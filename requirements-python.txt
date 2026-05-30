@@ -1,0 +1,7 @@
+pygvas
+customtkinter
+pillow
+pystray
+nuitka
+ordered-set
+zstandard

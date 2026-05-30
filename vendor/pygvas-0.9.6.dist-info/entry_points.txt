@@ -1,0 +1,4 @@
+[console_scripts]
+detect_format = pygvas.detect_gvas_format:main
+gvas2json = pygvas.gvas2json:main
+json2gvas = pygvas.json2gvas:main
