@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import zipfile
 
 
@@ -36,8 +37,10 @@ for package_path in PACKAGE_PATHS:
 
 DATA_DIRS = [
     ("img", "img"),
+    ("audio", "audio"),
+    ("efeitos sonoros", "efeitos sonoros"),
     ("translations", "translations"),
-    ("Textures", "Textures"),
+    ("Content", "Content"),
 ]
 
 DATA_FILES = [
@@ -99,26 +102,48 @@ def install_build_deps() -> None:
 def clean() -> None:
     for path in (DIST_DIR, BUILD_DIR, RELEASE_DIR):
         if path.exists():
-            shutil.rmtree(path)
+            remove_tree(path)
 
     for pattern in ("*.build", "*.dist", "*.onefile-build"):
         for path in ROOT.glob(pattern):
             if path.is_dir():
-                shutil.rmtree(path)
+                remove_tree(path)
+
+
+def remove_tree(path: Path) -> None:
+    for attempt in range(3):
+        try:
+            shutil.rmtree(path)
+            return
+        except PermissionError as exc:
+            if attempt < 2:
+                time.sleep(0.6)
+                continue
+            raise SystemExit(
+                f"Nao consegui limpar {path}.\n"
+                "Feche o GG Coalition, feche o GG Updater e confira se eles nao estao na bandeja do Windows.\n"
+                f"Detalhe: {exc}"
+            ) from exc
 
 
 def ensure_icon() -> Path | None:
-    if ICON_ICO.exists():
-        return ICON_ICO
-
     if not ICON_GIF.exists():
-        return None
+        return ICON_ICO if ICON_ICO.exists() else None
+
+    if ICON_ICO.exists() and ICON_ICO.stat().st_mtime >= ICON_GIF.stat().st_mtime:
+        return ICON_ICO
 
     try:
         from PIL import Image
 
         image = Image.open(ICON_GIF).convert("RGBA")
-        image.save(
+        bbox = image.getbbox()
+        if bbox:
+            image = image.crop(bbox)
+        image.thumbnail((256, 256), Image.LANCZOS)
+        canvas = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+        canvas.alpha_composite(image, ((256 - image.width) // 2, (256 - image.height) // 2))
+        canvas.save(
             ICON_ICO,
             format="ICO",
             sizes=[
@@ -168,6 +193,10 @@ def build_app() -> Path:
         "--enable-plugin=tk-inter",
         "--include-package=customtkinter",
         "--include-package=pystray",
+        "--include-package=pygvas",
+        "--include-package=pydantic",
+        "--include-package=pydantic_core",
+        "--include-package=typing_extensions",
         "--include-package=PIL",
         "--include-module=PIL.Image",
         "--include-module=PIL.ImageTk",
@@ -183,6 +212,7 @@ def build_app() -> Path:
 
 
 def build_updater() -> Path:
+    icon_path = ensure_icon()
     output = DIST_DIR / f"{UPDATER_NAME}.exe"
 
     command = [
@@ -193,6 +223,8 @@ def build_updater() -> Path:
         "--onefile",
         "--assume-yes-for-downloads",
         "--windows-console-mode=disable",
+        "--enable-plugin=tk-inter",
+        *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
         f"--output-dir={DIST_DIR}",
         f"--output-filename={output.name}",
         str(ROOT / "updater.py"),

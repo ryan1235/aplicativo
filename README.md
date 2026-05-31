@@ -28,6 +28,15 @@ Ao abrir, o GG Coalition mostra uma tela de carregamento com o GIF em `img/ggime
 
 Ao minimizar, o app fica em segundo plano na bandeja do Windows. Ao clicar em fechar, ele pergunta se voce quer fechar de verdade ou deixar em segundo plano; se marcar `Nao perguntar novamente`, essa escolha fica salva em `felb_settings.json`.
 
+Os arquivos gravaveis do app ficam fora do executavel. Na primeira inicializacao, o app cria automaticamente:
+
+```text
+felb_settings.json
+extracted/
+```
+
+Ele tenta usar `%LOCALAPPDATA%/GG Coalition`; se o Windows bloquear essa pasta, usa uma pasta gravavel alternativa automaticamente.
+
 ## Idiomas
 
 O GG Coalition detecta o idioma do usuario automaticamente e carrega traducoes em `translations/pt`, `translations/en`, `translations/es` e `translations/fr`. Tambem da para mudar manualmente pelos botoes `PT`, `EN`, `ES` e `FR` no topo da janela.
@@ -46,13 +55,13 @@ Como publicar uma versao:
 1. Crie um repositorio novo no GitHub, por exemplo `gg-coalition`.
 2. Envie o projeto para esse repo.
 3. Gere uma pasta ou build final do app.
-4. Compacte os arquivos em um `.zip`, mantendo `felb_app.py`, `updater.py`, `app_update.py`, `img/`, `translations/`, `Textures/` e os demais `.py` na raiz do zip.
+4. Compacte os arquivos em um `.zip`, mantendo `felb_app.py`, `updater.py`, `app_update.py`, `img/`, `translations/`, `Content/` e os demais `.py` na raiz do zip.
 5. No GitHub, abra `Releases` > `Draft a new release`.
 6. Use uma tag maior que a versao atual, por exemplo `v0.1.1`.
 7. Anexe o `.zip` nos assets da release e publique.
 8. Atualize `APP_VERSION` no codigo para a mesma versao antes de gerar o zip.
 
-Quando o app abrir, ele consulta a ultima release. Se a tag for maior que `APP_VERSION`, ele pergunta se deseja atualizar, baixa o zip, fecha o app, substitui os arquivos e abre novamente.
+Quando o app abrir, ele consulta a ultima release. Se a tag for maior que `APP_VERSION`, ele pergunta se deseja atualizar, baixa o zip, fecha o app, abre o `GG Updater.exe`, mostra uma janela de progresso da instalacao, substitui os arquivos e abre novamente.
 
 ## Gerar EXE
 

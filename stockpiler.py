@@ -15,14 +15,53 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
+from app_paths import extracted_dir, resource_dir
 
-BASE_DIR = Path(__file__).resolve().parent
+
+BASE_DIR = resource_dir()
 VENDOR_DIR = BASE_DIR / "vendor"
 DB_PATH = BASE_DIR / "update64.db"
-TEXTURES_DIR = BASE_DIR / "Textures"
-DEFAULT_WATCH_FILE = Path(
-    r"C:\Users\ryanl\AppData\Local\Foxhole\Saved\SaveGames\76561198826175640_MapData.sav"
-)
+CONTENT_DIR = BASE_DIR / "Content"
+TEXTURES_DIR = BASE_DIR / "Content" / "Textures"
+LEGACY_TEXTURES_DIR = BASE_DIR / "Textures"
+
+
+def foxhole_savegames_dir() -> Path:
+    local_app_data = os.getenv("LOCALAPPDATA")
+    if local_app_data:
+        return Path(local_app_data) / "Foxhole" / "Saved" / "SaveGames"
+    return Path.home() / "AppData" / "Local" / "Foxhole" / "Saved" / "SaveGames"
+
+
+def discover_map_data_file() -> Path | None:
+    savegames = foxhole_savegames_dir()
+    if not savegames.exists():
+        return None
+    try:
+        candidates = [path for path in savegames.glob("*_MapData.sav") if path.is_file()]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    dated_candidates: list[tuple[float, Path]] = []
+    for path in candidates:
+        try:
+            dated_candidates.append((path.stat().st_mtime, path))
+        except OSError:
+            continue
+    if not dated_candidates:
+        return None
+    return max(dated_candidates, key=lambda item: item[0])[1]
+
+
+def default_watch_file() -> Path:
+    discovered = discover_map_data_file()
+    if discovered:
+        return discovered
+    return foxhole_savegames_dir() / "SteamID_MapData.sav"
+
+
+DEFAULT_WATCH_FILE = default_watch_file()
 DEFAULT_API_URL = "https://felblogi.discloud.app/data"
 PINNED_TOOLTIPS_KEY = "PinnedMapToolTipsW"
 EXCLUDED_FIELD = "InitalMapItemDetails"
@@ -247,8 +286,11 @@ def write_json(data: Any, output: Path | None) -> None:
     if output is None:
         print(text, flush=True)
         return
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(text + "\n", encoding="utf-8")
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(text + "\n", encoding="utf-8")
+    except OSError as exc:
+        raise ExtractError(f"Nao foi possivel criar o JSON em {output}: {exc}") from exc
 
 
 def parse_api_response(status: int, response_body: str) -> dict[str, Any]:
@@ -275,10 +317,25 @@ def texture_path_from_object_path(iconobject_path: Any) -> str:
     if object_path.endswith(".0"):
         object_path = object_path[:-2]
 
-    candidate = TEXTURES_DIR / object_path
-    if candidate.suffix.lower() != ".png":
-        candidate = candidate.with_suffix(".png")
-    return str(candidate) if candidate.exists() else ""
+    object_paths = [object_path]
+    if object_path.startswith("Slate/Images") and not object_path.startswith("Slate/Images/"):
+        object_paths.append("Slate/Images/" + object_path.removeprefix("Slate/Images"))
+
+    for asset_dir in (CONTENT_DIR, TEXTURES_DIR, LEGACY_TEXTURES_DIR):
+        for path_variant in object_paths:
+            candidate = asset_dir / path_variant
+            if candidate.suffix.lower() != ".png":
+                candidate = candidate.with_suffix(".png")
+            if candidate.exists():
+                return str(candidate)
+
+    image_name = Path(object_paths[-1]).name
+    image_pattern = image_name if image_name.lower().endswith(".png") else f"{image_name}.png"
+    for asset_dir in (CONTENT_DIR, TEXTURES_DIR, LEGACY_TEXTURES_DIR):
+        candidate = next(asset_dir.rglob(image_pattern), None) if asset_dir.exists() else None
+        if candidate and candidate.exists():
+            return str(candidate)
+    return ""
 
 
 @lru_cache(maxsize=1)
@@ -446,31 +503,35 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda item: (item["warehouse"], item["display_name"]))
 
 
-def request_stockpile_debug(api_url: str) -> dict[str, Any]:
-    body = json.dumps({"mode": "debug"}, ensure_ascii=False).encode("utf-8")
+def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST") -> dict[str, Any]:
+    body = json.dumps(data, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         api_url,
         data=body,
-        headers={"Content-Type": "application/json"},
-        method="GET",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method=method,
     )
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             response_body = response.read().decode("utf-8", errors="replace")
             result = parse_api_response(response.status, response_body)
-            print(f"[Stockpile API] {result['status_text']}", flush=True)
+            print(f"[Stockpile API] {purpose}: {result['status_text']}", flush=True)
             return result
     except urllib.error.HTTPError as exc:
         response_body = exc.read().decode("utf-8", errors="replace")
-        print(f"[Stockpile API] HTTP {exc.code}: {response_body}", flush=True)
+        print(f"[Stockpile API] {purpose}: HTTP {exc.code}: {response_body}", flush=True)
         raise ExtractError(f"HTTP {exc.code}: {response_body}") from exc
     except urllib.error.URLError as exc:
-        print(f"[Stockpile API] failed: {exc.reason}", flush=True)
+        print(f"[Stockpile API] {purpose} failed: {exc.reason}", flush=True)
         raise ExtractError(str(exc.reason)) from exc
 
 
+def request_stockpile_debug(api_url: str) -> dict[str, Any]:
+    return request_json(api_url, {"mode": "debug"}, purpose="debug", method="GET")
+
+
 def post_json(data: Any, api_url: str) -> dict[str, Any]:
-    return request_stockpile_debug(api_url)
+    return request_json(api_url, data, purpose="upload")
 
 
 def default_output_path(sav_path: Path, out_dir: Path) -> Path:
@@ -513,16 +574,17 @@ def summarize_payload(payload: dict[str, Any], api_response: dict[str, Any]) -> 
             items = report.get("items")
             if isinstance(items, list):
                 item_count += len(items)
+    sent_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return {
         "kind": "api_result",
         "api_response": api_response.get("status_text", "-"),
-        "api_last_update": api_last_update(api_response),
+        "api_last_update": api_last_update(api_response) or sent_at,
         "warehouse_summaries": warehouse_summaries(api_response),
         "items": api_item_rows(api_response),
         "report_count": len(reports),
         "stockpiles": stockpiles,
         "item_count": item_count,
-        "sent_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "sent_at": sent_at,
     }
 
 
@@ -550,6 +612,7 @@ def extract_and_post(
     api_message = post_json(payload, api_url)
     summary = summarize_payload(payload, api_message)
     summary["payload_changed"] = has_changed
+    summary["upload_reason"] = "file_changed" if has_changed else "sync_refresh"
     return summary
 
 
@@ -609,12 +672,25 @@ class StockpileWatcher:
         pending_force_api_refresh = False
         next_sync_at = time.monotonic() + self.sync_interval
         if not path.exists():
-            self._status("waiting for Foxhole save file")
+            self._status(f"waiting for Foxhole save file: {path}")
 
         while not self.stop_event.is_set():
             try:
                 mtime = path.stat().st_mtime
             except FileNotFoundError:
+                discovered = discover_map_data_file()
+                if discovered and discovered.resolve() != path:
+                    path = discovered.resolve()
+                    self.file_path = path
+                    last_mtime = path.stat().st_mtime
+                    pending_at = time.monotonic()
+                    self._status(f"found Foxhole save file: {path}")
+                    time.sleep(self.interval)
+                    continue
+                time.sleep(self.interval)
+                continue
+            except OSError as exc:
+                self._status(f"cannot read Foxhole save file: {path}: {exc}")
                 time.sleep(self.interval)
                 continue
 
@@ -656,7 +732,7 @@ def stockpile_settings_from_env() -> dict[str, Any]:
     return {
         "watch_file": os.getenv("STOCKPILER_WATCH_FILE", str(DEFAULT_WATCH_FILE)),
         "api_url": os.getenv("STOCKPILER_API_URL", DEFAULT_API_URL),
-        "out_dir": os.getenv("STOCKPILER_OUT_DIR", "extracted"),
+        "out_dir": os.getenv("STOCKPILER_OUT_DIR", str(extracted_dir())),
         "enabled": True,
         "extract_initial": True,
     }

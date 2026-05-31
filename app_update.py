@@ -7,9 +7,14 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
+import zipfile
+from typing import Callable
 
 
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
+APP_EXE_NAME = "GG Coalition.exe"
+UPDATER_EXE_NAME = "GG Updater.exe"
+MIN_UPDATE_ZIP_SIZE = 1024 * 1024
 
 
 @dataclass
@@ -63,12 +68,20 @@ def check_latest_release(repo: str, current_version: str, timeout: int = 8) -> U
 
     assets = release.get("assets") or []
     zip_assets = [
-        asset for asset in assets
+        asset
+        for asset in assets
         if str(asset.get("name") or "").lower().endswith(".zip") and asset.get("browser_download_url")
     ]
     if not zip_assets:
         return None
-    asset = zip_assets[0]
+    asset = next(
+        (
+            item
+            for item in zip_assets
+            if "gg-coalition" in str(item.get("name") or "").lower()
+        ),
+        zip_assets[0],
+    )
     return UpdateInfo(
         version=tag,
         name=str(release.get("name") or tag),
@@ -78,17 +91,34 @@ def check_latest_release(repo: str, current_version: str, timeout: int = 8) -> U
     )
 
 
-def download_update(update: UpdateInfo, timeout: int = 60) -> Path:
-    target = Path(tempfile.gettempdir()) / update.asset_name
+def download_update(update: UpdateInfo, timeout: int = 60, progress_callback: Callable[[int, int], None] | None = None) -> Path:
+    target_dir = Path(tempfile.mkdtemp(prefix="gg_coalition_download_"))
+    target = target_dir / safe_asset_name(update.asset_name)
     request = urllib.request.Request(update.asset_url, headers={"User-Agent": "GG-Coalition-Updater"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        target.write_bytes(response.read())
+        status = getattr(response, "status", 200)
+        if status >= 400:
+            raise RuntimeError(f"Download da atualizacao falhou: HTTP {status}")
+        total = int(response.headers.get("Content-Length") or 0)
+        downloaded = 0
+        with target.open("wb") as output:
+            while True:
+                chunk = response.read(1024 * 256)
+                if not chunk:
+                    break
+                output.write(chunk)
+                downloaded += len(chunk)
+                if progress_callback:
+                    progress_callback(downloaded, total)
+
+    validate_update_zip(target, require_updater=False)
     return target
 
 
 def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path) -> None:
-    updater_exe = app_dir / "GG Updater.exe"
-    updater_py = app_dir / "updater.py"
+    validate_update_zip(zip_path, require_updater=False)
+    updater_exe = app_dir / UPDATER_EXE_NAME
+    updater_py = Path(__file__).resolve().with_name("updater.py")
     args = [
         "--zip",
         str(zip_path),
@@ -101,9 +131,80 @@ def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path) -> None:
     ]
     if updater_exe.exists():
         command = [str(updater_exe), *args]
-    else:
+    elif updater_py.exists():
         command = [sys.executable, str(updater_py), *args]
-    subprocess.Popen(command, cwd=str(app_dir), close_fds=True)
+    else:
+        temp_updater = extract_updater_from_zip(zip_path)
+        if temp_updater:
+            command = [str(temp_updater), *args]
+        else:
+            command = []
+    if not command:
+        raise RuntimeError(
+            "Nao encontrei um atualizador local confiavel. "
+            f"Se o antivirus bloqueou {UPDATER_EXE_NAME}, permita o app no Windows Defender "
+            "ou instale a nova versao manualmente pelo ZIP da release."
+        )
+    executable = Path(command[0])
+    if not executable.exists():
+        raise RuntimeError(f"Updater nao encontrado: {executable}")
+    subprocess.Popen(command, cwd=str(executable.parent), close_fds=True)
+
+
+def extract_updater_from_zip(zip_path: Path) -> Path | None:
+    try:
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            match = next(
+                (
+                    name
+                    for name in archive.namelist()
+                    if Path(name).name.lower() == UPDATER_EXE_NAME.lower()
+                ),
+                None,
+            )
+            if not match:
+                return None
+            target = Path(tempfile.mkdtemp(prefix="gg_coalition_updater_")) / UPDATER_EXE_NAME
+            try:
+                target.write_bytes(archive.read(match))
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 225:
+                    return None
+                raise
+            if not target.exists() or target.stat().st_size == 0:
+                return None
+            return target
+    except Exception:
+        return None
+
+
+def validate_update_zip(zip_path: Path, *, require_updater: bool = True) -> None:
+    if not zip_path.exists():
+        raise RuntimeError(f"Arquivo de update nao encontrado: {zip_path}")
+    if zip_path.stat().st_size < MIN_UPDATE_ZIP_SIZE:
+        raise RuntimeError(
+            f"Arquivo de update muito pequeno ({zip_path.stat().st_size} bytes). "
+            "Provavelmente a release baixou um asset errado ou incompleto."
+        )
+    if not zipfile.is_zipfile(zip_path):
+        raise RuntimeError(f"O arquivo baixado nao e um ZIP valido: {zip_path}")
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        names = {Path(name).name.lower() for name in archive.namelist()}
+    required = [APP_EXE_NAME]
+    if require_updater:
+        required.append(UPDATER_EXE_NAME)
+    missing = [name for name in required if name.lower() not in names]
+    if missing:
+        raise RuntimeError(
+            "ZIP de update incompleto. Faltando: "
+            + ", ".join(missing)
+            + ". Envie o arquivo release\\GG-Coalition.zip gerado pelo build."
+        )
+
+
+def safe_asset_name(name: str) -> str:
+    cleaned = Path(name or "GG-Coalition.zip").name
+    return cleaned if cleaned.lower().endswith(".zip") else "GG-Coalition.zip"
 
 
 def os_getpid() -> int:

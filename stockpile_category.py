@@ -1,4 +1,6 @@
 from pathlib import Path
+import ctypes
+from datetime import datetime, timezone
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -8,6 +10,7 @@ try:
 except ImportError:  # pragma: no cover - optional visual upgrade.
     ctk = None
 
+from app_paths import extracted_dir, resolve_writable_path
 from i18n import Translator
 from settings_store import load_settings, save_settings
 from stockpiler import (
@@ -40,6 +43,23 @@ COLORS = {
     "hover": "#172943",
     "accent_text": "#041014",
 }
+BASE_DIR = Path(__file__).resolve().parent
+SOUND_DIRS = (BASE_DIR / "efeitos sonoros", BASE_DIR / "audio")
+STOCKPILE_SOUND_NAMES = ("stoque", "estoque")
+SOUND_EXTENSIONS = (".wav", ".mp3", ".wma")
+
+
+def parent_surface_color(parent, fallback: str) -> str:
+    for option in ("fg_color", "bg"):
+        try:
+            value = parent.cget(option)
+            if isinstance(value, tuple):
+                return value[-1]
+            if value:
+                return str(value)
+        except Exception:
+            pass
+    return fallback
 
 
 def modern_frame(parent, color: str, radius: int = 18, border: int = 0, border_color: str | None = None):
@@ -47,6 +67,7 @@ def modern_frame(parent, color: str, radius: int = 18, border: int = 0, border_c
         return ctk.CTkFrame(
             parent,
             fg_color=color,
+            bg_color=parent_surface_color(parent, COLORS["bg"]),
             corner_radius=radius,
             border_width=border,
             border_color=border_color or color,
@@ -71,6 +92,7 @@ def modern_button(
             text=text,
             command=command,
             fg_color=color,
+            bg_color=parent_surface_color(parent, COLORS["bg"]),
             hover_color=hover or COLORS["hover"],
             text_color=text_color,
             corner_radius=14,
@@ -105,10 +127,44 @@ def widget_color(widget, fallback: str) -> str:
     return widget.cget("bg")
 
 
+def stockpile_sound_path() -> Path | None:
+    for directory in SOUND_DIRS:
+        for name in STOCKPILE_SOUND_NAMES:
+            for extension in SOUND_EXTENSIONS:
+                path = directory / f"{name}{extension}"
+                if path.exists():
+                    return path
+    return None
+
+
+def play_stockpile_sound() -> None:
+    path = stockpile_sound_path()
+    if not path:
+        return
+    if path.suffix.lower() == ".wav":
+        try:
+            import winsound
+
+            winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC)
+            return
+        except Exception:
+            pass
+    try:
+        alias = f"gg_stockpile_{int(threading.get_ident())}"
+        winmm = ctypes.windll.winmm
+        winmm.mciSendStringW(f"close {alias}", None, 0, None)
+        winmm.mciSendStringW(f'open "{path}" type mpegvideo alias {alias}', None, 0, None)
+        winmm.mciSendStringW(f"play {alias}", None, 0, None)
+        threading.Timer(8.0, lambda: winmm.mciSendStringW(f"close {alias}", None, 0, None)).start()
+    except Exception:
+        pass
+
+
 class StockpileCategory(ttk.Frame):
-    def __init__(self, parent: ttk.Widget, translator: Translator | None = None) -> None:
+    def __init__(self, parent: ttk.Widget, translator: Translator | None = None, success_callback=None) -> None:
         super().__init__(parent, style="Panel.TFrame")
         self.tr = translator or Translator()
+        self.success_callback = success_callback
         self.settings = load_settings()
         stockpile = self.settings["stockpile"]
         self.watcher: StockpileWatcher | None = None
@@ -128,14 +184,22 @@ class StockpileCategory(ttk.Frame):
         self.search_var = tk.StringVar(value="")
         self.visual_canvas: tk.Canvas | None = None
         self.warehouse_combo: ttk.Combobox | None = None
+        self.refresh_job: str | None = None
+        self.relative_update_job: str | None = None
+        self.visual_item_hitboxes: list[tuple[int, int, int, int, str]] = []
+        self.visual_tooltip: tk.Toplevel | None = None
+        self.visual_tooltip_label: tk.Label | None = None
+        self.visual_tooltip_text = ""
+        self.api_last_update_var.trace_add("write", lambda *_args: self.draw_visual_stockpile())
+        self.active = False
+        self.api_loading = False
         self.file_var = tk.StringVar(value=stockpile.get("watch_file", ""))
         self.api_var = tk.StringVar(value=stockpile.get("api_url", ""))
-        self.out_dir_var = tk.StringVar(value=stockpile.get("out_dir", "extracted"))
-        self.enabled_var = tk.BooleanVar(value=True)
-        self.extract_initial_var = tk.BooleanVar(value=bool(stockpile.get("extract_initial", True)))
+        self.out_dir_var = tk.StringVar(value=stockpile.get("out_dir", str(extracted_dir())))
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         self.build()
+        self.schedule_relative_update_clock()
         self.load_api_snapshot()
         self.start_watcher()
 
@@ -190,38 +254,14 @@ class StockpileCategory(ttk.Frame):
         )
         explanation.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 12))
 
-        checks = modern_frame(card, COLORS["card"], radius=0)
-        checks.grid(row=1, column=0, sticky="ew", padx=18, pady=(4, 10))
-        for index, (label, variable) in enumerate(
-            (
-                (self.tr.t("stockpile.watch"), self.enabled_var),
-                (self.tr.t("stockpile.extract_initial"), self.extract_initial_var),
-            )
-        ):
-            tk.Checkbutton(
-                checks,
-                text=label,
-                variable=variable,
-                command=self.save_settings,
-                bg=COLORS["card"],
-                fg=COLORS["text"],
-                selectcolor=COLORS["soft"],
-                activebackground=COLORS["card"],
-                activeforeground=COLORS["text"],
-                font=("Segoe UI", 10, "bold"),
-            ).grid(row=0, column=index, sticky="w", padx=(0, 18))
-
-        actions = modern_frame(card, COLORS["card"], radius=0)
-        actions.grid(row=2, column=0, sticky="ew", padx=18, pady=(0, 18))
-        actions.columnconfigure((0, 1, 2), weight=1)
-        modern_button(actions, text=self.tr.t("stockpile.start"), command=self.start_watcher, color=COLORS["accent"], text_color=COLORS["accent_text"], hover=COLORS["accent_2"]).grid(
-            row=0, column=0, sticky="ew", padx=(0, 8)
+        auto_box = modern_frame(card, COLORS["soft"], radius=16, border=1, border_color="#213854")
+        auto_box.grid(row=1, column=0, sticky="ew", padx=18, pady=(4, 18))
+        auto_box.columnconfigure(0, weight=1)
+        tk.Label(auto_box, text=self.tr.t("stockpile.auto_title"), bg=COLORS["soft"], fg=COLORS["accent"], font=("Segoe UI", 11, "bold")).grid(
+            row=0, column=0, sticky="w", padx=14, pady=(12, 2)
         )
-        modern_button(actions, text=self.tr.t("stockpile.stop"), command=self.stop_watcher, color=COLORS["soft"], text_color=COLORS["text"], hover=COLORS["hover"]).grid(
-            row=0, column=1, sticky="ew", padx=8
-        )
-        modern_button(actions, text=self.tr.t("stockpile.save"), command=self.save_settings, color=COLORS["soft"], text_color=COLORS["text"], hover=COLORS["hover"]).grid(
-            row=0, column=2, sticky="ew", padx=(8, 0)
+        tk.Label(auto_box, text=self.tr.t("stockpile.auto_body"), bg=COLORS["soft"], fg=COLORS["text"], font=("Segoe UI", 10), wraplength=760, justify="left").grid(
+            row=1, column=0, sticky="ew", padx=14, pady=(0, 12)
         )
 
         metrics = modern_frame(container, COLORS["bg"], radius=0)
@@ -253,6 +293,8 @@ class StockpileCategory(ttk.Frame):
         self.visual_canvas = tk.Canvas(visual_box, height=310, bg="#030303", highlightthickness=0)
         self.visual_canvas.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 14))
         self.visual_canvas.bind("<Configure>", lambda _event: self.draw_visual_stockpile())
+        self.visual_canvas.bind("<Motion>", self.on_visual_item_motion)
+        self.visual_canvas.bind("<Leave>", lambda _event: self.hide_visual_tooltip())
 
         status = modern_frame(container, COLORS["soft"], radius=18, border=1, border_color="#213854")
         status.grid(row=5, column=0, sticky="ew", padx=22, pady=(0, 22))
@@ -294,30 +336,32 @@ class StockpileCategory(ttk.Frame):
         )
 
     def save_settings(self) -> None:
+        self.settings = load_settings()
         self.settings["stockpile"] = {
-            "enabled": self.enabled_var.get(),
+            "enabled": True,
             "watch_file": self.file_var.get(),
             "api_url": self.api_var.get(),
-            "out_dir": self.out_dir_var.get(),
-            "extract_initial": self.extract_initial_var.get(),
+            "out_dir": str(resolve_writable_path(self.out_dir_var.get())),
+            "extract_initial": True,
         }
+        resolve_writable_path(self.out_dir_var.get()).mkdir(parents=True, exist_ok=True)
         save_settings(self.settings)
-        self.status_var.set(self.tr.t("stockpile.saved"))
 
     def refresh_language(self, translator: Translator) -> None:
         self.tr = translator
         for child in self.winfo_children():
             child.destroy()
         self.build()
+        self.load_api_snapshot()
 
     def start_watcher(self) -> None:
         self.save_settings()
         self.stop_watcher(update_status=False)
         self.watcher = StockpileWatcher(
             Path(self.file_var.get()),
-            Path(self.out_dir_var.get()),
+            resolve_writable_path(self.out_dir_var.get()),
             self.api_var.get(),
-            extract_initial=self.extract_initial_var.get(),
+            extract_initial=True,
             sync_interval=300.0,
             status_callback=self.show_status,
         )
@@ -325,6 +369,11 @@ class StockpileCategory(ttk.Frame):
         self.status_var.set(self.tr.t("stockpile.running"))
 
     def load_api_snapshot(self) -> None:
+        if self.api_loading:
+            return
+        self.api_loading = True
+        self.status_var.set(self.tr.t("stockpile.refreshing"))
+
         def worker() -> None:
             try:
                 api_response = request_stockpile_debug(self.api_var.get())
@@ -342,8 +391,35 @@ class StockpileCategory(ttk.Frame):
                 self.show_status(message)
             except Exception as exc:
                 self.after(0, self.status_var.set, self.tr.t("stockpile.error", message=str(exc)))
+            finally:
+                self.api_loading = False
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def set_active(self, active: bool) -> None:
+        self.active = active
+        if active:
+            self.load_api_snapshot()
+            self.schedule_api_refresh()
+        else:
+            self.cancel_api_refresh()
+
+    def schedule_api_refresh(self) -> None:
+        self.cancel_api_refresh()
+        if self.active:
+            self.refresh_job = self.after(30_000, self.periodic_api_refresh)
+
+    def cancel_api_refresh(self) -> None:
+        if self.refresh_job:
+            self.after_cancel(self.refresh_job)
+            self.refresh_job = None
+
+    def periodic_api_refresh(self) -> None:
+        self.refresh_job = None
+        if not self.active:
+            return
+        self.load_api_snapshot()
+        self.schedule_api_refresh()
 
     def show_status(self, message) -> None:
         if isinstance(message, dict):
@@ -366,6 +442,8 @@ class StockpileCategory(ttk.Frame):
                 self.after(0, self.status_var.set, self.tr.t("stockpile.api_loaded"))
             else:
                 self.after(0, self.status_var.set, self.tr.t("stockpile.last_sent", count=len(stockpiles)))
+                if message.get("upload_reason") == "file_changed" or message.get("payload_changed") is True:
+                    self.after(0, self.notify_upload_success, len(stockpiles))
             return
 
         translated = {
@@ -373,7 +451,27 @@ class StockpileCategory(ttk.Frame):
             "waiting for Foxhole save file": self.tr.t("stockpile.waiting_file"),
             "stockpile unchanged": self.tr.t("stockpile.unchanged"),
         }.get(message, message)
+        if isinstance(message, str) and message.startswith("waiting for Foxhole save file:"):
+            path = message.split(":", 1)[1].strip()
+            translated = self.tr.t("stockpile.waiting_file_detail", path=path)
+        elif isinstance(message, str) and message.startswith("found Foxhole save file:"):
+            path = message.split(":", 1)[1].strip()
+            self.after(0, lambda value=path: self.remember_discovered_file(value))
+            translated = self.tr.t("stockpile.found_file", path=path)
+        elif isinstance(message, str) and message.startswith("cannot read Foxhole save file:"):
+            translated = self.tr.t("stockpile.read_error", message=message)
         self.after(0, self.status_var.set, translated)
+
+    def remember_discovered_file(self, path: str) -> None:
+        self.file_var.set(path)
+        self.save_settings()
+
+    def notify_upload_success(self, count: int) -> None:
+        text = self.tr.t("stockpile.upload_success", count=count)
+        if load_settings().get("app", {}).get("stockpile_sound_enabled", True):
+            play_stockpile_sound()
+        if self.success_callback:
+            self.success_callback(text)
 
     def stop_watcher(self, update_status: bool = True) -> None:
         if self.watcher:
@@ -383,6 +481,10 @@ class StockpileCategory(ttk.Frame):
             self.status_var.set(self.tr.t("stockpile.stopped"))
 
     def stop(self) -> None:
+        self.cancel_api_refresh()
+        self.cancel_relative_update_clock()
+        if self.visual_tooltip and self.visual_tooltip.winfo_exists():
+            self.visual_tooltip.destroy()
         self.stop_watcher(update_status=False)
 
     def update_warehouse_dashboard(self) -> None:
@@ -416,6 +518,111 @@ class StockpileCategory(ttk.Frame):
             return None
         self.icon_images[path] = photo
         return photo
+
+    def schedule_relative_update_clock(self) -> None:
+        self.cancel_relative_update_clock()
+        self.relative_update_job = self.after(1000, self.tick_relative_update_clock)
+
+    def cancel_relative_update_clock(self) -> None:
+        if self.relative_update_job:
+            try:
+                self.after_cancel(self.relative_update_job)
+            except tk.TclError:
+                pass
+            self.relative_update_job = None
+
+    def tick_relative_update_clock(self) -> None:
+        self.relative_update_job = None
+        self.draw_visual_stockpile()
+        self.schedule_relative_update_clock()
+
+    def parsed_last_update(self) -> datetime | None:
+        value = self.api_last_update_var.get().strip()
+        if not value or value == "-":
+            return None
+        try:
+            normalized = value.replace("Z", "+00:00")
+            return datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+
+    def relative_last_update(self) -> str:
+        updated_at = self.parsed_last_update()
+        if not updated_at:
+            return self.api_last_update_var.get()
+        now = datetime.now(timezone.utc) if updated_at.tzinfo else datetime.now()
+        seconds = max(0, int((now - updated_at).total_seconds()))
+        if seconds < 5:
+            return self.tr.t("time.now")
+        if seconds < 60:
+            if seconds == 1:
+                return self.tr.t("time.second_ago")
+            return self.tr.t("time.seconds_ago", count=seconds)
+        minutes = seconds // 60
+        if minutes < 60:
+            if minutes == 1:
+                return self.tr.t("time.minute_ago")
+            return self.tr.t("time.minutes_ago", count=minutes)
+        hours = minutes // 60
+        if hours < 24:
+            if hours == 1:
+                return self.tr.t("time.hour_ago")
+            return self.tr.t("time.hours_ago", count=hours)
+        days = hours // 24
+        if days == 1:
+            return self.tr.t("time.day_ago")
+        return self.tr.t("time.days_ago", count=days)
+
+    def on_visual_item_motion(self, event) -> None:
+        for x1, y1, x2, y2, label in reversed(self.visual_item_hitboxes):
+            if x1 <= event.x <= x2 and y1 <= event.y <= y2:
+                if self.visual_canvas:
+                    self.visual_canvas.configure(cursor="question_arrow")
+                self.show_visual_tooltip(label, event.x_root + 12, event.y_root + 12)
+                return
+        if self.visual_canvas:
+            self.visual_canvas.configure(cursor="")
+        self.hide_visual_tooltip()
+
+    def show_visual_tooltip(self, text: str, x: int, y: int) -> None:
+        if not text:
+            self.hide_visual_tooltip()
+            return
+        if not self.visual_tooltip or not self.visual_tooltip.winfo_exists():
+            self.visual_tooltip = tk.Toplevel(self)
+            self.visual_tooltip.withdraw()
+            self.visual_tooltip.overrideredirect(True)
+            self.visual_tooltip.attributes("-topmost", True)
+            self.visual_tooltip_label = tk.Label(
+                self.visual_tooltip,
+                bg="#111c31",
+                fg=COLORS["text"],
+                font=("Segoe UI", 9, "bold"),
+                padx=8,
+                pady=5,
+                relief="solid",
+                borderwidth=1,
+            )
+            self.visual_tooltip_label.pack()
+        if self.visual_tooltip_label and text != self.visual_tooltip_text:
+            self.visual_tooltip_label.configure(text=text)
+            self.visual_tooltip_text = text
+        self.visual_tooltip.geometry(f"+{x}+{y}")
+        self.visual_tooltip.deiconify()
+
+    def hide_visual_tooltip(self) -> None:
+        self.visual_tooltip_text = ""
+        if self.visual_canvas:
+            self.visual_canvas.configure(cursor="")
+        if self.visual_tooltip and self.visual_tooltip.winfo_exists():
+            self.visual_tooltip.withdraw()
+
+    def clean_visual_item_name(self, item: dict) -> str:
+        display_name = str(item.get("display_name") or item.get("asset_name") or "-").strip()
+        suffix = " Crated"
+        if display_name.endswith(suffix):
+            display_name = display_name[: -len(suffix)].strip()
+        return display_name or "-"
 
     def visual_group_key(self, item: dict) -> str:
         asset = str(item.get("asset_name") or "").lower()
@@ -502,6 +709,7 @@ class StockpileCategory(ttk.Frame):
             return
         canvas = self.visual_canvas
         canvas.delete("all")
+        self.visual_item_hitboxes = []
         width = max(1, canvas.winfo_width())
         height = max(1, canvas.winfo_height())
         warehouse = self.selected_warehouse_var.get()
@@ -529,7 +737,7 @@ class StockpileCategory(ttk.Frame):
         canvas.create_text(
             8,
             46,
-            text=self.tr.t("stockpile.visual_updated", value=self.api_last_update_var.get()),
+            text=self.tr.t("stockpile.visual_updated", value=self.relative_last_update()),
             fill=COLORS["muted"],
             anchor="w",
             font=("Segoe UI", 8),
@@ -574,6 +782,8 @@ class StockpileCategory(ttk.Frame):
                 quantity = str(item.get("quantity", 0))
                 canvas.create_rectangle(x + 40, y + 2, x + 82, y + 28, fill="#172943", outline="#2b4565")
                 canvas.create_text(x + 61, y + 15, text=quantity, fill=COLORS["text"], anchor="center", font=("Segoe UI", 10, "bold"))
+                display_name = self.clean_visual_item_name(item)
+                self.visual_item_hitboxes.append((x, y, x + 82, y + 30, display_name))
 
                 column += 1
                 if column >= columns:

@@ -3,7 +3,9 @@ import base64
 from datetime import datetime, timezone
 import os
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import threading
 import tkinter as tk
 from tkinter import messagebox, ttk
@@ -28,32 +30,42 @@ except Exception:  # pragma: no cover - optional visual upgrade.
 
 try:
     import pystray
-    from PIL import Image, ImageDraw
 except Exception:  # pragma: no cover - tray is optional until dependencies are installed.
     pystray = None
+
+try:
+    from PIL import Image, ImageDraw, ImageTk
+except Exception:  # pragma: no cover - visual assets degrade to text-only fallbacks.
     Image = None
     ImageDraw = None
+    ImageTk = None
 
 from app_update import check_latest_release, download_update, launch_updater
-from functions_category import FunctionsCategory, OverlayCategory
+from functions_category import FunctionsCategory, SettingsCategory
 from i18n import SUPPORTED_LANGUAGES, Translator
+from item_search_category import ItemSearchCategory
+from chat_category import HomeChatPanel
+from notifications_category import NotificationsCategory
 from settings_store import load_settings, save_settings, selected_language
 from steam_profile import SteamProfile, get_local_steam_profile
 from stockpile_category import StockpileCategory
 
 
 APP_TITLE = "GG Coalition"
-APP_VERSION = "0.1.0"
-UPDATE_REPO = ""  # Exemplo: "seu-usuario/gg-coalition"
+APP_EXE_NAME = f"{APP_TITLE}.exe"
+APP_VERSION = "1.2.1"
+UPDATE_REPO = "ryan1235/aplicativo"  # Exemplo: "seu-usuario/gg-coalition"
 FOXHOLE_APP_ID = "505460"
 SIDEBAR_WIDTH = 302
 BASE_DIR = Path(__file__).resolve().parent
 ICON_PATH = BASE_DIR / "img" / "ggimege.gif"
+ICON_ICO_PATH = BASE_DIR / "img" / "app_icon.ico"
 WALLPAPER_PATH = BASE_DIR / "img" / "wallpeper.png"
+ICON_MENU_DIR = BASE_DIR / "img" / "iconmenu"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
 FOXHOLE_PATH_HINTS = ("\\steamapps\\common\\foxhole\\", "/steamapps/common/foxhole/")
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-MAX_SPLASH_FRAMES = 36
+MAX_SPLASH_FRAMES = 5000
 
 if ctk is not None:
     ctk.set_appearance_mode("dark")
@@ -96,11 +108,25 @@ COLORS = {
 }
 
 
+def parent_surface_color(parent, fallback: str) -> str:
+    for option in ("fg_color", "bg"):
+        try:
+            value = parent.cget(option)
+            if isinstance(value, tuple):
+                return value[-1]
+            if value:
+                return str(value)
+        except Exception:
+            pass
+    return fallback
+
+
 def modern_frame(parent, color: str, radius: int = 18, border: int = 0, border_color: str | None = None):
     if ctk is not None:
         return ctk.CTkFrame(
             parent,
             fg_color=color,
+            bg_color=parent_surface_color(parent, COLORS["bg"]),
             corner_radius=radius,
             border_width=border,
             border_color=border_color or color,
@@ -126,6 +152,7 @@ def modern_button(
             text=text,
             command=command,
             fg_color=color,
+            bg_color=parent_surface_color(parent, COLORS["bg"]),
             hover_color=hover or COLORS["hover"],
             text_color=text_color,
             corner_radius=14,
@@ -174,6 +201,7 @@ class FelbApp(AppBase):
         self.user_active = False
         self.user_status_var = tk.StringVar(value=self.tr.t("status.checking_user"))
         self.foxhole_running = False
+        self.foxhole_started_at: datetime | None = None
         self.foxhole_status_var = tk.StringVar(value=self.tr.t("status.checking_foxhole"))
         self.avatar_image: tk.PhotoImage | None = None
         self.app_icon_image: tk.PhotoImage | None = None
@@ -185,12 +213,16 @@ class FelbApp(AppBase):
         self.splash_animation_job: str | None = None
         self.sidebar_logo_animation_job: str | None = None
         self.flag_images: dict[str, tk.PhotoImage] = {}
+        self.nav_icon_images: dict[str, object] = {}
         self.wallpaper_source = None
         self.wallpaper_photo: tk.PhotoImage | None = None
         self.wallpaper_resize_job: str | None = None
         self.functions_page: FunctionsCategory | None = None
-        self.overlay_page: OverlayCategory | None = None
+        self.settings_page: SettingsCategory | None = None
         self.stockpile_page: StockpileCategory | None = None
+        self.notifications_page: NotificationsCategory | None = None
+        self.item_search_page: ItemSearchCategory | None = None
+        self.home_chat_panel: HomeChatPanel | None = None
         self.sidebar: tk.Frame | None = None
         self.sidebar_canvas: tk.Canvas | None = None
         self.sidebar_inner: tk.Frame | None = None
@@ -200,6 +232,7 @@ class FelbApp(AppBase):
         self.nav_buttons: dict[str, tk.Button] = {}
         self.language_buttons: dict[str, tk.Button] = {}
         self.ui_text: dict[str, tk.Widget] = {}
+        self.current_page = ""
         self.tray_icon = None
         self.tray_running = False
         self.hidden_to_tray = False
@@ -218,11 +251,15 @@ class FelbApp(AppBase):
         self.update_loading(self.tr.t("loading.ready"))
         self.show_page("inicio")
         self.after(650, self.finish_loading)
-        self.after(1800, self.check_for_updates)
         self.protocol("WM_DELETE_WINDOW", self.request_close)
         self.bind("<Unmap>", self.on_unmap, add="+")
 
     def load_app_icon(self) -> None:
+        if ICON_ICO_PATH.exists():
+            try:
+                self.iconbitmap(default=str(ICON_ICO_PATH))
+            except tk.TclError:
+                pass
         if not ICON_PATH.exists():
             return
         try:
@@ -271,9 +308,9 @@ class FelbApp(AppBase):
                 for index, frame in enumerate(ImageSequence.Iterator(image)):
                     if index >= MAX_SPLASH_FRAMES:
                         break
-                    frame = frame.convert("RGBA")
-                    frame.thumbnail((size, size))
-                    frames.append((ImageTk.PhotoImage(frame), max(45, int(frame.info.get("duration", 85)))))
+                    delay = max(45, int(frame.info.get("duration", image.info.get("duration", 85))))
+                    frame = self.prepare_icon_frame(frame.copy(), size, crop=False)
+                    frames.append((ImageTk.PhotoImage(frame), delay))
         except Exception:
             encoded = base64.b64encode(ICON_PATH.read_bytes()).decode("ascii")
             index = 0
@@ -295,14 +332,28 @@ class FelbApp(AppBase):
         try:
             from PIL import Image, ImageTk
 
-            image = Image.open(ICON_PATH).convert("RGBA")
-            image.thumbnail((92, 92))
+            image = self.prepare_icon_frame(Image.open(ICON_PATH), 92, crop=False)
             return ImageTk.PhotoImage(image)
         except Exception:
             try:
                 return tk_photo_from_path(ICON_PATH).subsample(5, 5)
             except tk.TclError:
                 return None
+
+    @staticmethod
+    def prepare_icon_frame(frame, size: int, *, crop: bool = True):
+        from PIL import Image
+
+        image = frame.convert("RGBA")
+        bbox = image.getbbox() if crop else None
+        if crop and bbox:
+            image = image.crop(bbox)
+        image.thumbnail((size, size), Image.LANCZOS)
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        x = (size - image.width) // 2
+        y = (size - image.height) // 2
+        canvas.alpha_composite(image, (x, y))
+        return canvas
 
     def animate_splash_logo(self) -> None:
         if not self.splash_logo_frames or not hasattr(self, "splash_logo_label"):
@@ -325,18 +376,47 @@ class FelbApp(AppBase):
         if hasattr(self, "loading_screen") and self.loading_screen.winfo_exists():
             self.loading_screen.destroy()
         self.deiconify()
+        self.maximize_main_window()
+        self.after(650, self.run_startup_prompt_sequence)
+
+    def maximize_main_window(self) -> None:
+        try:
+            self.state("zoomed")
+            return
+        except tk.TclError:
+            pass
+        try:
+            width = self.winfo_screenwidth()
+            height = self.winfo_screenheight()
+            self.geometry(f"{width}x{height}+0+0")
+        except tk.TclError:
+            pass
 
     def configure_styles(self) -> None:
         self.style.configure(
             "Vertical.TScrollbar",
-            background=COLORS["card_2"],
-            troughcolor=COLORS["bg"],
-            bordercolor=COLORS["bg"],
+            background=COLORS["hover"],
+            troughcolor=COLORS["glass"],
+            bordercolor=COLORS["glass"],
+            lightcolor=COLORS["hover"],
+            darkcolor=COLORS["hover"],
             arrowcolor=COLORS["accent_2"],
             relief="flat",
-            width=12,
+            width=10,
         )
-        self.style.map("Vertical.TScrollbar", background=[("active", COLORS["accent"])])
+        self.style.map("Vertical.TScrollbar", background=[("active", COLORS["accent_2"])])
+        self.style.configure(
+            "Horizontal.TScrollbar",
+            background=COLORS["hover"],
+            troughcolor=COLORS["glass"],
+            bordercolor=COLORS["glass"],
+            lightcolor=COLORS["hover"],
+            darkcolor=COLORS["hover"],
+            arrowcolor=COLORS["accent_2"],
+            relief="flat",
+            width=10,
+        )
+        self.style.map("Horizontal.TScrollbar", background=[("active", COLORS["accent_2"])])
         self.style.configure("Panel.TFrame", background=COLORS["bg"])
         self.style.configure("Inset.TFrame", background=COLORS["card"])
         self.style.configure("Title.TLabel", background=COLORS["bg"], foreground=COLORS["text"], font=("Segoe UI", 24, "bold"))
@@ -371,18 +451,24 @@ class FelbApp(AppBase):
 
         command_page = self.build_home_page(page_host)
         self.functions_page = FunctionsCategory(page_host, self.tr)
-        self.overlay_page = OverlayCategory(page_host, self.functions_page, self.tr)
-        self.stockpile_page = StockpileCategory(page_host, self.tr)
+        self.settings_page = SettingsCategory(page_host, self.functions_page, self.tr)
+        self.stockpile_page = StockpileCategory(page_host, self.tr, self.functions_page.notify_stockpile_success)
+        self.notifications_page = NotificationsCategory(page_host, self.tr)
+        self.item_search_page = ItemSearchCategory(page_host, self.tr)
 
         self.pages["inicio"] = command_page
         self.pages["ferramentas"] = self.functions_page
-        self.pages["overlay"] = self.overlay_page
+        self.pages["configuracoes"] = self.settings_page
         self.pages["stockpile"] = self.stockpile_page
+        self.pages["notificacoes"] = self.notifications_page
+        self.pages["item_search"] = self.item_search_page
 
         command_page.grid(row=0, column=0, sticky="nsew")
         self.functions_page.grid(row=0, column=0, sticky="nsew")
-        self.overlay_page.grid(row=0, column=0, sticky="nsew")
+        self.settings_page.grid(row=0, column=0, sticky="nsew")
         self.stockpile_page.grid(row=0, column=0, sticky="nsew")
+        self.notifications_page.grid(row=0, column=0, sticky="nsew")
+        self.item_search_page.grid(row=0, column=0, sticky="nsew")
         sidebar.configure(width=0)
         sidebar.grid_remove()
 
@@ -468,13 +554,17 @@ class FelbApp(AppBase):
         self.steam_label.grid(row=1, column=1, sticky="ew", padx=(0, 14), pady=(2, 12))
 
         self.section_label(sidebar, self.tr.t("sidebar.navigation"), 2, key="section_navigation")
-        self.nav_buttons["inicio"] = self.nav_button(sidebar, "HOME", self.tr.t("nav.home"), lambda: self.show_page("inicio"), row=3)
+        self.nav_buttons["inicio"] = self.nav_button(sidebar, "home", self.tr.t("nav.home"), lambda: self.show_page("inicio"), row=3)
 
         self.section_label(sidebar, self.tr.t("sidebar.tools"), 4, pady=(20, 6), key="section_tools")
-        self.nav_buttons["ferramentas"] = self.nav_button(sidebar, "AUTO", self.tr.t("nav.auto_clicker"), lambda: self.show_page("ferramentas"), row=5)
-        self.nav_buttons["overlay"] = self.nav_button(sidebar, "HUD", self.tr.t("nav.overlay"), lambda: self.show_page("overlay"), row=6)
-        self.nav_buttons["stockpile"] = self.nav_button(sidebar, "STK", self.tr.t("stockpile.nav"), lambda: self.show_page("stockpile"), row=7)
-        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=8, column=0, pady=80)
+        self.nav_buttons["ferramentas"] = self.nav_button(sidebar, "autoclicker", self.tr.t("nav.auto_clicker"), lambda: self.show_page("ferramentas"), row=5)
+        self.nav_buttons["stockpile"] = self.nav_button(sidebar, "estoque", self.tr.t("stockpile.nav"), lambda: self.show_page("stockpile"), row=6)
+        self.nav_buttons["notificacoes"] = self.nav_button(sidebar, "noti", self.tr.t("notifications.nav"), lambda: self.show_page("notificacoes"), row=7)
+        self.nav_buttons["item_search"] = self.nav_button(sidebar, "buscar", self.tr.t("item_search.nav"), lambda: self.show_page("item_search"), row=8)
+
+        self.section_label(sidebar, self.tr.t("sidebar.settings"), 9, pady=(20, 6), key="section_settings")
+        self.nav_buttons["configuracoes"] = self.nav_button(sidebar, "overlay", self.tr.t("nav.settings"), lambda: self.show_page("configuracoes"), row=10)
+        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=11, column=0, pady=80)
 
         tk.Label(
             sidebar,
@@ -505,10 +595,41 @@ class FelbApp(AppBase):
         if key:
             self.ui_text[key] = label
 
+    def load_nav_icon(self, name: str, size: int = 24):
+        key = f"{name}:{size}"
+        if key in self.nav_icon_images:
+            return self.nav_icon_images[key]
+        path = ICON_MENU_DIR / f"{name}.png"
+        if not path.exists():
+            return None
+        if Image is None:
+            try:
+                icon = tk.PhotoImage(file=str(path))
+                factor = max(1, math.ceil(max(icon.width(), icon.height()) / size))
+                if factor > 1:
+                    icon = icon.subsample(factor, factor)
+                self.nav_icon_images[key] = icon
+                return icon
+            except tk.TclError:
+                return None
+        image = Image.open(path).convert("RGBA")
+        image.thumbnail((size, size), Image.LANCZOS)
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        canvas.alpha_composite(image, ((size - image.width) // 2, (size - image.height) // 2))
+        if ctk is not None and hasattr(ctk, "CTkImage"):
+            icon = ctk.CTkImage(light_image=canvas, dark_image=canvas, size=(size, size))
+        elif ImageTk is not None:
+            icon = ImageTk.PhotoImage(canvas)
+        else:
+            return None
+        self.nav_icon_images[key] = icon
+        return icon
+
     def nav_button(self, parent: tk.Frame, icon: str, text: str, command, row: int):
+        image = self.load_nav_icon(icon)
         button = modern_button(
             parent,
-            text=f"{icon}   {text}",
+            text=text,
             command=command,
             color=COLORS["sidebar"],
             text_color=COLORS["muted"],
@@ -516,6 +637,10 @@ class FelbApp(AppBase):
             height=46,
             font=("Segoe UI", 11, "bold"),
         )
+        if image is not None:
+            button.configure(image=image, compound="left")
+        else:
+            button.configure(text=f"{icon.upper()}   {text}")
         button.grid(row=row, column=0, sticky="ew", padx=12, pady=3)
         if ctk is None:
             button.configure(anchor="w", padx=18)
@@ -677,14 +802,19 @@ class FelbApp(AppBase):
         self.tr.set_language(language)
         self.title(f"{APP_TITLE} - {self.tr.t('app.subtitle')}")
         self.refresh_language_texts()
-        self.refresh_steam_profile()
-        self.refresh_foxhole_status()
+        self.render_steam_profile(authenticate_chat=False)
+        self.render_foxhole_status()
+        if self.stockpile_page:
+            self.stockpile_page.load_api_snapshot()
+        if self.item_search_page:
+            self.item_search_page.load_items()
 
     def refresh_language_texts(self) -> None:
         text_updates = {
             "brand_subtitle": self.tr.t("app.subtitle"),
             "section_navigation": self.tr.t("sidebar.navigation"),
             "section_tools": self.tr.t("sidebar.tools"),
+            "section_settings": self.tr.t("sidebar.settings"),
             "header_title": self.tr.t("header.title"),
             "header_subtitle": self.tr.t("header.subtitle"),
             "home_eyebrow": self.tr.t("home.eyebrow"),
@@ -704,52 +834,64 @@ class FelbApp(AppBase):
             if widget:
                 widget.configure(text=text)
         nav_texts = {
-            "inicio": ("HOME", self.tr.t("nav.home")),
-            "ferramentas": ("AUTO", self.tr.t("nav.auto_clicker")),
-            "overlay": ("HUD", self.tr.t("nav.overlay")),
-            "stockpile": ("STK", self.tr.t("stockpile.nav")),
+            "inicio": self.tr.t("nav.home"),
+            "ferramentas": self.tr.t("nav.auto_clicker"),
+            "configuracoes": self.tr.t("nav.settings"),
+            "stockpile": self.tr.t("stockpile.nav"),
+            "notificacoes": self.tr.t("notifications.nav"),
+            "item_search": self.tr.t("item_search.nav"),
         }
-        for key, (icon, text) in nav_texts.items():
+        for key, text in nav_texts.items():
             button = self.nav_buttons.get(key)
             if button:
-                button.configure(text=f"{icon}   {text}")
+                button.configure(text=text)
         for language, button in self.language_buttons.items():
             button.configure(bg=COLORS["card_2"] if language == self.tr.language else COLORS["card"])
         if self.functions_page and hasattr(self.functions_page, "refresh_language"):
             self.functions_page.refresh_language(self.tr)
-        if self.overlay_page and hasattr(self.overlay_page, "refresh_language"):
-            self.overlay_page.refresh_language(self.tr)
+        if self.settings_page and hasattr(self.settings_page, "refresh_language"):
+            self.settings_page.refresh_language(self.tr)
         if self.stockpile_page and hasattr(self.stockpile_page, "refresh_language"):
             self.stockpile_page.refresh_language(self.tr)
+        if self.notifications_page and hasattr(self.notifications_page, "refresh_language"):
+            self.notifications_page.refresh_language(self.tr)
+        if self.item_search_page and hasattr(self.item_search_page, "refresh_language"):
+            self.item_search_page.refresh_language(self.tr)
+        if self.home_chat_panel and hasattr(self.home_chat_panel, "refresh_language"):
+            self.home_chat_panel.refresh_language(self.tr)
 
     def build_home_page(self, parent: tk.Frame) -> tk.Frame:
         page = modern_frame(parent, COLORS["bg"], radius=0)
         page.columnconfigure(0, weight=1)
+        page.columnconfigure(1, weight=0)
         page.rowconfigure(0, weight=1)
 
         canvas = tk.Canvas(page, bg=COLORS["bg"], highlightthickness=0, bd=0)
         canvas.grid(row=0, column=0, sticky="nsew")
+        scrollbar = ttk.Scrollbar(page, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-        hero = modern_frame(canvas, COLORS["glass"], radius=24, border=1, border_color="#315b86")
-        hero_window = canvas.create_window(32, 32, window=hero, anchor="nw", width=760)
+        hero = modern_frame(canvas, COLORS["glass"], radius=10, border=1, border_color="#203857")
+        hero_window = canvas.create_window(24, 24, window=hero, anchor="nw", width=760)
         self.ui_text["home_eyebrow"] = tk.Label(hero, text=self.tr.t("home.eyebrow"), bg=COLORS["glass"], fg=COLORS["accent_2"], font=("Segoe UI", 10, "bold"))
         self.ui_text["home_eyebrow"].pack(
-            anchor="w", padx=26, pady=(24, 4)
+            anchor="w", padx=22, pady=(18, 4)
         )
-        self.ui_text["home_title"] = tk.Label(hero, text=self.tr.t("home.title"), bg=COLORS["glass"], fg=COLORS["text"], font=("Segoe UI", 30, "bold"))
+        self.ui_text["home_title"] = tk.Label(hero, text=self.tr.t("home.title"), bg=COLORS["glass"], fg=COLORS["text"], font=("Segoe UI", 25, "bold"))
         self.ui_text["home_title"].pack(
-            anchor="w", padx=26
+            anchor="w", padx=22
         )
         status_row = tk.Frame(hero, bg=COLORS["glass"])
-        status_row.pack(fill="x", padx=26, pady=(14, 4))
+        status_row.pack(fill="x", padx=22, pady=(12, 4))
         status_pill = tk.Label(
             status_row,
             textvariable=self.user_status_var,
-            bg=COLORS["glass_2"],
+            bg="#10233a",
             fg=COLORS["accent_2"],
             font=("Segoe UI", 10, "bold"),
-            padx=12,
-            pady=6,
+            padx=10,
+            pady=5,
         )
         status_pill.pack(side="left", padx=(0, 8))
         tk.Label(
@@ -758,8 +900,8 @@ class FelbApp(AppBase):
             bg="#102b2a",
             fg=COLORS["accent"],
             font=("Segoe UI", 10, "bold"),
-            padx=12,
-            pady=6,
+            padx=10,
+            pady=5,
         ).pack(side="left")
         self.ui_text["home_body"] = tk.Label(
             hero,
@@ -767,17 +909,17 @@ class FelbApp(AppBase):
             bg=COLORS["glass"],
             fg=COLORS["muted"],
             font=("Segoe UI", 11),
-            wraplength=560,
+            wraplength=660,
             justify="left",
         )
-        self.ui_text["home_body"].pack(anchor="w", padx=26, pady=(8, 20))
+        self.ui_text["home_body"].pack(anchor="w", padx=22, pady=(8, 16))
 
-        foxhole_panel = modern_frame(hero, COLORS["glass_2"], radius=18, border=1, border_color="#254469")
-        foxhole_panel.pack(fill="x", padx=26, pady=(0, 26))
-        tk.Label(foxhole_panel, text="Foxhole", bg=COLORS["glass_2"], fg=COLORS["text"], font=("Segoe UI", 13, "bold")).grid(
+        foxhole_panel = modern_frame(hero, "#101f34", radius=8, border=1, border_color="#203857")
+        foxhole_panel.pack(fill="x", padx=22, pady=(0, 18))
+        tk.Label(foxhole_panel, text="Foxhole", bg="#101f34", fg=COLORS["text"], font=("Segoe UI", 13, "bold")).grid(
             row=0, column=0, sticky="w", padx=16, pady=(14, 0)
         )
-        tk.Label(foxhole_panel, textvariable=self.foxhole_status_var, bg=COLORS["glass_2"], fg=COLORS["muted"], font=("Segoe UI", 10)).grid(
+        tk.Label(foxhole_panel, textvariable=self.foxhole_status_var, bg="#101f34", fg=COLORS["muted"], font=("Segoe UI", 10)).grid(
             row=1, column=0, sticky="w", padx=16, pady=(2, 14)
         )
         self.foxhole_button = modern_button(
@@ -795,16 +937,16 @@ class FelbApp(AppBase):
         foxhole_panel.columnconfigure(0, weight=1)
 
         grid = modern_frame(canvas, COLORS["bg"], radius=0)
-        grid_window = canvas.create_window(32, 348, window=grid, anchor="nw", width=840)
-        for column in range(2):
-            grid.columnconfigure(column, weight=1)
+        grid_window = canvas.create_window(24, 292, window=grid, anchor="nw", width=840)
+        grid.columnconfigure(0, weight=1)
+        grid.rowconfigure(0, weight=1)
+        self.home_chat_panel = HomeChatPanel(grid, self)
+        self.home_chat_panel.grid(row=0, column=0, sticky="nsew")
 
-        self.add_card(grid, self.tr.t("home.card_tools_title"), self.tr.t("home.card_tools_body"), 0, 0, "home_card_tools")
-        self.add_card(grid, self.tr.t("home.card_profile_title"), self.tr.t("home.card_profile_body"), 0, 1, "home_card_profile")
-        self.add_card(grid, self.tr.t("home.card_stockpile_title"), self.tr.t("home.card_stockpile_body"), 1, 0, "home_card_stockpile")
-        self.add_card(grid, self.tr.t("home.card_foxhole_title"), self.tr.t("home.card_foxhole_body"), 1, 1, "home_card_foxhole")
-
+        hero.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        grid.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda event: self.redraw_home_background(event, hero_window, grid_window))
+        self.bind_mousewheel_recursive(page, canvas)
         return page
 
     def redraw_home_background(self, event, hero_window: int, grid_window: int) -> None:
@@ -820,8 +962,9 @@ class FelbApp(AppBase):
         canvas.create_rectangle(0, 0, width, height, fill="#030914", stipple="gray25", outline="", tags="wallpaper")
         canvas.create_rectangle(0, int(height * 0.55), width, height, fill="#030914", stipple="gray50", outline="", tags="wallpaper")
         canvas.tag_lower("wallpaper")
-        canvas.itemconfigure(hero_window, width=min(780, max(320, width - 64)))
-        canvas.itemconfigure(grid_window, width=max(320, width - 64))
+        canvas.itemconfigure(hero_window, width=min(860, max(320, width - 48)))
+        canvas.itemconfigure(grid_window, width=max(320, width - 48))
+        canvas.configure(scrollregion=canvas.bbox("all"))
 
     def load_wallpaper(self, width: int, height: int) -> tk.PhotoImage | None:
         if not WALLPAPER_PATH.exists():
@@ -901,12 +1044,19 @@ class FelbApp(AppBase):
             self.ui_text[f"{key}_body"] = body_label
 
     def show_page(self, page_name: str) -> None:
+        self.current_page = page_name
         for name, page in self.pages.items():
             if name == page_name:
                 page.tkraise()
                 self.configure_button_color(self.nav_buttons[name], COLORS["card_2"], COLORS["text"])
             else:
                 self.configure_button_color(self.nav_buttons[name], COLORS["sidebar"], COLORS["muted"])
+        if self.stockpile_page and hasattr(self.stockpile_page, "set_active"):
+            self.stockpile_page.set_active(page_name == "stockpile")
+        if self.item_search_page and hasattr(self.item_search_page, "set_active"):
+            self.item_search_page.set_active(page_name == "item_search")
+        if self.home_chat_panel and hasattr(self.home_chat_panel, "set_active"):
+            self.home_chat_panel.set_active(page_name == "inicio")
 
     def draw_avatar_placeholder(self) -> None:
         canvas: tk.Canvas = self.avatar_canvas
@@ -933,6 +1083,19 @@ class FelbApp(AppBase):
 
     def refresh_steam_profile(self) -> None:
         self.profile = get_local_steam_profile()
+        print(
+            "[SteamProfile] refreshed steam_id=%r persona=%r account=%r avatar=%r"
+            % (
+                getattr(self.profile, "steam_id", None),
+                getattr(self.profile, "persona_name", None),
+                getattr(self.profile, "account_name", None),
+                str(getattr(self.profile, "avatar_path", None)) if getattr(self.profile, "avatar_path", None) else None,
+            ),
+            flush=True,
+        )
+        self.render_steam_profile(authenticate_chat=True)
+
+    def render_steam_profile(self, *, authenticate_chat: bool) -> None:
         self.load_avatar_if_possible()
 
         if self.profile.persona_name:
@@ -945,10 +1108,18 @@ class FelbApp(AppBase):
         details = [self.tr.t("steam.connected") if self.profile.steam_id else self.tr.t("steam.open_to_detect")]
         self.steam_label.configure(text="\n".join(details))
         self.update_user_status()
+        if authenticate_chat and self.home_chat_panel and hasattr(self.home_chat_panel, "authenticate"):
+            self.home_chat_panel.authenticate()
 
     def refresh_foxhole_status(self) -> None:
         running, started_at = self.get_foxhole_process_state()
         self.foxhole_running = running
+        self.foxhole_started_at = started_at
+        self.render_foxhole_status()
+
+    def render_foxhole_status(self) -> None:
+        running = self.foxhole_running
+        started_at = getattr(self, "foxhole_started_at", None)
         if running:
             duration = self.format_duration(datetime.now(timezone.utc) - started_at) if started_at else self.tr.t("duration.unknown")
             self.foxhole_status_var.set(self.tr.t("home.foxhole_running", duration=duration))
@@ -1055,8 +1226,233 @@ class FelbApp(AppBase):
         self.foxhole_status_var.set(self.tr.t("home.foxhole_opening"))
         self.after(5000, self.refresh_foxhole_status)
 
-    def check_for_updates(self) -> None:
+    def run_startup_prompt_sequence(self) -> None:
+        self.check_for_updates(on_done=self.run_post_update_prompts)
+
+    def run_post_update_prompts(self) -> None:
+        self.configure_windows_startup()
+        self.show_release_notes_if_needed()
+
+    def show_release_notes_if_needed(self) -> None:
+        self.settings = load_settings()
+        app_settings = self.settings.setdefault("app", {})
+        if app_settings.get("last_release_notes_version") == APP_VERSION:
+            return
+        self.show_release_notes_dialog()
+
+    def show_release_notes_dialog(self) -> None:
+        dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        dialog.title(self.tr.t("release.title", version=APP_VERSION))
+        dialog.geometry("520x390")
+        dialog.resizable(False, False)
+        configure_surface(dialog, COLORS["bg"])
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - 520) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - 390) // 2)
+        dialog.geometry(f"520x390+{x}+{y}")
+
+        panel = modern_frame(dialog, COLORS["card"], radius=22, border=1, border_color=COLORS["line"])
+        panel.pack(fill="both", expand=True, padx=16, pady=16)
+        tk.Label(
+            panel,
+            text=self.tr.t("release.heading", version=APP_VERSION),
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=("Segoe UI", 18, "bold"),
+        ).pack(anchor="w", padx=22, pady=(20, 4))
+        tk.Label(
+            panel,
+            text=self.tr.t("release.subtitle"),
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=("Segoe UI", 10),
+            wraplength=450,
+            justify="left",
+        ).pack(anchor="w", padx=22, pady=(0, 14))
+
+        notes = tk.Text(
+            panel,
+            height=9,
+            bg=COLORS["soft"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["accent"],
+            relief="flat",
+            padx=14,
+            pady=12,
+            font=("Segoe UI", 10),
+            wrap="word",
+        )
+        notes.pack(fill="both", expand=True, padx=22, pady=(0, 16))
+        notes.insert("1.0", self.tr.t("release.body"))
+        notes.configure(state="disabled")
+
+        actions = modern_frame(panel, COLORS["card"], radius=0)
+        actions.pack(fill="x", padx=22, pady=(0, 18))
+        def close_release_notes() -> None:
+            self.settings = load_settings()
+            app_settings = self.settings.setdefault("app", {})
+            app_settings["last_release_notes_version"] = APP_VERSION
+            save_settings(self.settings)
+            dialog.grab_release()
+            dialog.destroy()
+
+        modern_button(
+            actions,
+            text=self.tr.t("release.ok"),
+            command=close_release_notes,
+            color=COLORS["accent"],
+            text_color=COLORS["accent_text"],
+            hover=COLORS["accent_2"],
+            height=40,
+        ).pack(side="right")
+        dialog.protocol("WM_DELETE_WINDOW", close_release_notes)
+
+    def configure_windows_startup(self) -> None:
+        self.settings = load_settings()
+        app_settings = self.settings.setdefault("app", {})
+        if app_settings.get("start_with_windows"):
+            try:
+                self.set_start_with_windows(True)
+            except Exception as exc:
+                print(f"[Startup] failed: {exc}", flush=True)
+            return
+
+        if app_settings.get("startup_prompted"):
+            return
+
+        wants_startup = messagebox.askyesno(
+            self.tr.t("startup.title"),
+            self.tr.t("startup.body"),
+            parent=self,
+        )
+        app_settings["startup_prompted"] = True
+        app_settings["start_with_windows"] = bool(wants_startup)
+        save_settings(self.settings)
+        if wants_startup:
+            try:
+                self.set_start_with_windows(True)
+            except Exception as exc:
+                print(f"[Startup] failed: {exc}", flush=True)
+
+    def startup_target_and_args(self) -> tuple[Path, str]:
+        if getattr(sys, "frozen", False):
+            return Path(sys.executable).resolve(), ""
+
+        python_exe = Path(sys.executable).resolve()
+        pythonw = python_exe.with_name("pythonw.exe")
+        if pythonw.exists():
+            python_exe = pythonw
+        return python_exe, f'"{(BASE_DIR / "felb_app.py").resolve()}"'
+
+    def startup_command(self) -> str:
+        target, arguments = self.startup_target_and_args()
+        return f'"{target}" {arguments}'.strip()
+
+    def startup_dir(self) -> Path:
+        return Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+    def startup_shortcut_path(self) -> Path:
+        return self.startup_dir() / f"{APP_TITLE}.lnk"
+
+    def startup_script_path(self) -> Path:
+        return self.startup_dir() / f"{APP_TITLE}.vbs"
+
+    def create_startup_shortcut(self) -> None:
+        target, arguments = self.startup_target_and_args()
+        shortcut_path = self.startup_shortcut_path()
+        shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+        icon_path = ICON_ICO_PATH if ICON_ICO_PATH.exists() else target
+        powershell_script = (
+            "param($shortcutPath,$targetPath,$arguments,$workingDirectory,$iconLocation,$description);"
+            "$shell=New-Object -ComObject WScript.Shell;"
+            "$shortcut=$shell.CreateShortcut($shortcutPath);"
+            "$shortcut.TargetPath=$targetPath;"
+            "$shortcut.Arguments=$arguments;"
+            "$shortcut.WorkingDirectory=$workingDirectory;"
+            "$shortcut.IconLocation=$iconLocation;"
+            "$shortcut.Description=$description;"
+            "$shortcut.Save();"
+        )
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                powershell_script,
+                str(shortcut_path),
+                str(target),
+                arguments,
+                str(BASE_DIR),
+                str(icon_path),
+                APP_TITLE,
+            ],
+            check=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
+    def create_startup_script(self) -> None:
+        script_path = self.startup_script_path()
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        command = self.startup_command().replace('"', '""')
+        working_dir = str(BASE_DIR).replace('"', '""')
+        script_path.write_text(
+            "\n".join(
+                [
+                    'Set shell = CreateObject("WScript.Shell")',
+                    f'shell.CurrentDirectory = "{working_dir}"',
+                    f'shell.Run "{command}", 0, False',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def create_startup_entry(self) -> None:
+        try:
+            self.create_startup_shortcut()
+            if self.startup_script_path().exists():
+                self.startup_script_path().unlink()
+        except Exception as exc:
+            print(f"[Startup] shortcut failed, using script fallback: {exc}", flush=True)
+            self.create_startup_script()
+
+    def remove_startup_shortcut(self) -> None:
+        shortcut_path = self.startup_shortcut_path()
+        if shortcut_path.exists():
+            shortcut_path.unlink()
+        script_path = self.startup_script_path()
+        if script_path.exists():
+            script_path.unlink()
+
+    def set_start_with_windows(self, enabled: bool) -> None:
+        import winreg
+
+        run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
+            if enabled:
+                self.create_startup_entry()
+                if getattr(sys, "frozen", False):
+                    winreg.SetValueEx(key, APP_TITLE, 0, winreg.REG_SZ, self.startup_command())
+                else:
+                    try:
+                        winreg.DeleteValue(key, APP_TITLE)
+                    except FileNotFoundError:
+                        pass
+            else:
+                try:
+                    winreg.DeleteValue(key, APP_TITLE)
+                except FileNotFoundError:
+                    pass
+                self.remove_startup_shortcut()
+
+    def check_for_updates(self, on_done=None) -> None:
         if not UPDATE_REPO:
+            if on_done:
+                self.after(0, on_done)
             return
 
         def worker() -> None:
@@ -1064,41 +1460,229 @@ class FelbApp(AppBase):
                 update = check_latest_release(UPDATE_REPO, APP_VERSION)
             except Exception as exc:
                 print(f"[Updater] check failed: {exc}", flush=True)
+                if on_done:
+                    self.after(0, on_done)
                 return
             if update:
-                self.after(0, lambda: self.offer_update(update))
+                self.after(0, lambda: self.offer_update(update, on_done=on_done))
+            elif on_done:
+                self.after(0, on_done)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def offer_update(self, update) -> None:
-        wants_update = messagebox.askyesno(
-            "Atualizacao disponivel",
-            f"Existe uma nova versao do GG Coalition: {update.version}\n\n"
-            "Deseja baixar e instalar agora?",
-            parent=self,
-        )
+    def offer_update(self, update, on_done=None) -> None:
+        wants_update = self.ask_update_dialog(update)
         if not wants_update:
+            if on_done:
+                on_done()
             return
+
+        progress_dialog, progress_text, progress_bar = self.show_update_progress(update.version)
 
         def worker() -> None:
             try:
-                zip_path = download_update(update)
+                self.after(0, progress_text.set, self.tr.t("update.downloading"))
+
+                def on_download_progress(downloaded: int, total: int) -> None:
+                    if total > 0:
+                        percent = int((downloaded / total) * 100)
+                        mb_done = downloaded / (1024 * 1024)
+                        mb_total = total / (1024 * 1024)
+                        text = f"{self.tr.t('update.downloading')} {percent}% ({mb_done:.1f}/{mb_total:.1f} MB)"
+                        self.after(0, lambda value=percent: progress_bar.configure(mode="determinate", value=value))
+                    else:
+                        mb_done = downloaded / (1024 * 1024)
+                        text = f"{self.tr.t('update.downloading')} {mb_done:.1f} MB"
+                    self.after(0, progress_text.set, text)
+
+                zip_path = download_update(update, progress_callback=on_download_progress)
+                self.after(0, progress_text.set, self.tr.t("update.launching"))
                 launch_updater(zip_path, self.runtime_dir(), self.launch_target())
                 self.after(0, self.exit_app)
             except Exception as exc:
-                self.after(0, lambda: messagebox.showerror("Erro ao atualizar", str(exc), parent=self))
+                self.after(0, progress_dialog.destroy)
+                self.after(0, lambda: messagebox.showerror(self.tr.t("update.error_title"), str(exc), parent=self))
+                if on_done:
+                    self.after(0, on_done)
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def ask_update_dialog(self, update) -> bool:
+        dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        dialog.title(self.tr.t("update.available_title"))
+        dialog.geometry("560x430")
+        dialog.resizable(False, False)
+        configure_surface(dialog, COLORS["bg"])
+        dialog.transient(self)
+        dialog.grab_set()
+        result = {"value": False}
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - 560) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - 430) // 2)
+        dialog.geometry(f"560x430+{x}+{y}")
+
+        panel = modern_frame(dialog, COLORS["card"], radius=22, border=1, border_color=COLORS["accent"])
+        panel.pack(fill="both", expand=True, padx=16, pady=16)
+        tk.Label(
+            panel,
+            text=self.tr.t("update.available_title"),
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=("Segoe UI", 19, "bold"),
+        ).pack(anchor="w", padx=22, pady=(20, 4))
+        tk.Label(
+            panel,
+            text=self.tr.t("update.available_body", version=update.version),
+            bg=COLORS["card"],
+            fg=COLORS["accent_2"],
+            font=("Segoe UI", 10, "bold"),
+            wraplength=500,
+            justify="left",
+        ).pack(anchor="w", padx=22, pady=(0, 12))
+
+        release_text = str(getattr(update, "body", "") or "").strip() or str(getattr(update, "name", "") or update.version)
+        notes = tk.Text(
+            panel,
+            height=9,
+            bg=COLORS["soft"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["accent"],
+            relief="flat",
+            padx=14,
+            pady=12,
+            font=("Segoe UI", 10),
+            wrap="word",
+        )
+        notes.pack(fill="both", expand=True, padx=22, pady=(0, 16))
+        notes.insert("1.0", release_text)
+        notes.configure(state="disabled")
+
+        actions = modern_frame(panel, COLORS["card"], radius=0)
+        actions.pack(fill="x", padx=22, pady=(0, 18))
+
+        def close(value: bool) -> None:
+            result["value"] = value
+            dialog.grab_release()
+            dialog.destroy()
+
+        modern_button(
+            actions,
+            text="Depois",
+            command=lambda: close(False),
+            color=COLORS["soft"],
+            text_color=COLORS["text"],
+            height=40,
+        ).pack(side="right", padx=(10, 0))
+        modern_button(
+            actions,
+            text="Atualizar agora",
+            command=lambda: close(True),
+            color=COLORS["accent"],
+            text_color=COLORS["accent_text"],
+            hover=COLORS["accent_2"],
+            height=40,
+        ).pack(side="right")
+        dialog.protocol("WM_DELETE_WINDOW", lambda: close(False))
+        self.wait_window(dialog)
+        return bool(result["value"])
+
+    def show_update_progress(self, version: str):
+        dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        dialog.title(self.tr.t("update.progress_title"))
+        dialog.geometry("430x180")
+        dialog.resizable(False, False)
+        configure_surface(dialog, COLORS["bg"])
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - 430) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - 180) // 2)
+        dialog.geometry(f"430x180+{x}+{y}")
+
+        panel = modern_frame(dialog, COLORS["card"], radius=22, border=1, border_color=COLORS["line"])
+        panel.pack(fill="both", expand=True, padx=16, pady=16)
+        tk.Label(panel, text=self.tr.t("update.progress_title"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 16, "bold")).pack(
+            anchor="w", padx=20, pady=(18, 4)
+        )
+        progress_text = tk.StringVar(value=self.tr.t("update.download_prepare", version=version))
+        tk.Label(panel, textvariable=progress_text, bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 10)).pack(
+            anchor="w", padx=20, pady=(0, 14)
+        )
+        bar = ttk.Progressbar(panel, mode="indeterminate", length=340, maximum=100)
+        bar.pack(fill="x", padx=20)
+        bar.start(12)
+        return dialog, progress_text, bar
+
     def runtime_dir(self) -> Path:
         if getattr(sys, "frozen", False):
-            return Path(sys.executable).resolve().parent
+            return self.launch_target().parent
         return BASE_DIR
 
     def launch_target(self) -> Path:
         if getattr(sys, "frozen", False):
-            return Path(sys.executable).resolve()
+            candidates: list[Path] = []
+            for value in (sys.argv[0], sys.executable, self.module_file_name()):
+                if not value:
+                    continue
+                try:
+                    candidates.append(Path(value).resolve())
+                except OSError:
+                    continue
+            try:
+                candidates.append((Path.cwd() / APP_EXE_NAME).resolve())
+            except OSError:
+                pass
+            saved = self.settings.get("app", {}).get("install_exe")
+            if saved:
+                try:
+                    candidates.append(Path(str(saved)).resolve())
+                except OSError:
+                    pass
+
+            valid = [
+                candidate
+                for candidate in candidates
+                if candidate.exists()
+                and candidate.is_file()
+                and candidate.suffix.lower() == ".exe"
+                and not self.is_temp_runtime_path(candidate)
+            ]
+            if not valid:
+                details = "\n".join(str(candidate) for candidate in candidates)
+                raise RuntimeError("Nao consegui identificar o executavel instalado fora da pasta temporaria:\n" + details)
+            named = [candidate for candidate in valid if candidate.name.lower() == APP_EXE_NAME.lower()]
+            chosen = (named or valid)[0]
+            if chosen.exists() and not self.is_temp_runtime_path(chosen):
+                self.remember_install_exe(chosen)
+            return chosen
         return BASE_DIR / "felb_app.py"
+
+    def module_file_name(self) -> str:
+        try:
+            buffer = ctypes.create_unicode_buffer(32768)
+            ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, len(buffer))
+            return buffer.value
+        except Exception:
+            return ""
+
+    def is_temp_runtime_path(self, path: Path) -> bool:
+        try:
+            resolved = path.resolve()
+            temp_root = Path(tempfile.gettempdir()).resolve()
+            if resolved == temp_root or temp_root in resolved.parents:
+                return True
+            lowered = str(resolved).lower()
+            return "onefile" in lowered and ("temp" in lowered or "tmp" in lowered)
+        except OSError:
+            return False
+
+    def remember_install_exe(self, path: Path) -> None:
+        try:
+            self.settings = load_settings()
+            self.settings.setdefault("app", {})["install_exe"] = str(path)
+            save_settings(self.settings)
+        except Exception as exc:
+            print(f"[Updater] nao consegui salvar install_exe: {exc}", flush=True)
 
     def on_unmap(self, event) -> None:
         if event.widget is not self:
@@ -1123,7 +1707,7 @@ class FelbApp(AppBase):
 
     def show_close_dialog(self) -> None:
         dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
-        dialog.title("Fechar GG Coalition")
+        dialog.title(self.tr.t("close.title"))
         dialog.geometry("430x230")
         dialog.resizable(False, False)
         configure_surface(dialog, COLORS["bg"])
@@ -1136,12 +1720,12 @@ class FelbApp(AppBase):
 
         panel = modern_frame(dialog, COLORS["card"], radius=22, border=1, border_color=COLORS["line"])
         panel.pack(fill="both", expand=True, padx=16, pady=16)
-        tk.Label(panel, text="O que deseja fazer?", bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).pack(
+        tk.Label(panel, text=self.tr.t("close.heading"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).pack(
             anchor="w", padx=20, pady=(18, 4)
         )
         tk.Label(
             panel,
-            text="Voce pode fechar de verdade ou deixar o app rodando em segundo plano na bandeja do Windows.",
+            text=self.tr.t("close.body"),
             bg=COLORS["card"],
             fg=COLORS["muted"],
             font=("Segoe UI", 10),
@@ -1153,7 +1737,7 @@ class FelbApp(AppBase):
         if ctk is not None:
             checkbox = ctk.CTkCheckBox(
                 panel,
-                text="Nao perguntar novamente",
+                text=self.tr.t("close.remember"),
                 variable=remember_var,
                 fg_color=COLORS["accent"],
                 hover_color=COLORS["accent_2"],
@@ -1163,7 +1747,7 @@ class FelbApp(AppBase):
         else:
             checkbox = tk.Checkbutton(
                 panel,
-                text="Nao perguntar novamente",
+                text=self.tr.t("close.remember"),
                 variable=remember_var,
                 bg=COLORS["card"],
                 fg=COLORS["text"],
@@ -1191,7 +1775,7 @@ class FelbApp(AppBase):
 
         modern_button(
             actions,
-            text="Segundo plano",
+            text=self.tr.t("close.tray"),
             command=lambda: choose("tray"),
             color=COLORS["accent"],
             text_color=COLORS["accent_text"],
@@ -1200,7 +1784,7 @@ class FelbApp(AppBase):
         ).pack(side="left", fill="x", expand=True, padx=(0, 8))
         modern_button(
             actions,
-            text="Fechar",
+            text=self.tr.t("close.exit"),
             command=lambda: choose("exit"),
             color=COLORS["soft"],
             text_color=COLORS["text"],
@@ -1215,8 +1799,8 @@ class FelbApp(AppBase):
             return
         self.iconify()
         messagebox.showwarning(
-            "Bandeja indisponivel",
-            "Instale a dependencia pystray para esconder no canto do Windows.",
+            self.tr.t("tray.unavailable_title"),
+            self.tr.t("tray.unavailable_body"),
             parent=self,
         )
 
@@ -1227,8 +1811,8 @@ class FelbApp(AppBase):
             return True
         image = self.create_tray_image()
         menu = pystray.Menu(
-            pystray.MenuItem("Abrir GG Coalition", lambda _icon, _item: self.after(0, self.show_from_tray), default=True),
-            pystray.MenuItem("Fechar", lambda _icon, _item: self.after(0, self.exit_app)),
+            pystray.MenuItem(self.tr.t("tray.open"), lambda _icon, _item: self.after(0, self.show_from_tray), default=True),
+            pystray.MenuItem(self.tr.t("tray.exit"), lambda _icon, _item: self.after(0, self.exit_app)),
         )
         self.tray_icon = pystray.Icon("GG Coalition", image, "GG Coalition", menu)
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
@@ -1239,8 +1823,7 @@ class FelbApp(AppBase):
         if Image is None:
             return None
         try:
-            image = Image.open(ICON_PATH).convert("RGBA")
-            image.thumbnail((64, 64))
+            image = self.prepare_icon_frame(Image.open(ICON_PATH), 64)
             canvas = Image.new("RGBA", (64, 64), (7, 11, 22, 255))
             x = (64 - image.width) // 2
             y = (64 - image.height) // 2
@@ -1278,6 +1861,12 @@ class FelbApp(AppBase):
             self.functions_page.stop()
         if self.stockpile_page:
             self.stockpile_page.stop()
+        if self.notifications_page:
+            self.notifications_page.stop()
+        if self.item_search_page:
+            self.item_search_page.stop()
+        if self.home_chat_panel:
+            self.home_chat_panel.stop()
         self.destroy()
 
 
