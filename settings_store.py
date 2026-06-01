@@ -49,6 +49,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "last_release_notes_version": "",
         "stockpile_sound_enabled": True,
         "squadlock_sound_enabled": True,
+        "chat_mention_overlay_enabled": True,
+        "chat_mention_sound_enabled": True,
     },
 }
 

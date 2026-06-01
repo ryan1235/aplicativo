@@ -6,12 +6,14 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 import zipfile
 from typing import Callable
 
 
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
+GITHUB_TAG_API = "https://api.github.com/repos/{repo}/releases/tags/{tag}"
 APP_EXE_NAME = "GG Coalition.exe"
 UPDATER_EXE_NAME = "GG Updater.exe"
 MIN_UPDATE_ZIP_SIZE = 1024 * 1024
@@ -91,6 +93,31 @@ def check_latest_release(repo: str, current_version: str, timeout: int = 8) -> U
     )
 
 
+def fetch_release_description(repo: str, version: str, timeout: int = 8) -> str:
+    if not repo or "/" not in repo:
+        return ""
+    tags = [version]
+    if not version.lower().startswith("v"):
+        tags.insert(0, f"v{version}")
+    for tag in tags:
+        request = urllib.request.Request(
+            GITHUB_TAG_API.format(repo=repo, tag=urllib.parse.quote(tag, safe="")),
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "GG-Coalition-Updater",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                release = json.loads(response.read().decode("utf-8"))
+        except Exception:
+            continue
+        body = str(release.get("body") or "").strip()
+        if body:
+            return body
+    return ""
+
+
 def download_update(update: UpdateInfo, timeout: int = 60, progress_callback: Callable[[int, int], None] | None = None) -> Path:
     target_dir = Path(tempfile.mkdtemp(prefix="gg_coalition_download_"))
     target = target_dir / safe_asset_name(update.asset_name)
@@ -116,8 +143,9 @@ def download_update(update: UpdateInfo, timeout: int = 60, progress_callback: Ca
 
 
 def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path) -> None:
-    validate_update_zip(zip_path, require_updater=False)
-    updater_exe = app_dir / UPDATER_EXE_NAME
+    validate_update_zip(zip_path, require_updater=True)
+    temp_update_dir = extract_update_package(zip_path)
+    updater_exe = temp_update_dir / UPDATER_EXE_NAME
     updater_py = Path(__file__).resolve().with_name("updater.py")
     args = [
         "--zip",
@@ -134,11 +162,7 @@ def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path) -> None:
     elif updater_py.exists():
         command = [sys.executable, str(updater_py), *args]
     else:
-        temp_updater = extract_updater_from_zip(zip_path)
-        if temp_updater:
-            command = [str(temp_updater), *args]
-        else:
-            command = []
+        command = []
     if not command:
         raise RuntimeError(
             "Nao encontrei um atualizador local confiavel. "
@@ -151,31 +175,14 @@ def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path) -> None:
     subprocess.Popen(command, cwd=str(executable.parent), close_fds=True)
 
 
-def extract_updater_from_zip(zip_path: Path) -> Path | None:
-    try:
-        with zipfile.ZipFile(zip_path, "r") as archive:
-            match = next(
-                (
-                    name
-                    for name in archive.namelist()
-                    if Path(name).name.lower() == UPDATER_EXE_NAME.lower()
-                ),
-                None,
-            )
-            if not match:
-                return None
-            target = Path(tempfile.mkdtemp(prefix="gg_coalition_updater_")) / UPDATER_EXE_NAME
-            try:
-                target.write_bytes(archive.read(match))
-            except OSError as exc:
-                if getattr(exc, "winerror", None) == 225:
-                    return None
-                raise
-            if not target.exists() or target.stat().st_size == 0:
-                return None
-            return target
-    except Exception:
-        return None
+def extract_update_package(zip_path: Path) -> Path:
+    target = Path(tempfile.mkdtemp(prefix="gg_coalition_update_runner_"))
+    with zipfile.ZipFile(zip_path, "r") as archive:
+        archive.extractall(target)
+    entries = [item for item in target.iterdir()]
+    if len(entries) == 1 and entries[0].is_dir():
+        return entries[0]
+    return target
 
 
 def validate_update_zip(zip_path: Path, *, require_updater: bool = True) -> None:

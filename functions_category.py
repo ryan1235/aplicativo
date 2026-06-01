@@ -165,8 +165,9 @@ def configure_surface(widget, color: str) -> None:
 
 
 class AutoClickerOverlay:
-    def __init__(self, parent: tk.Widget) -> None:
+    def __init__(self, parent: tk.Widget, translator: Translator | None = None) -> None:
         self.parent = parent
+        self.tr = translator or Translator()
         self.focus_check = lambda: False
         self.enabled_by_hotkey = True
         self.show_profile = True
@@ -195,7 +196,7 @@ class AutoClickerOverlay:
 
         self.status_label = tk.Label(
             self.shell,
-            text="AUTO CLICKER",
+            text=self.tr.t("overlay.clicker_title"),
             bg=self.palette["panel"],
             fg=self.palette["accent"],
             font=("Segoe UI", 8, "bold"),
@@ -205,7 +206,7 @@ class AutoClickerOverlay:
         self.status_label.pack(fill="x")
         self.profile_label = tk.Label(
             self.shell,
-            text="Perfil",
+            text=self.tr.t("overlay.profile"),
             bg=self.palette["panel"],
             fg=COLORS["muted"],
             font=("Segoe UI", 8, "bold"),
@@ -215,7 +216,7 @@ class AutoClickerOverlay:
         self.profile_label.pack(fill="x")
         self.detail_label = tk.Label(
             self.shell,
-            text="Pausado",
+            text=self.tr.t("clicker.paused_badge"),
             bg=self.palette["panel"],
             fg=COLORS["text"],
             font=("Segoe UI", 9, "bold"),
@@ -225,7 +226,7 @@ class AutoClickerOverlay:
         self.detail_label.pack(fill="x")
         self.target_label = tk.Label(
             self.shell,
-            text="Foxhole",
+            text=self.tr.t("overlay.target_default"),
             bg=self.palette["panel"],
             fg=COLORS["muted"],
             font=("Segoe UI", 8),
@@ -236,7 +237,7 @@ class AutoClickerOverlay:
 
         self.adjust_label = tk.Label(
             self.shell,
-            text="Arraste para mover",
+            text=self.tr.t("overlay.drag_hint"),
             bg=self.palette["panel"],
             fg=COLORS["accent"],
             font=("Segoe UI", 8, "bold"),
@@ -277,7 +278,7 @@ class AutoClickerOverlay:
         self.notification_icon.grid(row=0, column=0, sticky="ns", padx=(12, 8), pady=12)
         self.notification_text = tk.Label(
             self.notification_shell,
-            text="Upload enviado com sucesso",
+            text=self.tr.t("stockpile.upload_success", count=1),
             bg=self.palette["panel"],
             fg=COLORS["text"],
             font=("Segoe UI", 9, "bold"),
@@ -317,7 +318,7 @@ class AutoClickerOverlay:
         self.adjust_controls_shell.pack(fill="both", expand=True, padx=4, pady=4)
         self.adjust_controls_label = tk.Label(
             self.adjust_controls_shell,
-            text="Ajuste os overlays",
+            text=self.tr.t("overlay.adjust_title"),
             bg=COLORS["card"],
             fg=COLORS["text"],
             font=("Segoe UI", 9, "bold"),
@@ -327,7 +328,7 @@ class AutoClickerOverlay:
         self.adjust_controls_label.grid(row=0, column=0, sticky="ew", padx=(8, 4), pady=8)
         self.adjust_confirm_button = tk.Button(
             self.adjust_controls_shell,
-            text="Salvar posicoes",
+            text=self.tr.t("overlay.save_positions"),
             command=self.finish_adjust_positions,
             bg=COLORS["accent"],
             fg=COLORS["accent_text"],
@@ -561,18 +562,27 @@ class AutoClickerOverlay:
             if not self.adjusting:
                 self.window.withdraw()
 
-    def show_success_notification(self, text: str = "Upload enviado com sucesso") -> None:
+    def show_success_notification(self, text: str | None = None) -> None:
         if not self.notification.winfo_exists():
             return
         if not self.focus_check():
             return
-        self.notification_text.configure(text=text)
+        self.notification_text.configure(text=text or self.tr.t("stockpile.upload_success", count=1))
         self.position_notification()
         self.notification.attributes("-topmost", True)
         self.notification.deiconify()
         self.set_click_through(True)
         self.start_topmost_watch()
         self.notification.after(4500, self.hide_notification_if_needed)
+
+    def set_translator(self, translator: Translator) -> None:
+        self.tr = translator
+        self.status_label.configure(text=self.tr.t("overlay.clicker_title"))
+        self.profile_label.configure(text=self.tr.t("overlay.profile"))
+        self.adjust_label.configure(text=self.tr.t("overlay.drag_hint"))
+        self.notification_text.configure(text=self.tr.t("stockpile.upload_success", count=1))
+        self.adjust_controls_label.configure(text=self.tr.t("overlay.adjust_title"))
+        self.adjust_confirm_button.configure(text=self.tr.t("overlay.save_positions"))
 
     def hide_notification_if_needed(self) -> None:
         if not self.adjusting and self.notification.winfo_exists():
@@ -590,7 +600,7 @@ class AutoClickerOverlay:
         self.adjust_label.pack(fill="x")
         self.panel_close_button.pack(anchor="ne", padx=8, pady=(2, 6))
         self.window.deiconify()
-        self.notification_text.configure(text="Upload enviado com sucesso")
+        self.notification_text.configure(text=self.tr.t("stockpile.upload_success", count=1))
         self.notification_close_button.grid(row=0, column=2, sticky="ne", padx=(0, 8), pady=8)
         self.notification.deiconify()
         self.adjust_controls.deiconify()
@@ -695,16 +705,16 @@ class AutoClickerOverlay:
             self.profile_label.pack(fill="x", after=self.status_label)
 
         if enabled:
-            self.status_label.configure(text="AUTO CLICKER ATIVO", fg=COLORS["good"])
+            self.status_label.configure(text=self.tr.t("overlay.clicker_active"), fg=COLORS["good"])
             self.detail_label.configure(text=f"{hotkey} | {interval:.2f}s", fg=COLORS["text"])
         else:
-            self.status_label.configure(text="AUTO CLICKER PAUSADO", fg=COLORS["warn"])
-            self.detail_label.configure(text=f"{hotkey} para ligar", fg=COLORS["muted"])
+            self.status_label.configure(text=self.tr.t("overlay.clicker_paused"), fg=COLORS["warn"])
+            self.detail_label.configure(text=self.tr.t("overlay.hotkey_to_start", hotkey=hotkey), fg=COLORS["muted"])
         self.detail_label.pack_forget()
         if self.show_clicker:
             self.detail_label.pack(fill="x", after=self.profile_label if self.show_profile else self.status_label)
 
-        self.target_label.configure(text=target_title if target_title else "Foxhole")
+        self.target_label.configure(text=target_title if target_title else self.tr.t("overlay.target_default"))
         self.target_label.pack_forget()
         if self.show_target:
             self.target_label.pack(fill="x")
@@ -736,7 +746,7 @@ class FunctionsCategory(ttk.Frame):
         self.clicker_status_var = tk.StringVar(value=self.tr.t("clicker.off"))
         self.foxhole_status_var = tk.StringVar(value=self.tr.t("clicker.find_hint"))
         self.clicker = AutoClicker(self.set_clicker_status)
-        self.overlay = AutoClickerOverlay(self)
+        self.overlay = AutoClickerOverlay(self, self.tr)
         self.overlay.set_focus_checker(self.is_foxhole_overlay_context)
         self.overlay_hotkey_was_down = False
         self.last_overlay_reason = ""
@@ -745,6 +755,8 @@ class FunctionsCategory(ttk.Frame):
         self.hotkey_var = tk.StringVar(value=clicker_settings.get("hotkey", "F3"))
         self.mouse_button_var = tk.StringVar(value=clicker_settings.get("mouse_button", "Esquerdo"))
         self.speed_var = tk.StringVar(value=saved_speed)
+        self.mouse_button_display_var = tk.StringVar(value=self.mouse_button_label(self.mouse_button_var.get()))
+        self.speed_display_var = tk.StringVar(value=self.speed_label(self.speed_var.get()))
         self.overlay_enabled_var = tk.BooleanVar(value=bool(clicker_settings.get("overlay_enabled", True)))
         self.overlay_hotkey_var = tk.StringVar(value=clicker_settings.get("overlay_hotkey", "F8"))
         self.overlay_color_var = tk.StringVar(value=clicker_settings.get("overlay_color", "Azul"))
@@ -773,7 +785,7 @@ class FunctionsCategory(ttk.Frame):
         self.ui_text["tools_title"].grid(
             row=0, column=0, sticky="w", padx=22, pady=(20, 2)
         )
-        tk.Label(container, text="🖱️ Auto Clicker", bg=COLORS["bg"], fg=COLORS["accent_2"], font=("Segoe UI", 11, "bold")).grid(
+        tk.Label(container, text=self.tr.t("tools.subtitle"), bg=COLORS["bg"], fg=COLORS["accent_2"], font=("Segoe UI", 11, "bold")).grid(
             row=1, column=0, sticky="w", padx=22, pady=(0, 16)
         )
 
@@ -812,14 +824,18 @@ class FunctionsCategory(ttk.Frame):
         )
 
         self.add_label(controls, self.tr.t("clicker.speed"), 1)
-        ttk.Combobox(controls, textvariable=self.speed_var, values=list(SPEEDS.keys()), state="readonly", width=12).grid(
+        speed_combo = ttk.Combobox(controls, textvariable=self.speed_display_var, values=self.speed_labels(), state="readonly", width=12)
+        speed_combo.grid(
             row=1, column=1, sticky="w", padx=14, pady=10
         )
+        speed_combo.bind("<<ComboboxSelected>>", self.on_speed_selected)
 
         self.add_label(controls, self.tr.t("clicker.button"), 2)
-        ttk.Combobox(controls, textvariable=self.mouse_button_var, values=list(MOUSE_BUTTONS.keys()), state="readonly", width=12).grid(
+        mouse_button_combo = ttk.Combobox(controls, textvariable=self.mouse_button_display_var, values=self.mouse_button_labels(), state="readonly", width=12)
+        mouse_button_combo.grid(
             row=2, column=1, sticky="w", padx=14, pady=10
         )
+        mouse_button_combo.bind("<<ComboboxSelected>>", self.on_mouse_button_selected)
 
         target_box = modern_frame(card, COLORS["card"], radius=0)
         target_box.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 16))
@@ -872,7 +888,7 @@ class FunctionsCategory(ttk.Frame):
         overlay_card = modern_frame(parent, COLORS["card"], radius=24, border=1, border_color=COLORS["line"])
         overlay_card.grid(row=row, column=0, sticky="ew", padx=22, pady=(0, 16))
         overlay_card.columnconfigure(1, weight=1)
-        tk.Label(overlay_card, text="Overlay", bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).grid(
+        tk.Label(overlay_card, text=self.tr.t("overlay.title"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=20, pady=(18, 8)
         )
         tk.Checkbutton(
@@ -907,7 +923,7 @@ class FunctionsCategory(ttk.Frame):
         for index, (label, variable) in enumerate(
             (
                 (self.tr.t("overlay.profile"), self.overlay_profile_var),
-                ("Auto Clicker", self.overlay_clicker_var),
+                (self.tr.t("overlay.clicker_title"), self.overlay_clicker_var),
                 (self.tr.t("overlay.target"), self.overlay_target_var),
                 (self.tr.t("overlay.upload_notification"), self.overlay_notification_var),
             )
@@ -942,6 +958,49 @@ class FunctionsCategory(ttk.Frame):
 
     def overlay_color_labels(self) -> list[str]:
         return [self.overlay_color_label(name) for name in OVERLAY_COLORS]
+
+    def speed_label(self, speed_name: str) -> str:
+        return self.tr.t(
+            {
+                "Devagar": "clicker.speed_slow",
+                "Normal": "clicker.speed_normal",
+                "Rapido": "clicker.speed_fast",
+            }.get(speed_name, "clicker.speed_normal")
+        )
+
+    def speed_labels(self) -> list[str]:
+        return [self.speed_label(name) for name in SPEEDS]
+
+    def speed_name_from_label(self, label: str) -> str:
+        for name in SPEEDS:
+            if self.speed_label(name) == label:
+                return name
+        return "Normal"
+
+    def mouse_button_label(self, button_name: str) -> str:
+        return self.tr.t(
+            {
+                "Esquerdo": "clicker.mouse_left",
+                "Direito": "clicker.mouse_right",
+            }.get(button_name, "clicker.mouse_left")
+        )
+
+    def mouse_button_labels(self) -> list[str]:
+        return [self.mouse_button_label(name) for name in MOUSE_BUTTONS]
+
+    def mouse_button_name_from_label(self, label: str) -> str:
+        for name in MOUSE_BUTTONS:
+            if self.mouse_button_label(name) == label:
+                return name
+        return "Esquerdo"
+
+    def on_speed_selected(self, _event=None) -> None:
+        self.speed_var.set(self.speed_name_from_label(self.speed_display_var.get()))
+        self.save_clicker_settings()
+
+    def on_mouse_button_selected(self, _event=None) -> None:
+        self.mouse_button_var.set(self.mouse_button_name_from_label(self.mouse_button_display_var.get()))
+        self.save_clicker_settings()
 
     def overlay_color_from_label(self, label: str) -> str:
         for color_name in OVERLAY_COLORS:
@@ -1087,6 +1146,7 @@ class FunctionsCategory(ttk.Frame):
 
     def refresh_language(self, translator: Translator) -> None:
         self.tr = translator
+        self.overlay.set_translator(translator)
         overlay_was_enabled = self.overlay_enabled_var.get()
         notification_was_enabled = self.overlay_notification_var.get()
         panel_position = (self.overlay_panel_x, self.overlay_panel_y)
@@ -1098,6 +1158,8 @@ class FunctionsCategory(ttk.Frame):
         self.overlay_notification_var.set(notification_was_enabled)
         self.overlay_panel_x, self.overlay_panel_y = panel_position
         self.overlay_notification_x, self.overlay_notification_y = notification_position
+        self.speed_display_var.set(self.speed_label(self.speed_var.get()))
+        self.mouse_button_display_var.set(self.mouse_button_label(self.mouse_button_var.get()))
         self.overlay_color_display_var.set(self.overlay_color_label(self.overlay_color_var.get()))
         self.build()
         self.apply_clicker_settings(save=False)
@@ -1125,7 +1187,7 @@ class FunctionsCategory(ttk.Frame):
 
     def should_show_overlay(self) -> bool:
         if not self.overlay_enabled_var.get():
-            self.log_overlay_reason("desativado nas configuracoes")
+            self.log_overlay_reason(self.tr.t("overlay.hidden_disabled"))
             return False
         if not self.clicker.target_hwnd or not self.clicker.user32.IsWindow(self.clicker.target_hwnd):
             now = time.monotonic()
@@ -1133,7 +1195,7 @@ class FunctionsCategory(ttk.Frame):
                 self.last_overlay_find_attempt = now
                 self.clicker.use_foxhole_window(quiet=True)
         if not self.clicker.target_hwnd or not self.clicker.user32.IsWindow(self.clicker.target_hwnd):
-            self.log_overlay_reason("Foxhole nao capturado/encontrado")
+            self.log_overlay_reason(self.tr.t("overlay.hidden_not_captured"))
             return False
 
         foreground = self.clicker.user32.GetForegroundWindow()
@@ -1156,14 +1218,14 @@ class FunctionsCategory(ttk.Frame):
                 self.last_overlay_reason = ""
                 return True
 
-        self.log_overlay_reason("Foxhole nao esta em foco")
+        self.log_overlay_reason(self.tr.t("overlay.hidden_not_focused"))
         return False
 
     def log_overlay_reason(self, reason: str) -> None:
         if reason == self.last_overlay_reason:
             return
         self.last_overlay_reason = reason
-        print(f"[Overlay] escondido: {reason}", flush=True)
+        print(f"[Overlay] {self.tr.t('overlay.hidden_log')}: {reason}", flush=True)
 
     def monitor_overlay(self) -> None:
         hotkey = self.overlay_hotkey_var.get()
@@ -1181,8 +1243,31 @@ class FunctionsCategory(ttk.Frame):
         self.after(1500, lambda: self.set_clicker_status(self.clicker.status_text()))
 
     def set_clicker_status(self, text: str) -> None:
-        self.after(0, self.clicker_status_var.set, text)
+        self.after(0, self.clicker_status_var.set, self.translate_clicker_status(text))
         self.after(0, self.update_state)
+
+    def translate_clicker_status(self, text: str) -> str:
+        if text == "Foxhole nao encontrado":
+            return self.tr.t("clicker.foxhole_not_found")
+        if text.startswith("Ligado | aguardando Foxhole |"):
+            hotkey = text.rsplit("|", 1)[-1].strip()
+            return self.tr.t("clicker.status_waiting_foxhole", hotkey=hotkey)
+        if text.startswith("Ligado |") or text.startswith("Desligado |"):
+            parts = [part.strip() for part in text.split("|")]
+            if len(parts) >= 6:
+                state_key = "clicker.on_badge" if parts[0] == "Ligado" else "clicker.off"
+                point = parts[2].removeprefix("virtual").strip()
+                clicks = parts[3].removeprefix("cliques").strip()
+                return self.tr.t(
+                    "clicker.status_line",
+                    state=self.tr.t(state_key),
+                    target=parts[1],
+                    point=point,
+                    clicks=clicks,
+                    hotkey=parts[4],
+                    interval=parts[5],
+                )
+        return text
 
     def stop(self) -> None:
         self.clicker.stop()
@@ -1204,7 +1289,7 @@ class OverlayCategory(ttk.Frame):
         container.grid(row=0, column=0, sticky="nsew")
         container.columnconfigure(0, weight=1)
 
-        self.ui_text["title"] = tk.Label(container, text="Overlay", bg=COLORS["bg"], fg=COLORS["text"], font=("Segoe UI", 24, "bold"))
+        self.ui_text["title"] = tk.Label(container, text=self.tr.t("overlay.title"), bg=COLORS["bg"], fg=COLORS["text"], font=("Segoe UI", 24, "bold"))
         self.ui_text["title"].grid(
             row=0, column=0, sticky="w", padx=22, pady=(20, 2)
         )
@@ -1238,6 +1323,8 @@ class SettingsCategory(ttk.Frame):
         self.close_action_var = tk.StringVar(value=str(app_settings.get("close_action", "ask")))
         self.stockpile_sound_enabled_var = tk.BooleanVar(value=bool(app_settings.get("stockpile_sound_enabled", True)))
         self.squadlock_sound_enabled_var = tk.BooleanVar(value=bool(app_settings.get("squadlock_sound_enabled", True)))
+        self.chat_mention_overlay_enabled_var = tk.BooleanVar(value=bool(app_settings.get("chat_mention_overlay_enabled", True)))
+        self.chat_mention_sound_enabled_var = tk.BooleanVar(value=bool(app_settings.get("chat_mention_sound_enabled", True)))
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         self.build()
@@ -1367,7 +1454,31 @@ class SettingsCategory(ttk.Frame):
             activebackground=COLORS["card"],
             activeforeground=COLORS["text"],
             font=("Segoe UI", 10, "bold"),
-        ).grid(row=3, column=0, sticky="w", padx=20, pady=(0, 18))
+        ).grid(row=3, column=0, sticky="w", padx=20, pady=(0, 8))
+        tk.Checkbutton(
+            sound_card,
+            text=self.tr.t("settings.chat_mention_overlay"),
+            variable=self.chat_mention_overlay_enabled_var,
+            command=self.save_app_settings,
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            selectcolor=COLORS["soft"],
+            activebackground=COLORS["card"],
+            activeforeground=COLORS["text"],
+            font=("Segoe UI", 10, "bold"),
+        ).grid(row=4, column=0, sticky="w", padx=20, pady=(0, 8))
+        tk.Checkbutton(
+            sound_card,
+            text=self.tr.t("settings.chat_mention_sound"),
+            variable=self.chat_mention_sound_enabled_var,
+            command=self.save_app_settings,
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            selectcolor=COLORS["soft"],
+            activebackground=COLORS["card"],
+            activeforeground=COLORS["text"],
+            font=("Segoe UI", 10, "bold"),
+        ).grid(row=5, column=0, sticky="w", padx=20, pady=(0, 18))
         self.bind_mousewheel_recursive(outer, canvas)
 
     def bind_mousewheel_recursive(self, widget: tk.Widget, canvas: tk.Canvas) -> None:
@@ -1387,6 +1498,8 @@ class SettingsCategory(ttk.Frame):
         app_settings["close_action"] = self.close_action_var.get()
         app_settings["stockpile_sound_enabled"] = self.stockpile_sound_enabled_var.get()
         app_settings["squadlock_sound_enabled"] = self.squadlock_sound_enabled_var.get()
+        app_settings["chat_mention_overlay_enabled"] = self.chat_mention_overlay_enabled_var.get()
+        app_settings["chat_mention_sound_enabled"] = self.chat_mention_sound_enabled_var.get()
         save_settings(settings)
         app = self.winfo_toplevel()
         if hasattr(app, "set_start_with_windows"):

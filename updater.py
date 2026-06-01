@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+from ctypes import wintypes
+import filecmp
 import os
 from pathlib import Path
 import shutil
@@ -114,6 +116,103 @@ def wait_for_process_windows(pid: int, window: UpdateWindow, timeout: float) -> 
         kernel32.CloseHandle(handle)
 
 
+def close_installed_app_processes(target: Path, window: UpdateWindow, timeout: float = 12.0) -> None:
+    if os.name != "nt":
+        return
+    target = target.resolve()
+    current_pid = os.getpid()
+    matches = matching_processes_in_dir(target, {APP_EXE_NAME.lower(), UPDATER_EXE_NAME.lower()}, exclude_pid=current_pid)
+    if not matches:
+        return
+    names = ", ".join(f"{name} (PID {pid})" for pid, name in matches)
+    window.set_progress(18, "Fechando GG Coalition aberto...", names)
+    for pid, _name in matches:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        remaining = matching_processes_in_dir(target, {APP_EXE_NAME.lower(), UPDATER_EXE_NAME.lower()}, exclude_pid=current_pid)
+        if not remaining:
+            return
+        detail = ", ".join(f"{name} (PID {pid})" for pid, name in remaining)
+        window.set_progress(20, "Aguardando o aplicativo fechar...", detail)
+        time.sleep(0.5)
+    remaining = matching_processes_in_dir(target, {APP_EXE_NAME.lower(), UPDATER_EXE_NAME.lower()}, exclude_pid=current_pid)
+    if remaining:
+        detail = ", ".join(f"{name} (PID {pid})" for pid, name in remaining)
+        raise RuntimeError(
+            "Nao consegui fechar o GG Coalition para atualizar. "
+            f"Feche pelo Gerenciador de Tarefas e tente novamente: {detail}"
+        )
+
+
+def matching_processes_in_dir(target: Path, names: set[str], exclude_pid: int) -> list[tuple[int, str]]:
+    kernel32 = ctypes.windll.kernel32
+    matches: dict[int, str] = {}
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+    if snapshot == ctypes.c_void_p(-1).value:
+        return []
+    try:
+        entry = PROCESSENTRY32W()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+        has_entry = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+        while has_entry:
+            pid = int(entry.th32ProcessID)
+            if pid and pid != exclude_pid and pid not in matches:
+                process_path = process_path_for_pid(kernel32, pid)
+                if process_path:
+                    path = Path(process_path)
+                    if path.name.lower() in names and is_relative_to(path.parent, target):
+                        matches[pid] = path.name
+            has_entry = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+    finally:
+        kernel32.CloseHandle(snapshot)
+    return sorted(matches.items())
+
+
+class PROCESSENTRY32W(ctypes.Structure):
+    _fields_ = [
+        ("dwSize", wintypes.DWORD),
+        ("cntUsage", wintypes.DWORD),
+        ("th32ProcessID", wintypes.DWORD),
+        ("th32DefaultHeapID", ctypes.c_size_t),
+        ("th32ModuleID", wintypes.DWORD),
+        ("cntThreads", wintypes.DWORD),
+        ("th32ParentProcessID", wintypes.DWORD),
+        ("pcPriClassBase", wintypes.LONG),
+        ("dwFlags", wintypes.DWORD),
+        ("szExeFile", wintypes.WCHAR * 260),
+    ]
+
+
+def process_path_for_pid(kernel32, pid: int) -> str:
+    process_query_limited_information = 0x1000
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        return ""
+    try:
+        path_buffer = ctypes.create_unicode_buffer(32768)
+        size = ctypes.c_ulong(len(path_buffer))
+        if kernel32.QueryFullProcessImageNameW(handle, 0, path_buffer, ctypes.byref(size)):
+            return path_buffer.value
+        return ""
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def copy_tree(source: Path, target: Path, window: UpdateWindow) -> None:
     target.mkdir(parents=True, exist_ok=True)
     files = [file for file in source.rglob("*") if file.is_file() and not any(part in SKIP_NAMES for part in file.parts)]
@@ -125,13 +224,13 @@ def copy_tree(source: Path, target: Path, window: UpdateWindow) -> None:
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         window.set_progress(45 + int((index / total) * 40), "Instalando arquivos...", str(relative))
-        if same_file(file, destination):
+        if same_file(file, destination) or same_content(file, destination):
             continue
         try:
             copy_with_retry(file, destination, window)
-        except PermissionError:
-            if destination.name.lower() == UPDATER_EXE_NAME.lower():
-                schedule_locked_updater_replace(file, destination, window)
+        except OSError as exc:
+            if can_stage_locked_file(destination, exc):
+                save_locked_file_copy(file, destination, window)
             else:
                 raise
 
@@ -143,51 +242,63 @@ def same_file(source: Path, destination: Path) -> bool:
         return False
 
 
+def same_content(source: Path, destination: Path) -> bool:
+    try:
+        if not destination.exists() or not destination.is_file():
+            return False
+        source_stat = source.stat()
+        destination_stat = destination.stat()
+        if source_stat.st_size != destination_stat.st_size:
+            return False
+        return filecmp.cmp(source, destination, shallow=False)
+    except OSError:
+        return False
+
+
 def copy_with_retry(source: Path, destination: Path, window: UpdateWindow, attempts: int = 45) -> None:
-    last_error: PermissionError | None = None
+    last_error: OSError | None = None
     for attempt in range(1, attempts + 1):
         try:
             shutil.copy2(source, destination)
             return
-        except PermissionError as exc:
-            last_error = exc
-            if destination.name.lower() == UPDATER_EXE_NAME.lower():
+        except OSError as exc:
+            if not is_locked_file_error(exc):
                 raise
+            last_error = exc
+            if can_stage_locked_file(destination, exc):
+                raise
+            close_installed_app_processes(destination.parent, window, timeout=3.0)
             window.set_progress(
                 80,
                 "Aguardando arquivo liberar...",
-                f"{destination.name} tentativa {attempt}/{attempts}",
+                f"{destination.name} tentativa {attempt}/{attempts}. Feche o GG Coalition se ele ainda estiver aberto.",
             )
             time.sleep(1)
     if last_error:
         raise last_error
 
 
-def schedule_locked_updater_replace(source: Path, destination: Path, window: UpdateWindow) -> None:
-    pending = destination.with_name(f"{destination.name}.pending")
-    script = Path(tempfile.gettempdir()) / "gg_coalition_finish_updater_replace.cmd"
+def is_locked_file_error(exc: OSError) -> bool:
+    return isinstance(exc, PermissionError) or getattr(exc, "winerror", None) == 32
+
+
+def can_stage_locked_file(destination: Path, exc: OSError) -> bool:
+    if not is_locked_file_error(exc):
+        return False
+    return destination.name.lower() != APP_EXE_NAME.lower()
+
+
+def save_locked_file_copy(source: Path, destination: Path, window: UpdateWindow) -> None:
+    pending = destination.with_name(f"{destination.name}.new")
     shutil.copy2(source, pending)
-    script.write_text(
-        "\n".join(
-            [
-                "@echo off",
-                "for /L %%i in (1,1,30) do (",
-                f'  move /Y "{pending}" "{destination}" >nul 2>nul && goto done',
-                "  timeout /T 1 /NOBREAK >nul",
-                ")",
-                ":done",
-                'del "%~f0" >nul 2>nul',
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    creationflags = 0x08000000 if os.name == "nt" else 0
-    subprocess.Popen(["cmd", "/c", str(script)], close_fds=True, creationflags=creationflags)
-    window.set_progress(85, "Atualizador sera finalizado apos fechar.", destination.name)
+    window.set_progress(85, "Arquivo em uso salvo para proxima abertura.", pending.name)
 
 
 def extract_zip(zip_path: Path, window: UpdateWindow) -> Path:
+    packaged_source = Path(sys.executable).resolve().parent
+    if (packaged_source / APP_EXE_NAME).exists() and (packaged_source / UPDATER_EXE_NAME).exists():
+        window.set_progress(25, "Usando pacote extraido...", str(packaged_source))
+        return packaged_source
     validate_update_zip(zip_path)
     temp_dir = Path(tempfile.mkdtemp(prefix="gg_coalition_update_"))
     window.set_progress(25, "Extraindo pacote...", zip_path.name)
@@ -285,6 +396,7 @@ def run_update(args, window: UpdateWindow) -> None:
         window.set_progress(5, "Preparando atualizacao...", zip_path.name)
         window.set_progress(8, "Destino da instalacao...", str(target))
         wait_for_process(args.pid, window)
+        close_installed_app_processes(target, window)
         source = extract_zip(zip_path, window)
         if same_file(source / APP_EXE_NAME, target / APP_EXE_NAME):
             raise RuntimeError(f"Destino de atualizacao invalido: {target}")

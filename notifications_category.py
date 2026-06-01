@@ -155,8 +155,9 @@ def format_time(seconds: int) -> str:
 
 
 class SquadlockOverlay:
-    def __init__(self, parent: tk.Widget, on_reset, on_finish, on_moved) -> None:
+    def __init__(self, parent: tk.Widget, on_reset, on_finish, on_moved, translator: Translator | None = None) -> None:
         self.parent = parent
+        self.tr = translator or Translator()
         self.on_reset = on_reset
         self.on_finish = on_finish
         self.on_moved = on_moved
@@ -177,7 +178,7 @@ class SquadlockOverlay:
         self.shell.pack(fill="both", expand=True, padx=3, pady=3)
         self.title_label = tk.Label(
             self.shell,
-            text="LOCK",
+            text=self.tr.t("notifications.overlay_title"),
             bg="#0d1828",
             fg="#a8bfdc",
             font=("Segoe UI", 7, "bold"),
@@ -197,7 +198,7 @@ class SquadlockOverlay:
         self.time_label.grid(row=1, column=0, sticky="w")
         self.status_label = tk.Label(
             self.shell,
-            text="Veiculo",
+            text=self.tr.t("notifications.vehicle"),
             bg="#0d1828",
             fg="#7f93ad",
             font=("Segoe UI", 7, "bold"),
@@ -209,7 +210,7 @@ class SquadlockOverlay:
         self.actions = tk.Frame(self.shell, bg="#0d1828")
         self.reset_button = tk.Button(
             self.actions,
-            text="Resetar",
+            text=self.tr.t("notifications.reset"),
             command=self.on_reset,
             bg=COLORS["card_2"],
             fg=COLORS["text"],
@@ -221,7 +222,7 @@ class SquadlockOverlay:
         )
         self.done_button = tk.Button(
             self.actions,
-            text="Terminar",
+            text=self.tr.t("notifications.finish"),
             command=self.on_finish,
             bg=COLORS["accent"],
             fg=COLORS["accent_text"],
@@ -253,11 +254,24 @@ class SquadlockOverlay:
     def update(self, seconds: int, finished: bool = False) -> None:
         self.time_label.configure(text=format_time(seconds))
         if finished:
-            self.status_label.configure(text="Squadlock finalizado", fg=COLORS["good"])
+            self.status_label.configure(text=self.tr.t("notifications.finished"), fg=COLORS["good"])
             self.actions.grid(row=3, column=0, sticky="ew", padx=10, pady=(4, 10))
         else:
-            self.status_label.configure(text="Veiculo", fg="#7f93ad")
+            self.status_label.configure(text=self.tr.t("notifications.vehicle"), fg="#7f93ad")
             self.actions.grid_forget()
+
+    def set_translator(self, translator: Translator) -> None:
+        self.tr = translator
+        self.title_label.configure(text=self.tr.t("notifications.overlay_title"))
+        self.reset_button.configure(text=self.tr.t("notifications.reset"))
+        self.done_button.configure(text=self.tr.t("notifications.finish"))
+        current = str(self.time_label.cget("text"))
+        try:
+            minutes, seconds = current.split(":", 1)
+            total = int(minutes) * 60 + int(seconds)
+        except Exception:
+            total = 0
+        self.update(total, self.actions.winfo_ismapped())
 
     def position_window(self) -> None:
         width = 148
@@ -317,7 +331,7 @@ class NotificationsCategory(ttk.Frame):
         self.focus_job: str | None = None
         self.status_var = tk.StringVar(value=self.tr.t("notifications.waiting"))
         self.time_var = tk.StringVar(value=format_time(self.remaining_seconds))
-        self.overlay = SquadlockOverlay(self, self.reset_squadlock, self.finish_squadlock, self.save_overlay_position)
+        self.overlay = SquadlockOverlay(self, self.reset_squadlock, self.finish_squadlock, self.save_overlay_position, self.tr)
         self.overlay.set_position(notification_settings.get("squadlock_x"), notification_settings.get("squadlock_y"))
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -534,6 +548,7 @@ class NotificationsCategory(ttk.Frame):
 
     def refresh_language(self, translator: Translator) -> None:
         self.tr = translator
+        self.overlay.set_translator(translator)
         overlay_enabled = self.overlay_enabled_var.get()
         overlay_position = self.overlay.position
         if not self.running and not self.finished:

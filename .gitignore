@@ -78,6 +78,9 @@ felb_settings.json
 *.exe
 *.zip
 *.msi
+*.cer
+*.pfx
+certs/
 
 # ===================================
 # Cache Python
