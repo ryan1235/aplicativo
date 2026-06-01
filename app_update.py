@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -9,7 +10,7 @@ import tempfile
 import urllib.parse
 import urllib.request
 import zipfile
-from typing import Callable
+from typing import Any, Callable
 
 
 GITHUB_API = "https://api.github.com/repos/{repo}/releases/latest"
@@ -17,6 +18,15 @@ GITHUB_TAG_API = "https://api.github.com/repos/{repo}/releases/tags/{tag}"
 APP_EXE_NAME = "GG Coalition.exe"
 UPDATER_EXE_NAME = "GG Updater.exe"
 MIN_UPDATE_ZIP_SIZE = 1024 * 1024
+APP_UPDATE_FALLBACK_PT = {
+    "update.error_download_failed": "Download da atualizacao falhou: HTTP {status}",
+    "update.error_no_trusted_updater": "Nao encontrei um atualizador local confiavel. Se o antivirus bloqueou {updater}, permita o app no Windows Defender ou instale a nova versao manualmente pelo ZIP da release.",
+    "update.error_updater_not_found": "Updater nao encontrado: {path}",
+    "update.error_zip_not_found": "Arquivo de update nao encontrado: {path}",
+    "update.error_zip_too_small": "Arquivo de update muito pequeno ({size} bytes). Provavelmente a release baixou um asset errado ou incompleto.",
+    "update.error_zip_invalid": "O arquivo baixado nao e um ZIP valido: {path}",
+    "update.error_zip_incomplete": "ZIP de update incompleto. Faltando: {missing}. Envie o arquivo release\\GG-Coalition.zip gerado pelo build.",
+}
 
 
 @dataclass
@@ -118,14 +128,31 @@ def fetch_release_description(repo: str, version: str, timeout: int = 8) -> str:
     return ""
 
 
-def download_update(update: UpdateInfo, timeout: int = 60, progress_callback: Callable[[int, int], None] | None = None) -> Path:
+def _t(translator: Any | None, key: str, **kwargs: Any) -> str:
+    if translator is not None and hasattr(translator, "t"):
+        return translator.t(key, **kwargs)
+    value = APP_UPDATE_FALLBACK_PT.get(key, key)
+    if kwargs:
+        try:
+            return value.format(**kwargs)
+        except Exception:
+            return value
+    return value
+
+
+def download_update(
+    update: UpdateInfo,
+    timeout: int = 60,
+    progress_callback: Callable[[int, int], None] | None = None,
+    translator: Any | None = None,
+) -> Path:
     target_dir = Path(tempfile.mkdtemp(prefix="gg_coalition_download_"))
     target = target_dir / safe_asset_name(update.asset_name)
     request = urllib.request.Request(update.asset_url, headers={"User-Agent": "GG-Coalition-Updater"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         status = getattr(response, "status", 200)
         if status >= 400:
-            raise RuntimeError(f"Download da atualizacao falhou: HTTP {status}")
+            raise RuntimeError(_t(translator, "update.error_download_failed", status=status))
         total = int(response.headers.get("Content-Length") or 0)
         downloaded = 0
         with target.open("wb") as output:
@@ -138,12 +165,12 @@ def download_update(update: UpdateInfo, timeout: int = 60, progress_callback: Ca
                 if progress_callback:
                     progress_callback(downloaded, total)
 
-    validate_update_zip(target, require_updater=False)
+    validate_update_zip(target, require_updater=False, translator=translator)
     return target
 
 
-def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path) -> None:
-    validate_update_zip(zip_path, require_updater=True)
+def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path, *, language: str | None = None, translator: Any | None = None) -> None:
+    validate_update_zip(zip_path, require_updater=True, translator=translator)
     temp_update_dir = extract_update_package(zip_path)
     updater_exe = temp_update_dir / UPDATER_EXE_NAME
     updater_py = Path(__file__).resolve().with_name("updater.py")
@@ -165,14 +192,15 @@ def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path) -> None:
         command = []
     if not command:
         raise RuntimeError(
-            "Nao encontrei um atualizador local confiavel. "
-            f"Se o antivirus bloqueou {UPDATER_EXE_NAME}, permita o app no Windows Defender "
-            "ou instale a nova versao manualmente pelo ZIP da release."
+            _t(translator, "update.error_no_trusted_updater", updater=UPDATER_EXE_NAME)
         )
     executable = Path(command[0])
     if not executable.exists():
-        raise RuntimeError(f"Updater nao encontrado: {executable}")
-    subprocess.Popen(command, cwd=str(executable.parent), close_fds=True)
+        raise RuntimeError(_t(translator, "update.error_updater_not_found", path=executable))
+    env = os.environ.copy()
+    if language:
+        env["GG_COALITION_LANGUAGE"] = language
+    subprocess.Popen(command, cwd=str(executable.parent), close_fds=True, env=env)
 
 
 def extract_update_package(zip_path: Path) -> Path:
@@ -185,16 +213,15 @@ def extract_update_package(zip_path: Path) -> Path:
     return target
 
 
-def validate_update_zip(zip_path: Path, *, require_updater: bool = True) -> None:
+def validate_update_zip(zip_path: Path, *, require_updater: bool = True, translator: Any | None = None) -> None:
     if not zip_path.exists():
-        raise RuntimeError(f"Arquivo de update nao encontrado: {zip_path}")
+        raise RuntimeError(_t(translator, "update.error_zip_not_found", path=zip_path))
     if zip_path.stat().st_size < MIN_UPDATE_ZIP_SIZE:
         raise RuntimeError(
-            f"Arquivo de update muito pequeno ({zip_path.stat().st_size} bytes). "
-            "Provavelmente a release baixou um asset errado ou incompleto."
+            _t(translator, "update.error_zip_too_small", size=zip_path.stat().st_size)
         )
     if not zipfile.is_zipfile(zip_path):
-        raise RuntimeError(f"O arquivo baixado nao e um ZIP valido: {zip_path}")
+        raise RuntimeError(_t(translator, "update.error_zip_invalid", path=zip_path))
     with zipfile.ZipFile(zip_path, "r") as archive:
         names = {Path(name).name.lower() for name in archive.namelist()}
     required = [APP_EXE_NAME]
@@ -203,9 +230,7 @@ def validate_update_zip(zip_path: Path, *, require_updater: bool = True) -> None
     missing = [name for name in required if name.lower() not in names]
     if missing:
         raise RuntimeError(
-            "ZIP de update incompleto. Faltando: "
-            + ", ".join(missing)
-            + ". Envie o arquivo release\\GG-Coalition.zip gerado pelo build."
+            _t(translator, "update.error_zip_incomplete", missing=", ".join(missing))
         )
 
 

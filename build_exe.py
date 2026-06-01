@@ -113,6 +113,8 @@ def install_build_deps() -> None:
         "customtkinter",
         "pillow",
         "pystray",
+        "numpy",
+        "opencv-python",
     ])
 
 
@@ -222,6 +224,8 @@ def build_app() -> Path:
         "--include-package=pydantic_core",
         "--include-package=typing_extensions",
         "--include-package=PIL",
+        "--include-package=numpy",
+        "--include-package=cv2",
         "--include-module=PIL.Image",
         "--include-module=PIL.ImageTk",
         f"--output-dir={DIST_DIR}",

@@ -63,6 +63,7 @@ def default_watch_file() -> Path:
 
 DEFAULT_WATCH_FILE = default_watch_file()
 DEFAULT_API_URL = "https://felblogi.discloud.app/data"
+STOCKPILE_DEBUG_LOG = extracted_dir() / "stockpile_debug.log"
 PINNED_TOOLTIPS_KEY = "PinnedMapToolTipsW"
 EXCLUDED_FIELD = "InitalMapItemDetails"
 STRIPPED_PREFIXES = {
@@ -95,6 +96,18 @@ UE_TICKS_AT_UNIX_EPOCH = 621_355_968_000_000_000
 
 class ExtractError(RuntimeError):
     pass
+
+
+def _debug_log(message: str) -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{timestamp}] {message}"
+    print(line, flush=True)
+    try:
+        STOCKPILE_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with STOCKPILE_DEBUG_LOG.open("a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+    except OSError:
+        pass
 
 
 def unreal_datetime_to_iso(ticks: int) -> str:
@@ -289,6 +302,7 @@ def write_json(data: Any, output: Path | None) -> None:
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(text + "\n", encoding="utf-8")
+        _debug_log(f"[Stockpile] JSON written to {output}")
     except OSError as exc:
         raise ExtractError(f"Nao foi possivel criar o JSON em {output}: {exc}") from exc
 
@@ -407,6 +421,25 @@ def api_last_update(api_result: dict[str, Any]) -> str:
     return str(body.get("last_update") or "")
 
 
+def format_to_local_pc_time(value: str) -> str:
+    text = str(value or "").strip()
+    if not text or text == "-":
+        return "-"
+    try:
+        normalized = text.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return text
+    try:
+        if parsed.tzinfo is None:
+            # API usually sends UTC-like timestamps without offset.
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        local_dt = parsed.astimezone()
+        return local_dt.strftime("%d/%m/%Y %H:%M:%S")
+    except Exception:
+        return text
+
+
 def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
     body = api_result.get("body")
     if not isinstance(body, dict):
@@ -428,6 +461,7 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
                 "zero_count": 0,
                 "change_count": 0,
                 "categories": set(),
+                "last_update": "",
             },
         )
         quantity = item.get("Quantity") or 0
@@ -441,6 +475,9 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
             current["zero_count"] += 1
         if item.get("CategoryName"):
             current["categories"].add(str(item["CategoryName"]))
+        warehouse_last_update = str(item.get("WarehouseLastUpdate") or "")
+        if warehouse_last_update:
+            current["last_update"] = warehouse_last_update
 
     for change in body.get("changes") or []:
         if not isinstance(change, dict):
@@ -457,6 +494,7 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
                 "zero_count": 0,
                 "change_count": 0,
                 "categories": set(),
+                "last_update": "",
             },
         )
         current["change_count"] += 1
@@ -498,6 +536,7 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
                 "quantity": quantity,
                 "priority": str(item.get("Priority") or "-"),
                 "faction": str(item.get("Faction") or "-"),
+                "warehouse_last_update": str(item.get("WarehouseLastUpdate") or "-"),
             }
         )
     return sorted(rows, key=lambda item: (item["warehouse"], item["display_name"]))
@@ -505,6 +544,9 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
 
 def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST") -> dict[str, Any]:
     body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    _debug_log(f"[Stockpile API] request start purpose={purpose} method={method} url={api_url}")
+    _debug_log(f"[Stockpile API] request payload bytes={len(body)}")
+    _debug_log(f"[Stockpile API] request payload body={body.decode('utf-8', errors='replace')}")
     request = urllib.request.Request(
         api_url,
         data=body,
@@ -515,14 +557,16 @@ def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST")
         with urllib.request.urlopen(request, timeout=15) as response:
             response_body = response.read().decode("utf-8", errors="replace")
             result = parse_api_response(response.status, response_body)
-            print(f"[Stockpile API] {purpose}: {result['status_text']}", flush=True)
+            _debug_log(f"[Stockpile API] response status={response.status}")
+            _debug_log(f"[Stockpile API] response body={response_body}")
+            _debug_log(f"[Stockpile API] {purpose}: {result['status_text']}")
             return result
     except urllib.error.HTTPError as exc:
         response_body = exc.read().decode("utf-8", errors="replace")
-        print(f"[Stockpile API] {purpose}: HTTP {exc.code}: {response_body}", flush=True)
+        _debug_log(f"[Stockpile API] HTTPError status={exc.code} body={response_body}")
         raise ExtractError(f"HTTP {exc.code}: {response_body}") from exc
     except urllib.error.URLError as exc:
-        print(f"[Stockpile API] {purpose} failed: {exc.reason}", flush=True)
+        _debug_log(f"[Stockpile API] URLError reason={exc.reason}")
         raise ExtractError(str(exc.reason)) from exc
 
 
@@ -595,24 +639,31 @@ def extract_and_post(
     *,
     keep_enum_prefixes: bool = False,
     force_api_refresh: bool = False,
+    upload_reason: str = "file_changed",
 ) -> dict[str, Any] | None:
+    _debug_log(f"[Stockpile] extract_and_post start file={path} out_dir={out_dir} api_url={api_url}")
     data = extract_pinned_tooltips(path, strip_enum_prefixes=not keep_enum_prefixes)
+    _debug_log(f"[Stockpile] extracted entries={len(data) if isinstance(data, list) else 0}")
     payload = convert_to_api_payload(data, path)
     output = default_output_path(path, out_dir)
     has_changed = payload_changed_since_last_write(payload, output)
+    _debug_log(f"[Stockpile] payload_changed={has_changed} force_api_refresh={force_api_refresh} output={output}")
     if not has_changed and not force_api_refresh:
-        print("[Stockpile] unchanged; waiting 5 min refresh", flush=True)
+        _debug_log("[Stockpile] unchanged; waiting 5 min refresh")
         return None
 
     if has_changed:
         write_json(payload, output)
+    else:
+        _debug_log("[Stockpile] payload unchanged, skipped JSON write")
     report_count = len(payload.get("reports", []))
     action = "wrote" if has_changed else "kept"
-    print(f"[Stockpile] {action} {report_count} private API reports", flush=True)
+    _debug_log(f"[Stockpile] {action} {report_count} private API reports")
     api_message = post_json(payload, api_url)
+    _debug_log(f"[Stockpile] API parsed message={json.dumps(api_message, ensure_ascii=False)}")
     summary = summarize_payload(payload, api_message)
     summary["payload_changed"] = has_changed
-    summary["upload_reason"] = "file_changed" if has_changed else "sync_refresh"
+    summary["upload_reason"] = upload_reason
     return summary
 
 
@@ -653,14 +704,13 @@ class StockpileWatcher:
 
     def _status(self, message: str | dict[str, Any]) -> None:
         if isinstance(message, dict):
-            print(
+            _debug_log(
                 f"[Stockpile] {message.get('api_response', '-')} | "
                 f"{message.get('report_count', 0)} stockpiles | "
-                f"{len(message.get('items') or [])} API items",
-                flush=True,
+                f"{len(message.get('items') or [])} API items"
             )
         else:
-            print(f"[Stockpile] {message}", flush=True)
+            _debug_log(f"[Stockpile] {message}")
         if self.status_callback:
             self.status_callback(message)
 
@@ -669,7 +719,9 @@ class StockpileWatcher:
         self._status("running")
         last_mtime = path.stat().st_mtime if path.exists() else 0.0
         pending_at = time.monotonic() if self.extract_initial else None
-        pending_force_api_refresh = False
+        # Force one sync on startup so API receives data even when local file did not change.
+        pending_force_api_refresh = bool(self.extract_initial)
+        pending_upload_reason = "sync_refresh" if self.extract_initial else "file_changed"
         next_sync_at = time.monotonic() + self.sync_interval
         if not path.exists():
             self._status(f"waiting for Foxhole save file: {path}")
@@ -698,23 +750,30 @@ class StockpileWatcher:
             if mtime != last_mtime:
                 last_mtime = mtime
                 pending_at = now
-                pending_force_api_refresh = False
+                # Reload/update do MapData deve gerar envio, mesmo sem alteracao semantica.
+                pending_force_api_refresh = True
+                pending_upload_reason = "file_changed"
+                self._status("reload detected")
 
             if now >= next_sync_at:
                 pending_at = now
                 pending_force_api_refresh = True
+                pending_upload_reason = "sync_refresh"
                 next_sync_at = now + self.sync_interval
 
             if pending_at is not None and now - pending_at >= self.debounce:
                 pending_at = None
                 try:
+                    self._status("processing reload")
                     result = extract_and_post(
                         path,
                         self.out_dir,
                         self.api_url,
                         force_api_refresh=pending_force_api_refresh,
+                        upload_reason=pending_upload_reason,
                     )
                     pending_force_api_refresh = False
+                    pending_upload_reason = "file_changed"
                     if result is None:
                         self._status("stockpile unchanged")
                     else:

@@ -1,14 +1,14 @@
 import ctypes
 import time
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 try:
     import customtkinter as ctk
 except ImportError:  # pragma: no cover - optional visual upgrade.
     ctk = None
 
-from auto_clicker import HOTKEYS, MOUSE_BUTTONS, POINT, AutoClicker
+from auto_clicker import ACTION_KEYS, HOTKEYS, MOUSE_BUTTONS, POINT, AutoClicker
 from i18n import Translator
 from settings_store import load_settings, save_settings
 
@@ -180,6 +180,7 @@ class AutoClickerOverlay:
         self.notification_hidden_for_adjust = False
         self.drag_state: dict[str, int | tk.Toplevel] = {}
         self.pin_job: str | None = None
+        self.notification_hide_job: str | None = None
         self.panel_alpha = 1.0
         self.notification_alpha = 1.0
         self.palette = OVERLAY_COLORS["Azul"]
@@ -224,6 +225,18 @@ class AutoClickerOverlay:
             pady=2,
         )
         self.detail_label.pack(fill="x")
+        self.shortcuts_label = tk.Label(
+            self.shell,
+            text=self.tr.t("overlay.shortcuts_hint", move_hotkey="F2", auto_hotkey="F3", fixed_hotkey="F6", pilot_hotkey="F4"),
+            bg=self.palette["panel"],
+            fg=COLORS["muted"],
+            font=("Segoe UI", 7),
+            justify="left",
+            anchor="w",
+            padx=10,
+            pady=2,
+        )
+        self.shortcuts_label.pack(fill="x")
         self.target_label = tk.Label(
             self.shell,
             text=self.tr.t("overlay.target_default"),
@@ -370,7 +383,7 @@ class AutoClickerOverlay:
     def position(self) -> None:
         self.window.update_idletasks()
         width = 190
-        height = 104 if self.adjusting else 68
+        height = 124 if self.adjusting else 88
         screen_width = self.window.winfo_screenwidth()
         x, y = self.panel_position or (screen_width - width - 24, 24)
         self.window.geometry(f"{width}x{height}+{x}+{y}")
@@ -538,7 +551,7 @@ class AutoClickerOverlay:
             self.shell.configure(bg=self.palette["panel"], highlightbackground=self.palette["accent"])
             self.notification_shell.configure(bg=self.palette["panel"], highlightbackground=COLORS["good"])
             self.adjust_controls_shell.configure(highlightbackground=self.palette["accent"])
-        for label in (self.status_label, self.profile_label, self.detail_label, self.target_label, self.adjust_label):
+        for label in (self.status_label, self.profile_label, self.detail_label, self.shortcuts_label, self.target_label, self.adjust_label):
             label.configure(bg=self.palette["panel"])
         self.notification_text.configure(bg=self.palette["panel"])
         self.status_label.configure(fg=self.palette["accent"])
@@ -562,29 +575,54 @@ class AutoClickerOverlay:
             if not self.adjusting:
                 self.window.withdraw()
 
-    def show_success_notification(self, text: str | None = None) -> None:
+    def cancel_notification_hide(self) -> None:
+        if self.notification_hide_job and self.notification.winfo_exists():
+            try:
+                self.notification.after_cancel(self.notification_hide_job)
+            except tk.TclError:
+                pass
+        self.notification_hide_job = None
+
+    def show_success_notification(
+        self,
+        text: str | None = None,
+        *,
+        sticky: bool = False,
+        done: bool = False,
+        hide_delay_ms: int = 4500,
+    ) -> None:
         if not self.notification.winfo_exists():
             return
         if not self.focus_check():
             return
+        self.cancel_notification_hide()
         self.notification_text.configure(text=text or self.tr.t("stockpile.upload_success", count=1))
         self.position_notification()
         self.notification.attributes("-topmost", True)
         self.notification.deiconify()
         self.set_click_through(True)
         self.start_topmost_watch()
-        self.notification.after(4500, self.hide_notification_if_needed)
+        if sticky:
+            return
+        delay_ms = hide_delay_ms
+        if done:
+            delay_ms = min(hide_delay_ms, 2600)
+        self.notification_hide_job = self.notification.after(delay_ms, self.hide_notification_if_needed)
 
     def set_translator(self, translator: Translator) -> None:
         self.tr = translator
         self.status_label.configure(text=self.tr.t("overlay.clicker_title"))
         self.profile_label.configure(text=self.tr.t("overlay.profile"))
+        self.shortcuts_label.configure(
+            text=self.tr.t("overlay.shortcuts_hint", move_hotkey="F2", auto_hotkey="F3", fixed_hotkey="F6", pilot_hotkey="F4")
+        )
         self.adjust_label.configure(text=self.tr.t("overlay.drag_hint"))
         self.notification_text.configure(text=self.tr.t("stockpile.upload_success", count=1))
         self.adjust_controls_label.configure(text=self.tr.t("overlay.adjust_title"))
         self.adjust_confirm_button.configure(text=self.tr.t("overlay.save_positions"))
 
     def hide_notification_if_needed(self) -> None:
+        self.notification_hide_job = None
         if not self.adjusting and self.notification.winfo_exists():
             self.notification.withdraw()
 
@@ -696,7 +734,18 @@ class AutoClickerOverlay:
             return
         self.drag_state = {}
 
-    def update(self, enabled: bool, hotkey: str, interval: float, profile_name: str, target_title: str) -> None:
+    def update(
+        self,
+        enabled: bool,
+        hotkey: str,
+        interval: float,
+        profile_name: str,
+        target_title: str,
+        active_description: str,
+        move_hotkey: str = "F2",
+        fixed_hotkey: str = "F6",
+        pilot_hotkey: str = "F4",
+    ) -> None:
         if not self.window.winfo_exists():
             return
         self.profile_label.configure(text=profile_name if self.show_profile else "")
@@ -706,13 +755,25 @@ class AutoClickerOverlay:
 
         if enabled:
             self.status_label.configure(text=self.tr.t("overlay.clicker_active"), fg=COLORS["good"])
-            self.detail_label.configure(text=f"{hotkey} | {interval:.2f}s", fg=COLORS["text"])
+            self.detail_label.configure(text=active_description, fg=COLORS["text"])
         else:
             self.status_label.configure(text=self.tr.t("overlay.clicker_paused"), fg=COLORS["warn"])
             self.detail_label.configure(text=self.tr.t("overlay.hotkey_to_start", hotkey=hotkey), fg=COLORS["muted"])
         self.detail_label.pack_forget()
         if self.show_clicker:
             self.detail_label.pack(fill="x", after=self.profile_label if self.show_profile else self.status_label)
+        self.shortcuts_label.configure(
+            text=self.tr.t(
+                "overlay.shortcuts_hint",
+                move_hotkey=move_hotkey,
+                auto_hotkey=hotkey,
+                fixed_hotkey=fixed_hotkey,
+                pilot_hotkey=pilot_hotkey,
+            )
+        )
+        self.shortcuts_label.pack_forget()
+        if self.show_clicker:
+            self.shortcuts_label.pack(fill="x", after=self.detail_label)
 
         self.target_label.configure(text=target_title if target_title else self.tr.t("overlay.target_default"))
         self.target_label.pack_forget()
@@ -753,6 +814,9 @@ class FunctionsCategory(ttk.Frame):
         self.last_overlay_find_attempt = 0.0
 
         self.hotkey_var = tk.StringVar(value=clicker_settings.get("hotkey", "F3"))
+        self.move_hotkey_var = tk.StringVar(value=clicker_settings.get("move_hotkey", "F2"))
+        self.fixed_hotkey_var = tk.StringVar(value=clicker_settings.get("fixed_hotkey", "F6"))
+        self.pilot_hotkey_var = tk.StringVar(value=clicker_settings.get("pilot_hotkey", "F4"))
         self.mouse_button_var = tk.StringVar(value=clicker_settings.get("mouse_button", "Esquerdo"))
         self.speed_var = tk.StringVar(value=saved_speed)
         self.mouse_button_display_var = tk.StringVar(value=self.mouse_button_label(self.mouse_button_var.get()))
@@ -769,6 +833,20 @@ class FunctionsCategory(ttk.Frame):
         self.overlay_panel_y = clicker_settings.get("overlay_panel_y")
         self.overlay_notification_x = clicker_settings.get("overlay_notification_x")
         self.overlay_notification_y = clicker_settings.get("overlay_notification_y")
+        self.f5_orders = [str(item).strip() for item in clicker_settings.get("f5_orders", []) if str(item).strip()]
+        if not self.f5_orders:
+            self.f5_orders = ["Diesel", "Cmats", "Bmats", "Emats"]
+        self.slot_vars: dict[int, dict[str, tk.StringVar]] = {}
+        for slot in (1, 2, 3, 4):
+            default_x, default_y = self.clicker.slot_positions.get(slot, (0, 0))
+            saved_x = clicker_settings.get(f"slot_{slot}_x", default_x)
+            saved_y = clicker_settings.get(f"slot_{slot}_y", default_y)
+            self.slot_vars[slot] = {
+                "x": tk.StringVar(value=str(saved_x)),
+                "y": tk.StringVar(value=str(saved_y)),
+            }
+        self.orders_menu_window: tk.Toplevel | None = None
+        self.clicker.set_menu_callback(lambda: self.after(0, self.open_orders_stock_menu))
 
         self.build()
         self.apply_clicker_settings(save=False)
@@ -777,8 +855,32 @@ class FunctionsCategory(ttk.Frame):
         self.monitor_overlay()
 
     def build(self) -> None:
-        container = modern_frame(self, COLORS["bg"], radius=0)
-        container.grid(row=0, column=0, sticky="nsew")
+        outer = modern_frame(self, COLORS["bg"], radius=0)
+        outer.grid(row=0, column=0, sticky="nsew")
+        outer.columnconfigure(0, weight=1)
+        outer.rowconfigure(0, weight=1)
+
+        canvas = tk.Canvas(outer, bg=COLORS["bg"], highlightthickness=0)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        if ctk is not None:
+            scrollbar = ctk.CTkScrollbar(
+                outer,
+                orientation="vertical",
+                command=canvas.yview,
+                width=10,
+                fg_color=COLORS["bg"],
+                button_color=COLORS["card_2"],
+                button_hover_color=COLORS["accent"],
+            )
+        else:
+            scrollbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        container = modern_frame(canvas, COLORS["bg"], radius=0)
+        window_id = canvas.create_window((0, 0), window=container, anchor="nw")
+        container.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window_id, width=event.width))
         container.columnconfigure(0, weight=1)
 
         self.ui_text["tools_title"] = tk.Label(container, text=self.tr.t("tools.title"), bg=COLORS["bg"], fg=COLORS["text"], font=("Segoe UI", 24, "bold"))
@@ -819,26 +921,151 @@ class FunctionsCategory(ttk.Frame):
         controls.columnconfigure(1, weight=1)
 
         self.add_label(controls, self.tr.t("clicker.key"), 0)
-        ttk.Combobox(controls, textvariable=self.hotkey_var, values=list(HOTKEYS.keys()), state="readonly", width=12).grid(
-            row=0, column=1, sticky="w", padx=14, pady=10
-        )
+        auto_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
+        auto_hotkey_row.grid(row=0, column=1, sticky="w", padx=14, pady=10)
+        auto_hotkey_combo = ttk.Combobox(auto_hotkey_row, textvariable=self.hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        auto_hotkey_combo.grid(row=0, column=0, sticky="w")
+        auto_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
+        modern_button(
+            auto_hotkey_row,
+            text=self.tr.t("clicker.detect_key"),
+            command=lambda: self.start_hotkey_capture(self.hotkey_var),
+            color=COLORS["card_2"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=30,
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
 
-        self.add_label(controls, self.tr.t("clicker.speed"), 1)
+        self.add_label(controls, self.tr.t("clicker.key_move"), 1)
+        move_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
+        move_hotkey_row.grid(row=1, column=1, sticky="w", padx=14, pady=10)
+        move_hotkey_combo = ttk.Combobox(move_hotkey_row, textvariable=self.move_hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        move_hotkey_combo.grid(row=0, column=0, sticky="w")
+        move_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
+        modern_button(
+            move_hotkey_row,
+            text=self.tr.t("clicker.detect_key"),
+            command=lambda: self.start_hotkey_capture(self.move_hotkey_var),
+            color=COLORS["card_2"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=30,
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+        self.add_label(controls, self.tr.t("clicker.key_fixed"), 2)
+        fixed_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
+        fixed_hotkey_row.grid(row=2, column=1, sticky="w", padx=14, pady=10)
+        fixed_hotkey_combo = ttk.Combobox(fixed_hotkey_row, textvariable=self.fixed_hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        fixed_hotkey_combo.grid(row=0, column=0, sticky="w")
+        fixed_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
+        modern_button(
+            fixed_hotkey_row,
+            text=self.tr.t("clicker.detect_key"),
+            command=lambda: self.start_hotkey_capture(self.fixed_hotkey_var),
+            color=COLORS["card_2"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=30,
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+        self.add_label(controls, self.tr.t("clicker.key_pilot"), 3)
+        pilot_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
+        pilot_hotkey_row.grid(row=3, column=1, sticky="w", padx=14, pady=10)
+        pilot_hotkey_combo = ttk.Combobox(pilot_hotkey_row, textvariable=self.pilot_hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        pilot_hotkey_combo.grid(row=0, column=0, sticky="w")
+        pilot_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
+        modern_button(
+            pilot_hotkey_row,
+            text=self.tr.t("clicker.detect_key"),
+            command=lambda: self.start_hotkey_capture(self.pilot_hotkey_var),
+            color=COLORS["card_2"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=30,
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0))
+
+        self.add_label(controls, self.tr.t("clicker.speed"), 4)
         speed_combo = ttk.Combobox(controls, textvariable=self.speed_display_var, values=self.speed_labels(), state="readonly", width=12)
         speed_combo.grid(
-            row=1, column=1, sticky="w", padx=14, pady=10
+            row=4, column=1, sticky="w", padx=14, pady=10
         )
         speed_combo.bind("<<ComboboxSelected>>", self.on_speed_selected)
 
-        self.add_label(controls, self.tr.t("clicker.button"), 2)
+        self.add_label(controls, self.tr.t("clicker.button"), 5)
         mouse_button_combo = ttk.Combobox(controls, textvariable=self.mouse_button_display_var, values=self.mouse_button_labels(), state="readonly", width=12)
         mouse_button_combo.grid(
-            row=2, column=1, sticky="w", padx=14, pady=10
+            row=5, column=1, sticky="w", padx=14, pady=10
         )
         mouse_button_combo.bind("<<ComboboxSelected>>", self.on_mouse_button_selected)
 
+        self.add_label(controls, self.tr.t("clicker.slot_positions"), 6)
+        slots_row = modern_frame(controls, COLORS["soft"], radius=0)
+        slots_row.grid(row=6, column=1, sticky="w", padx=10, pady=(6, 12))
+        for idx, slot in enumerate((1, 2, 3, 4)):
+            slot_box = modern_frame(slots_row, "#0a1d35", radius=10, border=1, border_color="#213854")
+            slot_box.grid(row=0, column=idx, sticky="w", padx=(0, 8))
+            tk.Label(
+                slot_box,
+                text=f"{self.tr.t('clicker.slot')} {slot}",
+                bg="#0a1d35",
+                fg=COLORS["accent_2"],
+                font=("Segoe UI", 8, "bold"),
+            ).grid(row=0, column=0, columnspan=4, sticky="w", padx=8, pady=(6, 4))
+            tk.Label(slot_box, text="X", bg="#0a1d35", fg=COLORS["muted"], font=("Segoe UI", 8, "bold")).grid(row=1, column=0, padx=(8, 4), pady=(0, 8))
+            slot_x_entry = tk.Entry(
+                slot_box,
+                textvariable=self.slot_vars[slot]["x"],
+                width=5,
+                bg=COLORS["soft"],
+                fg=COLORS["text"],
+                insertbackground=COLORS["text"],
+                relief="flat",
+            )
+            slot_x_entry.grid(row=1, column=1, padx=(0, 8), pady=(0, 8))
+            tk.Label(slot_box, text="Y", bg="#0a1d35", fg=COLORS["muted"], font=("Segoe UI", 8, "bold")).grid(row=1, column=2, padx=(0, 4), pady=(0, 8))
+            slot_y_entry = tk.Entry(
+                slot_box,
+                textvariable=self.slot_vars[slot]["y"],
+                width=5,
+                bg=COLORS["soft"],
+                fg=COLORS["text"],
+                insertbackground=COLORS["text"],
+                relief="flat",
+            )
+            slot_y_entry.grid(row=1, column=3, padx=(0, 8), pady=(0, 8))
+            slot_x_entry.bind("<FocusOut>", lambda _event: self.save_clicker_settings())
+            slot_y_entry.bind("<FocusOut>", lambda _event: self.save_clicker_settings())
+            slot_x_entry.bind("<Return>", lambda _event: self.save_clicker_settings())
+            slot_y_entry.bind("<Return>", lambda _event: self.save_clicker_settings())
+
+        shortcuts_box = modern_frame(card, COLORS["soft"], radius=16, border=1, border_color="#213854")
+        shortcuts_box.grid(row=4, column=0, sticky="ew", padx=20, pady=(0, 12))
+        shortcuts_box.columnconfigure(0, weight=1)
+        self.ui_text["shortcuts_title"] = tk.Label(
+            shortcuts_box,
+            text=self.tr.t("clicker.shortcuts_title"),
+            bg="#0b1f38",
+            fg=COLORS["accent_2"],
+            font=("Segoe UI", 9, "bold"),
+        )
+        self.ui_text["shortcuts_title"].grid(row=0, column=0, sticky="w", padx=14, pady=(10, 4))
+        self.ui_text["shortcuts_body"] = tk.Label(
+            shortcuts_box,
+            text=self.clicker_shortcuts_text(),
+            bg="#0b1f38",
+            fg=COLORS["text"],
+            font=("Segoe UI", 9),
+            justify="left",
+            anchor="w",
+        )
+        self.ui_text["shortcuts_body"].grid(row=1, column=0, sticky="w", padx=14, pady=(0, 10))
+
         target_box = modern_frame(card, COLORS["card"], radius=0)
-        target_box.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 16))
+        target_box.grid(row=5, column=0, sticky="ew", padx=20, pady=(0, 16))
         target_box.columnconfigure(0, weight=1)
 
         self.capture_button = modern_button(
@@ -853,11 +1080,11 @@ class FunctionsCategory(ttk.Frame):
         self.capture_button.grid(row=0, column=0, sticky="ew")
 
         tk.Label(card, textvariable=self.foxhole_status_var, bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 9)).grid(
-            row=4, column=0, sticky="w", padx=20, pady=(0, 16)
+            row=6, column=0, sticky="w", padx=20, pady=(0, 16)
         )
 
         action_row = modern_frame(card, COLORS["card"], radius=0)
-        action_row.grid(row=5, column=0, sticky="ew", padx=20, pady=(0, 20))
+        action_row.grid(row=7, column=0, sticky="ew", padx=20, pady=(0, 20))
         action_row.columnconfigure(0, weight=1)
         action_row.columnconfigure(1, weight=1)
 
@@ -883,6 +1110,16 @@ class FunctionsCategory(ttk.Frame):
             font=("Segoe UI", 12, "bold"),
         )
         self.save_button.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+        self.bind_mousewheel_recursive(outer, canvas)
+
+    def bind_mousewheel_recursive(self, widget: tk.Widget, canvas: tk.Canvas) -> None:
+        def on_mousewheel(event) -> str:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+
+        widget.bind("<MouseWheel>", on_mousewheel, add="+")
+        for child in widget.winfo_children():
+            self.bind_mousewheel_recursive(child, canvas)
 
     def build_overlay_controls(self, parent: tk.Frame, row: int = 0) -> None:
         overlay_card = modern_frame(parent, COLORS["card"], radius=24, border=1, border_color=COLORS["line"])
@@ -982,6 +1219,7 @@ class FunctionsCategory(ttk.Frame):
             {
                 "Esquerdo": "clicker.mouse_left",
                 "Direito": "clicker.mouse_right",
+                "Meio": "clicker.mouse_middle",
             }.get(button_name, "clicker.mouse_left")
         )
 
@@ -1029,12 +1267,142 @@ class FunctionsCategory(ttk.Frame):
         if key:
             self.ui_text[key] = label
 
+    def clicker_shortcuts_text(self) -> str:
+        auto_hotkey = self.hotkey_var.get()
+        move_hotkey = self.move_hotkey_var.get()
+        fixed_hotkey = self.fixed_hotkey_var.get()
+        pilot_hotkey = self.pilot_hotkey_var.get()
+        lines = [
+            self.tr.t("clicker.shortcuts_auto", hotkey=auto_hotkey),
+            self.tr.t("clicker.shortcuts_move", hotkey=move_hotkey),
+            self.tr.t("clicker.shortcuts_fixed", hotkey=fixed_hotkey),
+            self.tr.t("clicker.shortcuts_slots", hotkey=fixed_hotkey),
+            self.tr.t("clicker.shortcuts_pilot", hotkey=pilot_hotkey),
+        ]
+        return "\n".join(lines)
+
+    def normalize_action_key_name(self, keysym: str) -> str | None:
+        if not keysym:
+            return None
+        if keysym.startswith("F") and keysym[1:].isdigit():
+            value = int(keysym[1:])
+            if 1 <= value <= 24:
+                return f"F{value}"
+        if len(keysym) == 1 and keysym.isalpha():
+            return keysym.upper()
+        if len(keysym) == 1 and keysym.isdigit():
+            return keysym
+        special = {
+            "Escape": "Esc",
+            "Return": "Enter",
+            "space": "Space",
+            "Tab": "Tab",
+            "Up": "Up",
+            "Down": "Down",
+            "Left": "Left",
+            "Right": "Right",
+            "Insert": "Insert",
+            "Delete": "Delete",
+            "Home": "Home",
+            "End": "End",
+            "Prior": "PageUp",
+            "Next": "PageDown",
+        }
+        return special.get(keysym)
+
+    def start_hotkey_capture(self, target_var: tk.StringVar) -> None:
+        dialog = tk.Toplevel(self)
+        dialog.title(self.tr.t("clicker.capture_key_title"))
+        dialog.configure(bg=COLORS["bg"])
+        dialog.geometry("360x140")
+        dialog.resizable(False, False)
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+
+        shell = modern_frame(dialog, COLORS["card"], radius=14, border=1, border_color=COLORS["line"])
+        shell.pack(fill="both", expand=True, padx=12, pady=12)
+        tk.Label(
+            shell,
+            text=self.tr.t("clicker.capture_key_body"),
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=("Segoe UI", 10, "bold"),
+            wraplength=310,
+            justify="left",
+        ).pack(anchor="w", padx=12, pady=(12, 8))
+        feedback = tk.Label(
+            shell,
+            text=self.tr.t("clicker.capture_key_wait"),
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=("Segoe UI", 9),
+        )
+        feedback.pack(anchor="w", padx=12, pady=(0, 8))
+
+        def close_dialog() -> None:
+            if dialog.winfo_exists():
+                dialog.grab_release()
+                dialog.destroy()
+
+        def on_key(event) -> str:
+            key_name = self.normalize_action_key_name(getattr(event, "keysym", ""))
+            if not key_name or key_name not in ACTION_KEYS:
+                feedback.configure(text=self.tr.t("clicker.capture_key_invalid"))
+                return "break"
+            target_var.set(key_name)
+            self.save_clicker_settings()
+            feedback.configure(text=self.tr.t("clicker.capture_key_saved", key=key_name))
+            dialog.after(220, close_dialog)
+            return "break"
+
+        dialog.bind("<KeyPress>", on_key)
+        modern_button(
+            shell,
+            text=self.tr.t("language.change_no"),
+            command=close_dialog,
+            color=COLORS["soft"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=34,
+            font=("Segoe UI", 9, "bold"),
+        ).pack(anchor="e", padx=12, pady=(0, 12))
+        dialog.focus_force()
+
     def selected_interval(self) -> float:
         return SPEEDS.get(self.speed_var.get(), 0.10)
 
+    def parse_slot_value(self, value: str, fallback: int) -> int:
+        try:
+            return max(0, int(str(value).strip()))
+        except (TypeError, ValueError):
+            return max(0, int(fallback))
+
+    def collect_slot_positions(self) -> dict[int, tuple[int, int]]:
+        positions: dict[int, tuple[int, int]] = {}
+        for slot in (1, 2, 3, 4):
+            fallback = self.clicker.slot_positions.get(slot, (0, 0))
+            x = self.parse_slot_value(self.slot_vars[slot]["x"].get(), fallback[0])
+            y = self.parse_slot_value(self.slot_vars[slot]["y"].get(), fallback[1])
+            self.slot_vars[slot]["x"].set(str(x))
+            self.slot_vars[slot]["y"].set(str(y))
+            positions[slot] = (x, y)
+        return positions
+
+    def apply_slot_settings(self) -> None:
+        self.clicker.set_slot_positions(self.collect_slot_positions())
+
     def apply_clicker_settings(self, save: bool = True) -> None:
         interval = self.selected_interval()
+        self.apply_slot_settings()
         self.clicker.configure(self.hotkey_var.get(), self.mouse_button_var.get(), interval)
+        self.clicker.configure_action_hotkeys(
+            self.move_hotkey_var.get(),
+            self.fixed_hotkey_var.get(),
+            self.pilot_hotkey_var.get(),
+        )
+        shortcuts_body = self.ui_text.get("shortcuts_body")
+        if shortcuts_body:
+            shortcuts_body.configure(text=self.clicker_shortcuts_text())
         self.apply_overlay_settings()
         if save:
             self.write_settings(interval)
@@ -1045,11 +1413,25 @@ class FunctionsCategory(ttk.Frame):
 
     def write_settings(self, interval: float) -> None:
         self.settings = load_settings()
+        slot_positions = self.collect_slot_positions()
         self.settings["auto_clicker"] = {
+            **self.settings.get("auto_clicker", {}),
             "hotkey": self.hotkey_var.get(),
+            "move_hotkey": self.move_hotkey_var.get(),
+            "fixed_hotkey": self.fixed_hotkey_var.get(),
+            "pilot_hotkey": self.pilot_hotkey_var.get(),
             "mouse_button": self.mouse_button_var.get(),
             "interval": interval,
             "mode": "Foxhole",
+            "slot_1_x": slot_positions[1][0],
+            "slot_1_y": slot_positions[1][1],
+            "slot_2_x": slot_positions[2][0],
+            "slot_2_y": slot_positions[2][1],
+            "slot_3_x": slot_positions[3][0],
+            "slot_3_y": slot_positions[3][1],
+            "slot_4_x": slot_positions[4][0],
+            "slot_4_y": slot_positions[4][1],
+            "f5_orders": self.f5_orders,
             "overlay_enabled": self.overlay_enabled_var.get(),
             "overlay_hotkey": self.overlay_hotkey_var.get(),
             "overlay_color": self.overlay_color_var.get(),
@@ -1097,8 +1479,157 @@ class FunctionsCategory(ttk.Frame):
         self.write_settings(self.selected_interval())
         self.flash_status(self.tr.t("overlay.removed"))
 
-    def notify_stockpile_success(self, text: str) -> None:
+    def open_orders_stock_menu(self) -> None:
+        if self.orders_menu_window and self.orders_menu_window.winfo_exists():
+            self.orders_menu_window.deiconify()
+            self.orders_menu_window.lift()
+            self.orders_menu_window.focus_force()
+            return
+
+        dialog = tk.Toplevel(self)
+        self.orders_menu_window = dialog
+        dialog.title(self.tr.t("clicker.f5_menu_title"))
+        dialog.configure(bg=COLORS["bg"])
+        dialog.geometry("460x420")
+        dialog.resizable(False, False)
+        dialog.transient(self.winfo_toplevel())
+
+        shell = modern_frame(dialog, COLORS["card"], radius=16, border=1, border_color=COLORS["line"])
+        shell.pack(fill="both", expand=True, padx=14, pady=14)
+        shell.columnconfigure(0, weight=1)
+
+        def close_dialog() -> None:
+            if dialog.winfo_exists():
+                dialog.destroy()
+            self.orders_menu_window = None
+
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        dialog.bind("<Destroy>", lambda _event: setattr(self, "orders_menu_window", None))
+
+        tk.Label(
+            shell,
+            text=self.tr.t("clicker.f5_menu_title"),
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=("Segoe UI", 16, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 4))
+        tk.Label(
+            shell,
+            text=self.tr.t("clicker.f5_menu_subtitle"),
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=("Segoe UI", 9),
+        ).grid(row=1, column=0, sticky="w", padx=16, pady=(0, 10))
+
+        orders_box = modern_frame(shell, COLORS["soft"], radius=14, border=1, border_color="#213854")
+        orders_box.grid(row=2, column=0, sticky="ew", padx=16, pady=(0, 10))
+        orders_box.columnconfigure(0, weight=1)
+        tk.Label(
+            orders_box,
+            text=self.tr.t("clicker.f5_orders_title"),
+            bg=COLORS["soft"],
+            fg=COLORS["accent_2"],
+            font=("Segoe UI", 10, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 4))
+        order_list = tk.Listbox(
+            orders_box,
+            bg="#081a30",
+            fg=COLORS["text"],
+            selectbackground="#1c4f8f",
+            relief="flat",
+            height=5,
+        )
+        order_list.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
+        for order in self.f5_orders:
+            order_list.insert("end", order)
+        if self.f5_orders:
+            order_list.selection_set(0)
+
+        def start_selected_order() -> None:
+            selected = order_list.curselection()
+            order_name = self.f5_orders[selected[0]] if selected else (self.f5_orders[0] if self.f5_orders else "Order")
+            app = self.winfo_toplevel()
+            if hasattr(app, "show_page"):
+                app.show_page("notificacoes")
+            notifications = getattr(app, "notifications_page", None)
+            if notifications and hasattr(notifications, "start_squadlock"):
+                notifications.start_squadlock()
+            self.flash_status(self.tr.t("clicker.order_started", order=order_name))
+            close_dialog()
+
+        modern_button(
+            orders_box,
+            text=self.tr.t("clicker.f5_start_order"),
+            command=start_selected_order,
+            color=COLORS["accent"],
+            text_color=COLORS["accent_text"],
+            hover=COLORS["accent_2"],
+            height=38,
+        ).grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 10))
+
+        stock_box = modern_frame(shell, COLORS["soft"], radius=14, border=1, border_color="#213854")
+        stock_box.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 10))
+        stock_box.columnconfigure(0, weight=1)
+        tk.Label(
+            stock_box,
+            text=self.tr.t("clicker.f5_stock_title"),
+            bg=COLORS["soft"],
+            fg=COLORS["accent_2"],
+            font=("Segoe UI", 10, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=12, pady=(10, 6))
+
+        def open_stockpile_page(refresh_now: bool) -> None:
+            app = self.winfo_toplevel()
+            if hasattr(app, "show_page"):
+                app.show_page("stockpile")
+            stockpile_page = getattr(app, "stockpile_page", None)
+            if refresh_now and stockpile_page and hasattr(stockpile_page, "load_api_snapshot"):
+                stockpile_page.load_api_snapshot()
+            close_dialog()
+
+        modern_button(
+            stock_box,
+            text=self.tr.t("clicker.f5_open_stockpile"),
+            command=lambda: open_stockpile_page(False),
+            color=COLORS["card_2"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=36,
+        ).grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 8))
+        modern_button(
+            stock_box,
+            text=self.tr.t("clicker.f5_refresh_stockpile"),
+            command=lambda: open_stockpile_page(True),
+            color=COLORS["card_2"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=36,
+        ).grid(row=2, column=0, sticky="ew", padx=12, pady=(0, 10))
+
+        modern_button(
+            shell,
+            text=self.tr.t("language.change_no"),
+            command=close_dialog,
+            color=COLORS["soft"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=38,
+        ).grid(row=4, column=0, sticky="ew", padx=16, pady=(0, 14))
+
+    def notify_stockpile_success(self, payload) -> None:
         if not self.overlay_notification_var.get():
+            return
+        if isinstance(payload, dict):
+            text = str(payload.get("text") or "")
+            stage = str(payload.get("stage") or "toast")
+        else:
+            text = str(payload or "")
+            stage = "toast"
+        if stage in {"start", "progress"}:
+            self.overlay.show_success_notification(text, sticky=True)
+            return
+        if stage == "done":
+            self.overlay.show_success_notification(text, done=True, hide_delay_ms=2400)
             return
         self.overlay.show_success_notification(text)
 
@@ -1118,13 +1649,13 @@ class FunctionsCategory(ttk.Frame):
 
     def use_foxhole_mode(self) -> None:
         title = self.clicker.use_foxhole_window()
-        self.foxhole_status_var.set(title)
+        self.foxhole_status_var.set(self.translate_foxhole_status(title))
         self.apply_clicker_settings(save=True)
 
     def prepare_clicker(self) -> None:
         self.apply_clicker_settings(save=True)
         title = self.clicker.use_foxhole_window()
-        self.foxhole_status_var.set(title)
+        self.foxhole_status_var.set(self.translate_foxhole_status(title))
         self.clicker.pause()
         self.update_state()
 
@@ -1134,7 +1665,7 @@ class FunctionsCategory(ttk.Frame):
         self.update_state()
 
     def update_state(self) -> None:
-        if self.clicker.enabled:
+        if self.is_any_clicker_mode_active():
             self.state_badge.configure(text=self.tr.t("clicker.on_badge"), bg="#145f46", fg=COLORS["text"])
             self.toggle_button.configure(text=self.tr.t("clicker.pause"))
             configure_button_color(self.toggle_button, COLORS["accent"], COLORS["accent_text"])
@@ -1143,6 +1674,31 @@ class FunctionsCategory(ttk.Frame):
             self.toggle_button.configure(text=self.tr.t("clicker.resume"))
             configure_button_color(self.toggle_button, COLORS["card_2"], COLORS["text"])
         self.refresh_overlay()
+
+    def is_any_clicker_mode_active(self) -> bool:
+        return bool(
+            self.clicker.enabled
+            or self.clicker.fixed_click_enabled
+            or self.clicker.move_click_enabled
+            or time.monotonic() < getattr(self.clicker, "last_pilot_until", 0.0)
+        )
+
+    def active_function_descriptions(self) -> str:
+        items: list[str] = []
+        if self.clicker.enabled:
+            items.append(
+                self.tr.t("overlay.mode_auto", hotkey=self.hotkey_var.get(), interval=f"{self.selected_interval():.2f}s")
+            )
+        if self.clicker.move_click_enabled:
+            items.append(self.tr.t("overlay.mode_move", hotkey=self.move_hotkey_var.get()))
+        if self.clicker.fixed_click_enabled:
+            items.append(self.tr.t("overlay.mode_fixed", hotkey=self.fixed_hotkey_var.get()))
+            items.append(self.tr.t("overlay.mode_slots"))
+        if time.monotonic() < getattr(self.clicker, "last_pilot_until", 0.0):
+            items.append(self.tr.t("overlay.mode_pilot", hotkey=self.pilot_hotkey_var.get()))
+        if not items:
+            return self.tr.t("overlay.mode_idle")
+        return " | ".join(items)
 
     def refresh_language(self, translator: Translator) -> None:
         self.tr = translator
@@ -1163,16 +1719,28 @@ class FunctionsCategory(ttk.Frame):
         self.overlay_color_display_var.set(self.overlay_color_label(self.overlay_color_var.get()))
         self.build()
         self.apply_clicker_settings(save=False)
+        self.clicker_status_var.set(self.translate_clicker_status(self.clicker.status_text()))
+        current_foxhole_status = self.clicker.target_title or ("Foxhole nao encontrado" if not self.clicker.target_hwnd else "Foxhole")
+        self.foxhole_status_var.set(self.translate_foxhole_status(current_foxhole_status))
         self.update_state()
+
+    def translate_foxhole_status(self, text: str) -> str:
+        if text == "Foxhole nao encontrado":
+            return self.tr.t("clicker.foxhole_not_found")
+        return text or self.tr.t("clicker.find_hint")
 
     def refresh_overlay(self) -> None:
         profile_name = self.overlay_profile_name()
         self.overlay.update(
-            self.clicker.enabled,
+            self.is_any_clicker_mode_active(),
             self.hotkey_var.get(),
             self.selected_interval(),
             profile_name,
             self.clicker.target_title or "Foxhole",
+            self.active_function_descriptions(),
+            self.move_hotkey_var.get(),
+            self.fixed_hotkey_var.get(),
+            self.pilot_hotkey_var.get(),
         )
         self.overlay.set_visible(self.should_show_overlay())
 
@@ -1306,6 +1874,10 @@ class OverlayCategory(ttk.Frame):
 
     def refresh_language(self, translator: Translator) -> None:
         self.tr = translator
+        self.controller.tr = translator
+        self.controller.speed_display_var.set(self.controller.speed_label(self.controller.speed_var.get()))
+        self.controller.mouse_button_display_var.set(self.controller.mouse_button_label(self.controller.mouse_button_var.get()))
+        self.controller.overlay_color_display_var.set(self.controller.overlay_color_label(self.controller.overlay_color_var.get()))
         self.ui_text = {}
         for child in self.winfo_children():
             child.destroy()
@@ -1491,6 +2063,7 @@ class SettingsCategory(ttk.Frame):
             self.bind_mousewheel_recursive(child, canvas)
 
     def save_app_settings(self) -> None:
+        previous_start_with_windows = bool(load_settings().get("app", {}).get("start_with_windows", False))
         settings = load_settings()
         app_settings = settings.setdefault("app", {})
         app_settings["start_with_windows"] = self.start_with_windows_var.get()
@@ -1507,9 +2080,21 @@ class SettingsCategory(ttk.Frame):
                 app.set_start_with_windows(self.start_with_windows_var.get())
             except Exception as exc:
                 print(f"[Settings] startup update failed: {exc}", flush=True)
+                self.start_with_windows_var.set(previous_start_with_windows)
+                app_settings["start_with_windows"] = previous_start_with_windows
+                save_settings(settings)
+                messagebox.showerror(
+                    self.tr.t("startup.error_title"),
+                    self.tr.t("startup.error_body", message=str(exc)),
+                    parent=self.winfo_toplevel(),
+                )
 
     def refresh_language(self, translator: Translator) -> None:
         self.tr = translator
+        self.controller.tr = translator
+        self.controller.speed_display_var.set(self.controller.speed_label(self.controller.speed_var.get()))
+        self.controller.mouse_button_display_var.set(self.controller.mouse_button_label(self.controller.mouse_button_var.get()))
+        self.controller.overlay_color_display_var.set(self.controller.overlay_color_label(self.controller.overlay_color_var.get()))
         for child in self.winfo_children():
             child.destroy()
         self.build()

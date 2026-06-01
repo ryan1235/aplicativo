@@ -33,6 +33,7 @@ except Exception:  # pragma: no cover - scrollbar falls back to ttk.
 
 CHAT_API_BASE = "https://archpixel.squareweb.app"
 CHAT_LOG_PATH = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "GG Coalition" / "chat_debug.log"
+WHISPER_CACHE_PATH = CHAT_LOG_PATH.with_name("whisper_cache.json")
 IMAGE_URL_RE = re.compile(r"https?://[^\s<>\"]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s<>\"]*)?", re.IGNORECASE)
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_.-]{1,32})")
 QUICK_EMOJIS = ("👍", "❤️", "😂", "🔥", "✅", "🫡", "👀", "🚚", "⚠️", "🎯")
@@ -156,6 +157,11 @@ class HomeChatPanel(ttk.Frame):
         self.next_message_cursor: str | None = None
         self.loading_older_messages = False
         self.online_users: list[dict[str, Any]] = []
+        self.all_chat_users: list[dict[str, Any]] = []
+        self.whisper_conversations: list[dict[str, Any]] = []
+        self.closed_whisper_ids: set[str] = set()
+        self.whisper_messages_cache: dict[str, dict[str, Any]] = {}
+        self.whisper_unread_ids: set[str] = set()
         self.mention_suggestions: list[dict[str, Any]] = []
         self.mentions_seen_ids: set[str] = set()
         self.notified_message_ids: set[str] = set()
@@ -166,6 +172,7 @@ class HomeChatPanel(ttk.Frame):
         self.active = False
 
         self.columnconfigure(0, weight=1)
+        self.load_whisper_cache()
         self.build()
         self.log("panel initialized")
         self.log("waiting for steam profile refresh before authenticate")
@@ -375,6 +382,69 @@ class HomeChatPanel(ttk.Frame):
         print(text, flush=True)
         _append_chat_log(text)
 
+    def load_whisper_cache(self) -> None:
+        try:
+            data = json.loads(WHISPER_CACHE_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        self.whisper_conversations = list(data.get("conversations") or [])
+        self.whisper_messages_cache = dict(data.get("messages") or {})
+        self.closed_whisper_ids = {str(item) for item in data.get("closed") or []}
+
+    def save_whisper_cache(self) -> None:
+        try:
+            WHISPER_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "conversations": self.whisper_conversations[-30:],
+                "messages": self.whisper_messages_cache,
+                "closed": sorted(self.closed_whisper_ids),
+            }
+            WHISPER_CACHE_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as exc:
+            self.log(f"whisper cache save failed: {exc}")
+
+    def conversation_id(self, conversation: dict[str, Any]) -> str:
+        return str(conversation.get("id") or conversation.get("_id") or conversation.get("conversationId") or "")
+
+    def selected_is_whisper(self) -> bool:
+        return self.selected_chat_slug.get().startswith("whisper:")
+
+    def selected_whisper_id(self) -> str:
+        value = self.selected_chat_slug.get().strip()
+        return value.split(":", 1)[1] if value.startswith("whisper:") else ""
+
+    def whisper_key(self, conversation_id: str) -> str:
+        return f"whisper:{conversation_id}"
+
+    def selected_room_slug(self) -> str:
+        return "" if self.selected_is_whisper() else self.selected_chat_slug.get().strip()
+
+    def other_whisper_user(self, conversation: dict[str, Any]) -> dict[str, Any]:
+        local_id = str(self.chat_user.get("id") or "")
+        local_steam = str(self.chat_user.get("steamId") or "")
+        for key in ("otherUser", "targetUser", "recipient", "receiver", "user"):
+            user = conversation.get(key)
+            if isinstance(user, dict):
+                return user
+        users = conversation.get("users") or conversation.get("participants") or []
+        if isinstance(users, list):
+            for item in users:
+                user = item.get("user") if isinstance(item, dict) and isinstance(item.get("user"), dict) else item
+                if not isinstance(user, dict):
+                    continue
+                if local_id and str(user.get("id") or "") == local_id:
+                    continue
+                if local_steam and str(user.get("steamId") or "") == local_steam:
+                    continue
+                return user
+        return {}
+
+    def normalize_whisper_message(self, message: dict[str, Any]) -> dict[str, Any]:
+        item = dict(message)
+        if "user" not in item and isinstance(item.get("sender"), dict):
+            item["user"] = item.get("sender")
+        return item
+
     def bind_messages_mousewheel(self, widget: tk.Widget) -> None:
         def on_mousewheel(event) -> str:
             self.messages_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -449,8 +519,15 @@ class HomeChatPanel(ttk.Frame):
     def filter_online_users(self, query: str) -> list[dict[str, Any]]:
         local_steam_id = str(self.chat_user.get("steamId") or getattr(self.app.profile, "steam_id", "") or "")
         scored: list[tuple[int, str, dict[str, Any]]] = []
-        for user in self.online_users:
+        seen_users: set[str] = set()
+        combined_users = [*self.online_users, *self.all_chat_users]
+        for user in combined_users:
             steam_id = str(user.get("steamId") or user.get("steam_id") or "")
+            user_id = str(user.get("id") or "")
+            unique_key = user_id or steam_id or self.user_mention_name(user).casefold()
+            if unique_key in seen_users:
+                continue
+            seen_users.add(unique_key)
             name = self.user_mention_name(user)
             if steam_id and steam_id == local_steam_id:
                 continue
@@ -541,7 +618,7 @@ class HomeChatPanel(ttk.Frame):
             return
         chat = self.chats[index]
         self.selected_chat_slug.set(str(chat.get("slug") or ""))
-        self.selected_chat_label.set(self.format_chat_label(chat))
+        self.selected_chat_label.set(self.format_chat_tab_label(chat))
         self.update_chat_tab_styles()
         self.log(f"chat selected slug={self.selected_chat_slug.get()} label={self.selected_chat_label.get()}")
         self.messages = []
@@ -549,6 +626,76 @@ class HomeChatPanel(ttk.Frame):
         self.rendered_message_signature = ()
         self.render_messages(scroll_to_bottom=True)
         self.load_messages()
+
+    def open_whisper_by_id(self, conversation_id: str, *, auto_open: bool = False) -> None:
+        if not conversation_id:
+            return
+        self.closed_whisper_ids.discard(conversation_id)
+        key = self.whisper_key(conversation_id)
+        self.selected_chat_slug.set(key)
+        conversation = self.find_whisper_conversation(conversation_id) or {"id": conversation_id}
+        self.selected_chat_label.set(self.format_whisper_tab_label(conversation))
+        self.room_title_var.set(self.tr.t("home.chat.current_room", room=self.selected_chat_label.get()))
+        self.whisper_unread_ids.discard(conversation_id)
+        self.messages = []
+        self.next_message_cursor = None
+        self.rendered_message_signature = ()
+        self.render_chat_tabs()
+        self.render_messages(scroll_to_bottom=True)
+        self.load_messages()
+        self.mark_whisper_read(conversation_id)
+        if auto_open and hasattr(self.app, "open_chat_from_overlay"):
+            self.app.open_chat_from_overlay()
+
+    def close_whisper_tab(self, conversation_id: str) -> None:
+        self.closed_whisper_ids.add(conversation_id)
+        self.save_whisper_cache()
+        if self.selected_whisper_id() == conversation_id:
+            self.selected_chat_slug.set(str(self.chats[0].get("slug") or "") if self.chats else "")
+            self.messages = []
+            self.rendered_message_signature = ()
+            self.load_messages()
+        self.render_chat_tabs()
+
+    def find_whisper_conversation(self, conversation_id: str) -> dict[str, Any] | None:
+        for conversation in self.whisper_conversations:
+            if self.conversation_id(conversation) == conversation_id:
+                return conversation
+        return None
+
+    def open_whisper_with_user(self, user: dict[str, Any]) -> None:
+        if not user or not self.chat_token:
+            return
+        target_payload: dict[str, str] = {}
+        if user.get("id"):
+            target_payload["targetUserId"] = str(user.get("id"))
+        elif user.get("steamId") or user.get("steam_id"):
+            target_payload["targetSteamId"] = str(user.get("steamId") or user.get("steam_id"))
+        else:
+            target_payload["personaname"] = self.user_mention_name(user)
+        self.status_var.set(self.tr.t("home.chat.whisper_opening"))
+
+        def worker() -> None:
+            try:
+                result = _http_json("POST", "/chat/whispers", token=self.chat_token, payload=target_payload, timeout=12)
+                conversation = dict(result.get("conversation") or result.get("whisper") or result)
+                self.after(0, self.apply_open_whisper_result, conversation)
+            except Exception as exc:
+                self.log(f"open whisper error: {exc}")
+                self.after(0, self.set_error, self.tr.t("home.chat.whisper_error", message=str(exc)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_open_whisper_result(self, conversation: dict[str, Any]) -> None:
+        conversation_id = self.conversation_id(conversation)
+        if not conversation_id:
+            self.set_error(self.tr.t("home.chat.whisper_error", message=self.tr.t("home.chat.missing_conversation")))
+            return
+        known = {self.conversation_id(item): item for item in self.whisper_conversations if self.conversation_id(item)}
+        known[conversation_id] = conversation
+        self.whisper_conversations = list(known.values())
+        self.save_whisper_cache()
+        self.open_whisper_by_id(conversation_id)
 
     def set_active(self, active: bool) -> None:
         self.active = active
@@ -634,7 +781,11 @@ class HomeChatPanel(ttk.Frame):
         else:
             self.log("refresh -> load chats/messages")
             self.load_chats()
-            if self.selected_chat_slug.get():
+            self.load_whispers()
+            self.load_all_chat_users()
+            if self.selected_is_whisper():
+                self.load_messages()
+            elif self.selected_chat_slug.get():
                 self.load_messages()
 
     def cancel_refresh(self) -> None:
@@ -663,6 +814,22 @@ class HomeChatPanel(ttk.Frame):
         if self.selected_chat_slug.get():
             self.load_messages()
         self.schedule_refresh()
+
+    def load_all_chat_users(self) -> None:
+        if not self.chat_token:
+            return
+
+        def worker() -> None:
+            try:
+                result = _http_json("GET", "/chat/users", token=self.chat_token, timeout=12)
+                self.after(0, self.apply_all_chat_users, list(result.get("users") or []))
+            except Exception as exc:
+                self.log(f"chat users error: {exc}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_all_chat_users(self, users: list[dict[str, Any]]) -> None:
+        self.all_chat_users = users
 
     def start_presence(self) -> None:
         if not self.active:
@@ -742,7 +909,7 @@ class HomeChatPanel(ttk.Frame):
         if not self.active:
             return
         self.cancel_mention_notifications()
-        self.poll_mention_notifications()
+        self.notification_job = self.after(2500, self.poll_mention_notifications)
 
     def cancel_mention_notifications(self) -> None:
         if self.notification_job:
@@ -752,7 +919,7 @@ class HomeChatPanel(ttk.Frame):
                 pass
             self.notification_job = None
 
-    def schedule_mention_notifications(self, delay_ms: int = 20000) -> None:
+    def schedule_mention_notifications(self, delay_ms: int = 6000) -> None:
         self.cancel_mention_notifications()
         if self.active and self.chat_token:
             self.notification_job = self.after(delay_ms, self.poll_mention_notifications)
@@ -760,19 +927,30 @@ class HomeChatPanel(ttk.Frame):
     def poll_mention_notifications(self) -> None:
         self.notification_job = None
         if not self.chat_token:
-            self.schedule_mention_notifications(30000)
+            self.schedule_mention_notifications(15000)
             return
 
         def worker() -> None:
             try:
-                result = _http_json("GET", "/chat/mentions/notifications?unreadOnly=true&take=50", token=self.chat_token, timeout=10)
-                self.after(0, self.apply_mention_notifications, list(result.get("mentions") or []))
+                result = _http_json("GET", "/chat/notifications?unreadOnly=true&take=50", token=self.chat_token, timeout=10)
+                self.after(0, self.apply_chat_notifications, result)
             except Exception as exc:
-                self.log(f"mention notification error: {exc}")
+                self.log(f"combined notification error: {exc}")
+                try:
+                    result = _http_json("GET", "/chat/mentions/notifications?unreadOnly=true&take=50", token=self.chat_token, timeout=10)
+                    self.after(0, self.apply_mention_notifications, list(result.get("mentions") or []))
+                except Exception as inner_exc:
+                    self.log(f"mention notification error: {inner_exc}")
             finally:
                 self.after(0, self.schedule_mention_notifications)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def apply_chat_notifications(self, result: dict[str, Any]) -> None:
+        self.apply_mention_notifications(list(result.get("mentions") or []))
+        whispers = list(result.get("whispers") or [])
+        if whispers:
+            self.apply_whisper_notifications(whispers)
 
     def apply_mention_notifications(self, mentions: list[dict[str, Any]]) -> None:
         received_new_mention = False
@@ -811,6 +989,53 @@ class HomeChatPanel(ttk.Frame):
                 _http_json("PATCH", f"/chat/mentions/{urllib.parse.quote(mention_id)}/read", token=self.chat_token, timeout=8)
             except Exception as exc:
                 self.log(f"mention read error {mention_id}: {exc}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_whisper_notifications(self, whispers: list[dict[str, Any]]) -> None:
+        first_conversation_id = ""
+        first_sender: dict[str, Any] = {}
+        for whisper in whispers:
+            conversation = whisper.get("conversation") if isinstance(whisper.get("conversation"), dict) else {}
+            conversation_id = str(whisper.get("conversationId") or whisper.get("conversation_id") or self.conversation_id(conversation))
+            if not conversation_id:
+                continue
+            if not conversation:
+                conversation = {
+                    "id": conversation_id,
+                    "otherUser": whisper.get("otherUser") if isinstance(whisper.get("otherUser"), dict) else whisper.get("sender"),
+                }
+            if conversation and not self.find_whisper_conversation(conversation_id):
+                self.whisper_conversations.append(conversation)
+            self.whisper_unread_ids.add(conversation_id)
+            message = self.normalize_whisper_message(whisper)
+            cached = self.whisper_messages_cache.setdefault(conversation_id, {"messages": [], "nextCursor": None})
+            cached_messages = [self.normalize_whisper_message(item) for item in list(cached.get("messages") or [])]
+            if all(self.message_identity(item) != self.message_identity(message) for item in cached_messages):
+                cached_messages.append(message)
+            cached["messages"] = cached_messages[-50:]
+            if not first_conversation_id:
+                first_conversation_id = conversation_id
+                first_sender = whisper.get("sender") if isinstance(whisper.get("sender"), dict) else message.get("user") or {}
+        self.save_whisper_cache()
+        self.render_chat_tabs()
+        if first_conversation_id:
+            title = self.tr.t("home.chat.whisper_title")
+            body = self.tr.t("home.chat.whisper_body", user=self.user_mention_name(first_sender))
+            self.show_mention_overlay(title, body)
+            self.play_mention_sound()
+            self.open_whisper_by_id(first_conversation_id, auto_open=True)
+
+    def mark_whisper_read(self, conversation_id: str) -> None:
+        if not conversation_id or not self.chat_token:
+            return
+        self.whisper_unread_ids.discard(conversation_id)
+
+        def worker() -> None:
+            try:
+                _http_json("PATCH", f"/chat/whispers/{urllib.parse.quote(conversation_id)}/read", token=self.chat_token, timeout=8)
+            except Exception as exc:
+                self.log(f"whisper read error {conversation_id}: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -865,6 +1090,8 @@ class HomeChatPanel(ttk.Frame):
         self.start_presence()
         self.start_mention_notifications()
         self.load_chats()
+        self.load_whispers()
+        self.load_all_chat_users()
 
     def handle_auth_error(self, message: str) -> None:
         self.apply_current_user_labels()
@@ -912,6 +1139,7 @@ class HomeChatPanel(ttk.Frame):
             return
         current = self.selected_chat_slug.get()
         valid_slugs = {str(chat.get("slug") or "") for chat in self.chats}
+        valid_slugs.update(self.whisper_key(self.conversation_id(item)) for item in self.whisper_conversations if self.conversation_id(item))
         if current not in valid_slugs:
             current = str(self.chats[0].get("slug") or "")
             self.selected_chat_slug.set(current)
@@ -919,6 +1147,29 @@ class HomeChatPanel(ttk.Frame):
         self.sync_selected_chat_label()
         self.status_var.set(self.tr.t("home.chat.ready"))
         self.load_messages()
+
+    def load_whispers(self) -> None:
+        if not self.chat_token:
+            return
+
+        def worker() -> None:
+            try:
+                result = _http_json("GET", "/chat/whispers", token=self.chat_token, timeout=12)
+                self.after(0, self.apply_whispers_result, list(result.get("conversations") or result.get("whispers") or []))
+            except Exception as exc:
+                self.log(f"whispers list error: {exc}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_whispers_result(self, conversations: list[dict[str, Any]]) -> None:
+        known = {self.conversation_id(item): item for item in self.whisper_conversations if self.conversation_id(item)}
+        for conversation in conversations:
+            conversation_id = self.conversation_id(conversation)
+            if conversation_id:
+                known[conversation_id] = conversation
+        self.whisper_conversations = list(known.values())
+        self.save_whisper_cache()
+        self.render_chat_tabs()
 
     def chats_signature(self, chats: list[dict[str, Any]]) -> tuple[tuple[str, str, str], ...]:
         signature: list[tuple[str, str, str]] = []
@@ -935,7 +1186,24 @@ class HomeChatPanel(ttk.Frame):
         return name
 
     def format_chat_tab_label(self, chat: dict[str, Any]) -> str:
-        return str(chat.get("name") or chat.get("slug") or "-")
+        return self.localized_chat_name(chat)
+
+    def localized_chat_name(self, chat: dict[str, Any]) -> str:
+        slug = str(chat.get("slug") or "").strip().lower()
+        name = str(chat.get("name") or "").strip()
+        key_by_slug = {
+            "global": "home.chat.room_global",
+            "discussion": "home.chat.room_discussion",
+            "discusion": "home.chat.room_discussion",
+            "logi": "home.chat.room_logi",
+            "faci": "home.chat.room_faci",
+            "front": "home.chat.room_front",
+        }
+        normalized_name = name.lower()
+        key = key_by_slug.get(slug) or key_by_slug.get(normalized_name)
+        if key:
+            return self.tr.t(key)
+        return name or slug or "-"
 
     def render_chat_tabs(self) -> None:
         for child in self.chat_tabs_frame.winfo_children():
@@ -960,8 +1228,55 @@ class HomeChatPanel(ttk.Frame):
             )
             button.pack(side="left", padx=(0, 4))
             self.chat_tab_buttons[slug] = button
+        for conversation in self.visible_whisper_conversations():
+            conversation_id = self.conversation_id(conversation)
+            key = self.whisper_key(conversation_id)
+            holder = tk.Frame(self.chat_tabs_frame, bg="#07111f")
+            holder.pack(side="left", padx=(4, 4))
+            label = self.format_whisper_tab_label(conversation)
+            button = tk.Button(
+                holder,
+                text=label,
+                command=lambda cid=conversation_id: self.open_whisper_by_id(cid),
+                bg="#13233b",
+                fg="#dce8f7",
+                activebackground="#203857",
+                activeforeground="#edf6ff",
+                relief="flat",
+                bd=0,
+                font=("Segoe UI", 9, "bold" if conversation_id in self.whisper_unread_ids else "normal"),
+                padx=10,
+                pady=4,
+                cursor="hand2",
+            )
+            button.pack(side="left")
+            close_button = tk.Button(
+                holder,
+                text="x",
+                command=lambda cid=conversation_id: self.close_whisper_tab(cid),
+                bg="#13233b",
+                fg="#99abc4",
+                activebackground="#431926",
+                activeforeground="#edf6ff",
+                relief="flat",
+                bd=0,
+                font=("Segoe UI", 8, "bold"),
+                padx=6,
+                pady=4,
+                cursor="hand2",
+            )
+            close_button.pack(side="left")
+            self.chat_tab_buttons[key] = button
         self.update_chat_tab_styles()
         self.after(0, self.refresh_chat_tabs_scroll)
+
+    def visible_whisper_conversations(self) -> list[dict[str, Any]]:
+        return [item for item in self.whisper_conversations if self.conversation_id(item) and self.conversation_id(item) not in self.closed_whisper_ids]
+
+    def format_whisper_tab_label(self, conversation: dict[str, Any]) -> str:
+        name = self.user_mention_name(self.other_whisper_user(conversation))
+        marker = "• " if self.conversation_id(conversation) in self.whisper_unread_ids else ""
+        return f"{marker}{self.tr.t('home.chat.whisper_tab', user=name)}"
 
     def update_chat_tab_styles(self) -> None:
         current = self.selected_chat_slug.get().strip()
@@ -969,7 +1284,14 @@ class HomeChatPanel(ttk.Frame):
             if slug == current:
                 button.configure(bg="#5eead4", fg="#041014", activebackground="#8ab4ff", activeforeground="#041014", font=("Segoe UI", 9, "bold"))
             else:
-                button.configure(bg="#0f1b2e", fg="#cbd8ea", activebackground="#182d49", activeforeground="#edf6ff", font=("Segoe UI", 9))
+                is_whisper = slug.startswith("whisper:")
+                button.configure(
+                    bg="#13233b" if is_whisper else "#0f1b2e",
+                    fg="#5eead4" if is_whisper and slug.split(":", 1)[1] in self.whisper_unread_ids else "#cbd8ea",
+                    activebackground="#203857" if is_whisper else "#182d49",
+                    activeforeground="#edf6ff",
+                    font=("Segoe UI", 9, "bold" if is_whisper and slug.split(":", 1)[1] in self.whisper_unread_ids else "normal"),
+                )
 
     def on_chat_tabs_configure(self, _event=None) -> None:
         self.refresh_chat_tabs_scroll()
@@ -998,15 +1320,22 @@ class HomeChatPanel(ttk.Frame):
     def sync_selected_chat_label(self) -> None:
         slug = self.selected_chat_slug.get().strip()
         self.log(f"sync selected chat label slug={slug!r}")
+        if slug.startswith("whisper:"):
+            conversation = self.find_whisper_conversation(slug.split(":", 1)[1]) or {}
+            label = self.format_whisper_tab_label(conversation)
+            self.selected_chat_label.set(label)
+            self.room_title_var.set(self.tr.t("home.chat.current_room", room=label))
+            self.update_chat_tab_styles()
+            return
         for index, chat in enumerate(self.chats):
             if str(chat.get("slug") or "") == slug:
-                label = self.format_chat_label(chat)
+                label = self.format_chat_tab_label(chat)
                 self.selected_chat_label.set(label)
                 self.room_title_var.set(self.tr.t("home.chat.current_room", room=label))
                 self.update_chat_tab_styles()
                 return
         if self.chats:
-            label = self.format_chat_label(self.chats[0])
+            label = self.format_chat_tab_label(self.chats[0])
             self.selected_chat_label.set(label)
             self.room_title_var.set(self.tr.t("home.chat.current_room", room=label))
             self.update_chat_tab_styles()
@@ -1014,6 +1343,9 @@ class HomeChatPanel(ttk.Frame):
             self.room_title_var.set("")
 
     def load_messages(self, *, cursor: str | None = None, append_older: bool = False, use_cache: bool = True) -> None:
+        if self.selected_is_whisper():
+            self.load_whisper_messages(cursor=cursor, append_older=append_older, use_cache=use_cache)
+            return
         slug = self.selected_chat_slug.get().strip()
         if not slug:
             self.log(f"load messages skipped slug={slug!r} inflight={self.messages_in_flight}")
@@ -1067,6 +1399,61 @@ class HomeChatPanel(ttk.Frame):
                     self.after(0, self.schedule_refresh)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def load_whisper_messages(self, *, cursor: str | None = None, append_older: bool = False, use_cache: bool = True) -> None:
+        conversation_id = self.selected_whisper_id()
+        if not conversation_id:
+            return
+        if not cursor and not append_older and use_cache:
+            cached = self.whisper_messages_cache.get(conversation_id)
+            if cached and not self.messages:
+                self.messages = [self.normalize_whisper_message(item) for item in list(cached.get("messages") or [])]
+                self.next_message_cursor = cached.get("nextCursor")
+                self.render_messages(scroll_to_bottom=True)
+        if self.messages_in_flight:
+            self.pending_message_slug = self.whisper_key(conversation_id)
+            return
+        self.messages_in_flight = True
+        self.loading_older_messages = append_older
+        self.pending_message_slug = None
+        self.status_var.set(self.tr.t("home.chat.loading_older") if append_older else self.tr.t("home.chat.loading"))
+
+        def worker() -> None:
+            try:
+                path = f"/chat/whispers/{urllib.parse.quote(conversation_id)}/messages?take=50"
+                if cursor:
+                    path = f"{path}&cursor={urllib.parse.quote(cursor)}"
+                result = _http_json("GET", path, token=self.chat_token, timeout=12)
+                messages = [self.normalize_whisper_message(item) for item in list(result.get("messages") or [])]
+                self.after(0, self.apply_whisper_messages_result, conversation_id, messages, result.get("nextCursor"), append_older)
+            except Exception as exc:
+                self.log(f"whisper messages error {conversation_id}: {exc}")
+                self.after(0, self.set_error, self.tr.t("home.chat.message_error", message=str(exc)))
+            finally:
+                self.messages_in_flight = False
+                self.loading_older_messages = False
+                if self.active and self.selected_whisper_id() == conversation_id:
+                    self.after(0, self.schedule_refresh)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_whisper_messages_result(self, conversation_id: str, messages: list[dict[str, Any]], next_cursor: Any = None, append_older: bool = False) -> None:
+        if self.selected_whisper_id() != conversation_id:
+            return
+        merged_messages = self.merge_messages(self.messages, messages) if append_older else messages
+        self.next_message_cursor = str(next_cursor or "") or None
+        if not append_older:
+            self.whisper_messages_cache[conversation_id] = {"messages": list(messages), "nextCursor": self.next_message_cursor}
+            self.save_whisper_cache()
+        signature = self.messages_signature(merged_messages)
+        if signature == self.rendered_message_signature:
+            self.messages = merged_messages
+            self.status_var.set(self.tr.t("home.chat.ready"))
+            return
+        should_scroll = False if append_older else (not self.rendered_message_signature or self.is_messages_near_bottom())
+        self.messages = merged_messages
+        self.render_messages(scroll_to_bottom=should_scroll)
+        self.status_var.set(self.tr.t("home.chat.ready"))
 
     def apply_messages_result(self, messages: list[dict[str, Any]], slug: str, next_cursor: Any = None, append_older: bool = False) -> None:
         if self.selected_chat_slug.get() != slug:
@@ -1160,6 +1547,9 @@ class HomeChatPanel(ttk.Frame):
             self.status_var.set(self.tr.t("home.chat.auth_needed"))
             self.authenticate()
             return
+        if self.selected_is_whisper():
+            self.send_whisper_message(content)
+            return
         slug = self.selected_chat_slug.get().strip()
         if not slug:
             self.log("send aborted: no selected chat")
@@ -1188,6 +1578,46 @@ class HomeChatPanel(ttk.Frame):
                 self.after(0, lambda: self.send_button.configure(state="normal"))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def send_whisper_message(self, content: str) -> None:
+        conversation_id = self.selected_whisper_id()
+        if not conversation_id:
+            return
+        retry_seconds = int(max(0, self.send_retry_after - time.monotonic()))
+        if retry_seconds > 0:
+            self.status_var.set(self.tr.t("home.chat.send_wait", seconds=retry_seconds))
+            return
+        self.send_button.configure(state="disabled")
+        self.status_var.set(self.tr.t("home.chat.sending"))
+
+        def worker() -> None:
+            try:
+                path = f"/chat/whispers/{urllib.parse.quote(conversation_id)}/messages"
+                result = _http_json("POST", path, token=self.chat_token, payload={"content": content}, timeout=12)
+                message = self.normalize_whisper_message(dict(result.get("message") or result))
+                self.after(0, self.after_send_whisper_message, conversation_id, message)
+            except Exception as exc:
+                self.after(0, self.handle_send_error, str(exc))
+            finally:
+                self.after(0, lambda: self.send_button.configure(state="normal"))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def after_send_whisper_message(self, conversation_id: str, message: dict[str, Any]) -> None:
+        self.send_retry_after = 0.0
+        self.input_var.set("")
+        if message:
+            self.messages.append(message)
+            cached = self.whisper_messages_cache.setdefault(conversation_id, {"messages": [], "nextCursor": self.next_message_cursor})
+            cached_messages = [self.normalize_whisper_message(item) for item in list(cached.get("messages") or [])]
+            cached_messages.append(message)
+            cached["messages"] = cached_messages[-50:]
+            cached["nextCursor"] = self.next_message_cursor
+            self.save_whisper_cache()
+            self.render_messages(scroll_to_bottom=True)
+        else:
+            self.load_messages(use_cache=False)
+        self.status_var.set(self.tr.t("home.chat.sent"))
 
     def after_send_message(self, message: dict[str, Any], fallback_content: str) -> None:
         self.send_retry_after = 0.0
@@ -1319,6 +1749,22 @@ class HomeChatPanel(ttk.Frame):
         created = str(message.get("createdAt") or message.get("created_at") or "")
         edited = message.get("editedAt") or message.get("edited_at")
         tk.Label(header, text=name, bg=bubble_bg, fg="#8ab4ff", font=("Segoe UI", 9, "bold")).pack(side="right" if is_mine else "left")
+        if not is_mine and user:
+            tk.Button(
+                header,
+                text=self.tr.t("home.chat.whisper_button"),
+                command=lambda item=user: self.open_whisper_with_user(item),
+                bg="#17324f",
+                fg="#5eead4",
+                activebackground="#203857",
+                activeforeground="#edf6ff",
+                relief="flat",
+                bd=0,
+                font=("Segoe UI", 7, "bold"),
+                padx=6,
+                pady=1,
+                cursor="hand2",
+            ).pack(side="right" if not is_mine else "left", padx=6)
         meta_text = self.format_message_time(created) if created else ""
         if edited:
             meta_text = f"{meta_text}  {self.tr.t('home.chat.edited')}"
@@ -1376,7 +1822,7 @@ class HomeChatPanel(ttk.Frame):
 
     def find_online_user(self, name: str) -> dict[str, Any] | None:
         wanted = name.casefold().lstrip("@")
-        for user in self.online_users:
+        for user in [*self.online_users, *self.all_chat_users]:
             if self.user_mention_name(user).casefold() == wanted:
                 return user
         return None
@@ -1403,6 +1849,21 @@ class HomeChatPanel(ttk.Frame):
         steam_id = str(user.get("steamId") or user.get("steam_id") or "")
         detail = steam_id if steam_id else self.tr.t("home.chat.online")
         tk.Label(frame, text=detail, bg="#07111f", fg="#99abc4", font=("Segoe UI", 8)).grid(row=1, column=1, sticky="w", padx=(0, 12), pady=(0, 10))
+        tk.Button(
+            frame,
+            text=self.tr.t("home.chat.whisper_button"),
+            command=lambda item=user: (self.hide_mention_hover_card(), self.open_whisper_with_user(item)),
+            bg="#17324f",
+            fg="#5eead4",
+            activebackground="#203857",
+            activeforeground="#edf6ff",
+            relief="flat",
+            bd=0,
+            font=("Segoe UI", 8, "bold"),
+            padx=8,
+            pady=3,
+            cursor="hand2",
+        ).grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
         card.update_idletasks()
         card.geometry(f"+{event.x_root + 14}+{event.y_root + 14}")
 

@@ -1,5 +1,5 @@
 import ctypes
-import os
+import random
 from pathlib import Path
 import threading
 import time
@@ -7,30 +7,54 @@ import time
 
 DEBUG_CONSOLE = True
 HOTKEYS = {f"F{i}": 0x6F + i for i in range(1, 13)}
+ACTION_KEYS = {
+    **HOTKEYS,
+    **{chr(code): code for code in range(0x41, 0x5B)},  # A-Z
+    **{str(number): 0x30 + number for number in range(0, 10)},  # 0-9
+    "Esc": 0x1B,
+    "Tab": 0x09,
+    "Enter": 0x0D,
+    "Space": 0x20,
+    "Up": 0x26,
+    "Down": 0x28,
+    "Left": 0x25,
+    "Right": 0x27,
+    "Insert": 0x2D,
+    "Delete": 0x2E,
+    "Home": 0x24,
+    "End": 0x23,
+    "PageUp": 0x21,
+    "PageDown": 0x22,
+}
 MOUSE_BUTTONS = {
-    "Esquerdo": {
-        "down": 0x0201,
-        "up": 0x0202,
-        "mk": 0x0001,
-    },
-    "Direito": {
-        "down": 0x0204,
-        "up": 0x0205,
-        "mk": 0x0002,
-    },
-    "Meio": {
-        "down": 0x0207,
-        "up": 0x0208,
-        "mk": 0x0010,
-    },
+    "Esquerdo": {"down": 0x0201, "up": 0x0202, "mk": 0x0001},
+    "Direito": {"down": 0x0204, "up": 0x0205, "mk": 0x0002},
+    "Meio": {"down": 0x0207, "up": 0x0208, "mk": 0x0010},
 }
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
 FOXHOLE_PATH_HINTS = ("\\steamapps\\common\\foxhole\\", "/steamapps/common/foxhole/")
 IGNORED_PROCESS_HINTS = ("discord", "chrome", "msedge", "firefox", "opera", "steam", "python")
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 WM_MOUSEMOVE = 0x0200
+WM_KEYDOWN = 0x0100
+WM_KEYUP = 0x0101
 CWP_SKIPINVISIBLE = 0x0001
 CWP_SKIPDISABLED = 0x0002
+
+VK_W = 0x57
+VK_A = 0x41
+VK_S = 0x53
+VK_D = 0x44
+VK_1 = 0x31
+VK_2 = 0x32
+VK_3 = 0x33
+VK_4 = 0x34
+VK_ESC = 0x1B
+VK_LBUTTON = 0x01
+VK_RBUTTON = 0x02
+VK_MBUTTON = 0x04
+VK_RETURN = 0x0D
+VK_CONTROL = 0x11
 
 
 class POINT(ctypes.Structure):
@@ -38,12 +62,7 @@ class POINT(ctypes.Structure):
 
 
 class RECT(ctypes.Structure):
-    _fields_ = [
-        ("left", ctypes.c_long),
-        ("top", ctypes.c_long),
-        ("right", ctypes.c_long),
-        ("bottom", ctypes.c_long),
-    ]
+    _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
 
 
 class AutoClicker:
@@ -53,6 +72,7 @@ class AutoClicker:
         self.hotkey_vk = HOTKEYS[self.hotkey_name]
         self.mouse_button = "Esquerdo"
         self.interval = 0.1
+
         self.target_hwnd = 0
         self.click_hwnd = 0
         self.target_title = ""
@@ -62,10 +82,43 @@ class AutoClicker:
         self.last_status_update = 0.0
         self.last_find_log = 0.0
         self.last_missing_log = 0.0
+
+        # Modo original (auto clicker configuravel da UI)
         self.enabled = False
         self.waiting_for_foxhole = False
+
+        # Modo extra: double-click fixo com tecla dedicada
+        self.fixed_hotkey_name = "F6"
+        self.fixed_hotkey_vk = ACTION_KEYS[self.fixed_hotkey_name]
+        self.fixed_click_enabled = False
+        self.double_click_range = (0.08, 0.15)
+
+        # Move-click / piloto automatico configuraveis
+        self.move_hotkey_name = "F2"
+        self.move_hotkey_vk = ACTION_KEYS[self.move_hotkey_name]
+        self.pilot_hotkey_name = "F4"
+        self.pilot_hotkey_vk = ACTION_KEYS[self.pilot_hotkey_name]
+        self.last_pilot_until = 0.0
+
+        # F2 - move-click segurando esquerdo
+        self.move_click_enabled = False
+        self.move_click_holding = False
+        self.move_click_hwnd = 0
+        self.move_click_lparam = 0
+
+        # Slots 1-4 para clique posicional durante double-click fixo
+        self.slot_positions: dict[int, tuple[int, int]] = {
+            1: (40, 80),
+            2: (95, 80),
+            3: (150, 80),
+            4: (205, 80),
+        }
+
+        # F5 menu callback (UI thread-safe callback supplied by view layer)
+        self.menu_callback = None
+
         self.stop_event = threading.Event()
-        self.hotkey_was_down = False
+        self.key_was_down: dict[int, bool] = {}
         self.user32 = ctypes.windll.user32
         self.kernel32 = ctypes.windll.kernel32
         self.user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_size_t]
@@ -74,7 +127,8 @@ class AutoClicker:
         self.user32.WindowFromPoint.restype = ctypes.c_void_p
         self.user32.ChildWindowFromPointEx.argtypes = [ctypes.c_void_p, POINT, ctypes.c_uint]
         self.user32.ChildWindowFromPointEx.restype = ctypes.c_void_p
-        self.monitor_thread = threading.Thread(target=self.monitor_hotkey, daemon=True)
+
+        self.monitor_thread = threading.Thread(target=self.monitor_hotkeys, daemon=True)
         self.click_thread = threading.Thread(target=self.click_loop, daemon=True)
         self.monitor_thread.start()
         self.click_thread.start()
@@ -84,12 +138,39 @@ class AutoClicker:
         if DEBUG_CONSOLE:
             print(f"[AutoClicker] {message}", flush=True)
 
+    def set_slot_positions(self, positions: dict[int, tuple[int, int]]) -> None:
+        for slot, value in positions.items():
+            if slot in (1, 2, 3, 4):
+                try:
+                    x, y = int(value[0]), int(value[1])
+                except Exception:
+                    continue
+                self.slot_positions[slot] = (max(0, x), max(0, y))
+        self.log(f"Slots atualizados: {self.slot_positions}")
+
+    def set_menu_callback(self, callback) -> None:
+        self.menu_callback = callback
+
     def configure(self, hotkey_name: str, mouse_button: str, interval: float) -> None:
+        # Mantemos para compatibilidade da tela já existente.
         self.hotkey_name = hotkey_name
-        self.hotkey_vk = HOTKEYS[hotkey_name]
-        self.mouse_button = mouse_button
+        self.hotkey_vk = ACTION_KEYS.get(hotkey_name, ACTION_KEYS["F3"])
+        self.mouse_button = mouse_button if mouse_button in MOUSE_BUTTONS else "Esquerdo"
         self.interval = max(0.03, interval)
         self.log(f"Config: hotkey={self.hotkey_name} botao={self.mouse_button} intervalo={self.interval:.2f}s")
+        self.status_callback(self.status_text())
+
+    def configure_action_hotkeys(self, move_hotkey: str, fixed_hotkey: str, pilot_hotkey: str) -> None:
+        self.move_hotkey_name = move_hotkey if move_hotkey in ACTION_KEYS else "F2"
+        self.fixed_hotkey_name = fixed_hotkey if fixed_hotkey in ACTION_KEYS else "F6"
+        self.pilot_hotkey_name = pilot_hotkey if pilot_hotkey in ACTION_KEYS else "F4"
+        self.move_hotkey_vk = ACTION_KEYS[self.move_hotkey_name]
+        self.fixed_hotkey_vk = ACTION_KEYS[self.fixed_hotkey_name]
+        self.pilot_hotkey_vk = ACTION_KEYS[self.pilot_hotkey_name]
+        self.log(
+            f"Hotkeys extras: move={self.move_hotkey_name} "
+            f"fixed={self.fixed_hotkey_name} pilot={self.pilot_hotkey_name}"
+        )
         self.status_callback(self.status_text())
 
     def use_foxhole_window(self, *, quiet: bool = False) -> str:
@@ -131,16 +212,13 @@ class AutoClicker:
                 title = buffer.value
             process_name = self.get_window_process_name(hwnd).lower()
             process_path = self.get_window_process_path(hwnd).lower()
-            title_lower = title.lower()
             if process_name or title:
                 visible_windows.append((hwnd, process_name, title))
-
             if any(blocked in process_name for blocked in IGNORED_PROCESS_HINTS):
                 return True
             if self.is_foxhole_process(process_name, process_path):
                 self.log(f"Foxhole confirmado: hwnd={hwnd} processo={process_name} titulo='{title}' caminho='{process_path}'")
                 matches.append((hwnd, title))
-                return True
             return True
 
         self.user32.EnumWindows(enum_proc_type(enum_proc), 0)
@@ -154,14 +232,6 @@ class AutoClicker:
                     self.log(f"  hwnd={hwnd} processo='{process_name}' titulo='{title}'")
         return matches[0] if matches else (0, "")
 
-    def get_window_title(self, hwnd: int) -> str:
-        length = self.user32.GetWindowTextLengthW(hwnd)
-        if length <= 0:
-            return ""
-        buffer = ctypes.create_unicode_buffer(length + 1)
-        self.user32.GetWindowTextW(hwnd, buffer, length + 1)
-        return buffer.value
-
     def get_window_process_name(self, hwnd: int) -> str:
         process_path = self.get_window_process_path(hwnd)
         return Path(process_path).name if process_path else ""
@@ -171,11 +241,9 @@ class AutoClicker:
         self.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         if not pid.value:
             return ""
-
         process_handle = self.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
         if not process_handle:
             return ""
-
         try:
             path_buffer = ctypes.create_unicode_buffer(1024)
             size = ctypes.c_ulong(len(path_buffer))
@@ -195,59 +263,110 @@ class AutoClicker:
         return process_name in FOXHOLE_PROCESS_NAMES or any(hint in process_path for hint in FOXHOLE_PATH_HINTS)
 
     def toggle(self) -> None:
-        turning_on = not self.enabled
-        if turning_on:
-            self.use_foxhole_window()
-        self.enabled = not self.enabled
-        self.waiting_for_foxhole = False
-        self.log(f"F3/toggle: enabled={self.enabled} target_hwnd={self.target_hwnd} click_hwnd={self.click_hwnd}")
-        self.status_callback(self.status_text())
+        if self.enabled:
+            self.pause()
+        else:
+            self.start()
 
     def start(self) -> None:
-        if not self.target_hwnd:
-            self.use_foxhole_window()
+        self.disable_fixed_click("auto on")
+        self.use_foxhole_window()
         self.enabled = True
         self.waiting_for_foxhole = False
-        self.log(f"Start: enabled={self.enabled} target_hwnd={self.target_hwnd} click_hwnd={self.click_hwnd}")
         self.status_callback(self.status_text())
 
     def pause(self) -> None:
+        if not self.enabled:
+            return
         self.enabled = False
         self.waiting_for_foxhole = False
-        self.log("Pausado")
         self.status_callback(self.status_text())
 
     def stop(self) -> None:
-        self.enabled = False
+        self.pause()
+        self.disable_fixed_click("stop")
+        self.disable_move_click("stop")
         self.stop_event.set()
         self.log("Parando AutoClicker")
 
     def status_text(self) -> str:
-        if self.enabled and self.waiting_for_foxhole:
+        running = self.enabled or self.fixed_click_enabled
+        if running and (not self.target_hwnd or not self.user32.IsWindow(self.target_hwnd) or self.waiting_for_foxhole):
             return f"Ligado | aguardando Foxhole | {self.hotkey_name}"
-        state = "Ligado" if self.enabled else "Desligado"
+        state = "Ligado" if running else "Desligado"
         target = self.target_title if self.target_title else "Foxhole"
         point = f"{self.click_x},{self.click_y}" if self.target_hwnd else "--"
-        return f"{state} | {target} | virtual {point} | cliques {self.click_count} | {self.hotkey_name} | {self.interval:.2f}s"
+        mode = []
+        if self.move_click_enabled:
+            mode.append("F2")
+        if self.enabled:
+            mode.append("AUTO")
+        if self.fixed_click_enabled:
+            mode.append(self.fixed_hotkey_name)
+        if time.monotonic() < self.last_pilot_until:
+            mode.append(self.pilot_hotkey_name)
+        mode_text = ",".join(mode) if mode else "-"
+        return f"{state} | {target} | virtual {point} | cliques {self.click_count} | {self.hotkey_name} | {self.interval:.2f}s | {mode_text}"
 
-    def monitor_hotkey(self) -> None:
+    def monitor_hotkeys(self) -> None:
+        watch_keys = [
+            self.hotkey_vk,
+            self.move_hotkey_vk,
+            self.pilot_hotkey_vk,
+            self.fixed_hotkey_vk,
+            VK_1,
+            VK_2,
+            VK_3,
+            VK_4,
+        ]
+        for vk in watch_keys:
+            self.key_was_down[vk] = False
+
         while not self.stop_event.is_set():
-            is_down = bool(self.user32.GetAsyncKeyState(self.hotkey_vk) & 0x8000)
-            if is_down and not self.hotkey_was_down:
-                self.log(f"Hotkey detectada: {self.hotkey_name}")
-                self.toggle()
-            self.hotkey_was_down = is_down
-            time.sleep(0.03)
+            self.handle_key_press(self.move_hotkey_vk, self.toggle_move_click)
+            self.handle_key_press(self.hotkey_vk, self.toggle)
+            self.handle_key_press(self.fixed_hotkey_vk, self.toggle_fixed_click)
+            self.handle_key_press(self.pilot_hotkey_vk, self.run_forward_sequence)
+
+            if self.fixed_click_enabled:
+                self.handle_key_press(VK_1, lambda: self.trigger_slot_click(1))
+                self.handle_key_press(VK_2, lambda: self.trigger_slot_click(2))
+                self.handle_key_press(VK_3, lambda: self.trigger_slot_click(3))
+                self.handle_key_press(VK_4, lambda: self.trigger_slot_click(4))
+
+            self.check_cancel_shortcuts()
+            time.sleep(0.02)
+
+    def handle_key_press(self, vk: int, callback) -> None:
+        is_down = bool(self.user32.GetAsyncKeyState(vk) & 0x8000)
+        was_down = self.key_was_down.get(vk, False)
+        if is_down and not was_down:
+            try:
+                callback()
+            except Exception as exc:
+                self.log(f"Erro no callback da tecla {vk}: {exc}")
+        self.key_was_down[vk] = is_down
+
+    def check_cancel_shortcuts(self) -> None:
+        esc = bool(self.user32.GetAsyncKeyState(VK_ESC) & 0x8000)
+        lbtn = bool(self.user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
+        rbtn = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
+        mbtn = bool(self.user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000)
+        wasd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (VK_W, VK_A, VK_S, VK_D))
+
+        if self.move_click_enabled and (esc or lbtn or rbtn or mbtn):
+            self.disable_move_click("cancel: esc/outro clique")
+
+        # Double-click fixo cancela com mouse/wasd/esc
+        if self.fixed_click_enabled and (esc or lbtn or rbtn or mbtn or wasd):
+            self.disable_fixed_click("cancel: mouse/wasd/esc")
 
     def click_loop(self) -> None:
         while not self.stop_event.is_set():
             if self.enabled:
                 self.refresh_target_if_needed()
                 if self.target_hwnd and self.user32.IsWindow(self.target_hwnd):
-                    should_update = self.waiting_for_foxhole
                     self.waiting_for_foxhole = False
-                    if should_update:
-                        self.status_callback(self.status_text())
                     self.click()
                     now = time.monotonic()
                     if now - self.last_status_update >= 1:
@@ -257,14 +376,126 @@ class AutoClicker:
                 else:
                     if not self.waiting_for_foxhole:
                         self.waiting_for_foxhole = True
-                        now = time.monotonic()
-                        if now - self.last_missing_log >= 3:
-                            self.last_missing_log = now
-                            self.log("Aguardando Foxhole: target inexistente ou janela fechada")
+                        self.log("Aguardando Foxhole: target inexistente ou janela fechada")
+                        self.status_callback(self.status_text())
+                    time.sleep(0.12)
+            elif self.fixed_click_enabled:
+                self.refresh_target_if_needed()
+                if self.target_hwnd and self.user32.IsWindow(self.target_hwnd):
+                    self.waiting_for_foxhole = False
+                    self.click()
+                    now = time.monotonic()
+                    if now - self.last_status_update >= 1:
+                        self.last_status_update = now
+                        self.status_callback(self.status_text())
+                    time.sleep(random.uniform(*self.double_click_range))
+                else:
+                    if not self.waiting_for_foxhole:
+                        self.waiting_for_foxhole = True
+                        self.log("Aguardando Foxhole: target inexistente ou janela fechada")
                         self.status_callback(self.status_text())
                     time.sleep(0.12)
             else:
                 time.sleep(0.05)
+
+    def toggle_fixed_click(self) -> None:
+        if self.fixed_click_enabled:
+            self.disable_fixed_click(f"{self.fixed_hotkey_name} off")
+        else:
+            self.enable_fixed_click()
+
+    def enable_fixed_click(self) -> None:
+        self.pause()
+        self.use_foxhole_window()
+        self.fixed_click_enabled = True
+        self.waiting_for_foxhole = False
+        self.log(f"{self.fixed_hotkey_name} on: double-click fixo ativo")
+        self.status_callback(self.status_text())
+
+    def disable_fixed_click(self, reason: str) -> None:
+        if not self.fixed_click_enabled:
+            return
+        self.fixed_click_enabled = False
+        self.waiting_for_foxhole = False
+        self.log(f"{self.fixed_hotkey_name} off: {reason}")
+        self.status_callback(self.status_text())
+
+    def toggle_move_click(self) -> None:
+        if self.move_click_enabled:
+            self.disable_move_click(f"{self.move_hotkey_name} off")
+        else:
+            self.enable_move_click()
+
+    def enable_move_click(self) -> None:
+        self.use_foxhole_window()
+        hwnd = self.click_hwnd or self.target_hwnd
+        if not hwnd:
+            self.log("F2 on abortado: sem janela alvo")
+            return
+        button = MOUSE_BUTTONS["Esquerdo"]
+        lparam = self.make_lparam(self.click_x, self.click_y)
+        self.user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
+        down_sent = self.user32.PostMessageW(hwnd, button["down"], button["mk"], lparam)
+        if down_sent:
+            self.move_click_enabled = True
+            self.move_click_holding = True
+            self.move_click_hwnd = hwnd
+            self.move_click_lparam = lparam
+            self.log(f"{self.move_hotkey_name} on: segurando esquerdo hwnd={hwnd} ponto={self.click_x},{self.click_y}")
+        else:
+            self.log(f"{self.move_hotkey_name} falhou ao segurar esquerdo")
+
+    def disable_move_click(self, reason: str) -> None:
+        if not self.move_click_enabled:
+            return
+        button = MOUSE_BUTTONS["Esquerdo"]
+        hwnd = self.move_click_hwnd or self.click_hwnd or self.target_hwnd
+        if hwnd:
+            self.user32.PostMessageW(hwnd, button["up"], 0, self.move_click_lparam or self.make_lparam(self.click_x, self.click_y))
+        self.move_click_enabled = False
+        self.move_click_holding = False
+        self.move_click_hwnd = 0
+        self.move_click_lparam = 0
+        self.log(f"F2 off: {reason}")
+
+    def run_forward_sequence(self) -> None:
+        self.last_pilot_until = time.monotonic() + 5.0
+        self.status_callback(self.status_text())
+        threading.Thread(target=self._forward_sequence_worker, daemon=True).start()
+
+    def _forward_sequence_worker(self) -> None:
+        self.log(f"{self.pilot_hotkey_name}: piloto automatico iniciando (Enter -> Ctrl+W -> Enter)")
+        self.send_key_pair(VK_RETURN)
+        time.sleep(0.08)
+        self.key_down(VK_CONTROL)
+        time.sleep(0.03)
+        self.send_key_pair(VK_W)
+        time.sleep(0.03)
+        self.key_up(VK_CONTROL)
+        time.sleep(0.08)
+        self.send_key_pair(VK_RETURN)
+        self.log(f"{self.pilot_hotkey_name}: piloto automatico concluido")
+        self.status_callback(self.status_text())
+
+    def open_orders_menu(self) -> None:
+        self.log("F5: abrir menu ordens/estoques")
+        if self.menu_callback:
+            try:
+                self.menu_callback()
+            except Exception as exc:
+                self.log(f"F5 callback falhou: {exc}")
+
+    def trigger_slot_click(self, slot: int) -> None:
+        if slot not in self.slot_positions:
+            return
+        self.refresh_target_if_needed()
+        hwnd = self.target_hwnd
+        if not hwnd:
+            self.log(f"Slot {slot} ignorado: sem target")
+            return
+        x, y = self.slot_positions[slot]
+        self.click_at(hwnd, x, y, "Esquerdo")
+        self.log(f"Slot {slot} clicado em {x},{y}")
 
     def refresh_target_if_needed(self) -> None:
         if self.target_hwnd and self.user32.IsWindow(self.target_hwnd):
@@ -282,7 +513,6 @@ class AutoClicker:
         point = POINT()
         if self.user32.GetCursorPos(ctypes.byref(point)):
             window_at_cursor = self.user32.WindowFromPoint(point)
-            self.log(f"Cursor na tela: {point.x},{point.y} window_at_cursor={window_at_cursor}")
             if window_at_cursor and self.is_same_process_window(window_at_cursor, self.target_hwnd):
                 self.click_hwnd = window_at_cursor
                 client_point = POINT(point.x, point.y)
@@ -290,26 +520,18 @@ class AutoClicker:
                     if self.is_point_inside_client(client_point.x, client_point.y):
                         self.click_x = max(0, client_point.x)
                         self.click_y = max(0, client_point.y)
-                        self.log(f"Ponto capturado pelo cursor: hwnd={self.click_hwnd} ponto={self.click_x},{self.click_y}")
                         return
-                    self.log(f"Cursor esta fora da area cliente: {client_point.x},{client_point.y}")
-                else:
-                    self.log("ScreenToClient falhou")
-            else:
-                self.log("Cursor nao esta sobre uma janela do mesmo processo do Foxhole")
 
         rect = RECT()
         if self.user32.GetClientRect(self.target_hwnd, ctypes.byref(rect)):
             self.click_hwnd = self.find_child_at_point(self.target_hwnd, (rect.right - rect.left) // 2, (rect.bottom - rect.top) // 2)
             self.click_x = max(0, (rect.right - rect.left) // 2)
             self.click_y = max(0, (rect.bottom - rect.top) // 2)
-            self.log(f"Usando centro da janela: hwnd={self.click_hwnd} ponto={self.click_x},{self.click_y}")
             return
 
         self.click_hwnd = self.target_hwnd
         self.click_x = 0
         self.click_y = 0
-        self.log("GetClientRect falhou; usando ponto 0,0")
 
     def is_point_inside_client(self, x: int, y: int) -> bool:
         rect = RECT()
@@ -334,27 +556,34 @@ class AutoClicker:
     def click(self) -> None:
         hwnd = self.click_hwnd or self.target_hwnd
         if not hwnd:
-            self.log("Clique ignorado: hwnd vazio")
             return
+        self.click_at(hwnd, self.click_x, self.click_y, self.mouse_button)
 
-        button = MOUSE_BUTTONS[self.mouse_button]
-        lparam = self.make_lparam(self.click_x, self.click_y)
+    def click_at(self, hwnd: int, x: int, y: int, mouse_button: str) -> None:
+        button = MOUSE_BUTTONS.get(mouse_button, MOUSE_BUTTONS["Esquerdo"])
+        lparam = self.make_lparam(x, y)
         move_sent = self.user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
         down_sent = self.user32.PostMessageW(hwnd, button["down"], button["mk"], lparam)
         up_sent = self.user32.PostMessageW(hwnd, button["up"], 0, lparam)
         if down_sent and up_sent:
             self.click_count += 1
-            if self.click_count == 1 or self.click_count % 10 == 0:
-                self.log(
-                    f"Clique enviado #{self.click_count}: hwnd={hwnd} ponto={self.click_x},{self.click_y} "
-                    f"move={bool(move_sent)} down={bool(down_sent)} up={bool(up_sent)}"
-                )
+            if self.click_count == 1 or self.click_count % 20 == 0:
+                self.log(f"Clique enviado #{self.click_count}: hwnd={hwnd} ponto={x},{y} move={bool(move_sent)}")
         else:
             error = self.kernel32.GetLastError()
-            self.log(
-                f"Falha ao enviar clique: hwnd={hwnd} ponto={self.click_x},{self.click_y} "
-                f"move={bool(move_sent)} down={bool(down_sent)} up={bool(up_sent)} erro={error}"
-            )
+            self.log(f"Falha clique hwnd={hwnd} ponto={x},{y} erro={error}")
+
+    def send_key_pair(self, vk: int) -> None:
+        self.key_down(vk)
+        time.sleep(0.02)
+        self.key_up(vk)
+
+    def key_down(self, vk: int) -> None:
+        # Global key simulation - practical for F4 sequence.
+        self.user32.keybd_event(vk, 0, 0, 0)
+
+    def key_up(self, vk: int) -> None:
+        self.user32.keybd_event(vk, 0, 0x0002, 0)
 
     @staticmethod
     def make_lparam(x: int, y: int) -> int:

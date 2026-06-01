@@ -4,6 +4,7 @@ import argparse
 import ctypes
 from ctypes import wintypes
 import filecmp
+import json
 import os
 from pathlib import Path
 import shutil
@@ -16,6 +17,14 @@ import tkinter as tk
 from tkinter import ttk
 import zipfile
 import traceback
+
+try:
+    from i18n import Translator, normalize_language
+except Exception:  # pragma: no cover - updater can still show Portuguese fallback text.
+    Translator = None
+
+    def normalize_language(language: str | None) -> str:
+        return "pt"
 
 
 SKIP_NAMES = {"felb_settings.json", "__pycache__", "extracted"}
@@ -30,11 +39,75 @@ COLORS = {
     "line": "#2d496f",
 }
 
+UPDATER_FALLBACK_PT = {
+    "update.runner_window_title": "GG Coalition Launcher",
+    "update.runner_heading": "Atualizando GG Coalition",
+    "update.runner_prepare": "Preparando atualizacao...",
+    "update.runner_wait_app": "Aguardando o aplicativo fechar...",
+    "update.runner_closing_app": "Fechando GG Coalition aberto...",
+    "update.runner_close_failed": "Nao consegui fechar o GG Coalition para atualizar. Feche pelo Gerenciador de Tarefas e tente novamente: {detail}",
+    "update.runner_installing_files": "Instalando arquivos...",
+    "update.runner_wait_file": "Aguardando arquivo liberar...",
+    "update.runner_wait_file_detail": "{file} tentativa {attempt}/{attempts}. Feche o GG Coalition se ele ainda estiver aberto.",
+    "update.runner_locked_saved": "Arquivo em uso salvo para proxima abertura.",
+    "update.runner_using_extracted": "Usando pacote extraido...",
+    "update.runner_extracting": "Extraindo pacote...",
+    "update.runner_zip_not_found": "ZIP nao encontrado: {path}",
+    "update.runner_zip_invalid": "Arquivo de update invalido: {path}",
+    "update.runner_zip_incomplete": "ZIP de update incompleto. Faltando: {missing}. Use o release\\GG-Coalition.zip gerado pelo build.",
+    "update.runner_app_missing": "Aplicativo atualizado nao encontrado. Procurei por {app} em {target}.",
+    "update.runner_opening_app": "Abrindo GG Coalition...",
+    "update.runner_install_target": "Destino da instalacao...",
+    "update.runner_target_invalid": "Destino de atualizacao invalido: {target}",
+    "update.runner_completed": "Atualizacao concluida.",
+    "update.runner_done": "Pronto",
+    "update.runner_failed": "Erro ao atualizar.",
+    "update.runner_log": "{message}\nLog: {log}",
+}
+
+
+def load_updater_language() -> str | None:
+    env_language = os.getenv("GG_COALITION_LANGUAGE")
+    if env_language:
+        return normalize_language(env_language)
+    base = os.getenv("LOCALAPPDATA")
+    candidates = []
+    if base:
+        candidates.append(Path(base) / "GG Coalition" / "felb_settings.json")
+    candidates.append(Path.home() / "GG Coalition" / "felb_settings.json")
+    candidates.append(Path(__file__).resolve().parent / "user_data" / "felb_settings.json")
+    for path in candidates:
+        try:
+            language = json.loads(path.read_text(encoding="utf-8")).get("language")
+        except (OSError, json.JSONDecodeError, AttributeError):
+            continue
+        if language and language != "auto":
+            return normalize_language(str(language))
+    return None
+
+
+class FallbackTranslator:
+    def t(self, key: str, **kwargs) -> str:
+        value = UPDATER_FALLBACK_PT.get(key, key)
+        if kwargs:
+            try:
+                return value.format(**kwargs)
+            except Exception:
+                return value
+        return value
+
+
+TR = Translator(load_updater_language()) if Translator is not None else FallbackTranslator()
+
+
+def _t(key: str, **kwargs) -> str:
+    return TR.t(key, **kwargs)
+
 
 class UpdateWindow:
     def __init__(self) -> None:
         self.root = tk.Tk()
-        self.root.title("GG Coalition Launcher")
+        self.root.title(_t("update.runner_window_title"))
         self.root.geometry("460x240")
         self.root.resizable(False, False)
         self.root.configure(bg=COLORS["bg"])
@@ -47,10 +120,10 @@ class UpdateWindow:
         panel = tk.Frame(self.root, bg=COLORS["card"], highlightthickness=1, highlightbackground=COLORS["line"])
         panel.pack(fill="both", expand=True, padx=18, pady=18)
 
-        tk.Label(panel, text="Atualizando GG Coalition", bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).pack(
+        tk.Label(panel, text=_t("update.runner_heading"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).pack(
             anchor="w", padx=22, pady=(22, 4)
         )
-        self.status_var = tk.StringVar(value="Preparando atualizacao...")
+        self.status_var = tk.StringVar(value=_t("update.runner_prepare"))
         tk.Label(panel, textvariable=self.status_var, bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 10)).pack(
             anchor="w", padx=22, pady=(0, 18)
         )
@@ -94,7 +167,7 @@ def wait_for_process(pid: int, window: UpdateWindow, timeout: float = 25.0) -> N
             os.kill(pid, 0)
         except OSError:
             return
-        window.set_progress(15, "Aguardando o aplicativo fechar...", f"PID {pid}")
+        window.set_progress(15, _t("update.runner_wait_app"), f"PID {pid}")
         time.sleep(0.25)
 
 
@@ -108,7 +181,7 @@ def wait_for_process_windows(pid: int, window: UpdateWindow, timeout: float) -> 
     try:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            window.set_progress(15, "Aguardando o aplicativo fechar...", f"PID {pid}")
+            window.set_progress(15, _t("update.runner_wait_app"), f"PID {pid}")
             result = kernel32.WaitForSingleObject(handle, 250)
             if result != wait_timeout:
                 return
@@ -125,7 +198,7 @@ def close_installed_app_processes(target: Path, window: UpdateWindow, timeout: f
     if not matches:
         return
     names = ", ".join(f"{name} (PID {pid})" for pid, name in matches)
-    window.set_progress(18, "Fechando GG Coalition aberto...", names)
+    window.set_progress(18, _t("update.runner_closing_app"), names)
     for pid, _name in matches:
         subprocess.run(
             ["taskkill", "/PID", str(pid), "/T"],
@@ -139,14 +212,13 @@ def close_installed_app_processes(target: Path, window: UpdateWindow, timeout: f
         if not remaining:
             return
         detail = ", ".join(f"{name} (PID {pid})" for pid, name in remaining)
-        window.set_progress(20, "Aguardando o aplicativo fechar...", detail)
+        window.set_progress(20, _t("update.runner_wait_app"), detail)
         time.sleep(0.5)
     remaining = matching_processes_in_dir(target, {APP_EXE_NAME.lower(), UPDATER_EXE_NAME.lower()}, exclude_pid=current_pid)
     if remaining:
         detail = ", ".join(f"{name} (PID {pid})" for pid, name in remaining)
         raise RuntimeError(
-            "Nao consegui fechar o GG Coalition para atualizar. "
-            f"Feche pelo Gerenciador de Tarefas e tente novamente: {detail}"
+            _t("update.runner_close_failed", detail=detail)
         )
 
 
@@ -223,7 +295,7 @@ def copy_tree(source: Path, target: Path, window: UpdateWindow) -> None:
             continue
         destination = target / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        window.set_progress(45 + int((index / total) * 40), "Instalando arquivos...", str(relative))
+        window.set_progress(45 + int((index / total) * 40), _t("update.runner_installing_files"), str(relative))
         if same_file(file, destination) or same_content(file, destination):
             continue
         try:
@@ -270,8 +342,8 @@ def copy_with_retry(source: Path, destination: Path, window: UpdateWindow, attem
             close_installed_app_processes(destination.parent, window, timeout=3.0)
             window.set_progress(
                 80,
-                "Aguardando arquivo liberar...",
-                f"{destination.name} tentativa {attempt}/{attempts}. Feche o GG Coalition se ele ainda estiver aberto.",
+                _t("update.runner_wait_file"),
+                _t("update.runner_wait_file_detail", file=destination.name, attempt=attempt, attempts=attempts),
             )
             time.sleep(1)
     if last_error:
@@ -291,17 +363,17 @@ def can_stage_locked_file(destination: Path, exc: OSError) -> bool:
 def save_locked_file_copy(source: Path, destination: Path, window: UpdateWindow) -> None:
     pending = destination.with_name(f"{destination.name}.new")
     shutil.copy2(source, pending)
-    window.set_progress(85, "Arquivo em uso salvo para proxima abertura.", pending.name)
+    window.set_progress(85, _t("update.runner_locked_saved"), pending.name)
 
 
 def extract_zip(zip_path: Path, window: UpdateWindow) -> Path:
     packaged_source = Path(sys.executable).resolve().parent
     if (packaged_source / APP_EXE_NAME).exists() and (packaged_source / UPDATER_EXE_NAME).exists():
-        window.set_progress(25, "Usando pacote extraido...", str(packaged_source))
+        window.set_progress(25, _t("update.runner_using_extracted"), str(packaged_source))
         return packaged_source
     validate_update_zip(zip_path)
     temp_dir = Path(tempfile.mkdtemp(prefix="gg_coalition_update_"))
-    window.set_progress(25, "Extraindo pacote...", zip_path.name)
+    window.set_progress(25, _t("update.runner_extracting"), zip_path.name)
     with zipfile.ZipFile(zip_path, "r") as archive:
         archive.extractall(temp_dir)
 
@@ -313,17 +385,15 @@ def extract_zip(zip_path: Path, window: UpdateWindow) -> Path:
 
 def validate_update_zip(zip_path: Path) -> None:
     if not zip_path.exists():
-        raise RuntimeError(f"ZIP nao encontrado: {zip_path}")
+        raise RuntimeError(_t("update.runner_zip_not_found", path=zip_path))
     if not zipfile.is_zipfile(zip_path):
-        raise RuntimeError(f"Arquivo de update invalido: {zip_path}")
+        raise RuntimeError(_t("update.runner_zip_invalid", path=zip_path))
     with zipfile.ZipFile(zip_path, "r") as archive:
         names = {Path(name).name.lower() for name in archive.namelist()}
     missing = [name for name in (APP_EXE_NAME,) if name.lower() not in names]
     if missing:
         raise RuntimeError(
-            "ZIP de update incompleto. Faltando: "
-            + ", ".join(missing)
-            + ". Use o release\\GG-Coalition.zip gerado pelo build."
+            _t("update.runner_zip_incomplete", missing=", ".join(missing))
         )
 
 
@@ -351,14 +421,13 @@ def resolve_launch_target(launch: Path, target: Path) -> Path:
         except OSError:
             continue
     raise RuntimeError(
-        "Aplicativo atualizado nao encontrado. Procurei por "
-        f"{APP_EXE_NAME} em {target}."
+        _t("update.runner_app_missing", app=APP_EXE_NAME, target=target)
     )
 
 
 def launch_app(launch: Path, target: Path, window: UpdateWindow) -> None:
     launch = resolve_launch_target(launch, target)
-    window.set_progress(95, "Abrindo GG Coalition...", str(launch))
+    window.set_progress(95, _t("update.runner_opening_app"), str(launch))
     cwd = launch.parent if launch.parent.exists() else target
     try:
         if launch.suffix.lower() == ".py":
@@ -393,20 +462,20 @@ def run_update(args, window: UpdateWindow) -> None:
         zip_path = Path(args.zip)
         target = Path(args.target).resolve()
         launch = Path(args.launch)
-        window.set_progress(5, "Preparando atualizacao...", zip_path.name)
-        window.set_progress(8, "Destino da instalacao...", str(target))
+        window.set_progress(5, _t("update.runner_prepare"), zip_path.name)
+        window.set_progress(8, _t("update.runner_install_target"), str(target))
         wait_for_process(args.pid, window)
         close_installed_app_processes(target, window)
         source = extract_zip(zip_path, window)
         if same_file(source / APP_EXE_NAME, target / APP_EXE_NAME):
-            raise RuntimeError(f"Destino de atualizacao invalido: {target}")
+            raise RuntimeError(_t("update.runner_target_invalid", target=target))
         copy_tree(source, target, window)
         launch_app(launch, target, window)
-        window.set_progress(100, "Atualizacao concluida.", "Pronto")
+        window.set_progress(100, _t("update.runner_completed"), _t("update.runner_done"))
     except Exception as exc:
         target = Path(getattr(args, "target", tempfile.gettempdir()))
         log_path = write_error_log(target, exc)
-        window.set_progress(100, "Erro ao atualizar.", f"{exc}\nLog: {log_path}")
+        window.set_progress(100, _t("update.runner_failed"), _t("update.runner_log", message=exc, log=log_path))
         time.sleep(10)
     finally:
         window.close()

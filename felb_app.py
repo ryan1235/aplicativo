@@ -42,8 +42,9 @@ except Exception:  # pragma: no cover - visual assets degrade to text-only fallb
 
 from app_update import check_latest_release, download_update, fetch_release_description, launch_updater
 from functions_category import FunctionsCategory, SettingsCategory
-from i18n import SUPPORTED_LANGUAGES, Translator
+from i18n import SUPPORTED_LANGUAGES, Translator, normalize_language
 from item_search_category import ItemSearchCategory
+from identify_item_category import IdentifyItemCategory
 from chat_category import HomeChatPanel
 from notifications_category import NotificationsCategory
 from settings_store import load_settings, save_settings, selected_language
@@ -54,7 +55,7 @@ from stockpile_category import StockpileCategory
 APP_TITLE = "GG Coalition"
 APP_EXE_NAME = f"{APP_TITLE}.exe"
 UPDATER_EXE_NAME = "GG Updater.exe"
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.6.4"
 UPDATE_REPO = "ryan1235/aplicativo"  # Exemplo: "seu-usuario/gg-coalition"
 FOXHOLE_APP_ID = "505460"
 SIDEBAR_WIDTH = 302
@@ -224,6 +225,7 @@ class FelbApp(AppBase):
         self.stockpile_page: StockpileCategory | None = None
         self.notifications_page: NotificationsCategory | None = None
         self.item_search_page: ItemSearchCategory | None = None
+        self.identify_item_page: IdentifyItemCategory | None = None
         self.home_chat_panel: HomeChatPanel | None = None
         self.home_online_frame: tk.Frame | None = None
         self.home_online_avatar_cache: dict[str, tk.PhotoImage] = {}
@@ -494,6 +496,7 @@ class FelbApp(AppBase):
         self.stockpile_page = StockpileCategory(page_host, self.tr, self.functions_page.notify_stockpile_success)
         self.notifications_page = NotificationsCategory(page_host, self.tr)
         self.item_search_page = ItemSearchCategory(page_host, self.tr)
+        self.identify_item_page = IdentifyItemCategory(page_host, self.tr)
 
         self.pages["inicio"] = command_page
         self.pages["ferramentas"] = self.functions_page
@@ -501,6 +504,7 @@ class FelbApp(AppBase):
         self.pages["stockpile"] = self.stockpile_page
         self.pages["notificacoes"] = self.notifications_page
         self.pages["item_search"] = self.item_search_page
+        self.pages["identify_item"] = self.identify_item_page
 
         command_page.grid(row=0, column=0, sticky="nsew")
         self.functions_page.grid(row=0, column=0, sticky="nsew")
@@ -508,6 +512,7 @@ class FelbApp(AppBase):
         self.stockpile_page.grid(row=0, column=0, sticky="nsew")
         self.notifications_page.grid(row=0, column=0, sticky="nsew")
         self.item_search_page.grid(row=0, column=0, sticky="nsew")
+        self.identify_item_page.grid(row=0, column=0, sticky="nsew")
         sidebar.configure(width=0)
         sidebar.grid_remove()
 
@@ -600,18 +605,20 @@ class FelbApp(AppBase):
         self.nav_buttons["stockpile"] = self.nav_button(sidebar, "estoque", self.tr.t("stockpile.nav"), lambda: self.show_page("stockpile"), row=6)
         self.nav_buttons["notificacoes"] = self.nav_button(sidebar, "noti", self.tr.t("notifications.nav"), lambda: self.show_page("notificacoes"), row=7)
         self.nav_buttons["item_search"] = self.nav_button(sidebar, "buscar", self.tr.t("item_search.nav"), lambda: self.show_page("item_search"), row=8)
+        self.nav_buttons["identify_item"] = self.nav_button(sidebar, "indent", self.tr.t("identify.nav"), lambda: self.show_page("identify_item"), row=9)
 
-        self.section_label(sidebar, self.tr.t("sidebar.settings"), 9, pady=(20, 6), key="section_settings")
-        self.nav_buttons["configuracoes"] = self.nav_button(sidebar, "overlay", self.tr.t("nav.settings"), lambda: self.show_page("configuracoes"), row=10)
-        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=11, column=0, pady=80)
+        self.section_label(sidebar, self.tr.t("sidebar.settings"), 10, pady=(20, 6), key="section_settings")
+        self.nav_buttons["configuracoes"] = self.nav_button(sidebar, "overlay", self.tr.t("nav.settings"), lambda: self.show_page("configuracoes"), row=11)
+        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=12, column=0, pady=80)
 
-        tk.Label(
+        self.ui_text["sidebar_footer"] = tk.Label(
             sidebar,
-            text=f"{APP_TITLE} Command",
+            text=self.tr.t("sidebar.footer", app=APP_TITLE),
             bg=COLORS["sidebar"],
             fg="#517499",
             font=("Segoe UI", 8, "bold"),
-        ).grid(row=99, column=0, sticky="s", padx=18, pady=20)
+        )
+        self.ui_text["sidebar_footer"].grid(row=99, column=0, sticky="s", padx=18, pady=20)
         sidebar.rowconfigure(98, weight=1)
 
     def load_logo_frames(self, size: int = 44) -> list[tuple[tk.PhotoImage, int]]:
@@ -807,7 +814,6 @@ class FelbApp(AppBase):
             if self.menu_button:
                 self.configure_button_color(self.menu_button, COLORS["card"])
                 self.menu_button.configure(text="\u2630")
-                self.pulse_menu_button(COLORS["card_2"], COLORS["card"])
         else:
             self.sidebar.configure(width=SIDEBAR_WIDTH)
             self.sidebar.grid(row=0, column=0, sticky="ns")
@@ -815,13 +821,12 @@ class FelbApp(AppBase):
             if self.menu_button:
                 self.configure_button_color(self.menu_button, COLORS["card_2"])
                 self.menu_button.configure(text="X")
-                self.pulse_menu_button(COLORS["accent"], COLORS["card_2"])
 
     def pulse_menu_button(self, first_color: str, final_color: str) -> None:
         if not self.menu_button:
             return
-        self.configure_button_color(self.menu_button, first_color)
-        self.after(90, lambda: self.menu_button and self.configure_button_color(self.menu_button, final_color))
+        # Keep this method for compatibility, but make it immediate to avoid UI stutter.
+        self.configure_button_color(self.menu_button, final_color)
 
     def configure_button_color(self, button, color: str, text_color: str | None = None) -> None:
         if ctk is not None:
@@ -836,18 +841,91 @@ class FelbApp(AppBase):
             button.configure(**kwargs)
 
     def change_language(self, language: str) -> None:
+        target_language = normalize_language(language)
+        if target_language == self.tr.language:
+            return
+        if not self.confirm_language_change(target_language):
+            return
+        current_page = self.current_page or "inicio"
         self.settings = load_settings()
-        self.settings["language"] = language
+        self.settings["language"] = target_language
         save_settings(self.settings)
-        self.tr.set_language(language)
+        self.tr.set_language(target_language)
         self.title(f"{APP_TITLE} - {self.tr.t('app.subtitle')}")
         self.refresh_language_texts()
         self.render_steam_profile(authenticate_chat=False)
         self.render_foxhole_status()
+        self.show_page(current_page)
         if self.stockpile_page:
             self.stockpile_page.load_api_snapshot()
         if self.item_search_page:
             self.item_search_page.load_items()
+
+    def language_display_name(self, language: str) -> str:
+        code = normalize_language(language)
+        label = self.tr.t(f"language.name.{code}")
+        if label != f"language.name.{code}":
+            return label
+        return SUPPORTED_LANGUAGES.get(code, {}).get("name", code.upper())
+
+    def confirm_language_change(self, target_language: str) -> bool:
+        dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        dialog.title(self.tr.t("language.change_title"))
+        dialog.geometry("430x210")
+        dialog.resizable(False, False)
+        configure_surface(dialog, COLORS["bg"])
+        dialog.transient(self)
+        dialog.grab_set()
+        result = {"value": False}
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - 430) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - 210) // 2)
+        dialog.geometry(f"430x210+{x}+{y}")
+
+        panel = modern_frame(dialog, COLORS["card"], radius=22, border=1, border_color=COLORS["line"])
+        panel.pack(fill="both", expand=True, padx=16, pady=16)
+        tk.Label(panel, text=self.tr.t("language.change_title"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 17, "bold")).pack(
+            anchor="w", padx=20, pady=(18, 6)
+        )
+        tk.Label(
+            panel,
+            text=self.tr.t("language.change_body", language=self.language_display_name(target_language)),
+            bg=COLORS["card"],
+            fg=COLORS["muted"],
+            font=("Segoe UI", 10),
+            wraplength=360,
+            justify="left",
+        ).pack(anchor="w", padx=20, pady=(0, 14))
+
+        actions = modern_frame(panel, COLORS["card"], radius=0)
+        actions.pack(fill="x", padx=20, pady=(0, 16))
+
+        def close(value: bool) -> None:
+            result["value"] = value
+            dialog.grab_release()
+            dialog.destroy()
+
+        modern_button(
+            actions,
+            text=self.tr.t("language.change_no"),
+            command=lambda: close(False),
+            color=COLORS["soft"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"],
+            height=38,
+        ).pack(side="right", padx=(8, 0))
+        modern_button(
+            actions,
+            text=self.tr.t("language.change_yes"),
+            command=lambda: close(True),
+            color=COLORS["accent"],
+            text_color=COLORS["accent_text"],
+            hover=COLORS["accent_2"],
+            height=38,
+        ).pack(side="right")
+        dialog.protocol("WM_DELETE_WINDOW", lambda: close(False))
+        self.wait_window(dialog)
+        return bool(result["value"])
 
     def refresh_language_texts(self) -> None:
         text_updates = {
@@ -855,6 +933,7 @@ class FelbApp(AppBase):
             "section_navigation": self.tr.t("sidebar.navigation"),
             "section_tools": self.tr.t("sidebar.tools"),
             "section_settings": self.tr.t("sidebar.settings"),
+            "sidebar_footer": self.tr.t("sidebar.footer", app=APP_TITLE),
             "header_title": self.tr.t("header.title"),
             "header_subtitle": self.tr.t("header.subtitle"),
             "home_eyebrow": self.tr.t("home.eyebrow"),
@@ -1302,6 +1381,8 @@ class FelbApp(AppBase):
             self.stockpile_page.set_active(page_name == "stockpile")
         if self.item_search_page and hasattr(self.item_search_page, "set_active"):
             self.item_search_page.set_active(page_name == "item_search")
+        if self.identify_item_page and hasattr(self.identify_item_page, "set_active"):
+            self.identify_item_page.set_active(page_name == "identify_item")
         if self.home_chat_panel and hasattr(self.home_chat_panel, "set_active"):
             self.home_chat_panel.set_active(page_name == "inicio")
 
@@ -1636,25 +1717,42 @@ class FelbApp(AppBase):
         return f'"{target}" {arguments}'.strip()
 
     def startup_dir(self) -> Path:
-        return Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            base = Path(appdata)
+        else:
+            base = Path.home() / "AppData" / "Roaming"
+        return base / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
 
     def startup_shortcut_path(self) -> Path:
         return self.startup_dir() / f"{APP_TITLE}.lnk"
+
+    def startup_task_name(self) -> str:
+        return f"{APP_TITLE} Startup"
+
+    def schtasks_executable(self) -> str:
+        windir = Path(os.environ.get("WINDIR", r"C:\Windows"))
+        candidate = windir / "System32" / "schtasks.exe"
+        if candidate.exists():
+            return str(candidate)
+        return "schtasks"
 
     def create_startup_shortcut(self) -> None:
         target, arguments = self.startup_target_and_args()
         shortcut_path = self.startup_shortcut_path()
         shortcut_path.parent.mkdir(parents=True, exist_ok=True)
         icon_path = ICON_ICO_PATH if ICON_ICO_PATH.exists() else target
+        def ps_quote(value: str) -> str:
+            return value.replace("'", "''")
+
         powershell_script = (
-            "param($shortcutPath,$targetPath,$arguments,$workingDirectory,$iconLocation,$description);"
             "$shell=New-Object -ComObject WScript.Shell;"
-            "$shortcut=$shell.CreateShortcut($shortcutPath);"
-            "$shortcut.TargetPath=$targetPath;"
-            "$shortcut.Arguments=$arguments;"
-            "$shortcut.WorkingDirectory=$workingDirectory;"
-            "$shortcut.IconLocation=$iconLocation;"
-            "$shortcut.Description=$description;"
+            f"$shortcut=$shell.CreateShortcut('{ps_quote(str(shortcut_path))}');"
+            f"$shortcut.TargetPath='{ps_quote(str(target))}';"
+            f"$shortcut.Arguments='{ps_quote(arguments)}';"
+            f"$shortcut.WorkingDirectory='{ps_quote(str(BASE_DIR))}';"
+            f"$shortcut.IconLocation='{ps_quote(str(icon_path))}';"
+            f"$shortcut.Description='{ps_quote(APP_TITLE)}';"
             "$shortcut.Save();"
         )
         subprocess.run(
@@ -1665,12 +1763,6 @@ class FelbApp(AppBase):
                 "Bypass",
                 "-Command",
                 powershell_script,
-                str(shortcut_path),
-                str(target),
-                arguments,
-                str(BASE_DIR),
-                str(icon_path),
-                APP_TITLE,
             ],
             check=True,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -1679,31 +1771,90 @@ class FelbApp(AppBase):
     def create_startup_entry(self) -> None:
         self.create_startup_shortcut()
 
+    def create_startup_task(self) -> None:
+        target, arguments = self.startup_target_and_args()
+        def ps_quote(value: str) -> str:
+            return value.replace("'", "''")
+        powershell_script = (
+            f"$action=New-ScheduledTaskAction -Execute '{ps_quote(str(target))}' -Argument '{ps_quote(arguments)}' -WorkingDirectory '{ps_quote(str(BASE_DIR))}';"
+            "$trigger=New-ScheduledTaskTrigger -AtLogOn;"
+            f"Register-ScheduledTask -TaskName '{ps_quote(self.startup_task_name())}' -Action $action -Trigger $trigger -Description '{ps_quote(APP_TITLE)} startup' -Force | Out-Null;"
+        )
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                powershell_script,
+            ],
+            check=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
+    def remove_startup_task(self) -> None:
+        subprocess.run(
+            [
+                self.schtasks_executable(),
+                "/Delete",
+                "/TN",
+                self.startup_task_name(),
+                "/F",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
     def remove_startup_shortcut(self) -> None:
         shortcut_path = self.startup_shortcut_path()
         if shortcut_path.exists():
             shortcut_path.unlink()
+        for legacy_name in (f"{APP_TITLE}.cmd", f"{APP_TITLE}.bat"):
+            legacy_path = self.startup_dir() / legacy_name
+            if legacy_path.exists():
+                legacy_path.unlink()
 
-    def set_start_with_windows(self, enabled: bool) -> None:
+    def clear_legacy_run_key(self) -> None:
         import winreg
 
         run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
-            if enabled:
-                self.create_startup_entry()
-                if getattr(sys, "frozen", False):
-                    winreg.SetValueEx(key, APP_TITLE, 0, winreg.REG_SZ, self.startup_command())
-                else:
-                    try:
-                        winreg.DeleteValue(key, APP_TITLE)
-                    except FileNotFoundError:
-                        pass
-            else:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
                 try:
                     winreg.DeleteValue(key, APP_TITLE)
                 except FileNotFoundError:
                     pass
-                self.remove_startup_shortcut()
+        except OSError:
+            pass
+
+    def set_start_with_windows(self, enabled: bool) -> None:
+        if enabled:
+            startup_task_error = None
+            startup_shortcut_error = None
+            # Clean previous duplicate entry before creating a fresh startup config.
+            self.remove_startup_shortcut()
+            try:
+                self.create_startup_task()
+            except Exception as exc:
+                startup_task_error = exc
+                # Fallback only if Task Scheduler fails.
+                try:
+                    self.create_startup_entry()
+                except Exception as shortcut_exc:
+                    startup_shortcut_error = shortcut_exc
+            self.clear_legacy_run_key()
+            if startup_task_error and startup_shortcut_error:
+                raise RuntimeError(
+                    f"Task Scheduler: {startup_task_error}; Startup shortcut: {startup_shortcut_error}"
+                )
+            return
+
+        self.remove_startup_task()
+        self.remove_startup_shortcut()
+        self.clear_legacy_run_key()
 
     def check_for_updates(self, on_done=None) -> None:
         if not UPDATE_REPO:
@@ -1751,9 +1902,9 @@ class FelbApp(AppBase):
                         text = f"{self.tr.t('update.downloading')} {mb_done:.1f} MB"
                     self.after(0, progress_text.set, text)
 
-                zip_path = download_update(update, progress_callback=on_download_progress)
+                zip_path = download_update(update, progress_callback=on_download_progress, translator=self.tr)
                 self.after(0, progress_text.set, self.tr.t("update.launching"))
-                launch_updater(zip_path, self.runtime_dir(), self.launch_target())
+                launch_updater(zip_path, self.runtime_dir(), self.launch_target(), language=self.tr.language, translator=self.tr)
                 self.after(0, self.exit_app)
             except Exception as exc:
                 self.after(0, progress_dialog.destroy)
@@ -2121,6 +2272,8 @@ class FelbApp(AppBase):
             self.notifications_page.stop()
         if self.item_search_page:
             self.item_search_page.stop()
+        if self.identify_item_page and hasattr(self.identify_item_page, "stop"):
+            self.identify_item_page.stop()
         if self.home_chat_panel:
             self.home_chat_panel.stop()
         self.destroy()

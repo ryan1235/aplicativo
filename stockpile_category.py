@@ -2,6 +2,7 @@ from pathlib import Path
 import ctypes
 from datetime import datetime, timezone
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk
 
@@ -17,6 +18,7 @@ from stockpiler import (
     StockpileWatcher,
     api_item_rows,
     api_last_update,
+    format_to_local_pc_time,
     request_stockpile_debug,
     warehouse_summaries,
 )
@@ -190,6 +192,9 @@ class StockpileCategory(ttk.Frame):
         self.visual_tooltip: tk.Toplevel | None = None
         self.visual_tooltip_label: tk.Label | None = None
         self.visual_tooltip_text = ""
+        self.last_overlay_flow_text = ""
+        self.last_overlay_flow_at = 0.0
+        self.overlay_reload_in_progress = False
         self.api_last_update_var.trace_add("write", lambda *_args: self.draw_visual_stockpile())
         self.active = False
         self.api_loading = False
@@ -381,7 +386,7 @@ class StockpileCategory(ttk.Frame):
                 message = {
                     "kind": "api_snapshot",
                     "api_response": api_response.get("status_text", "-"),
-                    "api_last_update": api_last_update(api_response),
+                    "api_last_update": format_to_local_pc_time(api_last_update(api_response)),
                     "warehouse_summaries": summaries,
                     "items": api_item_rows(api_response),
                     "report_count": len(summaries),
@@ -423,6 +428,12 @@ class StockpileCategory(ttk.Frame):
 
     def show_status(self, message) -> None:
         if isinstance(message, dict):
+            incoming_items = message.get("items") or []
+            incoming_warehouses = message.get("warehouse_summaries") or []
+            if message.get("kind") == "api_snapshot" and not incoming_items and self.latest_items:
+                # Keep previous data when API temporarily returns an empty snapshot during refresh.
+                self.after(0, self.status_var.set, self.tr.t("stockpile.refreshing"))
+                return
             stockpiles = message.get("stockpiles") or []
             last_stockpile = stockpiles[-1] if stockpiles else "-"
             stockpile_list = ", ".join(stockpiles[:6]) if stockpiles else "-"
@@ -430,26 +441,40 @@ class StockpileCategory(ttk.Frame):
                 stockpile_list = f"{stockpile_list} +{len(stockpiles) - 6}"
             self.after(0, self.sent_count_var.set, str(message.get("send_count", 0)))
             self.after(0, self.report_count_var.set, str(message.get("report_count", 0)))
-            self.after(0, self.item_count_var.set, str(len(message.get("items") or [])))
+            self.after(0, self.item_count_var.set, str(len(incoming_items)))
             self.after(0, self.last_stockpile_var.set, last_stockpile)
             self.after(0, self.stockpile_list_var.set, self.tr.t("stockpile.detected_list", names=stockpile_list))
             self.after(0, self.last_response_var.set, str(message.get("api_response", "-")))
             self.after(0, self.api_last_update_var.set, str(message.get("api_last_update") or "-"))
-            self.latest_warehouses = message.get("warehouse_summaries") or []
-            self.latest_items = message.get("items") or []
+            self.latest_warehouses = incoming_warehouses
+            self.latest_items = incoming_items
             self.after(0, self.update_warehouse_dashboard)
             if message.get("kind") == "api_snapshot":
                 self.after(0, self.status_var.set, self.tr.t("stockpile.api_loaded"))
             else:
                 self.after(0, self.status_var.set, self.tr.t("stockpile.last_sent", count=len(stockpiles)))
-                if message.get("upload_reason") == "file_changed" or message.get("payload_changed") is True:
+                payload_changed = bool(message.get("payload_changed"))
+                upload_reason = str(message.get("upload_reason") or "")
+                response = str(message.get("api_response", "-"))
+                if payload_changed:
                     self.after(0, self.notify_upload_success, len(stockpiles))
+                    self.emit_overlay_flow(
+                        self.tr.t("stockpile.flow_upload_changed", count=len(stockpiles), response=response),
+                        play_sound=True,
+                        dedupe_window=2.0,
+                        stage="done",
+                    )
+                else:
+                    # Sem mudanças reais: atualiza métricas na tela, mas não abre overlay.
+                    pass
             return
 
         translated = {
             "running": self.tr.t("stockpile.running"),
             "waiting for Foxhole save file": self.tr.t("stockpile.waiting_file"),
             "stockpile unchanged": self.tr.t("stockpile.unchanged"),
+            "reload detected": self.tr.t("stockpile.flow_reload_detected"),
+            "processing reload": self.tr.t("stockpile.flow_reload_processing"),
         }.get(message, message)
         if isinstance(message, str) and message.startswith("waiting for Foxhole save file:"):
             path = message.split(":", 1)[1].strip()
@@ -461,6 +486,10 @@ class StockpileCategory(ttk.Frame):
         elif isinstance(message, str) and message.startswith("cannot read Foxhole save file:"):
             translated = self.tr.t("stockpile.read_error", message=message)
         self.after(0, self.status_var.set, translated)
+        if message in {"reload detected", "processing reload", "stockpile unchanged"}:
+            return
+        if isinstance(translated, str) and translated:
+            self.emit_overlay_flow(translated, play_sound=False, dedupe_window=10.0, stage="toast")
 
     def remember_discovered_file(self, path: str) -> None:
         self.file_var.set(path)
@@ -468,10 +497,27 @@ class StockpileCategory(ttk.Frame):
 
     def notify_upload_success(self, count: int) -> None:
         text = self.tr.t("stockpile.upload_success", count=count)
-        if load_settings().get("app", {}).get("stockpile_sound_enabled", True):
+        self.emit_overlay_flow(text, play_sound=False, dedupe_window=2.0, stage="done")
+
+    def emit_overlay_flow(
+        self,
+        text: str,
+        *,
+        play_sound: bool = False,
+        dedupe_window: float = 6.0,
+        stage: str = "progress",
+    ) -> None:
+        if not text:
+            return
+        now = time.monotonic()
+        if text == self.last_overlay_flow_text and now - self.last_overlay_flow_at < dedupe_window:
+            return
+        self.last_overlay_flow_text = text
+        self.last_overlay_flow_at = now
+        if play_sound and load_settings().get("app", {}).get("stockpile_sound_enabled", True):
             play_stockpile_sound()
         if self.success_callback:
-            self.success_callback(text)
+            self.success_callback({"text": text, "stage": stage})
 
     def stop_watcher(self, update_status: bool = True) -> None:
         if self.watcher:
@@ -733,6 +779,18 @@ class StockpileCategory(ttk.Frame):
         canvas.create_rectangle(0, 0, width, 32, fill="#15253d", outline="")
         title = warehouse or self.tr.t("stockpile.visual_empty")
         canvas.create_text(12, 16, text=title, fill=COLORS["text"], anchor="w", font=("Segoe UI", 10, "bold"))
+        selected_summary = next((item for item in self.latest_warehouses if str(item.get("name")) == warehouse), None)
+        warehouse_update = "-"
+        if isinstance(selected_summary, dict):
+            warehouse_update = format_to_local_pc_time(str(selected_summary.get("last_update") or "-"))
+        canvas.create_text(
+            width - 12,
+            16,
+            text=f"Atualização do estoque: {warehouse_update}",
+            fill=COLORS["muted"],
+            anchor="e",
+            font=("Segoe UI", 8, "bold"),
+        )
 
         canvas.create_text(
             8,

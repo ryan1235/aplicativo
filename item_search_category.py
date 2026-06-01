@@ -12,7 +12,7 @@ except ImportError:  # pragma: no cover - optional visual upgrade.
 
 from i18n import Translator
 from settings_store import load_settings
-from stockpiler import api_item_rows, api_last_update, request_stockpile_debug
+from stockpiler import api_item_rows, api_last_update, format_to_local_pc_time, request_stockpile_debug
 
 try:
     from PIL import Image, ImageTk
@@ -83,7 +83,10 @@ class ItemSearchCategory(ttk.Frame):
         self.entry: tk.Entry | None = None
         self.active = False
         self.loading = False
+        self.items_loaded = False
         self.refresh_job: str | None = None
+        self.row_tooltip: tk.Toplevel | None = None
+        self.row_tooltip_var = tk.StringVar(value="")
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         self.build()
@@ -183,8 +186,17 @@ class ItemSearchCategory(ttk.Frame):
         for child in self.winfo_children():
             child.destroy()
         self.build()
+        self.refresh_status_text()
         self.update_suggestions()
         self.draw_result()
+
+    def refresh_status_text(self) -> None:
+        if self.loading:
+            self.status_var.set(self.tr.t("item_search.loading"))
+        elif self.items_loaded:
+            self.status_var.set(self.tr.t("item_search.loaded", count=len(self.items)))
+        else:
+            self.status_var.set(self.tr.t("item_search.loading"))
 
     def set_active(self, active: bool) -> None:
         self.active = active
@@ -221,7 +233,7 @@ class ItemSearchCategory(ttk.Frame):
                 stockpile = load_settings()["stockpile"]
                 api_response = request_stockpile_debug(str(stockpile.get("api_url", "")))
                 items = api_item_rows(api_response)
-                last_update = api_last_update(api_response) or "-"
+                last_update = format_to_local_pc_time(api_last_update(api_response))
                 self.after(0, lambda: self.apply_items(items, last_update))
             except Exception as exc:
                 self.after(0, self.status_var.set, self.tr.t("item_search.error", message=str(exc)))
@@ -236,7 +248,12 @@ class ItemSearchCategory(ttk.Frame):
         return "break"
 
     def apply_items(self, items: list[dict], last_update: str) -> None:
+        if not items and self.items:
+            # Avoid clearing UI on transient empty API snapshots during backend refresh.
+            self.status_var.set(self.tr.t("item_search.loaded", count=len(self.items)))
+            return
         self.items = items
+        self.items_loaded = True
         self.last_update_var.set(last_update)
         self.status_var.set(self.tr.t("item_search.loaded", count=len(items)))
         self.update_suggestions()
@@ -324,6 +341,7 @@ class ItemSearchCategory(ttk.Frame):
     def draw_result(self) -> None:
         if not self.result_canvas:
             return
+        self.hide_row_tooltip()
         canvas = self.result_canvas
         canvas.delete("all")
         width = max(1, canvas.winfo_width())
@@ -387,16 +405,57 @@ class ItemSearchCategory(ttk.Frame):
             for item in region_rows:
                 _region, _name, code = self.split_location(str(item.get("warehouse") or "-"))
                 quantity = int(item.get("quantity", 0) or 0)
+                warehouse_last_update = str(item.get("warehouse_last_update") or "-")
                 row_x1 = card_x + 34
                 row_x2 = card_x + card_w - 34
-                canvas.create_rectangle(row_x1, y - 14, row_x2, y + 22, fill="#0c192b", outline="#162b45")
-                canvas.create_text(row_x1 + 14, y + 4, text=str(code), fill=COLORS["text"], anchor="w", font=("Segoe UI", 11, "bold"))
-                canvas.create_text(row_x2 - 18, y + 4, text=str(quantity), fill=COLORS["accent"], anchor="e", font=("Segoe UI", 12, "bold"))
+                tag = f"row_{region}_{code}_{y}".replace(" ", "_").replace("/", "_")
+                canvas.create_rectangle(row_x1, y - 14, row_x2, y + 22, fill="#0c192b", outline="#162b45", tags=(tag,))
+                canvas.create_text(row_x1 + 14, y + 4, text=str(code), fill=COLORS["text"], anchor="w", font=("Segoe UI", 11, "bold"), tags=(tag,))
+                canvas.create_text(row_x2 - 18, y + 4, text=str(quantity), fill=COLORS["accent"], anchor="e", font=("Segoe UI", 12, "bold"), tags=(tag,))
                 small_icon = self.load_item_icon(str(item.get("icon_path") or ""))
                 if small_icon:
-                    canvas.create_image(row_x2 - 8, y + 4, image=small_icon, anchor="w")
+                    canvas.create_image(row_x2 - 8, y + 4, image=small_icon, anchor="w", tags=(tag,))
+                tooltip_text = f"Última atualização: {format_to_local_pc_time(warehouse_last_update)}"
+                canvas.tag_bind(tag, "<Enter>", lambda event, text=tooltip_text: self.show_row_tooltip(event, text))
+                canvas.tag_bind(tag, "<Motion>", self.move_row_tooltip)
+                canvas.tag_bind(tag, "<Leave>", lambda _event: self.hide_row_tooltip())
                 y += 44
             y += 10
 
+    def show_row_tooltip(self, event, text: str) -> None:
+        if not self.result_canvas:
+            return
+        self.hide_row_tooltip()
+        self.row_tooltip = tk.Toplevel(self)
+        self.row_tooltip.overrideredirect(True)
+        self.row_tooltip.attributes("-topmost", True)
+        self.row_tooltip_var.set(text)
+        label = tk.Label(
+            self.row_tooltip,
+            textvariable=self.row_tooltip_var,
+            bg="#0b1220",
+            fg=COLORS["accent"],
+            font=("Segoe UI", 9, "bold"),
+            relief="solid",
+            borderwidth=1,
+            padx=8,
+            pady=5,
+        )
+        label.pack()
+        self.move_row_tooltip(event)
+
+    def move_row_tooltip(self, event) -> None:
+        if not self.row_tooltip:
+            return
+        x = event.x_root + 14
+        y = event.y_root + 14
+        self.row_tooltip.geometry(f"+{x}+{y}")
+
+    def hide_row_tooltip(self) -> None:
+        if self.row_tooltip and self.row_tooltip.winfo_exists():
+            self.row_tooltip.destroy()
+        self.row_tooltip = None
+
     def stop(self) -> None:
         self.cancel_refresh()
+        self.hide_row_tooltip()

@@ -2,6 +2,8 @@ pygvas
 customtkinter
 pillow
 pystray
+numpy
+opencv-python
 nuitka
 ordered-set
 zstandard
