@@ -74,7 +74,7 @@ STOCKPILE_SECTIONS = (
     ("ItemCrates", True),
     ("Vehicles", False),
     ("VehicleCrates", True),
-    ("Structures", True),
+    ("Structures", False),
     ("StructureCrates", True),
 )
 ICON_TABLES = (
