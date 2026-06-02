@@ -110,6 +110,11 @@ def _debug_log(message: str) -> None:
         pass
 
 
+def _runtime_log(message: str) -> None:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {message}", flush=True)
+
+
 def unreal_datetime_to_iso(ticks: int) -> str:
     unix_ticks = ticks - UE_TICKS_AT_UNIX_EPOCH
     seconds, tick_remainder = divmod(unix_ticks, 10_000_000)
@@ -302,7 +307,7 @@ def write_json(data: Any, output: Path | None) -> None:
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(text + "\n", encoding="utf-8")
-        _debug_log(f"[Stockpile] JSON written to {output}")
+        _runtime_log(f"[Stockpile] JSON written to {output}")
     except OSError as exc:
         raise ExtractError(f"Nao foi possivel criar o JSON em {output}: {exc}") from exc
 
@@ -544,9 +549,12 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
 
 def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST") -> dict[str, Any]:
     body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-    _debug_log(f"[Stockpile API] request start purpose={purpose} method={method} url={api_url}")
-    _debug_log(f"[Stockpile API] request payload bytes={len(body)}")
-    _debug_log(f"[Stockpile API] request payload body={body.decode('utf-8', errors='replace')}")
+    log_upload = purpose == "upload" and method.upper() == "POST"
+    log = _debug_log if log_upload else _runtime_log
+    log(f"[Stockpile API] request start purpose={purpose} method={method} url={api_url}")
+    if log_upload:
+        _debug_log(f"[Stockpile API] request payload bytes={len(body)}")
+        _debug_log(f"[Stockpile API] request payload body={body.decode('utf-8', errors='replace')}")
     request = urllib.request.Request(
         api_url,
         data=body,
@@ -557,16 +565,17 @@ def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST")
         with urllib.request.urlopen(request, timeout=15) as response:
             response_body = response.read().decode("utf-8", errors="replace")
             result = parse_api_response(response.status, response_body)
-            _debug_log(f"[Stockpile API] response status={response.status}")
-            _debug_log(f"[Stockpile API] response body={response_body}")
-            _debug_log(f"[Stockpile API] {purpose}: {result['status_text']}")
+            log(f"[Stockpile API] response status={response.status}")
+            if log_upload:
+                _debug_log(f"[Stockpile API] response body={response_body}")
+            log(f"[Stockpile API] {purpose}: {result['status_text']}")
             return result
     except urllib.error.HTTPError as exc:
         response_body = exc.read().decode("utf-8", errors="replace")
-        _debug_log(f"[Stockpile API] HTTPError status={exc.code} body={response_body}")
+        log(f"[Stockpile API] HTTPError status={exc.code} body={response_body}")
         raise ExtractError(f"HTTP {exc.code}: {response_body}") from exc
     except urllib.error.URLError as exc:
-        _debug_log(f"[Stockpile API] URLError reason={exc.reason}")
+        log(f"[Stockpile API] URLError reason={exc.reason}")
         raise ExtractError(str(exc.reason)) from exc
 
 
@@ -582,6 +591,10 @@ def default_output_path(sav_path: Path, out_dir: Path) -> Path:
     return out_dir / f"{sav_path.stem}.json"
 
 
+def last_sent_output_path(sav_path: Path, out_dir: Path) -> Path:
+    return out_dir / f"{sav_path.stem}_last_sent.json"
+
+
 def stable_payload_for_compare(value: Any) -> Any:
     if isinstance(value, dict):
         return {
@@ -594,7 +607,7 @@ def stable_payload_for_compare(value: Any) -> Any:
     return value
 
 
-def payload_changed_since_last_write(payload: dict[str, Any], output: Path) -> bool:
+def payload_changed_since_json(payload: dict[str, Any], output: Path) -> bool:
     if not output.exists():
         return True
     try:
@@ -632,6 +645,71 @@ def summarize_payload(payload: dict[str, Any], api_response: dict[str, Any]) -> 
     }
 
 
+def log_stockpile_debug_details(
+    payload: dict[str, Any],
+    *,
+    source_file: Path,
+    output: Path,
+    sent_output: Path,
+    upload_reason: str,
+    capture_changed: bool,
+    api_payload_changed: bool,
+    extracted_entries: int,
+    action: str,
+) -> None:
+    reports = payload.get("reports") if isinstance(payload, dict) else []
+    reports = reports if isinstance(reports, list) else []
+    total_items = 0
+    total_crated = 0
+    for report in reports:
+        if not isinstance(report, dict):
+            continue
+        items = report.get("items")
+        if not isinstance(items, list):
+            continue
+        total_items += len(items)
+        total_crated += sum(1 for item in items if isinstance(item, dict) and item.get("is_crated"))
+
+    _debug_log("[Stockpile Reload] ----------")
+    _debug_log(f"[Stockpile Reload] reason={upload_reason} action={action}")
+    _debug_log(f"[Stockpile Reload] source_file={source_file}")
+    _debug_log(f"[Stockpile Reload] extracted_entries={extracted_entries}")
+    _debug_log(f"[Stockpile Reload] captured_json={output}")
+    _debug_log(f"[Stockpile Reload] last_sent_json={sent_output}")
+    _debug_log("[Stockpile Reload] comparison=stable payload JSON, ignoring extracted_at timestamps")
+    _debug_log(
+        "[Stockpile Reload] "
+        f"captured_json_changed={capture_changed} "
+        f"last_sent_json_equal={not api_payload_changed} "
+        f"api_payload_changed={api_payload_changed}"
+    )
+    _debug_log(f"[Stockpile Reload] detected_stockpiles={len(reports)} detected_items={total_items} crated_items={total_crated}")
+
+    for index, report in enumerate(reports, 1):
+        if not isinstance(report, dict):
+            continue
+        header = report.get("header") if isinstance(report.get("header"), dict) else {}
+        metadata = report.get("metadata") if isinstance(report.get("metadata"), dict) else {}
+        items = report.get("items") if isinstance(report.get("items"), list) else []
+        name = header.get("inventory_name", "Unknown")
+        inventory_type = header.get("inventory_type", "-")
+        map_id = header.get("map_id") or metadata.get("map_id") or "-"
+        _debug_log(f"[Stockpile Reload] #{index} {name} type={inventory_type} map={map_id} items={len(items)}")
+        sorted_items = sorted(
+            [item for item in items if isinstance(item, dict)],
+            key=lambda item: (str(item.get("display_name") or item.get("asset_name") or ""), int(item.get("quantity") or 0)),
+        )
+        for item in sorted_items[:20]:
+            display = item.get("display_name") or item.get("asset_name") or "-"
+            asset = item.get("asset_name") or "-"
+            quantity = item.get("quantity") or 0
+            crate_quantity = item.get("crate_quantity") or 0
+            crate_text = f", crates={crate_quantity}" if crate_quantity else ""
+            _debug_log(f"[Stockpile Reload]    - {display} ({asset}) qty={quantity}{crate_text}")
+        if len(sorted_items) > 20:
+            _debug_log(f"[Stockpile Reload]    ... +{len(sorted_items) - 20} itens")
+
+
 def extract_and_post(
     path: Path,
     out_dir: Path,
@@ -641,28 +719,58 @@ def extract_and_post(
     force_api_refresh: bool = False,
     upload_reason: str = "file_changed",
 ) -> dict[str, Any] | None:
-    _debug_log(f"[Stockpile] extract_and_post start file={path} out_dir={out_dir} api_url={api_url}")
+    _runtime_log(f"[Stockpile] extract_and_post start file={path} out_dir={out_dir} api_url={api_url}")
     data = extract_pinned_tooltips(path, strip_enum_prefixes=not keep_enum_prefixes)
-    _debug_log(f"[Stockpile] extracted entries={len(data) if isinstance(data, list) else 0}")
+    extracted_entries = len(data) if isinstance(data, list) else 0
+    _runtime_log(f"[Stockpile] extracted entries={extracted_entries}")
     payload = convert_to_api_payload(data, path)
     output = default_output_path(path, out_dir)
-    has_changed = payload_changed_since_last_write(payload, output)
-    _debug_log(f"[Stockpile] payload_changed={has_changed} force_api_refresh={force_api_refresh} output={output}")
-    if not has_changed and not force_api_refresh:
-        _debug_log("[Stockpile] unchanged; waiting 5 min refresh")
-        return None
-
-    if has_changed:
+    sent_output = last_sent_output_path(path, out_dir)
+    capture_changed = payload_changed_since_json(payload, output)
+    api_payload_changed = payload_changed_since_json(payload, sent_output)
+    _runtime_log(
+        "[Stockpile] "
+        f"capture_changed={capture_changed} api_payload_changed={api_payload_changed} "
+        f"force_api_refresh_ignored={force_api_refresh} output={output} last_sent={sent_output}"
+    )
+    if capture_changed:
         write_json(payload, output)
     else:
-        _debug_log("[Stockpile] payload unchanged, skipped JSON write")
+        _runtime_log("[Stockpile] captured JSON unchanged")
+
+    if not api_payload_changed:
+        log_stockpile_debug_details(
+            payload,
+            source_file=path,
+            output=output,
+            sent_output=sent_output,
+            upload_reason=upload_reason,
+            capture_changed=capture_changed,
+            api_payload_changed=api_payload_changed,
+            extracted_entries=extracted_entries,
+            action="skip: same as last sent JSON",
+        )
+        _runtime_log("[Stockpile] unchanged; API skipped")
+        return None
+
     report_count = len(payload.get("reports", []))
-    action = "wrote" if has_changed else "kept"
-    _debug_log(f"[Stockpile] {action} {report_count} private API reports")
+    log_stockpile_debug_details(
+        payload,
+        source_file=path,
+        output=output,
+        sent_output=sent_output,
+        upload_reason=upload_reason,
+        capture_changed=capture_changed,
+        api_payload_changed=api_payload_changed,
+        extracted_entries=extracted_entries,
+        action="POST to API",
+    )
+    _debug_log(f"[Stockpile] posting {report_count} private API reports")
     api_message = post_json(payload, api_url)
     _debug_log(f"[Stockpile] API parsed message={json.dumps(api_message, ensure_ascii=False)}")
+    write_json(payload, sent_output)
     summary = summarize_payload(payload, api_message)
-    summary["payload_changed"] = has_changed
+    summary["payload_changed"] = api_payload_changed
     summary["upload_reason"] = upload_reason
     return summary
 
@@ -677,7 +785,7 @@ class StockpileWatcher:
         extract_initial: bool = True,
         debounce: float = 3.0,
         interval: float = 0.5,
-        sync_interval: float = 300.0,
+        sync_interval: float | None = None,
         status_callback: Callable[[str | dict[str, Any]], None] | None = None,
     ) -> None:
         self.file_path = file_path
@@ -704,75 +812,85 @@ class StockpileWatcher:
 
     def _status(self, message: str | dict[str, Any]) -> None:
         if isinstance(message, dict):
-            _debug_log(
+            _runtime_log(
                 f"[Stockpile] {message.get('api_response', '-')} | "
                 f"{message.get('report_count', 0)} stockpiles | "
                 f"{len(message.get('items') or [])} API items"
             )
         else:
-            _debug_log(f"[Stockpile] {message}")
+            _runtime_log(f"[Stockpile] {message}")
         if self.status_callback:
             self.status_callback(message)
 
     def _run(self) -> None:
         path = self.file_path.resolve()
         self._status("running")
-        last_mtime = path.stat().st_mtime if path.exists() else 0.0
+        initial_stat = path.stat() if path.exists() else None
+        last_mtime_ns = initial_stat.st_mtime_ns if initial_stat else 0
+        last_size = initial_stat.st_size if initial_stat else -1
+        _debug_log(
+            "[Stockpile Watcher] started "
+            f"file={path} exists={initial_stat is not None} "
+            f"size={last_size} mtime_ns={last_mtime_ns} extract_initial={self.extract_initial}"
+        )
         pending_at = time.monotonic() if self.extract_initial else None
-        # Force one sync on startup so API receives data even when local file did not change.
-        pending_force_api_refresh = bool(self.extract_initial)
-        pending_upload_reason = "sync_refresh" if self.extract_initial else "file_changed"
-        next_sync_at = time.monotonic() + self.sync_interval
+        pending_upload_reason = "startup" if self.extract_initial else "file_changed"
         if not path.exists():
+            _debug_log(f"[Stockpile Watcher] waiting for Foxhole save file={path}")
             self._status(f"waiting for Foxhole save file: {path}")
 
         while not self.stop_event.is_set():
             try:
-                mtime = path.stat().st_mtime
+                stat = path.stat()
             except FileNotFoundError:
                 discovered = discover_map_data_file()
                 if discovered and discovered.resolve() != path:
                     path = discovered.resolve()
                     self.file_path = path
-                    last_mtime = path.stat().st_mtime
+                    stat = path.stat()
+                    last_mtime_ns = stat.st_mtime_ns
+                    last_size = stat.st_size
                     pending_at = time.monotonic()
+                    _debug_log(
+                        "[Stockpile Watcher] discovered new save "
+                        f"file={path} size={last_size} mtime_ns={last_mtime_ns}"
+                    )
                     self._status(f"found Foxhole save file: {path}")
                     time.sleep(self.interval)
                     continue
                 time.sleep(self.interval)
                 continue
             except OSError as exc:
+                _debug_log(f"[Stockpile Watcher] cannot read file={path} error={exc}")
                 self._status(f"cannot read Foxhole save file: {path}: {exc}")
                 time.sleep(self.interval)
                 continue
 
             now = time.monotonic()
-            if mtime != last_mtime:
-                last_mtime = mtime
+            file_size = stat.st_size
+            mtime_ns = stat.st_mtime_ns
+            if mtime_ns != last_mtime_ns or file_size != last_size:
+                last_mtime_ns = mtime_ns
+                last_size = file_size
                 pending_at = now
-                # Reload/update do MapData deve gerar envio, mesmo sem alteracao semantica.
-                pending_force_api_refresh = True
                 pending_upload_reason = "file_changed"
+                _debug_log(
+                    "[Stockpile Watcher] reload detected "
+                    f"file={path} size={file_size} mtime_ns={mtime_ns}"
+                )
                 self._status("reload detected")
-
-            if now >= next_sync_at:
-                pending_at = now
-                pending_force_api_refresh = True
-                pending_upload_reason = "sync_refresh"
-                next_sync_at = now + self.sync_interval
 
             if pending_at is not None and now - pending_at >= self.debounce:
                 pending_at = None
                 try:
+                    _debug_log(f"[Stockpile Watcher] processing reload reason={pending_upload_reason} file={path}")
                     self._status("processing reload")
                     result = extract_and_post(
                         path,
                         self.out_dir,
                         self.api_url,
-                        force_api_refresh=pending_force_api_refresh,
                         upload_reason=pending_upload_reason,
                     )
-                    pending_force_api_refresh = False
                     pending_upload_reason = "file_changed"
                     if result is None:
                         self._status("stockpile unchanged")
@@ -781,8 +899,7 @@ class StockpileWatcher:
                         result["send_count"] = self.send_count
                         self._status(result)
                 except Exception as exc:
-                    pending_force_api_refresh = False
-                    self._status(str(exc))
+                    self._status(f"error: {exc}")
 
             time.sleep(self.interval)
 

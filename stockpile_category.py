@@ -1,6 +1,7 @@
 from pathlib import Path
 import ctypes
 from datetime import datetime, timezone
+import queue
 import threading
 import time
 import tkinter as tk
@@ -15,10 +16,16 @@ from app_paths import extracted_dir, resolve_writable_path
 from i18n import Translator
 from settings_store import load_settings, save_settings
 from stockpiler import (
+    STOCKPILE_DEBUG_LOG,
     StockpileWatcher,
     api_item_rows,
     api_last_update,
+    default_output_path,
+    discover_map_data_file,
+    extract_and_post,
     format_to_local_pc_time,
+    foxhole_savegames_dir,
+    last_sent_output_path,
     request_stockpile_debug,
     warehouse_summaries,
 )
@@ -188,6 +195,13 @@ class StockpileCategory(ttk.Frame):
         self.warehouse_combo: ttk.Combobox | None = None
         self.refresh_job: str | None = None
         self.relative_update_job: str | None = None
+        self.status_queue_job: str | None = None
+        self.status_queue: queue.SimpleQueue = queue.SimpleQueue()
+        self.debug_console_job: str | None = None
+        self.debug_console_visible = False
+        self.debug_console_frame: tk.Widget | None = None
+        self.debug_console_text: tk.Text | None = None
+        self.manual_check_running = False
         self.visual_item_hitboxes: list[tuple[int, int, int, int, str]] = []
         self.visual_tooltip: tk.Toplevel | None = None
         self.visual_tooltip_label: tk.Label | None = None
@@ -205,6 +219,7 @@ class StockpileCategory(ttk.Frame):
         self.rowconfigure(0, weight=1)
         self.build()
         self.schedule_relative_update_clock()
+        self.schedule_status_queue()
         self.load_api_snapshot()
         self.start_watcher()
 
@@ -304,16 +319,75 @@ class StockpileCategory(ttk.Frame):
         status = modern_frame(container, COLORS["soft"], radius=18, border=1, border_color="#213854")
         status.grid(row=5, column=0, sticky="ew", padx=22, pady=(0, 22))
         status.columnconfigure(0, weight=1)
+        status.columnconfigure(1, weight=0)
+        status.columnconfigure(2, weight=0)
         tk.Label(status, textvariable=self.status_var, bg=COLORS["soft"], fg=COLORS["text"], font=("Segoe UI", 11, "bold"), wraplength=820, justify="left").grid(
-            row=0, column=0, sticky="w", padx=16, pady=(12, 2)
+            row=0, column=0, columnspan=2, sticky="w", padx=16, pady=(12, 2)
         )
         tk.Label(status, textvariable=self.last_response_var, bg=COLORS["soft"], fg=COLORS["accent_2"], font=("Segoe UI", 9, "bold"), wraplength=820, justify="left").grid(
-            row=1, column=0, sticky="w", padx=16, pady=(4, 2)
+            row=1, column=0, columnspan=2, sticky="w", padx=16, pady=(4, 2)
         )
         tk.Label(status, textvariable=self.stockpile_list_var, bg=COLORS["soft"], fg=COLORS["text"], font=("Segoe UI", 9), wraplength=820, justify="left").grid(
-            row=2, column=0, sticky="w", padx=16, pady=(4, 2)
+            row=2, column=0, columnspan=2, sticky="w", padx=16, pady=(4, 2)
         )
         tk.Label(status, text=self.tr.t("stockpile.console_note"), bg=COLORS["soft"], fg=COLORS["muted"], font=("Segoe UI", 9)).grid(row=3, column=0, sticky="w", padx=16, pady=(0, 12))
+        modern_button(
+            status,
+            text=self.tr.t("stockpile.debug_button"),
+            command=self.toggle_debug_console,
+            color="#172943",
+            text_color=COLORS["muted"],
+            hover="#213854",
+            height=28,
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=3, column=1, sticky="e", padx=16, pady=(0, 12))
+        modern_button(
+            status,
+            text=self.tr.t("stockpile.debug_check_button"),
+            command=self.manual_stockpile_check,
+            color="#101d31",
+            text_color=COLORS["muted"],
+            hover="#213854",
+            height=28,
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=3, column=2, sticky="e", padx=(0, 16), pady=(0, 12))
+
+        self.debug_console_frame = modern_frame(status, "#070b16", radius=12, border=1, border_color="#2d496f")
+        self.debug_console_frame.grid(row=4, column=0, columnspan=3, sticky="ew", padx=16, pady=(0, 14))
+        self.debug_console_frame.columnconfigure(0, weight=1)
+        self.debug_console_text = tk.Text(
+            self.debug_console_frame,
+            height=11,
+            bg="#050914",
+            fg="#d7e4f5",
+            insertbackground="#d7e4f5",
+            relief="flat",
+            borderwidth=0,
+            font=("Consolas", 9),
+            wrap="none",
+        )
+        self.debug_console_text.grid(row=0, column=0, sticky="ew", padx=(10, 0), pady=10)
+        self.debug_console_text.bind("<MouseWheel>", self.on_debug_console_mousewheel)
+        self.debug_console_text.configure(state="disabled")
+        if ctk is not None:
+            debug_scrollbar = ctk.CTkScrollbar(
+                self.debug_console_frame,
+                orientation="vertical",
+                command=self.debug_console_text.yview,
+                width=10,
+                fg_color="#070b16",
+                button_color=COLORS["card_2"],
+                button_hover_color=COLORS["accent"],
+            )
+        else:
+            debug_scrollbar = ttk.Scrollbar(self.debug_console_frame, orient="vertical", command=self.debug_console_text.yview)
+        debug_scrollbar.grid(row=0, column=1, sticky="ns", padx=(6, 10), pady=10)
+        self.debug_console_text.configure(yscrollcommand=debug_scrollbar.set)
+        if self.debug_console_visible:
+            self.refresh_debug_console()
+            self.schedule_debug_console_refresh()
+        else:
+            self.debug_console_frame.grid_remove()
         self.bind_mousewheel_recursive(outer, canvas)
 
     def add_label(self, parent: tk.Frame, text: str, row: int) -> None:
@@ -326,6 +400,8 @@ class StockpileCategory(ttk.Frame):
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
 
+        if widget in {self.debug_console_frame, self.debug_console_text}:
+            return
         widget.bind("<MouseWheel>", on_mousewheel, add="+")
         for child in widget.winfo_children():
             self.bind_mousewheel_recursive(child, canvas)
@@ -339,6 +415,181 @@ class StockpileCategory(ttk.Frame):
         tk.Label(card, textvariable=value, bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 14, "bold"), wraplength=170, justify="left").pack(
             anchor="w", padx=14, pady=(0, 12)
         )
+
+    def on_debug_console_mousewheel(self, event) -> str:
+        if self.debug_console_text:
+            self.debug_console_text.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        return "break"
+
+    def file_stat_line(self, label: str, path: Path) -> str:
+        try:
+            stat = path.stat()
+        except OSError as exc:
+            return f"{label}: {path} | missing/unreadable ({exc})"
+        changed = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+        return f"{label}: {path} | size={stat.st_size} mtime={changed} mtime_ns={stat.st_mtime_ns}"
+
+    def watcher_alive(self) -> bool:
+        return bool(self.watcher and self.watcher.thread and self.watcher.thread.is_alive())
+
+    def live_debug_snapshot(self) -> str:
+        lines = ["[Diagnostico atual]"]
+        lines.append(f"watcher_alive={self.watcher_alive()} active_page={self.active} manual_check_running={self.manual_check_running}")
+        lines.append(f"status={self.status_var.get()}")
+        try:
+            watch_path = Path(self.file_var.get()).expanduser().resolve()
+        except OSError:
+            watch_path = Path(self.file_var.get())
+        out_dir = resolve_writable_path(self.out_dir_var.get())
+        lines.append(self.file_stat_line("watch_file", watch_path))
+        lines.append(f"out_dir={out_dir}")
+        lines.append(self.file_stat_line("captured_json", default_output_path(watch_path, out_dir)))
+        lines.append(self.file_stat_line("last_sent_json", last_sent_output_path(watch_path, out_dir)))
+        discovered = discover_map_data_file()
+        lines.append(f"discover_map_data_file={discovered or '-'}")
+        save_dir = foxhole_savegames_dir()
+        lines.append(f"savegames_dir={save_dir}")
+        try:
+            candidates = sorted(
+                [path for path in save_dir.glob("*_MapData.sav") if path.is_file()],
+                key=lambda item: item.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError as exc:
+            lines.append(f"candidates_error={exc}")
+            candidates = []
+        if not candidates:
+            lines.append("candidates=none")
+        for index, candidate in enumerate(candidates[:5], 1):
+            marker = " <= monitorado" if candidate.resolve() == watch_path else ""
+            lines.append(self.file_stat_line(f"candidate_{index}{marker}", candidate))
+        return "\n".join(lines)
+
+    def toggle_debug_console(self) -> None:
+        self.debug_console_visible = not self.debug_console_visible
+        if not self.debug_console_frame:
+            return
+        if self.debug_console_visible:
+            self.debug_console_frame.grid()
+            self.refresh_debug_console()
+            self.schedule_debug_console_refresh()
+            return
+        self.debug_console_frame.grid_remove()
+        self.cancel_debug_console_refresh()
+
+    def debug_log_tail(self, max_chars: int = 70000) -> str:
+        snapshot = self.live_debug_snapshot()
+        try:
+            text = STOCKPILE_DEBUG_LOG.read_text(encoding="utf-8")
+        except OSError:
+            return f"{snapshot}\n\n{self.tr.t('stockpile.debug_empty', path=str(STOCKPILE_DEBUG_LOG))}"
+        markers = (
+            "[Stockpile Watcher] started",
+            "[Stockpile Watcher] reload detected",
+            "[Stockpile Reload] ----------",
+            "[Stockpile Upload] ----------",
+        )
+        marker_indexes = [index for marker in markers if (index := text.find(marker)) >= 0]
+        if marker_indexes:
+            text = text[min(marker_indexes):]
+        else:
+            text = ""
+        if len(text) > max_chars:
+            text = text[-max_chars:]
+        if not text:
+            text = self.tr.t("stockpile.debug_empty", path=str(STOCKPILE_DEBUG_LOG))
+        return f"{snapshot}\n\n{text}"
+
+    def refresh_debug_console(self) -> None:
+        if not self.debug_console_visible or not self.debug_console_text:
+            return
+        was_at_bottom = self.debug_console_text.yview()[1] >= 0.98
+        text = self.debug_log_tail()
+        self.debug_console_text.configure(state="normal")
+        self.debug_console_text.delete("1.0", "end")
+        self.debug_console_text.insert("1.0", text)
+        if was_at_bottom:
+            self.debug_console_text.see("end")
+        self.debug_console_text.configure(state="disabled")
+
+    def schedule_debug_console_refresh(self) -> None:
+        self.cancel_debug_console_refresh()
+        if self.debug_console_visible:
+            self.debug_console_job = self.after(1500, self.tick_debug_console)
+
+    def cancel_debug_console_refresh(self) -> None:
+        if self.debug_console_job:
+            try:
+                self.after_cancel(self.debug_console_job)
+            except tk.TclError:
+                pass
+            self.debug_console_job = None
+
+    def tick_debug_console(self) -> None:
+        self.debug_console_job = None
+        self.refresh_debug_console()
+        self.schedule_debug_console_refresh()
+
+    def manual_stockpile_check(self) -> None:
+        if self.manual_check_running:
+            return
+        self.manual_check_running = True
+        self.status_var.set(self.tr.t("stockpile.debug_check_running"))
+        if not self.debug_console_visible:
+            self.debug_console_visible = True
+            if self.debug_console_frame:
+                self.debug_console_frame.grid()
+            self.schedule_debug_console_refresh()
+
+        def worker() -> None:
+            try:
+                path = Path(self.file_var.get()).expanduser().resolve()
+                result = extract_and_post(
+                    path,
+                    resolve_writable_path(self.out_dir_var.get()),
+                    self.api_var.get(),
+                    upload_reason="manual_check",
+                )
+                if result is None:
+                    self.enqueue_status("stockpile unchanged")
+                else:
+                    result["send_count"] = self.sent_count_var.get()
+                    self.enqueue_status(result)
+            except Exception as exc:
+                self.enqueue_status(f"error: {exc}")
+            finally:
+                self.manual_check_running = False
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def enqueue_status(self, message) -> None:
+        self.status_queue.put(message)
+
+    def schedule_status_queue(self) -> None:
+        self.cancel_status_queue()
+        self.status_queue_job = self.after(100, self.drain_status_queue)
+
+    def cancel_status_queue(self) -> None:
+        if self.status_queue_job:
+            try:
+                self.after_cancel(self.status_queue_job)
+            except tk.TclError:
+                pass
+            self.status_queue_job = None
+
+    def drain_status_queue(self) -> None:
+        self.status_queue_job = None
+        drained = False
+        while True:
+            try:
+                message = self.status_queue.get_nowait()
+            except queue.Empty:
+                break
+            drained = True
+            self.show_status(message)
+        if drained:
+            self.refresh_debug_console()
+        self.schedule_status_queue()
 
     def save_settings(self) -> None:
         self.settings = load_settings()
@@ -354,9 +605,12 @@ class StockpileCategory(ttk.Frame):
 
     def refresh_language(self, translator: Translator) -> None:
         self.tr = translator
+        self.cancel_debug_console_refresh()
+        self.cancel_status_queue()
         for child in self.winfo_children():
             child.destroy()
         self.build()
+        self.schedule_status_queue()
         self.load_api_snapshot()
 
     def start_watcher(self) -> None:
@@ -367,8 +621,7 @@ class StockpileCategory(ttk.Frame):
             resolve_writable_path(self.out_dir_var.get()),
             self.api_var.get(),
             extract_initial=True,
-            sync_interval=300.0,
-            status_callback=self.show_status,
+            status_callback=self.enqueue_status,
         )
         self.watcher.start()
         self.status_var.set(self.tr.t("stockpile.running"))
@@ -393,9 +646,10 @@ class StockpileCategory(ttk.Frame):
                     "stockpiles": [str(item.get("name", "-")) for item in summaries],
                     "send_count": self.sent_count_var.get(),
                 }
-                self.show_status(message)
+                self.enqueue_status(message)
             except Exception as exc:
-                self.after(0, self.status_var.set, self.tr.t("stockpile.error", message=str(exc)))
+                text = self.tr.t("stockpile.error", message=str(exc))
+                self.enqueue_status({"kind": "ui_error", "text": text})
             finally:
                 self.api_loading = False
 
@@ -428,36 +682,41 @@ class StockpileCategory(ttk.Frame):
 
     def show_status(self, message) -> None:
         if isinstance(message, dict):
+            if message.get("kind") == "ui_error":
+                self.status_var.set(str(message.get("text", "-")))
+                return
             incoming_items = message.get("items") or []
             incoming_warehouses = message.get("warehouse_summaries") or []
             if message.get("kind") == "api_snapshot" and not incoming_items and self.latest_items:
                 # Keep previous data when API temporarily returns an empty snapshot during refresh.
-                self.after(0, self.status_var.set, self.tr.t("stockpile.refreshing"))
+                self.status_var.set(self.tr.t("stockpile.refreshing"))
                 return
             stockpiles = message.get("stockpiles") or []
             last_stockpile = stockpiles[-1] if stockpiles else "-"
             stockpile_list = ", ".join(stockpiles[:6]) if stockpiles else "-"
             if len(stockpiles) > 6:
                 stockpile_list = f"{stockpile_list} +{len(stockpiles) - 6}"
-            self.after(0, self.sent_count_var.set, str(message.get("send_count", 0)))
-            self.after(0, self.report_count_var.set, str(message.get("report_count", 0)))
-            self.after(0, self.item_count_var.set, str(len(incoming_items)))
-            self.after(0, self.last_stockpile_var.set, last_stockpile)
-            self.after(0, self.stockpile_list_var.set, self.tr.t("stockpile.detected_list", names=stockpile_list))
-            self.after(0, self.last_response_var.set, str(message.get("api_response", "-")))
-            self.after(0, self.api_last_update_var.set, str(message.get("api_last_update") or "-"))
+            self.sent_count_var.set(str(message.get("send_count", 0)))
+            self.report_count_var.set(str(message.get("report_count", 0)))
+            self.item_count_var.set(str(len(incoming_items)))
+            self.last_stockpile_var.set(last_stockpile)
+            self.stockpile_list_var.set(self.tr.t("stockpile.detected_list", names=stockpile_list))
+            self.last_response_var.set(str(message.get("api_response", "-")))
+            self.api_last_update_var.set(str(message.get("api_last_update") or "-"))
             self.latest_warehouses = incoming_warehouses
             self.latest_items = incoming_items
-            self.after(0, self.update_warehouse_dashboard)
+            self.update_warehouse_dashboard()
             if message.get("kind") == "api_snapshot":
-                self.after(0, self.status_var.set, self.tr.t("stockpile.api_loaded"))
+                self.status_var.set(self.tr.t("stockpile.api_loaded"))
             else:
-                self.after(0, self.status_var.set, self.tr.t("stockpile.last_sent", count=len(stockpiles)))
+                self.status_var.set(self.tr.t("stockpile.last_sent", count=len(stockpiles)))
                 payload_changed = bool(message.get("payload_changed"))
                 upload_reason = str(message.get("upload_reason") or "")
                 response = str(message.get("api_response", "-"))
-                if payload_changed:
-                    self.after(0, self.notify_upload_success, len(stockpiles))
+                updated_count = int(message.get("report_count", 0) or 0)
+                should_notify_upload = payload_changed and updated_count >= 1 and upload_reason == "file_changed"
+                if should_notify_upload:
+                    self.notify_upload_success(len(stockpiles))
                     self.emit_overlay_flow(
                         self.tr.t("stockpile.flow_upload_changed", count=len(stockpiles), response=response),
                         play_sound=True,
@@ -465,10 +724,13 @@ class StockpileCategory(ttk.Frame):
                         stage="done",
                     )
                 else:
-                    # Sem mudanças reais: atualiza métricas na tela, mas não abre overlay.
+                    # Sem atualização real de estoque: não abre overlay nem toca som.
                     pass
+                if upload_reason == "file_changed":
+                    self.overlay_reload_in_progress = False
             return
 
+        is_error = False
         translated = {
             "running": self.tr.t("stockpile.running"),
             "waiting for Foxhole save file": self.tr.t("stockpile.waiting_file"),
@@ -481,15 +743,23 @@ class StockpileCategory(ttk.Frame):
             translated = self.tr.t("stockpile.waiting_file_detail", path=path)
         elif isinstance(message, str) and message.startswith("found Foxhole save file:"):
             path = message.split(":", 1)[1].strip()
-            self.after(0, lambda value=path: self.remember_discovered_file(value))
+            self.remember_discovered_file(path)
             translated = self.tr.t("stockpile.found_file", path=path)
         elif isinstance(message, str) and message.startswith("cannot read Foxhole save file:"):
             translated = self.tr.t("stockpile.read_error", message=message)
-        self.after(0, self.status_var.set, translated)
-        if message in {"reload detected", "processing reload", "stockpile unchanged"}:
+            is_error = True
+        elif isinstance(message, str) and message.startswith("error:"):
+            translated = self.tr.t("stockpile.error", message=message.removeprefix("error:").strip())
+            is_error = True
+        self.status_var.set(translated)
+        if message == "reload detected":
+            self.overlay_reload_in_progress = True
             return
-        if isinstance(translated, str) and translated:
-            self.emit_overlay_flow(translated, play_sound=False, dedupe_window=10.0, stage="toast")
+        if message in {"processing reload", "stockpile unchanged"}:
+            self.overlay_reload_in_progress = False
+            return
+        if is_error and isinstance(translated, str) and translated:
+            self.emit_overlay_flow(translated, play_sound=False, dedupe_window=4.0, stage="toast")
 
     def remember_discovered_file(self, path: str) -> None:
         self.file_var.set(path)
@@ -529,6 +799,8 @@ class StockpileCategory(ttk.Frame):
     def stop(self) -> None:
         self.cancel_api_refresh()
         self.cancel_relative_update_clock()
+        self.cancel_debug_console_refresh()
+        self.cancel_status_queue()
         if self.visual_tooltip and self.visual_tooltip.winfo_exists():
             self.visual_tooltip.destroy()
         self.stop_watcher(update_status=False)

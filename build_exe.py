@@ -201,11 +201,30 @@ def standalone_output_dir(script_name: str) -> Path:
     return DIST_DIR / f"{Path(script_name).stem}.dist"
 
 
+def standalone_build_dir(script_name: str) -> Path:
+    return DIST_DIR / f"{Path(script_name).stem}.build"
+
+
+def standalone_onefile_build_dir(script_name: str) -> Path:
+    return DIST_DIR / f"{Path(script_name).stem}.onefile-build"
+
+
+def clean_nuitka_target(script_name: str) -> None:
+    for path in (
+        standalone_build_dir(script_name),
+        standalone_output_dir(script_name),
+        standalone_onefile_build_dir(script_name),
+    ):
+        if path.exists():
+            remove_tree(path)
+
+
 def standalone_exe_path(script_name: str, output_name: str) -> Path:
     return standalone_output_dir(script_name) / output_name
 
 
 def build_app() -> Path:
+    clean_nuitka_target("felb_app.py")
     icon_path = ensure_icon()
     output = standalone_exe_path("felb_app.py", f"{APP_NAME}.exe")
 
@@ -242,6 +261,7 @@ def build_app() -> Path:
 
 
 def build_updater() -> Path:
+    clean_nuitka_target("updater.py")
     icon_path = ensure_icon()
     output = standalone_exe_path("updater.py", f"{UPDATER_NAME}.exe")
 

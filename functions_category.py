@@ -590,10 +590,11 @@ class AutoClickerOverlay:
         sticky: bool = False,
         done: bool = False,
         hide_delay_ms: int = 4500,
+        force: bool = False,
     ) -> None:
         if not self.notification.winfo_exists():
             return
-        if not self.focus_check():
+        if not force and not self.focus_check():
             return
         self.cancel_notification_hide()
         self.notification_text.configure(text=text or self.tr.t("stockpile.upload_success", count=1))
@@ -1626,12 +1627,12 @@ class FunctionsCategory(ttk.Frame):
             text = str(payload or "")
             stage = "toast"
         if stage in {"start", "progress"}:
-            self.overlay.show_success_notification(text, sticky=True)
+            self.overlay.show_success_notification(text, sticky=True, force=True)
             return
         if stage == "done":
-            self.overlay.show_success_notification(text, done=True, hide_delay_ms=2400)
+            self.overlay.show_success_notification(text, done=True, hide_delay_ms=2400, force=True)
             return
-        self.overlay.show_success_notification(text)
+        self.overlay.show_success_notification(text, force=True)
 
     def is_foxhole_overlay_context(self) -> bool:
         if not self.clicker.target_hwnd or not self.clicker.user32.IsWindow(self.clicker.target_hwnd):

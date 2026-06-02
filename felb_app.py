@@ -45,6 +45,7 @@ from functions_category import FunctionsCategory, SettingsCategory
 from i18n import SUPPORTED_LANGUAGES, Translator, normalize_language
 from item_search_category import ItemSearchCategory
 from identify_item_category import IdentifyItemCategory
+from production_calculator_category import ProductionCalculatorCategory
 from chat_category import HomeChatPanel
 from notifications_category import NotificationsCategory
 from settings_store import load_settings, save_settings, selected_language
@@ -55,7 +56,7 @@ from stockpile_category import StockpileCategory
 APP_TITLE = "GG Coalition"
 APP_EXE_NAME = f"{APP_TITLE}.exe"
 UPDATER_EXE_NAME = "GG Updater.exe"
-APP_VERSION = "1.6.4"
+APP_VERSION = "1.7.0"
 UPDATE_REPO = "ryan1235/aplicativo"  # Exemplo: "seu-usuario/gg-coalition"
 FOXHOLE_APP_ID = "505460"
 SIDEBAR_WIDTH = 302
@@ -68,6 +69,8 @@ FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
 FOXHOLE_PATH_HINTS = ("\\steamapps\\common\\foxhole\\", "/steamapps/common/foxhole/")
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 MAX_SPLASH_FRAMES = 5000
+SINGLE_INSTANCE_MUTEX_NAME = "Local\\GGCoalition.SingleInstance"
+ERROR_ALREADY_EXISTS = 183
 
 if ctk is not None:
     ctk.set_appearance_mode("dark")
@@ -85,6 +88,32 @@ def tk_photo_from_path(path: Path, *, format: str | None = None) -> tk.PhotoImag
     if format:
         return tk.PhotoImage(data=encoded, format=format)
     return tk.PhotoImage(data=encoded)
+
+
+def acquire_single_instance_mutex(name: str = SINGLE_INSTANCE_MUTEX_NAME):
+    try:
+        handle = ctypes.windll.kernel32.CreateMutexW(None, False, name)
+        if not handle:
+            return None
+        if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return None
+        return handle
+    except Exception:
+        return object()
+
+
+def release_single_instance_mutex(handle) -> None:
+    if not handle:
+        return
+    try:
+        if isinstance(handle, int):
+            ctypes.windll.kernel32.CloseHandle(handle)
+            return
+        if hasattr(handle, "value"):
+            ctypes.windll.kernel32.CloseHandle(handle)
+    except Exception:
+        pass
 
 
 class FILETIME(ctypes.Structure):
@@ -226,6 +255,7 @@ class FelbApp(AppBase):
         self.notifications_page: NotificationsCategory | None = None
         self.item_search_page: ItemSearchCategory | None = None
         self.identify_item_page: IdentifyItemCategory | None = None
+        self.production_calculator_page: ProductionCalculatorCategory | None = None
         self.home_chat_panel: HomeChatPanel | None = None
         self.home_online_frame: tk.Frame | None = None
         self.home_online_avatar_cache: dict[str, tk.PhotoImage] = {}
@@ -246,6 +276,7 @@ class FelbApp(AppBase):
         self.tray_icon = None
         self.tray_running = False
         self.hidden_to_tray = False
+        self.restore_was_zoomed = True
 
         self.apply_pending_updater_update()
         self.style = ttk.Style(self)
@@ -418,6 +449,7 @@ class FelbApp(AppBase):
             self.loading_screen.destroy()
         self.deiconify()
         self.maximize_main_window()
+        self.restore_was_zoomed = True
         self.after(650, self.run_startup_prompt_sequence)
 
     def maximize_main_window(self) -> None:
@@ -497,6 +529,7 @@ class FelbApp(AppBase):
         self.notifications_page = NotificationsCategory(page_host, self.tr)
         self.item_search_page = ItemSearchCategory(page_host, self.tr)
         self.identify_item_page = IdentifyItemCategory(page_host, self.tr)
+        self.production_calculator_page = ProductionCalculatorCategory(page_host, self.tr)
 
         self.pages["inicio"] = command_page
         self.pages["ferramentas"] = self.functions_page
@@ -505,6 +538,7 @@ class FelbApp(AppBase):
         self.pages["notificacoes"] = self.notifications_page
         self.pages["item_search"] = self.item_search_page
         self.pages["identify_item"] = self.identify_item_page
+        self.pages["production_calculator"] = self.production_calculator_page
 
         command_page.grid(row=0, column=0, sticky="nsew")
         self.functions_page.grid(row=0, column=0, sticky="nsew")
@@ -513,6 +547,7 @@ class FelbApp(AppBase):
         self.notifications_page.grid(row=0, column=0, sticky="nsew")
         self.item_search_page.grid(row=0, column=0, sticky="nsew")
         self.identify_item_page.grid(row=0, column=0, sticky="nsew")
+        self.production_calculator_page.grid(row=0, column=0, sticky="nsew")
         sidebar.configure(width=0)
         sidebar.grid_remove()
 
@@ -605,11 +640,12 @@ class FelbApp(AppBase):
         self.nav_buttons["stockpile"] = self.nav_button(sidebar, "estoque", self.tr.t("stockpile.nav"), lambda: self.show_page("stockpile"), row=6)
         self.nav_buttons["notificacoes"] = self.nav_button(sidebar, "noti", self.tr.t("notifications.nav"), lambda: self.show_page("notificacoes"), row=7)
         self.nav_buttons["item_search"] = self.nav_button(sidebar, "buscar", self.tr.t("item_search.nav"), lambda: self.show_page("item_search"), row=8)
-        self.nav_buttons["identify_item"] = self.nav_button(sidebar, "indent", self.tr.t("identify.nav"), lambda: self.show_page("identify_item"), row=9)
+        self.nav_buttons["production_calculator"] = self.nav_button(sidebar, "buscar", self.tr.t("production.nav"), lambda: self.show_page("production_calculator"), row=9)
+        self.nav_buttons["identify_item"] = self.nav_button(sidebar, "indent", self.tr.t("identify.nav"), lambda: self.show_page("identify_item"), row=10)
 
-        self.section_label(sidebar, self.tr.t("sidebar.settings"), 10, pady=(20, 6), key="section_settings")
-        self.nav_buttons["configuracoes"] = self.nav_button(sidebar, "overlay", self.tr.t("nav.settings"), lambda: self.show_page("configuracoes"), row=11)
-        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=12, column=0, pady=80)
+        self.section_label(sidebar, self.tr.t("sidebar.settings"), 11, pady=(20, 6), key="section_settings")
+        self.nav_buttons["configuracoes"] = self.nav_button(sidebar, "overlay", self.tr.t("nav.settings"), lambda: self.show_page("configuracoes"), row=12)
+        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=13, column=0, pady=80)
 
         self.ui_text["sidebar_footer"] = tk.Label(
             sidebar,
@@ -961,6 +997,8 @@ class FelbApp(AppBase):
             "stockpile": self.tr.t("stockpile.nav"),
             "notificacoes": self.tr.t("notifications.nav"),
             "item_search": self.tr.t("item_search.nav"),
+            "production_calculator": self.tr.t("production.nav"),
+            "identify_item": self.tr.t("identify.nav"),
         }
         for key, text in nav_texts.items():
             button = self.nav_buttons.get(key)
@@ -980,6 +1018,10 @@ class FelbApp(AppBase):
             self.notifications_page.refresh_language(self.tr)
         if self.item_search_page and hasattr(self.item_search_page, "refresh_language"):
             self.item_search_page.refresh_language(self.tr)
+        if self.production_calculator_page and hasattr(self.production_calculator_page, "refresh_language"):
+            self.production_calculator_page.refresh_language(self.tr)
+        if self.identify_item_page and hasattr(self.identify_item_page, "refresh_language"):
+            self.identify_item_page.refresh_language(self.tr)
         if self.home_chat_panel and hasattr(self.home_chat_panel, "refresh_language"):
             self.home_chat_panel.refresh_language(self.tr)
 
@@ -1388,8 +1430,7 @@ class FelbApp(AppBase):
 
     def open_chat_from_overlay(self) -> None:
         try:
-            self.deiconify()
-            self.state("normal")
+            self.restore_main_window()
         except tk.TclError:
             pass
         self.hidden_to_tray = False
@@ -2200,6 +2241,7 @@ class FelbApp(AppBase):
         ).pack(side="left", fill="x", expand=True, padx=(8, 0))
 
     def hide_to_tray(self) -> None:
+        self.remember_window_restore_state()
         if self.ensure_tray_icon():
             self.hidden_to_tray = True
             self.withdraw()
@@ -2244,11 +2286,23 @@ class FelbApp(AppBase):
             return image
 
     def show_from_tray(self) -> None:
-        self.hidden_to_tray = False
-        self.deiconify()
-        self.state("normal")
+        self.restore_main_window()
         self.lift()
         self.focus_force()
+
+    def remember_window_restore_state(self) -> None:
+        try:
+            self.restore_was_zoomed = self.state() == "zoomed"
+        except tk.TclError:
+            pass
+
+    def restore_main_window(self) -> None:
+        self.hidden_to_tray = False
+        self.deiconify()
+        if self.restore_was_zoomed:
+            self.maximize_main_window()
+        else:
+            self.state("normal")
 
     def on_close(self) -> None:
         self.exit_app()
@@ -2280,4 +2334,17 @@ class FelbApp(AppBase):
 
 
 if __name__ == "__main__":
-    FelbApp().mainloop()
+    instance_mutex = acquire_single_instance_mutex()
+    if instance_mutex is None:
+        try:
+            popup = tk.Tk()
+            popup.withdraw()
+            messagebox.showwarning(APP_TITLE, "O aplicativo ja esta aberto.")
+            popup.destroy()
+        except Exception:
+            pass
+        raise SystemExit(0)
+    try:
+        FelbApp().mainloop()
+    finally:
+        release_single_instance_mutex(instance_mutex)
