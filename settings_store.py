@@ -69,6 +69,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "chat_mention_overlay_enabled": True,
         "chat_mention_sound_enabled": True,
     },
+    "time_task": {
+        "overlay_record_x": None,
+        "overlay_record_y": None,
+        "overlay_replay_x": None,
+        "overlay_replay_y": None,
+    },
 }
 
 
@@ -107,6 +113,10 @@ def load_settings() -> dict[str, Any]:
     settings["app"] = {
         **DEFAULT_SETTINGS["app"],
         **loaded.get("app", {}),
+    }
+    settings["time_task"] = {
+        **DEFAULT_SETTINGS["time_task"],
+        **loaded.get("time_task", {}),
     }
     save_settings(settings)
     return settings

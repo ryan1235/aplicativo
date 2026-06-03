@@ -1,4 +1,4 @@
-﻿import ctypes
+import ctypes
 import base64
 from datetime import datetime, timezone
 import os
@@ -51,6 +51,7 @@ from notifications_category import NotificationsCategory
 from settings_store import load_settings, save_settings, selected_language
 from steam_profile import SteamProfile, get_local_steam_profile
 from stockpile_category import StockpileCategory
+from time_task_category import TimeTaskCategory
 
 
 APP_TITLE = "GG Coalition"
@@ -256,6 +257,7 @@ class FelbApp(AppBase):
         self.item_search_page: ItemSearchCategory | None = None
         self.identify_item_page: IdentifyItemCategory | None = None
         self.production_calculator_page: ProductionCalculatorCategory | None = None
+        self.time_task_page: TimeTaskCategory | None = None
         self.home_chat_panel: HomeChatPanel | None = None
         self.home_online_frame: tk.Frame | None = None
         self.home_online_avatar_cache: dict[str, tk.PhotoImage] = {}
@@ -530,6 +532,7 @@ class FelbApp(AppBase):
         self.item_search_page = ItemSearchCategory(page_host, self.tr)
         self.identify_item_page = IdentifyItemCategory(page_host, self.tr)
         self.production_calculator_page = ProductionCalculatorCategory(page_host, self.tr)
+        self.time_task_page = TimeTaskCategory(page_host, self.tr)
 
         self.pages["inicio"] = command_page
         self.pages["ferramentas"] = self.functions_page
@@ -539,6 +542,7 @@ class FelbApp(AppBase):
         self.pages["item_search"] = self.item_search_page
         self.pages["identify_item"] = self.identify_item_page
         self.pages["production_calculator"] = self.production_calculator_page
+        self.pages["time_task"] = self.time_task_page
 
         command_page.grid(row=0, column=0, sticky="nsew")
         self.functions_page.grid(row=0, column=0, sticky="nsew")
@@ -548,6 +552,42 @@ class FelbApp(AppBase):
         self.item_search_page.grid(row=0, column=0, sticky="nsew")
         self.identify_item_page.grid(row=0, column=0, sticky="nsew")
         self.production_calculator_page.grid(row=0, column=0, sticky="nsew")
+        self.time_task_page.grid(row=0, column=0, sticky="nsew")
+        sidebar.configure(width=0)
+        sidebar.grid_remove()
+
+    def build_sidebar_shell(self, sidebar: tk.Frame) -> None:
+        canvas = tk.Canvas(sidebar, bg=COLORS["sidebar"], highlightthickness=0, bd=0)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        if ctk is not None:
+            scrollbar = ctk.CTkScrollbar(
+                sidebar,
+                orientation="vertical",
+                command=canvas.yview,
+                width=10,
+                fg_color=COLORS["sidebar"],
+                button_color=COLORS["card_2"],
+                button_hover_color=COLORS["accent"],
+            )
+        else:
+            scrollbar = ttk.Scrollbar(sidebar, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        inner = tk.Frame(canvas, bg=COLORS["sidebar"])
+        window_id = canvas.create_window((0, 0), window=inner, anchor="nw", width=SIDEBAR_WIDTH - 18)
+        inner.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window_id, width=max(1, event.width)))
+
+        self.sidebar_canvas = canvas
+        self.sidebar_inner = inner
+        self.build_sidebar(inner)
+        self.bind_mousewheel_recursive(sidebar, canvas)
+
+    def bind_mousewheel_recursive(self, widget: tk.Widget, canvas: tk.Canvas) -> None:
+        def on_mousewheel(event) -> str:
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
         sidebar.configure(width=0)
         sidebar.grid_remove()
 
@@ -593,14 +633,19 @@ class FelbApp(AppBase):
         brand.grid(row=0, column=0, sticky="ew", padx=18, pady=(18, 14))
         brand.columnconfigure(1, weight=1)
         self.sidebar_logo_frames = self.load_logo_frames(size=44)
+        
+        logo_container = tk.Frame(brand, width=44, height=44, bg=COLORS["sidebar"])
+        logo_container.grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 10))
+        logo_container.grid_propagate(False)
+        
         if self.sidebar_logo_frames:
             self.sidebar_logo_image = self.sidebar_logo_frames[0][0]
-            self.sidebar_logo_label = tk.Label(brand, image=self.sidebar_logo_image, bg=COLORS["sidebar"])
-            self.sidebar_logo_label.grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 10))
+            self.sidebar_logo_label = tk.Label(logo_container, image=self.sidebar_logo_image, bg=COLORS["sidebar"])
+            self.sidebar_logo_label.place(relx=0.5, rely=0.5, anchor="center")
             self.animate_sidebar_logo()
         else:
-            mark = tk.Label(brand, text="GG", bg=COLORS["accent"], fg="#06101d", font=("Segoe UI", 13, "bold"), width=3, height=2)
-            mark.grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 10))
+            mark = tk.Label(logo_container, text="GG", bg=COLORS["accent"], fg="#06101d", font=("Segoe UI", 13, "bold"), width=3, height=2)
+            mark.place(relx=0.5, rely=0.5, anchor="center")
         self.ui_text["brand_title"] = tk.Label(brand, text=APP_TITLE, bg=COLORS["sidebar"], fg=COLORS["text"], font=("Segoe UI", 17, "bold"))
         self.ui_text["brand_title"].grid(
             row=0, column=1, sticky="w"
@@ -632,20 +677,30 @@ class FelbApp(AppBase):
         self.steam_label = tk.Label(profile_card, text="", bg=COLORS["soft"], fg=COLORS["muted"], font=("Segoe UI", 9), anchor="w")
         self.steam_label.grid(row=1, column=1, sticky="ew", padx=(0, 14), pady=(2, 12))
 
-        self.section_label(sidebar, self.tr.t("sidebar.navigation"), 2, key="section_navigation")
-        self.nav_buttons["inicio"] = self.nav_button(sidebar, "home", self.tr.t("nav.home"), lambda: self.show_page("inicio"), row=3)
+        menu_container = tk.Frame(sidebar, bg=COLORS["sidebar"])
+        menu_container.grid(row=2, column=0, sticky="ew", padx=0, pady=(10, 0))
+        menu_container.columnconfigure(0, weight=1)
 
-        self.section_label(sidebar, self.tr.t("sidebar.tools"), 4, pady=(20, 6), key="section_tools")
-        self.nav_buttons["ferramentas"] = self.nav_button(sidebar, "autoclicker", self.tr.t("nav.auto_clicker"), lambda: self.show_page("ferramentas"), row=5)
-        self.nav_buttons["stockpile"] = self.nav_button(sidebar, "estoque", self.tr.t("stockpile.nav"), lambda: self.show_page("stockpile"), row=6)
-        self.nav_buttons["notificacoes"] = self.nav_button(sidebar, "noti", self.tr.t("notifications.nav"), lambda: self.show_page("notificacoes"), row=7)
-        self.nav_buttons["item_search"] = self.nav_button(sidebar, "buscar", self.tr.t("item_search.nav"), lambda: self.show_page("item_search"), row=8)
-        self.nav_buttons["production_calculator"] = self.nav_button(sidebar, "buscar", self.tr.t("production.nav"), lambda: self.show_page("production_calculator"), row=9)
-        self.nav_buttons["identify_item"] = self.nav_button(sidebar, "indent", self.tr.t("identify.nav"), lambda: self.show_page("identify_item"), row=10)
+        _, nav_sub = self.build_accordion_section(menu_container, "sidebar.navigation", "home", 0)
+        self.nav_buttons["inicio"] = self.nav_button(nav_sub, None, self.tr.t("nav.home"), lambda: self.show_page("inicio"), row=0)
 
-        self.section_label(sidebar, self.tr.t("sidebar.settings"), 11, pady=(20, 6), key="section_settings")
-        self.nav_buttons["configuracoes"] = self.nav_button(sidebar, "overlay", self.tr.t("nav.settings"), lambda: self.show_page("configuracoes"), row=12)
-        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=13, column=0, pady=80)
+        _, auto_sub = self.build_accordion_section(menu_container, "sidebar.automation", "autoclicker", 2)
+        self.nav_buttons["ferramentas"] = self.nav_button(auto_sub, None, self.tr.t("nav.auto_clicker"), lambda: self.show_page("ferramentas"), row=0)
+        self.nav_buttons["time_task"] = self.nav_button(auto_sub, None, self.tr.t("timetask.nav"), lambda: self.show_page("time_task"), row=1)
+
+        _, logi_sub = self.build_accordion_section(menu_container, "sidebar.logistics", "estoque", 4)
+        self.nav_buttons["stockpile"] = self.nav_button(logi_sub, None, self.tr.t("stockpile.nav"), lambda: self.show_page("stockpile"), row=0)
+        self.nav_buttons["production_calculator"] = self.nav_button(logi_sub, None, self.tr.t("production.nav"), lambda: self.show_page("production_calculator"), row=1)
+
+        _, util_sub = self.build_accordion_section(menu_container, "sidebar.utilities", "buscar", 6)
+        self.nav_buttons["notificacoes"] = self.nav_button(util_sub, None, self.tr.t("notifications.nav"), lambda: self.show_page("notificacoes"), row=0)
+        self.nav_buttons["item_search"] = self.nav_button(util_sub, None, self.tr.t("item_search.nav"), lambda: self.show_page("item_search"), row=1)
+        self.nav_buttons["identify_item"] = self.nav_button(util_sub, None, self.tr.t("identify.nav"), lambda: self.show_page("identify_item"), row=2)
+
+        _, cfg_sub = self.build_accordion_section(menu_container, "sidebar.settings", "overlay", 8)
+        self.nav_buttons["configuracoes"] = self.nav_button(cfg_sub, None, self.tr.t("nav.settings"), lambda: self.show_page("configuracoes"), row=0)
+
+        tk.Label(sidebar, text="", bg=COLORS["sidebar"]).grid(row=3, column=0, pady=40)
 
         self.ui_text["sidebar_footer"] = tk.Label(
             sidebar,
@@ -669,13 +724,45 @@ class FelbApp(AppBase):
         self.sidebar_logo_frame_index = (self.sidebar_logo_frame_index + 1) % len(self.sidebar_logo_frames)
         self.sidebar_logo_animation_job = self.after(max(80, delay), self.animate_sidebar_logo)
 
-    def section_label(self, parent: tk.Frame, text: str, row: int, pady: tuple[int, int] = (0, 6), key: str | None = None) -> None:
-        label = tk.Label(parent, text=text, bg=COLORS["sidebar"], fg="#6385aa", font=("Segoe UI", 8, "bold"))
-        label.grid(
-            row=row, column=0, sticky="w", padx=22, pady=pady
+    def build_accordion_section(self, parent: tk.Frame, category_key: str, icon_name: str, row: int) -> tuple[tk.Button, tk.Frame]:
+        bg_color = COLORS["sidebar"]
+        text = self.tr.t(category_key)
+        
+        sub_frame = tk.Frame(parent, bg=bg_color)
+        sub_frame.grid(row=row+1, column=0, sticky="ew")
+        sub_frame.grid_remove()
+        sub_frame.columnconfigure(0, weight=1)
+
+        def toggle_accordion():
+            if sub_frame.winfo_ismapped():
+                sub_frame.grid_remove()
+            else:
+                sub_frame.grid()
+
+        button = modern_button(
+            parent,
+            text=text,
+            command=toggle_accordion,
+            color=bg_color,
+            text_color="#6385aa",
+            hover=COLORS["hover"],
+            height=46,
+            font=("Segoe UI", 11, "bold"),
         )
-        if key:
-            self.ui_text[key] = label
+        image = self.load_nav_icon(icon_name)
+        if image:
+            button.configure(image=image, compound="left")
+            
+        button.grid(row=row, column=0, sticky="ew")
+        if ctk is None:
+            button.configure(anchor="w", padx=22)
+            button.bind("<Enter>", lambda _event: button.configure(bg=COLORS["hover"]))
+            button.bind("<Leave>", lambda _event: button.configure(bg=bg_color))
+        else:
+            button.configure(anchor="w")
+            
+        self.ui_text[category_key] = button
+        return button, sub_frame
 
     def load_nav_icon(self, name: str, size: int = 24):
         key = f"{name}:{size}"
@@ -707,37 +794,47 @@ class FelbApp(AppBase):
         self.nav_icon_images[key] = icon
         return icon
 
-    def nav_button(self, parent: tk.Frame, icon: str, text: str, command, row: int):
-        image = self.load_nav_icon(icon)
+    def nav_button(self, parent: tk.Frame, icon: str | None, text: str, command, row: int):
+        bg_color = parent_surface_color(parent, COLORS["sidebar"])
         button = modern_button(
             parent,
             text=text,
             command=command,
-            color=COLORS["sidebar"],
+            color=bg_color,
             text_color=COLORS["muted"],
             hover=COLORS["hover"],
-            height=46,
-            font=("Segoe UI", 11, "bold"),
+            height=38,
+            font=("Segoe UI", 10, "bold"),
         )
-        if image is not None:
-            button.configure(image=image, compound="left")
+        if icon:
+            image = self.load_nav_icon(icon)
+            if image:
+                button.configure(image=image, compound="left")
+            else:
+                button.configure(text=f"{icon.upper()}   {text}")
         else:
-            button.configure(text=f"{icon.upper()}   {text}")
-        button.grid(row=row, column=0, sticky="ew", padx=12, pady=3)
+            button.configure(text=f"          {text}")
+            
+        button.grid(row=row, column=0, sticky="ew", padx=12, pady=1)
         if ctk is None:
-            button.configure(anchor="w", padx=18)
+            button.configure(anchor="w", padx=14)
             button.bind("<Enter>", lambda _event: button.configure(bg=COLORS["hover"], fg=COLORS["text"]))
         else:
             button.configure(anchor="w")
+        button.nav_parent = parent
         button.bind("<Leave>", lambda _event: self.restore_nav_button(button))
         return button
 
     def restore_nav_button(self, button) -> None:
+        is_active = getattr(button, "is_active", False)
+        target_bg = COLORS["card_2"] if is_active else parent_surface_color(getattr(button, "nav_parent", button.master), COLORS["sidebar"])
+        target_fg = COLORS["text"] if is_active else COLORS["muted"]
+        
         if ctk is not None:
-            if button.cget("fg_color") != COLORS["card_2"]:
-                button.configure(fg_color=COLORS["sidebar"], text_color=COLORS["muted"])
-        elif button.cget("bg") != COLORS["card_2"]:
-            button.configure(bg=COLORS["sidebar"], fg=COLORS["muted"])
+            if button.cget("fg_color") != target_bg:
+                button.configure(fg_color=target_bg, text_color=target_fg)
+        elif button.cget("bg") != target_bg:
+            button.configure(bg=target_bg, fg=target_fg)
 
     def build_header(self, parent: tk.Frame) -> None:
         header = modern_frame(parent, COLORS["bg"], radius=0)
@@ -746,7 +843,7 @@ class FelbApp(AppBase):
 
         self.menu_button = modern_button(
             header,
-            text="â˜°",
+            text="☰",
             command=self.toggle_sidebar,
             color=COLORS["card"],
             text_color=COLORS["text"],
@@ -966,9 +1063,11 @@ class FelbApp(AppBase):
     def refresh_language_texts(self) -> None:
         text_updates = {
             "brand_subtitle": self.tr.t("app.subtitle"),
-            "section_navigation": self.tr.t("sidebar.navigation"),
-            "section_tools": self.tr.t("sidebar.tools"),
-            "section_settings": self.tr.t("sidebar.settings"),
+            "sidebar.navigation": self.tr.t("sidebar.navigation"),
+            "sidebar.automation": self.tr.t("sidebar.automation"),
+            "sidebar.logistics": self.tr.t("sidebar.logistics"),
+            "sidebar.utilities": self.tr.t("sidebar.utilities"),
+            "sidebar.settings": self.tr.t("sidebar.settings"),
             "sidebar_footer": self.tr.t("sidebar.footer", app=APP_TITLE),
             "header_title": self.tr.t("header.title"),
             "header_subtitle": self.tr.t("header.subtitle"),
@@ -999,6 +1098,7 @@ class FelbApp(AppBase):
             "item_search": self.tr.t("item_search.nav"),
             "production_calculator": self.tr.t("production.nav"),
             "identify_item": self.tr.t("identify.nav"),
+            "time_task": self.tr.t("timetask.nav"),
         }
         for key, text in nav_texts.items():
             button = self.nav_buttons.get(key)
@@ -1022,6 +1122,8 @@ class FelbApp(AppBase):
             self.production_calculator_page.refresh_language(self.tr)
         if self.identify_item_page and hasattr(self.identify_item_page, "refresh_language"):
             self.identify_item_page.refresh_language(self.tr)
+        if self.time_task_page and hasattr(self.time_task_page, "refresh_language"):
+            self.time_task_page.refresh_language(self.tr)
         if self.home_chat_panel and hasattr(self.home_chat_panel, "refresh_language"):
             self.home_chat_panel.refresh_language(self.tr)
 
@@ -1416,15 +1518,24 @@ class FelbApp(AppBase):
         for name, page in self.pages.items():
             if name == page_name:
                 page.tkraise()
-                self.configure_button_color(self.nav_buttons[name], COLORS["card_2"], COLORS["text"])
+                button = self.nav_buttons.get(name)
+                if button:
+                    button.is_active = True
+                    self.configure_button_color(button, COLORS["card_2"], COLORS["text"])
             else:
-                self.configure_button_color(self.nav_buttons[name], COLORS["sidebar"], COLORS["muted"])
+                button = self.nav_buttons.get(name)
+                if button:
+                    button.is_active = False
+                    parent_bg = parent_surface_color(getattr(button, "nav_parent", button.master), COLORS["sidebar"])
+                    self.configure_button_color(button, parent_bg, COLORS["muted"])
         if self.stockpile_page and hasattr(self.stockpile_page, "set_active"):
             self.stockpile_page.set_active(page_name == "stockpile")
         if self.item_search_page and hasattr(self.item_search_page, "set_active"):
             self.item_search_page.set_active(page_name == "item_search")
         if self.identify_item_page and hasattr(self.identify_item_page, "set_active"):
             self.identify_item_page.set_active(page_name == "identify_item")
+        if self.time_task_page and hasattr(self.time_task_page, "set_active"):
+            self.time_task_page.set_active(page_name == "time_task")
         if self.home_chat_panel and hasattr(self.home_chat_panel, "set_active"):
             self.home_chat_panel.set_active(page_name == "inicio")
 
@@ -2328,6 +2439,8 @@ class FelbApp(AppBase):
             self.item_search_page.stop()
         if self.identify_item_page and hasattr(self.identify_item_page, "stop"):
             self.identify_item_page.stop()
+        if self.time_task_page and hasattr(self.time_task_page, "stop"):
+            self.time_task_page.stop()
         if self.home_chat_panel:
             self.home_chat_panel.stop()
         self.destroy()

@@ -69,20 +69,24 @@ CATEGORY_ORDER = (
     "Small Arms",
     "Heavy Arms",
     "Heavy Ammunition",
+    "Utility",
+    "Medical",
+    "Resource",
     "Uniforms",
-    "Supplies",
     "Vehicles",
     "Structures",
 )
 
 CATEGORY_RULES = {
-    "Small Arms": {"min": 3, "max": 9, "units": None, "mark": "SA"},
-    "Heavy Arms": {"min": 3, "max": 9, "units": None, "mark": "HA"},
-    "Heavy Ammunition": {"min": 3, "max": 9, "units": None, "mark": "AM"},
-    "Uniforms": {"min": 3, "max": 9, "units": None, "mark": "UN"},
-    "Supplies": {"min": 3, "max": 9, "units": None, "mark": "SP"},
-    "Vehicles": {"min": 1, "max": 5, "units": 3, "mark": "VH"},
-    "Structures": {"min": 1, "max": 5, "units": 3, "mark": "ST"},
+    "Small Arms": {"min": 3, "max": 9, "units": None, "mark": "SA", "factory": True, "mpf": True},
+    "Heavy Arms": {"min": 3, "max": 9, "units": None, "mark": "HA", "factory": True, "mpf": True},
+    "Heavy Ammunition": {"min": 3, "max": 9, "units": None, "mark": "AM", "factory": True, "mpf": True},
+    "Utility": {"min": 3, "max": 9, "units": None, "mark": "UT", "factory": True, "mpf": False},
+    "Medical": {"min": 3, "max": 9, "units": None, "mark": "MD", "factory": True, "mpf": False},
+    "Resource": {"min": 3, "max": 9, "units": None, "mark": "RS", "factory": True, "mpf": False},
+    "Uniforms": {"min": 3, "max": 9, "units": None, "mark": "UN", "factory": True, "mpf": True},
+    "Vehicles": {"min": 1, "max": 5, "units": 3, "mark": "VH", "factory": False, "mpf": True},
+    "Structures": {"min": 1, "max": 5, "units": 3, "mark": "ST", "factory": False, "mpf": True},
 }
 
 CATEGORY_ICON_PATHS = {
@@ -146,7 +150,9 @@ def category_from_queue(value: str | None) -> str:
         "HeavyArms": "Heavy Arms",
         "HeavyAmmo": "Heavy Ammunition",
         "Uniforms": "Uniforms",
-        "Supplies": "Supplies",
+        "Utility": "Utility",
+        "Medical": "Medical",
+        "Supplies": "Resource",
         "VehicleFactory": "Vehicles",
         "Shipyard": "Vehicles",
         "ConstructionYard": "Structures",
@@ -179,6 +185,8 @@ class ProductionCalculatorCategory(ttk.Frame):
         self.last_material_totals: dict[str, float] = {key: 0.0 for key, _label in MATERIALS}
         self.selected_category = tk.StringVar(value="Small Arms")
         self.mode_var = tk.StringVar(value="mpf")
+        self.factory_multiplier = tk.IntVar(value=1)
+        self.mpf_vehicle_mode = tk.StringVar(value="Dunne")
         self.faction_filter = tk.StringVar(value="Neutral")
         self.search_var = tk.StringVar(value="")
         self.status_var = tk.StringVar(value=self.tr.t("production.loading"))
@@ -234,6 +242,12 @@ class ProductionCalculatorCategory(ttk.Frame):
         for row in rows:
             mode, item_id, name, faction, queue_type, bmat, emat, rmat, hemat, relic, quantity, time_value, vehicle_bonus = row
             category = category_from_queue(queue_type)
+            
+            if mode == "mpf" and not CATEGORY_RULES.get(category, {}).get("mpf", False):
+                continue
+            if mode == "factory" and not CATEGORY_RULES.get(category, {}).get("factory", False):
+                continue
+
             rule = CATEGORY_RULES.get(category, {"units": None})
             if rule.get("units"):
                 units_per_crate = int(rule["units"])
@@ -304,24 +318,55 @@ class ProductionCalculatorCategory(ttk.Frame):
 
         filters = modern_frame(panel, COLORS["card"], radius=0)
         filters.grid(row=1, column=0, sticky="ew", pady=(0, 6))
-        filters.columnconfigure(3, weight=1)
-        for text, value, column in (
-            (self.tr.t("production.mode_factory"), "factory", 0),
-            (self.tr.t("production.mode_mpf"), "mpf", 1),
-        ):
-            tk.Radiobutton(
-                filters,
-                text=text,
-                variable=self.mode_var,
-                value=value,
-                command=self.on_mode_changed,
-                bg=COLORS["card"],
-                fg=COLORS["text"],
-                selectcolor=COLORS["card_2"],
-                activebackground=COLORS["card"],
-                activeforeground=COLORS["text"],
-                font=("Segoe UI", 8, "bold"),
-            ).grid(row=0, column=column, sticky="w", padx=(0, 8))
+        filters.columnconfigure(4, weight=1)
+        
+        tk.Radiobutton(
+            filters,
+            text=self.tr.t("production.mode_factory"),
+            variable=self.mode_var,
+            value="factory",
+            command=self.on_mode_changed,
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            selectcolor=COLORS["card_2"],
+            activebackground=COLORS["card"],
+            activeforeground=COLORS["text"],
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=0, column=0, sticky="w", padx=(0, 4))
+        
+        mult_frame = tk.Frame(filters, bg=COLORS["card"])
+        mult_frame.grid(row=0, column=1, sticky="w", padx=(0, 16))
+        
+        def dec():
+            if self.factory_multiplier.get() > 1:
+                self.factory_multiplier.set(self.factory_multiplier.get() - 1)
+                self.recalculate_queue()
+                self.draw_queue()
+                
+        def inc():
+            if self.factory_multiplier.get() < 2:
+                self.factory_multiplier.set(self.factory_multiplier.get() + 1)
+                self.recalculate_queue()
+                self.draw_queue()
+            
+        tk.Button(mult_frame, text="-", command=dec, bg=COLORS["card_2"], fg=COLORS["text"], relief="flat", activebackground=COLORS["line"]).pack(side="left")
+        tk.Label(mult_frame, textvariable=self.factory_multiplier, bg=COLORS["card"], fg=COLORS["accent"], font=("Segoe UI", 8, "bold"), width=3).pack(side="left")
+        tk.Button(mult_frame, text="+", command=inc, bg=COLORS["card_2"], fg=COLORS["text"], relief="flat", activebackground=COLORS["line"]).pack(side="left")
+
+        tk.Radiobutton(
+            filters,
+            text=self.tr.t("production.mode_mpf"),
+            variable=self.mode_var,
+            value="mpf",
+            command=self.on_mode_changed,
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            selectcolor=COLORS["card_2"],
+            activebackground=COLORS["card"],
+            activeforeground=COLORS["text"],
+            font=("Segoe UI", 8, "bold"),
+        ).grid(row=0, column=2, sticky="w", padx=(0, 8))
+
         for value, column in (("Neutral", 0), ("Colonial", 1), ("Warden", 2)):
             tk.Radiobutton(
                 filters,
@@ -337,7 +382,7 @@ class ProductionCalculatorCategory(ttk.Frame):
                 font=("Segoe UI", 8, "bold"),
             ).grid(row=1, column=column, sticky="w", padx=(0, 8), pady=(4, 0))
         search_wrap = modern_frame(filters, "#050914", radius=8, border=1, border_color="#24405f")
-        search_wrap.grid(row=0, column=3, rowspan=2, sticky="e", padx=(10, 0))
+        search_wrap.grid(row=0, column=4, rowspan=2, sticky="e", padx=(10, 0))
         search_wrap.columnconfigure(0, weight=1)
         self.search_entry = tk.Entry(
             search_wrap,
@@ -394,6 +439,21 @@ class ProductionCalculatorCategory(ttk.Frame):
         )
         tk.Button(
             top,
+            text="Resumo de Rotas",
+            command=self.show_truck_planner,
+            bg=COLORS["accent_2"],
+            fg="#041014",
+            activebackground=COLORS["accent"],
+            activeforeground="#041014",
+            relief="flat",
+            padx=12,
+            pady=4,
+            font=("Segoe UI", 8, "bold"),
+            cursor="hand2",
+        ).grid(row=0, column=1, sticky="e", padx=(0, 8))
+
+        tk.Button(
+            top,
             text=self.tr.t("production.clear"),
             command=self.clear_queue,
             bg=COLORS["card_2"],
@@ -405,7 +465,7 @@ class ProductionCalculatorCategory(ttk.Frame):
             pady=4,
             font=("Segoe UI", 8, "bold"),
             cursor="hand2",
-        ).grid(row=0, column=1, sticky="e")
+        ).grid(row=0, column=2, sticky="e")
 
         totals = modern_frame(panel, COLORS["soft"], radius=0)
         totals.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 6))
@@ -539,17 +599,16 @@ class ProductionCalculatorCategory(ttk.Frame):
             canvas.delete("all")
             self.category_hitboxes = []
             width = max(1, canvas.winfo_width())
-            cell_w = max(1, width // len(CATEGORY_ORDER))
+            present = self.available_categories()
+            cell_w = max(1, width // max(1, len(present)))
             selected = self.selected_category.get()
-            present = set(self.available_categories())
-            for index, category in enumerate(CATEGORY_ORDER):
+            for index, category in enumerate(present):
                 x1 = index * cell_w
-                x2 = width if index == len(CATEGORY_ORDER) - 1 else (index + 1) * cell_w
+                x2 = width if index == len(present) - 1 else (index + 1) * cell_w
                 is_selected = category == selected
-                is_present = category in present
                 fill = COLORS["accent"] if is_selected else COLORS["soft"]
                 outline = "#3c587d" if is_selected else "#223650"
-                text_color = "#041014" if is_selected else (COLORS["text"] if is_present else COLORS["muted"])
+                text_color = "#041014" if is_selected else COLORS["text"]
                 canvas.create_rectangle(x1 + 2, 4, x2 - 2, 54, fill=fill, outline=outline)
                 icon = self.load_item_icon(str(CATEGORY_ICON_PATHS.get(category, "")), 24)
                 if icon:
@@ -560,8 +619,7 @@ class ProductionCalculatorCategory(ttk.Frame):
                 count = len(self.queue.get(category, []))
                 label = CATEGORY_RULES[category]["mark"] if not count else f"{CATEGORY_RULES[category]['mark']} {count}"
                 canvas.create_text((x1 + x2) // 2, 43, text=label, fill=text_color, font=("Segoe UI", 7, "bold"))
-                if is_present:
-                    self.category_hitboxes.append((x1, 0, x2, 58, category))
+                self.category_hitboxes.append((x1, 0, x2, 58, category))
             return
 
         selected = self.selected_category.get()
@@ -657,11 +715,21 @@ class ProductionCalculatorCategory(ttk.Frame):
     def on_item_click(self, event) -> str:
         item = self.item_at(event.x, self.item_canvas.canvasy(event.y) if self.item_canvas else event.y)
         if item:
-            if event.state & 0x0001:
-                self.fill_category_queue(item)
+            is_ctrl = bool(event.state & 0x0004)
+            is_shift = bool(event.state & 0x0001)
+            if is_ctrl or is_shift:
+                q = self.queue.get(item.category, [])
+                if q and q[0].item_id == item.item_id and len(q) >= self.category_limit(item.category):
+                    self.clear_category_queue(item.category)
+                else:
+                    self.fill_category_queue(item)
             else:
                 self.add_queue_item(item)
         return "break"
+
+    def clear_category_queue(self, category: str) -> None:
+        self.queue[category] = []
+        self.refresh_all()
 
     def on_item_right_click(self, event) -> str:
         item = self.item_at(event.x, self.item_canvas.canvasy(event.y) if self.item_canvas else event.y)
@@ -671,6 +739,9 @@ class ProductionCalculatorCategory(ttk.Frame):
 
     def add_queue_item(self, item: ProductionItem) -> None:
         category_queue = self.queue.setdefault(item.category, [])
+        if category_queue and category_queue[0].item_id != item.item_id:
+            category_queue.clear()
+            
         limit = self.category_limit(item.category)
         if len(category_queue) >= limit:
             self.warning_var.set(self.tr.t("production.max_warning", category=item.category, max=limit))
@@ -680,8 +751,12 @@ class ProductionCalculatorCategory(ttk.Frame):
         self.refresh_all()
 
     def fill_category_queue(self, item: ProductionItem) -> None:
+        category_queue = self.queue.setdefault(item.category, [])
+        if category_queue and category_queue[0].item_id != item.item_id:
+            category_queue.clear()
+            
         limit = self.category_limit(item.category)
-        while len(self.queue.setdefault(item.category, [])) < limit:
+        while len(self.queue[item.category]) < limit:
             self.queue[item.category].append(item)
         self.warning_var.set("")
         self.refresh_all()
@@ -704,12 +779,12 @@ class ProductionCalculatorCategory(ttk.Frame):
 
     def category_limit(self, category: str) -> int:
         if self.mode_var.get() == "factory":
-            return 4
+            return 4 * max(1, self.factory_multiplier.get())
         return int(CATEGORY_RULES.get(category, {}).get("max") or 9)
 
     def category_minimum(self, category: str) -> int:
         if self.mode_var.get() == "factory":
-            return 1
+            return 0
         return int(CATEGORY_RULES.get(category, {}).get("min") or 1)
 
     def material_totals(self) -> tuple[dict[str, float], dict[str, float], int, int, int]:
@@ -740,18 +815,183 @@ class ProductionCalculatorCategory(ttk.Frame):
         self.summary_var.set(self.tr.t("production.queue_summary", crates=total_crates, items=total_items))
         self.last_material_totals = totals
         self.materials_var.set(self.format_materials(totals))
-        if self.mode_var.get() == "mpf":
+        
+        mode = self.mode_var.get()
+        if mode == "mpf":
             self.orders_var.set(self.tr.t("production.queue_orders", orders=total_crates, discount=f"{discount:.1f}"))
         else:
-            self.orders_var.set(self.tr.t("production.queue_orders_factory", orders=total_crates))
+            # Calculate factories needed
+            max_factory = 1
+            for rows in self.queue.values():
+                if rows:
+                    max_factory = max(max_factory, math.ceil(len(rows) / 4))
+            msg = f"{total_crates} caixas\n{max_factory} Fábrica(s) necessária(s)"
+            self.orders_var.set(msg)
+            
         self.draw_material_strip()
         min_warnings = []
-        for category, rows in self.queue.items():
-            minimum = self.category_minimum(category)
-            if rows and len(rows) < minimum:
-                min_warnings.append(self.tr.t("production.min_warning", category=category, min=minimum))
+        if mode == "mpf":
+            for category, rows in self.queue.items():
+                minimum = self.category_minimum(category)
+                if rows and len(rows) < minimum:
+                    min_warnings.append(self.tr.t("production.min_warning", category=category, min=minimum))
         if min_warnings:
             self.warning_var.set("  ".join(min_warnings))
+            
+    def show_truck_planner(self) -> None:
+        totals = self.last_material_totals
+        if sum(totals.values()) == 0:
+            return
+            
+        top = tk.Toplevel(self)
+        top.title("Rotas de Transporte Logístico")
+        top.geometry("450x520")
+        top.configure(bg=COLORS["bg"])
+        top.transient(self.winfo_toplevel())
+        
+        if ctk is None:
+            top.grab_set()
+            top.overrideredirect(True)
+            
+        header = modern_frame(top, COLORS["card"], radius=0, border=0)
+        header.pack(fill="x", pady=(0, 10))
+        
+        tk.Label(header, text="Logística de Transporte", bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 14, "bold")).pack(pady=(12, 4))
+        
+        if ctk is None:
+            tk.Button(header, text="X", command=top.destroy, bg=COLORS["card"], fg=COLORS["danger"], activebackground=COLORS["line"], relief="flat", font=("Segoe UI", 12, "bold")).place(relx=1.0, x=-10, y=10, anchor="ne")
+        
+        controls = tk.Frame(header, bg=COLORS["card"])
+        controls.pack(pady=(0, 12))
+        
+        if self.mode_var.get() == "mpf":
+            tk.Radiobutton(controls, text="Dunne (Solto)", variable=self.mpf_vehicle_mode, value="Dunne", bg=COLORS["card"], fg=COLORS["text"], selectcolor=COLORS["card_2"], activebackground=COLORS["card"], activeforeground=COLORS["text"], command=lambda: refresh_routes()).pack(side="left", padx=10)
+            tk.Radiobutton(controls, text="Flatbed (Caixas)", variable=self.mpf_vehicle_mode, value="Flatbed", bg=COLORS["card"], fg=COLORS["text"], selectcolor=COLORS["card_2"], activebackground=COLORS["card"], activeforeground=COLORS["text"], command=lambda: refresh_routes()).pack(side="left", padx=10)
+        else:
+            tk.Label(controls, text="Veículo: Dunne Transport (15 Slots)", bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 9)).pack()
+            self.mpf_vehicle_mode.set("Dunne")
+
+        container = modern_frame(top, COLORS["soft"], radius=14, border=1, border_color=COLORS["line"])
+        container.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+        
+        canvas = tk.Canvas(container, bg=COLORS["soft"], highlightthickness=0)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=COLORS["soft"])
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True, padx=8, pady=8)
+        scrollbar.pack(side="right", fill="y")
+        
+        def refresh_routes():
+            for child in scrollable_frame.winfo_children():
+                child.destroy()
+                
+            is_flatbed = self.mpf_vehicle_mode.get() == "Flatbed"
+            mode = self.mode_var.get()
+            
+            # 1. Group queues into orders
+            orders = []
+            for category, items in self.queue.items():
+                if not items: continue
+                if mode == "factory":
+                    for i in range(0, len(items), 4):
+                        chunk = items[i:i+4]
+                        orders.append((category, chunk))
+                else:
+                    orders.append((category, items))
+                    
+            if not orders:
+                return
+
+            trips = []
+            
+            for category, chunk in orders:
+                # Calculate cost of this order
+                mats = {key: 0.0 for key, _ in MATERIALS}
+                for box_index, item in enumerate(chunk, 1):
+                    multiplier = discount_multiplier(box_index) if mode == "mpf" else 1.0
+                    for key, _ in MATERIALS:
+                        mats[key] += getattr(item, key) * multiplier
+                        
+                # Pack into trips
+                placed = False
+                for trip in trips:
+                    test_mats = {k: trip["materials"].get(k, 0) + mats.get(k, 0) for k, _ in MATERIALS}
+                    
+                    if is_flatbed:
+                        in_slots = sum(math.ceil(math.ceil(test_mats[k]) / MATERIAL_CRATE_SIZES[k]) for k, _ in MATERIALS if test_mats[k] > 0)
+                    else:
+                        in_slots = sum(math.ceil(test_mats[k] / MATERIAL_CRATE_SIZES[k]) for k, _ in MATERIALS if test_mats[k] > 0)
+                        
+                    out_crates = trip["crates"] + len(chunk)
+                    max_in = 60 if is_flatbed else 15
+                    max_out = 60 if is_flatbed else 15
+                    
+                    if in_slots <= max_in and out_crates <= max_out:
+                        trip["orders"].append((category, chunk))
+                        trip["materials"] = test_mats
+                        trip["crates"] = out_crates
+                        trip["in_slots"] = in_slots
+                        placed = True
+                        break
+                        
+                if not placed:
+                    if is_flatbed:
+                        in_slots = sum(math.ceil(math.ceil(mats[k]) / MATERIAL_CRATE_SIZES[k]) for k, _ in MATERIALS if mats[k] > 0)
+                    else:
+                        in_slots = sum(math.ceil(mats[k] / MATERIAL_CRATE_SIZES[k]) for k, _ in MATERIALS if mats[k] > 0)
+                    trips.append({
+                        "orders": [(category, chunk)],
+                        "materials": mats,
+                        "crates": len(chunk),
+                        "in_slots": in_slots
+                    })
+
+            tk.Label(scrollable_frame, text=f"Total de viagens ({self.mpf_vehicle_mode.get()}): {len(trips)}", bg=COLORS["soft"], fg=COLORS["accent"], font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(8, 12))
+            
+            for trip_num, trip in enumerate(trips):
+                trip_frame = modern_frame(scrollable_frame, COLORS["card_2"], radius=8)
+                trip_frame.pack(fill="x", pady=(0, 12), padx=4)
+                
+                tk.Label(trip_frame, text=f"Viagem {trip_num + 1}:", bg=COLORS["card_2"], fg="#fff", font=("Segoe UI", 10, "bold")).pack(anchor="w", padx=10, pady=(6, 2))
+                
+                take_frame = tk.Frame(trip_frame, bg=COLORS["card_2"])
+                take_frame.pack(fill="x", padx=10, pady=2)
+                tk.Label(take_frame, text="Levar (Materiais):", bg=COLORS["card_2"], fg=COLORS["accent"], font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
+                
+                row_idx = 1
+                for key, label in MATERIALS:
+                    val = trip["materials"].get(key, 0)
+                    if val > 0:
+                        rounded = math.ceil(val - 1e-9)
+                        crate_size = MATERIAL_CRATE_SIZES.get(key) or 1
+                        if is_flatbed:
+                            crates_needed = math.ceil(rounded / crate_size)
+                            tk.Label(take_frame, text=f"• {crates_needed}x caixas de {label}", bg=COLORS["card_2"], fg=COLORS["text"], font=("Segoe UI", 9)).grid(row=row_idx, column=0, sticky="w", padx=(10, 0))
+                        else:
+                            tk.Label(take_frame, text=f"• {rounded} {label} soltos", bg=COLORS["card_2"], fg=COLORS["text"], font=("Segoe UI", 9)).grid(row=row_idx, column=0, sticky="w", padx=(10, 0))
+                        row_idx += 1
+                        
+                bring_frame = tk.Frame(trip_frame, bg=COLORS["card_2"])
+                bring_frame.pack(fill="x", padx=10, pady=(4, 6))
+                tk.Label(bring_frame, text="Produzir / Retirar (Caixas):", bg=COLORS["card_2"], fg=COLORS["accent"], font=("Segoe UI", 9, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+                
+                row_idx = 1
+                for _cat, chunk in trip["orders"]:
+                    item = chunk[0]
+                    icon = self.load_item_icon(item.icon_path, 20)
+                    if icon:
+                        lbl = tk.Label(bring_frame, image=icon, bg=COLORS["card_2"])
+                        lbl.image = icon
+                        lbl.grid(row=row_idx, column=0, sticky="w", padx=(10, 0), pady=1)
+                        tk.Label(bring_frame, text=f"{len(chunk)}x {item.name}", bg=COLORS["card_2"], fg=COLORS["text"], font=("Segoe UI", 9)).grid(row=row_idx, column=1, sticky="w", padx=(4, 0), pady=1)
+                    else:
+                        tk.Label(bring_frame, text=f"• {len(chunk)}x {item.name}", bg=COLORS["card_2"], fg=COLORS["text"], font=("Segoe UI", 9)).grid(row=row_idx, column=0, columnspan=2, sticky="w", padx=(10, 0), pady=1)
+                    row_idx += 1
+                
+        refresh_routes()
 
     def format_materials(self, totals: dict[str, float]) -> str:
         parts = []
@@ -813,34 +1053,48 @@ class ProductionCalculatorCategory(ttk.Frame):
         self.queue_hitboxes = []
         width = max(1, canvas.winfo_width())
         y = 8
-        for category in CATEGORY_ORDER:
+        for category in self.available_categories():
             rows = self.queue.get(category, [])
             rule = {**CATEGORY_RULES[category], "max": self.category_limit(category)}
-            row_h = 58
+            
+            # Calculate required height based on wrapping
+            items_per_row = max(1, int((width - 58) / 45))
+            num_item_rows = max(1, (len(rows) + items_per_row - 1) // items_per_row) if len(rows) > 0 else 1
+            row_h = 58 + (num_item_rows - 1) * 45
+            
             canvas.create_rectangle(0, y, width, y + row_h, fill="#292929", outline="#3b3b3b")
             category_icon = self.load_item_icon(str(CATEGORY_ICON_PATHS.get(category, "")), 28)
+            
             if category_icon:
                 canvas.create_image(24, y + 22, image=category_icon)
             else:
                 canvas.create_text(10, y + 17, text=rule["mark"], fill=COLORS["text"], anchor="w", font=("Segoe UI", 12, "bold"))
+                
             canvas.create_text(10, y + 49, text=f"{len(rows)}/{rule['max']}", fill=COLORS["muted"], anchor="w", font=("Segoe UI", 7, "bold"))
+            
             x = 58
+            item_y = y
             for index, item in enumerate(rows):
+                if x + 40 > width and x > 58:
+                    x = 58
+                    item_y += 45
+                    
                 icon = self.load_item_icon(item.icon_path, 32)
-                canvas.create_rectangle(x, y + 9, x + 40, y + 49, fill="#555555", outline=COLORS["line"])
+                canvas.create_rectangle(x, item_y + 9, x + 40, item_y + 49, fill="#555555", outline=COLORS["line"])
                 if icon:
-                    canvas.create_image(x + 20, y + 29, image=icon)
+                    canvas.create_image(x + 20, item_y + 29, image=icon)
                 else:
-                    canvas.create_text(x + 20, y + 29, text=item.name[:2].upper(), fill=COLORS["text"], font=("Segoe UI", 7, "bold"))
+                    canvas.create_text(x + 20, item_y + 29, text=item.name[:2].upper(), fill=COLORS["text"], font=("Segoe UI", 7, "bold"))
+                    
                 discount = int((1 - discount_multiplier(index + 1)) * 100) if self.mode_var.get() == "mpf" else 0
                 if discount:
-                    canvas.create_text(x + 37, y + 15, text=f"{discount}", fill=COLORS["accent"], anchor="e", font=("Segoe UI", 6, "bold"))
-                self.queue_hitboxes.append((x, y + 9, x + 40, y + 49, category, index))
+                    canvas.create_text(x + 37, item_y + 15, text=f"{discount}", fill=COLORS["accent"], anchor="e", font=("Segoe UI", 6, "bold"))
+                    
+                self.queue_hitboxes.append((x, item_y + 9, x + 40, item_y + 49, category, index))
                 x += 45
-                if x + 43 > width:
-                    x = 58
-                    y += 45
+                
             y += row_h + 7
+
         canvas.configure(scrollregion=(0, 0, width, max(canvas.winfo_height(), y + 8)))
 
     def on_queue_click(self, event) -> str:
