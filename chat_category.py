@@ -178,94 +178,89 @@ class HomeChatPanel(ttk.Frame):
         self.log("waiting for steam profile refresh before authenticate")
 
     def build(self) -> None:
-        panel = tk.Frame(self, bg="#07111f", highlightthickness=1, highlightbackground="#203857")
+        panel = tk.Frame(self, bg=COLORS["bg"], highlightthickness=0)
         panel.grid(row=0, column=0, sticky="nsew", padx=0, pady=(0, 18))
         panel.columnconfigure(0, weight=1)
         panel.rowconfigure(2, weight=1)
-        header = tk.Frame(panel, bg="#07111f")
-        header.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 8))
+
+        header = tk.Frame(panel, bg=COLORS["bg"])
+        header.grid(row=0, column=0, sticky="ew", padx=14, pady=(12, 0))
         header.columnconfigure(1, weight=1)
 
         tk.Label(
             header,
             text=self.tr.t("home.chat.title"),
-            bg="#07111f",
+            bg=COLORS["bg"],
             fg=COLORS["text"],
-            font=("Segoe UI", 15, "bold"),
-        ).grid(row=0, column=0, sticky="w")
+            font=("Segoe UI", 16, "bold"),
+        ).pack(side="left")
+        
+        self.room_title_label = tk.Label(header, textvariable=self.room_title_var, bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 10))
+        self.room_title_label.pack(side="left", padx=(12, 0))
 
-        status_row = tk.Frame(header, bg="#07111f")
-        status_row.grid(row=0, column=1, sticky="e")
-        tk.Label(status_row, textvariable=self.status_var, bg="#10233a", fg="#dce8f7", font=("Segoe UI", 8, "bold"), padx=9, pady=4).pack(side="right")
-
-        account_row = tk.Frame(panel, bg="#0d1729", highlightthickness=1, highlightbackground="#182d49")
-        account_row.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 8))
-        account_row.columnconfigure(1, weight=1)
-        self.avatar_canvas = tk.Canvas(account_row, width=36, height=36, bg="#14243b", highlightthickness=0)
-        self.avatar_canvas.grid(row=0, column=0, rowspan=2, sticky="w", padx=(10, 8), pady=8)
-        self.draw_avatar_placeholder(self.avatar_canvas, 36)
-        self.connected_label = tk.Label(account_row, text=self.tr.t("home.chat.connected_as"), bg="#0d1729", fg="#7f90aa", font=("Segoe UI", 8, "bold"))
-        self.connected_label.grid(row=0, column=1, sticky="w", pady=(8, 0))
-        tk.Label(account_row, textvariable=self.user_name_var, bg="#0d1729", fg="#edf6ff", font=("Segoe UI", 10, "bold")).grid(row=1, column=1, sticky="w", pady=(0, 8))
-        tk.Label(account_row, textvariable=self.user_detail_var, bg="#0d1729", fg="#7f90aa", font=("Segoe UI", 8)).grid(row=0, column=2, rowspan=2, sticky="e", padx=10)
-        account_row.grid_remove()
-
-        top_controls = tk.Frame(panel, bg="#07111f")
-        top_controls.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 8))
-        top_controls.columnconfigure(0, weight=1)
-
-        tabs_header = tk.Frame(top_controls, bg="#07111f")
-        tabs_header.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
-        tabs_header.columnconfigure(1, weight=1)
-        self.rooms_label = tk.Label(tabs_header, text=self.tr.t("home.chat.rooms"), bg="#07111f", fg="#8ab4ff", font=("Segoe UI", 9, "bold"))
-        self.rooms_label.grid(row=0, column=0, sticky="w")
-        self.room_title_label = tk.Label(tabs_header, textvariable=self.room_title_var, bg="#07111f", fg="#7f90aa", font=("Segoe UI", 9))
-        self.room_title_label.grid(row=0, column=1, sticky="e")
-
-        online_row = tk.Frame(top_controls, bg="#07111f")
-        online_row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 7))
-        online_row.columnconfigure(1, weight=1)
-        self.online_label = tk.Label(online_row, text=self.tr.t("home.chat.online"), bg="#07111f", fg="#5eead4", font=("Segoe UI", 8, "bold"))
-        self.online_label.grid(row=0, column=0, sticky="w")
-        self.online_users_label = tk.Label(online_row, textvariable=self.online_var, bg="#07111f", fg="#99abc4", font=("Segoe UI", 8))
-        self.online_users_label.grid(row=0, column=1, sticky="w", padx=(8, 0))
-        online_row.grid_remove()
-
-        tabs_shell = tk.Frame(top_controls, bg="#07111f")
-        tabs_shell.grid(row=1, column=0, sticky="ew")
-        tabs_shell.columnconfigure(0, weight=1)
-        self.chat_tabs_canvas = tk.Canvas(tabs_shell, bg="#07111f", height=33, highlightthickness=0, bd=0)
-        self.chat_tabs_canvas.grid(row=0, column=0, sticky="ew")
-        self.chat_tabs_scrollbar = ttk.Scrollbar(tabs_shell, orient="horizontal", command=self.chat_tabs_canvas.xview, style="Horizontal.TScrollbar")
-        self.chat_tabs_scrollbar.grid(row=1, column=0, sticky="ew", pady=(2, 0))
-        self.chat_tabs_canvas.configure(xscrollcommand=self.chat_tabs_scrollbar.set)
-        self.chat_tabs_frame = tk.Frame(self.chat_tabs_canvas, bg="#07111f")
-        self.chat_tabs_window = self.chat_tabs_canvas.create_window((0, 0), window=self.chat_tabs_frame, anchor="nw")
-        self.chat_tabs_frame.bind("<Configure>", self.on_chat_tabs_configure)
-        self.chat_tabs_canvas.bind("<Configure>", self.on_chat_tabs_canvas_configure)
-        self.chat_tabs_canvas.bind("<MouseWheel>", self.on_chat_tabs_mousewheel, add="+")
-
+        status_row = tk.Frame(header, bg=COLORS["bg"])
+        status_row.pack(side="right")
         self.refresh_button = tk.Button(
-            top_controls,
+            status_row,
             text=self.tr.t("home.chat.refresh"),
             command=self.refresh_now,
-            bg="#0e1a2d",
-            fg="#edf6ff",
-            activebackground="#203857",
-            activeforeground="#edf6ff",
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            activebackground=COLORS["card_2"],
+            activeforeground=COLORS["text"],
             relief="flat",
             font=("Segoe UI", 9, "bold"),
             padx=10,
             pady=4,
             cursor="hand2",
         )
-        self.refresh_button.grid(row=1, column=1, sticky="e", padx=(10, 0))
+        self.refresh_button.pack(side="right", padx=(12, 0))
+        tk.Label(status_row, textvariable=self.status_var, bg=COLORS["card_2"], fg=COLORS["accent_2"], font=("Segoe UI", 8, "bold"), padx=9, pady=5).pack(side="right")
 
-        messages_shell = tk.Frame(panel, bg="#07111f")
+        account_row = tk.Frame(panel, bg=COLORS["card"], highlightthickness=0)
+        account_row.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 8))
+        account_row.columnconfigure(1, weight=1)
+        self.avatar_canvas = tk.Canvas(account_row, width=36, height=36, bg=COLORS["card"], highlightthickness=0)
+        self.avatar_canvas.grid(row=0, column=0, rowspan=2, sticky="w", padx=(10, 8), pady=8)
+        self.draw_avatar_placeholder(self.avatar_canvas, 36)
+        self.connected_label = tk.Label(account_row, text=self.tr.t("home.chat.connected_as"), bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 8, "bold"))
+        self.connected_label.grid(row=0, column=1, sticky="w", pady=(8, 0))
+        tk.Label(account_row, textvariable=self.user_name_var, bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 10, "bold")).grid(row=1, column=1, sticky="w", pady=(0, 8))
+        tk.Label(account_row, textvariable=self.user_detail_var, bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 8)).grid(row=0, column=2, rowspan=2, sticky="e", padx=10)
+        account_row.grid_remove()
+
+        top_controls = tk.Frame(panel, bg=COLORS["bg"])
+        top_controls.grid(row=1, column=0, sticky="ew", padx=14, pady=(8, 8))
+        top_controls.columnconfigure(0, weight=1)
+
+        online_row = tk.Frame(top_controls, bg=COLORS["bg"])
+        online_row.grid(row=1, column=0, sticky="ew", pady=(0, 7))
+        online_row.columnconfigure(1, weight=1)
+        self.online_label = tk.Label(online_row, text=self.tr.t("home.chat.online"), bg=COLORS["bg"], fg=COLORS["accent"], font=("Segoe UI", 8, "bold"))
+        self.online_label.grid(row=0, column=0, sticky="w")
+        self.online_users_label = tk.Label(online_row, textvariable=self.online_var, bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 8))
+        self.online_users_label.grid(row=0, column=1, sticky="w", padx=(8, 0))
+        online_row.grid_remove()
+
+        tabs_shell = tk.Frame(top_controls, bg=COLORS["bg"])
+        tabs_shell.grid(row=2, column=0, sticky="ew")
+        tabs_shell.columnconfigure(0, weight=1)
+        self.chat_tabs_canvas = tk.Canvas(tabs_shell, bg=COLORS["bg"], height=33, highlightthickness=0, bd=0)
+        self.chat_tabs_canvas.grid(row=0, column=0, sticky="ew")
+        self.chat_tabs_scrollbar = ttk.Scrollbar(tabs_shell, orient="horizontal", command=self.chat_tabs_canvas.xview, style="Horizontal.TScrollbar")
+        self.chat_tabs_scrollbar.grid(row=1, column=0, sticky="ew", pady=(2, 0))
+        self.chat_tabs_canvas.configure(xscrollcommand=self.chat_tabs_scrollbar.set)
+        self.chat_tabs_frame = tk.Frame(self.chat_tabs_canvas, bg=COLORS["bg"])
+        self.chat_tabs_window = self.chat_tabs_canvas.create_window((0, 0), window=self.chat_tabs_frame, anchor="nw")
+        self.chat_tabs_frame.bind("<Configure>", self.on_chat_tabs_configure)
+        self.chat_tabs_canvas.bind("<Configure>", self.on_chat_tabs_canvas_configure)
+        self.chat_tabs_canvas.bind("<MouseWheel>", self.on_chat_tabs_mousewheel, add="+")
+
+        messages_shell = tk.Frame(panel, bg=COLORS["bg"])
         messages_shell.grid(row=2, column=0, sticky="nsew", padx=14, pady=(0, 9))
         messages_shell.columnconfigure(0, weight=1)
         messages_shell.rowconfigure(0, weight=1)
-        self.messages_canvas = tk.Canvas(messages_shell, bg="#0b1424", highlightthickness=1, highlightbackground="#1b3554", height=300, bd=0)
+        self.messages_canvas = tk.Canvas(messages_shell, bg=COLORS["bg"], highlightthickness=0, height=300, bd=0)
         self.messages_canvas.grid(row=0, column=0, sticky="nsew")
         if ctk is not None:
             self.messages_scrollbar = ctk.CTkScrollbar(
@@ -273,15 +268,15 @@ class HomeChatPanel(ttk.Frame):
                 orientation="vertical",
                 command=self.messages_canvas.yview,
                 width=10,
-                fg_color="#07111f",
-                button_color="#1d3353",
-                button_hover_color="#5eead4",
+                fg_color=COLORS["bg"],
+                button_color=COLORS["card_2"],
+                button_hover_color=COLORS["accent"],
             )
         else:
             self.messages_scrollbar = ttk.Scrollbar(messages_shell, orient="vertical", command=self.messages_canvas.yview, style="Vertical.TScrollbar")
         self.messages_scrollbar.grid(row=0, column=1, sticky="ns")
         self.messages_canvas.configure(yscrollcommand=self.messages_scrollbar.set)
-        self.messages_inner = tk.Frame(self.messages_canvas, bg="#0b1424")
+        self.messages_inner = tk.Frame(self.messages_canvas, bg=COLORS["bg"])
         self.messages_window = self.messages_canvas.create_window((0, 0), window=self.messages_inner, anchor="nw")
         self.messages_inner.bind("<Configure>", lambda _event: self.messages_canvas.configure(scrollregion=self.messages_canvas.bbox("all")))
         self.messages_canvas.bind("<Configure>", self.on_messages_canvas_configure)
@@ -804,8 +799,10 @@ class HomeChatPanel(ttk.Frame):
     def next_refresh_delay_ms(self) -> int:
         retry_seconds = max(0.0, self.messages_retry_after - time.monotonic())
         if retry_seconds > 0:
-            return int(retry_seconds * 1000) + 1000
-        return 15000
+            delay = int(retry_seconds * 1000) + 1000
+        else:
+            delay = 15000
+        return delay if self.active else delay * 3
 
     def poll_refresh(self) -> None:
         self.refresh_job = None
@@ -847,6 +844,7 @@ class HomeChatPanel(ttk.Frame):
 
     def schedule_presence(self, delay_ms: int = 30000) -> None:
         self.cancel_presence()
+        delay = delay_ms if getattr(self, "active", True) else delay_ms * 3
         if self.active:
             self.presence_job = self.after(delay_ms, self.ping_presence)
 
@@ -921,6 +919,7 @@ class HomeChatPanel(ttk.Frame):
 
     def schedule_mention_notifications(self, delay_ms: int = 6000) -> None:
         self.cancel_mention_notifications()
+        delay = delay_ms if getattr(self, "active", True) else delay_ms * 3
         if self.active and self.chat_token:
             self.notification_job = self.after(delay_ms, self.poll_mention_notifications)
 
@@ -1215,13 +1214,13 @@ class HomeChatPanel(ttk.Frame):
                 self.chat_tabs_frame,
                 text=self.format_chat_tab_label(chat),
                 command=lambda chat_index=index: self.on_chat_selected(chat_index),
-                bg="#0f1b2e",
-                fg="#edf6ff",
-                activebackground="#182d49",
-                activeforeground="#edf6ff",
+                bg=COLORS["card"],
+                fg=COLORS["muted"],
+                activebackground=COLORS["card_2"],
+                activeforeground=COLORS["text"],
                 relief="flat",
                 bd=0,
-                font=("Segoe UI", 9),
+                font=("Segoe UI", 9, "bold"),
                 padx=11,
                 pady=4,
                 cursor="hand2",
@@ -1238,10 +1237,10 @@ class HomeChatPanel(ttk.Frame):
                 holder,
                 text=label,
                 command=lambda cid=conversation_id: self.open_whisper_by_id(cid),
-                bg="#13233b",
-                fg="#dce8f7",
-                activebackground="#203857",
-                activeforeground="#edf6ff",
+                bg=COLORS["card"],
+                fg=COLORS["text"],
+                activebackground=COLORS["card_2"],
+                activeforeground=COLORS["text"],
                 relief="flat",
                 bd=0,
                 font=("Segoe UI", 9, "bold" if conversation_id in self.whisper_unread_ids else "normal"),
@@ -1282,15 +1281,15 @@ class HomeChatPanel(ttk.Frame):
         current = self.selected_chat_slug.get().strip()
         for slug, button in self.chat_tab_buttons.items():
             if slug == current:
-                button.configure(bg="#5eead4", fg="#041014", activebackground="#8ab4ff", activeforeground="#041014", font=("Segoe UI", 9, "bold"))
+                button.configure(bg=COLORS["card_2"], fg=COLORS["accent"], activebackground=COLORS["card_2"], activeforeground=COLORS["accent"], font=("Segoe UI", 9, "bold"))
             else:
                 is_whisper = slug.startswith("whisper:")
                 button.configure(
-                    bg="#13233b" if is_whisper else "#0f1b2e",
-                    fg="#5eead4" if is_whisper and slug.split(":", 1)[1] in self.whisper_unread_ids else "#cbd8ea",
-                    activebackground="#203857" if is_whisper else "#182d49",
-                    activeforeground="#edf6ff",
-                    font=("Segoe UI", 9, "bold" if is_whisper and slug.split(":", 1)[1] in self.whisper_unread_ids else "normal"),
+                    bg=COLORS["card_2"] if is_whisper else COLORS["card"],
+                    fg=COLORS["accent"] if is_whisper and slug.split(":", 1)[1] in self.whisper_unread_ids else COLORS["muted"],
+                    activebackground=COLORS["card_2"],
+                    activeforeground=COLORS["text"],
+                    font=("Segoe UI", 9, "bold" if is_whisper and slug.split(":", 1)[1] in self.whisper_unread_ids else "bold"),
                 )
 
     def on_chat_tabs_configure(self, _event=None) -> None:
@@ -1720,61 +1719,58 @@ class HomeChatPanel(ttk.Frame):
 
     def render_message_row(self, message: dict[str, Any]) -> None:
         is_mine = self.is_own_message(message)
-        row = tk.Frame(self.messages_inner, bg="#0b1424")
-        row.pack(fill="x", padx=10, pady=(7, 0), anchor="e" if is_mine else "w")
+        row = tk.Frame(self.messages_inner, bg=COLORS["bg"])
+        row.pack(fill="x", padx=10, pady=(4, 4), anchor="w")
         avatar_url = self.message_avatar_url(message)
-        avatar = self.get_avatar_image(avatar_url, size=28)
-        side = "right" if is_mine else "left"
-        opposite_side = "left" if is_mine else "right"
-        accent_color = "#5eead4" if is_mine else "#24486d"
-        bubble_bg = "#10243a" if is_mine else "#0e192b"
-        accent = tk.Frame(row, bg=accent_color, width=2)
-        accent.pack(side=side, fill="y", padx=(8, 0) if is_mine else (0, 8))
-        avatar_label = tk.Label(row, image=avatar, bg="#0b1424")
+        avatar = self.get_avatar_image(avatar_url, size=32)
+        
+        avatar_label = tk.Label(row, image=avatar, bg=COLORS["bg"])
         avatar_label.image = avatar
-        avatar_label.pack(side=side, anchor="n", padx=(8, 0) if is_mine else (0, 8), pady=7)
+        avatar_label.pack(side="left", anchor="nw", padx=(4, 12), pady=4)
         self.message_image_refs.append(avatar)
         if avatar_url:
             self.avatar_labels_by_url.setdefault(avatar_url, []).append(avatar_label)
 
-        spacer = tk.Frame(row, bg="#0b1424")
-        spacer.pack(side=opposite_side, fill="x", expand=True)
-        body = tk.Frame(row, bg=bubble_bg, highlightthickness=1, highlightbackground="#24486d" if is_mine else "#182d49")
-        body.pack(side=side, fill="x", expand=False)
+        body = tk.Frame(row, bg=COLORS["bg"])
+        body.pack(side="left", fill="x", expand=True)
         body.configure(width=max(320, min(760, self.messages_canvas.winfo_width() - 150)))
-        header = tk.Frame(body, bg=bubble_bg)
-        header.pack(fill="x", padx=10, pady=(6, 1))
+        
+        header = tk.Frame(body, bg=COLORS["bg"])
+        header.pack(fill="x", anchor="w", pady=(0, 2))
         user = message.get("user") or {}
         name = str(user.get("personaname") or user.get("nickname") or self.tr.t("home.chat.no_user"))
         created = str(message.get("createdAt") or message.get("created_at") or "")
         edited = message.get("editedAt") or message.get("edited_at")
-        tk.Label(header, text=name, bg=bubble_bg, fg="#8ab4ff", font=("Segoe UI", 9, "bold")).pack(side="right" if is_mine else "left")
+        tk.Label(header, text=name, bg=COLORS["bg"], fg=COLORS["accent"] if is_mine else COLORS["accent_2"], font=("Segoe UI", 10, "bold")).pack(side="left")
+        
+        meta_text = self.format_message_time(created) if created else ""
+        if edited:
+            meta_text = f"{meta_text}  {self.tr.t('home.chat.edited')}"
+        tk.Label(header, text=meta_text, bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 8)).pack(side="left", padx=(8, 0))
+
         if not is_mine and user:
             tk.Button(
                 header,
                 text=self.tr.t("home.chat.whisper_button"),
                 command=lambda item=user: self.open_whisper_with_user(item),
-                bg="#17324f",
-                fg="#5eead4",
-                activebackground="#203857",
-                activeforeground="#edf6ff",
+                bg=COLORS["card"],
+                fg=COLORS["accent_2"],
+                activebackground=COLORS["card_2"],
+                activeforeground=COLORS["accent"],
                 relief="flat",
                 bd=0,
                 font=("Segoe UI", 7, "bold"),
                 padx=6,
                 pady=1,
                 cursor="hand2",
-            ).pack(side="right" if not is_mine else "left", padx=6)
-        meta_text = self.format_message_time(created) if created else ""
-        if edited:
-            meta_text = f"{meta_text}  {self.tr.t('home.chat.edited')}"
-        tk.Label(header, text=meta_text, bg=bubble_bg, fg="#7f90aa", font=("Segoe UI", 8)).pack(side="left" if is_mine else "right")
+            ).pack(side="left", padx=(12, 0))
+
         content = str(message.get("content") or "")
         visible_content = self.visible_message_text(content)
         if visible_content:
-            self.render_message_text(body, visible_content, message, bubble_bg, align_right=is_mine)
-        self.render_message_mentions(body, message, visible_content, align_right=is_mine)
-        self.render_message_previews(body, content, align_right=is_mine)
+            self.render_message_text(body, visible_content, message, COLORS["bg"], align_right=False)
+        self.render_message_mentions(body, message, visible_content, align_right=False)
+        self.render_message_previews(body, content, align_right=False)
 
     def render_message_text(self, parent: tk.Widget, content: str, message: dict[str, Any], bubble_bg: str, *, align_right: bool = False) -> None:
         line_count = max(1, content.count("\n") + (len(content) // 82) + 1)
@@ -1793,8 +1789,8 @@ class HomeChatPanel(ttk.Frame):
             pady=0,
             takefocus=0,
         )
-        text.pack(fill="x", padx=10, pady=(0, 8))
-        text.tag_configure("body", justify="right" if align_right else "left")
+        text.pack(fill="x", padx=0, pady=(0, 4))
+        text.tag_configure("body", justify="left")
         text.insert("1.0", content, ("body",))
         mention_users = self.message_mention_users(message)
         for index, match in enumerate(MENTION_RE.finditer(content)):

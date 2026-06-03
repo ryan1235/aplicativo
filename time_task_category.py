@@ -683,7 +683,8 @@ class TimeTaskCategory(ttk.Frame):
         elif self.recorder.replaying:
             detail = self.tr.t("timetask.overlay_paused") if self.recorder.replay_paused else self.tr.t("timetask.overlay_replay_live", live=self.recorder.replay_status())
             self.replay_overlay.show(self.tr.t("timetask.overlay_playing"), detail, COLORS["good"])
-        self.after(300, self.poll_state)
+        delay = 300 if getattr(self, "active", True) or self.recorder.recording or self.recorder.replaying else 1000
+        self.after(delay, self.poll_state)
 
     def show_idle_overlay(self) -> None:
         self.overlay.hide()

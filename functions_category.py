@@ -1893,6 +1893,7 @@ class SettingsCategory(ttk.Frame):
         settings = load_settings()
         app_settings = settings.get("app", {})
         self.start_with_windows_var = tk.BooleanVar(value=bool(app_settings.get("start_with_windows", False)))
+        self.start_in_background_var = tk.BooleanVar(value=bool(app_settings.get("start_in_background", False)))
         self.close_action_var = tk.StringVar(value=str(app_settings.get("close_action", "ask")))
         self.stockpile_sound_enabled_var = tk.BooleanVar(value=bool(app_settings.get("stockpile_sound_enabled", True)))
         self.squadlock_sound_enabled_var = tk.BooleanVar(value=bool(app_settings.get("squadlock_sound_enabled", True)))
@@ -1960,9 +1961,21 @@ class SettingsCategory(ttk.Frame):
             activeforeground=COLORS["text"],
             font=("Segoe UI", 10, "bold"),
         ).grid(row=1, column=0, sticky="w", padx=20, pady=(8, 4))
+        tk.Checkbutton(
+            app_card,
+            text=self.tr.t("settings.start_background") if self.tr.t("settings.start_background") != "settings.start_background" else "Iniciar Minimizado (Segundo Plano)",
+            variable=self.start_in_background_var,
+            command=self.save_app_settings,
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            selectcolor=COLORS["soft"],
+            activebackground=COLORS["card"],
+            activeforeground=COLORS["text"],
+            font=("Segoe UI", 9, "bold"),
+        ).grid(row=2, column=0, sticky="w", padx=40, pady=(0, 4))
 
         close_row = modern_frame(app_card, COLORS["card"], radius=0)
-        close_row.grid(row=2, column=0, sticky="ew", padx=20, pady=(10, 18))
+        close_row.grid(row=3, column=0, sticky="ew", padx=20, pady=(10, 18))
         tk.Label(close_row, text=self.tr.t("settings.close_action"), bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 10, "bold")).grid(
             row=0, column=0, sticky="w", padx=(0, 16)
         )
@@ -2068,6 +2081,7 @@ class SettingsCategory(ttk.Frame):
         settings = load_settings()
         app_settings = settings.setdefault("app", {})
         app_settings["start_with_windows"] = self.start_with_windows_var.get()
+        app_settings["start_in_background"] = self.start_in_background_var.get()
         app_settings["startup_prompted"] = True
         app_settings["close_action"] = self.close_action_var.get()
         app_settings["stockpile_sound_enabled"] = self.stockpile_sound_enabled_var.get()

@@ -1,4 +1,4 @@
-import ctypes
+﻿import ctypes
 import base64
 from datetime import datetime, timezone
 import os
@@ -57,7 +57,7 @@ from time_task_category import TimeTaskCategory
 APP_TITLE = "GG Coalition"
 APP_EXE_NAME = f"{APP_TITLE}.exe"
 UPDATER_EXE_NAME = "GG Updater.exe"
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 UPDATE_REPO = "ryan1235/aplicativo"  # Exemplo: "seu-usuario/gg-coalition"
 FOXHOLE_APP_ID = "505460"
 SIDEBAR_WIDTH = 302
@@ -219,8 +219,9 @@ def configure_surface(widget, color: str) -> None:
 
 
 class FelbApp(AppBase):
-    def __init__(self) -> None:
+    def __init__(self, start_minimized: bool = False) -> None:
         super().__init__()
+        self.start_minimized = start_minimized
         self.title(f"{APP_TITLE} - {self.tr.t('app.subtitle') if hasattr(self, 'tr') else 'Warden Command'}")
         self.geometry("1100x680")
         self.minsize(900, 580)
@@ -285,16 +286,33 @@ class FelbApp(AppBase):
         self.style.theme_use("clam")
         self.configure_styles()
         self.load_app_icon()
-        self.show_loading_screen()
+        if not self.start_minimized:
+            self.show_loading_screen()
+            self.after(50, self._async_init_step_1)
+        else:
+            self.withdraw()
+            self.after(10, self._async_init_step_1)
+
+    def _async_init_step_1(self) -> None:
+        self.update_loading(self.tr.t("loading.prepare"))
         self.build_ui()
+        self.after(10, self._async_init_step_2)
+
+    def _async_init_step_2(self) -> None:
         self.update_loading(self.tr.t("loading.steam"))
         self.refresh_steam_profile()
         self.update_loading(self.tr.t("loading.foxhole"))
         self.refresh_foxhole_status()
         self.update_user_status()
+        self.after(10, self._async_init_step_3)
+
+    def _async_init_step_3(self) -> None:
         self.update_loading(self.tr.t("loading.ready"))
         self.show_page("inicio")
-        self.after(650, self.finish_loading)
+        if not self.start_minimized:
+            self.after(650, self.finish_loading)
+        else:
+            self.after(0, self.finish_loading_background)
         self.protocol("WM_DELETE_WINDOW", self.request_close)
         self.bind("<Unmap>", self.on_unmap, add="+")
 
@@ -346,28 +364,47 @@ class FelbApp(AppBase):
         self.withdraw()
         splash = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
         splash.overrideredirect(True)
-        configure_surface(splash, COLORS["bg"])
-        splash.geometry("460x330")
-        splash.update_idletasks()
-        x = (splash.winfo_screenwidth() - 460) // 2
-        y = (splash.winfo_screenheight() - 330) // 2
-        splash.geometry(f"460x330+{x}+{y}")
+        
+        transparent_color = "#000001"
+        if ctk is not None:
+            try:
+                splash.configure(fg_color=transparent_color)
+            except Exception:
+                pass
+        splash.configure(bg=transparent_color)
+        try:
+            splash.attributes("-transparentcolor", transparent_color)
+        except tk.TclError:
+            pass
 
-        panel = modern_frame(splash, COLORS["card"], radius=24, border=1, border_color=COLORS["line"])
-        panel.pack(fill="both", expand=True, padx=18, pady=18)
-        self.splash_logo_frames = self.load_splash_frames()
+        splash.geometry("440x350")
+        splash.update_idletasks()
+        x = (splash.winfo_screenwidth() - 440) // 2
+        y = (splash.winfo_screenheight() - 350) // 2
+        splash.geometry(f"440x350+{x}+{y}")
+
+        panel = modern_frame(splash, COLORS["bg"], radius=16, border=1, border_color=COLORS["line"])
+        panel.pack(fill="both", expand=True)
+        
+        inner = tk.Frame(panel, bg=COLORS["bg"])
+        inner.pack(fill="both", expand=True, padx=2, pady=2)
+
+        self.splash_logo_frames = self.load_splash_frames(size=120)
         self.splash_logo_image = self.splash_logo_frames[0][0] if self.splash_logo_frames else self.load_splash_logo()
         if self.splash_logo_image:
-            self.splash_logo_label = tk.Label(panel, image=self.splash_logo_image, bg=COLORS["card"])
-            self.splash_logo_label.pack(pady=(24, 10))
+            self.splash_logo_label = tk.Label(inner, image=self.splash_logo_image, bg=COLORS["bg"])
+            self.splash_logo_label.pack(pady=(36, 12))
             self.animate_splash_logo()
-        tk.Label(panel, text=APP_TITLE, bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 28, "bold")).pack()
-        tk.Label(panel, text=self.tr.t("loading.prepare"), bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 11)).pack(pady=(2, 22))
-        self.loading_label = tk.Label(panel, text=self.tr.t("loading.starting"), bg=COLORS["card"], fg=COLORS["accent_2"], font=("Segoe UI", 10, "bold"))
+        
+        tk.Label(inner, text=APP_TITLE, bg=COLORS["bg"], fg=COLORS["text"], font=("Segoe UI", 26, "bold")).pack()
+        tk.Label(inner, text=self.tr.t("app.subtitle"), bg=COLORS["bg"], fg=COLORS["accent"], font=("Segoe UI", 10, "bold")).pack(pady=(0, 24))
+        
+        self.loading_label = tk.Label(inner, text=self.tr.t("loading.starting"), bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 9))
         self.loading_label.pack()
-        progress = ttk.Progressbar(panel, mode="indeterminate", length=260)
-        progress.pack(pady=(14, 0))
+        progress = ttk.Progressbar(inner, mode="indeterminate", length=240)
+        progress.pack(pady=(12, 0))
         progress.start(12)
+        
         self.loading_screen = splash
         self.update()
 
@@ -452,6 +489,10 @@ class FelbApp(AppBase):
         self.deiconify()
         self.maximize_main_window()
         self.restore_was_zoomed = True
+        self.after(650, self.run_startup_prompt_sequence)
+
+    def finish_loading_background(self) -> None:
+        self.hide_to_tray()
         self.after(650, self.run_startup_prompt_sequence)
 
     def maximize_main_window(self) -> None:
@@ -841,19 +882,20 @@ class FelbApp(AppBase):
         header.grid(row=0, column=0, sticky="ew", padx=24, pady=(24, 18))
         header.columnconfigure(1, weight=1)
 
-        self.menu_button = modern_button(
+        self.menu_button = tk.Button(
             header,
-            text="☰",
+            text="\u2630",
             command=self.toggle_sidebar,
-            color=COLORS["card"],
-            text_color=COLORS["text"],
-            hover=COLORS["card_2"],
-            width=48,
-            height=44,
-            font=("Segoe UI", 16, "bold"),
+            bg=COLORS["bg"],
+            fg=COLORS["muted"],
+            activebackground=COLORS["bg"],
+            activeforeground=COLORS["text"],
+            relief="flat",
+            bd=0,
+            font=("Segoe UI", 20),
+            cursor="hand2",
         )
-        self.menu_button.configure(text="\u2630")
-        self.menu_button.grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, 14), pady=(2, 0))
+        self.menu_button.grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, 18), pady=(0, 0))
 
         self.ui_text["header_title"] = tk.Label(header, text=self.tr.t("header.title"), bg=COLORS["bg"], fg=COLORS["text"], font=("Segoe UI", 26, "bold"))
         self.ui_text["header_title"].grid(
@@ -901,13 +943,13 @@ class FelbApp(AppBase):
             language_box,
             text=self.tr.t("stockpile.nav"),
             command=lambda: self.show_page("stockpile"),
-            color=COLORS["card"],
-            text_color=COLORS["accent_2"],
-            hover=COLORS["card_2"],
+            color=COLORS["accent"],
+            text_color=COLORS["accent_text"],
+            hover=COLORS["accent_2"],
             height=30,
             font=("Segoe UI", 9, "bold"),
         )
-        self.quick_stock_button.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(6, 0))
+        self.quick_stock_button.grid(row=0, column=len(SUPPORTED_LANGUAGES), padx=(12, 0))
 
     def load_flag_image(self, language: str) -> tk.PhotoImage | None:
         if language in self.flag_images:
@@ -1331,28 +1373,28 @@ class FelbApp(AppBase):
         scrollbar.grid(row=0, column=1, sticky="ns")
         canvas.configure(yscrollcommand=scrollbar.set)
 
-        hero = modern_frame(canvas, COLORS["glass"], radius=6, border=1, border_color="#203857")
+        hero = modern_frame(canvas, COLORS["card"], radius=16, border=0)
         hero_window = canvas.create_window(24, 24, window=hero, anchor="nw", width=760)
-        self.ui_text["home_eyebrow"] = tk.Label(hero, text="", bg=COLORS["glass"], fg=COLORS["accent_2"], font=("Segoe UI", 1))
-        self.ui_text["home_title"] = tk.Label(hero, text=self.tr.t("home.title"), bg=COLORS["glass"], fg=COLORS["text"], font=("Segoe UI", 22, "bold"))
+        self.ui_text["home_eyebrow"] = tk.Label(hero, text="", bg=COLORS["card"], fg=COLORS["accent_2"], font=("Segoe UI", 1))
+        self.ui_text["home_title"] = tk.Label(hero, text=self.tr.t("home.title"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 22, "bold"))
         self.ui_text["home_title"].pack(
             anchor="w", padx=20, pady=(16, 0)
         )
-        status_row = tk.Frame(hero, bg=COLORS["glass"])
+        status_row = tk.Frame(hero, bg=COLORS["card"])
         status_pill = tk.Label(
             status_row,
             textvariable=self.user_status_var,
-            bg="#10233a",
+            bg=COLORS["soft"],
             fg=COLORS["accent_2"],
             font=("Segoe UI", 9, "bold"),
-            padx=8,
+            padx=12,
             pady=4,
         )
         status_pill.pack(side="left", padx=(0, 8))
         self.ui_text["home_body"] = tk.Label(
             hero,
             text=self.tr.t("home.body"),
-            bg=COLORS["glass"],
+            bg=COLORS["card"],
             fg=COLORS["muted"],
             font=("Segoe UI", 10),
             wraplength=660,
@@ -1360,13 +1402,13 @@ class FelbApp(AppBase):
         )
         self.ui_text["home_body"].pack(anchor="w", padx=20, pady=(6, 12))
 
-        online_panel = tk.Frame(hero, bg=COLORS["glass"])
+        online_panel = tk.Frame(hero, bg=COLORS["card"])
         online_panel.pack(fill="x", padx=20, pady=(0, 10))
         online_panel.columnconfigure(1, weight=1)
         self.ui_text["home_online_title"] = tk.Label(
             online_panel,
             text=self.tr.t("home.online_title"),
-            bg=COLORS["glass"],
+            bg=COLORS["card"],
             fg=COLORS["accent"],
             font=("Segoe UI", 10, "bold"),
         )
@@ -1374,23 +1416,23 @@ class FelbApp(AppBase):
         tk.Label(
             online_panel,
             textvariable=self.home_online_users_var,
-            bg=COLORS["glass"],
+            bg=COLORS["card"],
             fg=COLORS["muted"],
             font=("Segoe UI", 9),
             wraplength=650,
             justify="left",
             anchor="w",
         ).grid(row=0, column=1, sticky="w", padx=(12, 0))
-        self.home_online_frame = tk.Frame(online_panel, bg=COLORS["glass"])
-        self.home_online_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(7, 0))
+        self.home_online_frame = tk.Frame(online_panel, bg=COLORS["card"])
+        self.home_online_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
 
-        foxhole_panel = tk.Frame(hero, bg=COLORS["glass"], highlightthickness=1, highlightbackground="#203857")
-        foxhole_panel.pack(fill="x", padx=20, pady=(0, 16))
-        tk.Label(foxhole_panel, text=self.tr.t("home.foxhole_title"), bg=COLORS["glass"], fg=COLORS["text"], font=("Segoe UI", 11, "bold")).grid(
-            row=0, column=0, sticky="w", padx=12, pady=(9, 2)
+        foxhole_panel = modern_frame(hero, COLORS["card_2"], radius=12, border=0)
+        foxhole_panel.pack(fill="x", padx=20, pady=(10, 20))
+        tk.Label(foxhole_panel, text=self.tr.t("home.foxhole_title"), bg=COLORS["card_2"], fg=COLORS["text"], font=("Segoe UI", 11, "bold")).grid(
+            row=0, column=0, sticky="w", padx=16, pady=(14, 2)
         )
-        tk.Label(foxhole_panel, textvariable=self.foxhole_status_var, bg=COLORS["glass"], fg=COLORS["muted"], font=("Segoe UI", 9)).grid(
-            row=1, column=0, sticky="w", padx=12, pady=(0, 9)
+        tk.Label(foxhole_panel, textvariable=self.foxhole_status_var, bg=COLORS["card_2"], fg=COLORS["muted"], font=("Segoe UI", 9)).grid(
+            row=1, column=0, sticky="w", padx=16, pady=(0, 14)
         )
         self.foxhole_button = modern_button(
             foxhole_panel,
@@ -1400,10 +1442,10 @@ class FelbApp(AppBase):
             text_color=COLORS["accent_text"],
             hover=COLORS["accent_2"],
             width=128,
-            height=34,
+            height=36,
             font=("Segoe UI", 9, "bold"),
         )
-        self.foxhole_button.grid(row=0, column=1, rowspan=2, sticky="e", padx=12, pady=9)
+        self.foxhole_button.grid(row=0, column=1, rowspan=2, sticky="e", padx=16, pady=12)
         foxhole_panel.columnconfigure(0, weight=1)
 
         grid = modern_frame(canvas, COLORS["bg"], radius=0)
@@ -1413,22 +1455,27 @@ class FelbApp(AppBase):
         self.home_chat_panel = HomeChatPanel(grid, self)
         self.home_chat_panel.grid(row=0, column=0, sticky="nsew")
 
-        hero.bind("<Configure>", lambda _event: self.layout_home_sections(canvas, hero_window, grid_window, hero))
-        grid.bind("<Configure>", lambda _event: self.layout_home_sections(canvas, hero_window, grid_window, hero))
+        hero.bind("<Configure>", lambda _event: self.request_home_layout(canvas, hero_window, grid_window, hero))
+        grid.bind("<Configure>", lambda _event: self.request_home_layout(canvas, hero_window, grid_window, hero))
         canvas.bind("<Configure>", lambda event: self.redraw_home_background(event, hero_window, grid_window, hero))
         self.bind_mousewheel_recursive(page, canvas)
         return page
 
     def redraw_home_background(self, event, hero_window: int, grid_window: int, hero: tk.Widget) -> None:
         canvas: tk.Canvas = event.widget
-        canvas.delete("wallpaper")
         width = max(1, event.width)
-        height = max(1, event.height)
-        canvas.create_rectangle(0, 0, width, height, fill=COLORS["bg"], outline="", tags="wallpaper")
-        canvas.tag_lower("wallpaper")
         canvas.itemconfigure(hero_window, width=min(860, max(320, width - 48)))
         canvas.itemconfigure(grid_window, width=max(320, width - 48))
-        self.layout_home_sections(canvas, hero_window, grid_window, hero)
+        self.request_home_layout(canvas, hero_window, grid_window, hero)
+
+    def request_home_layout(self, canvas: tk.Canvas, hero_window: int, grid_window: int, hero: tk.Widget) -> None:
+        job = getattr(self, "home_layout_job", None)
+        if job is not None:
+            try:
+                self.after_cancel(job)
+            except Exception:
+                pass
+        self.home_layout_job = self.after(16, lambda: self.layout_home_sections(canvas, hero_window, grid_window, hero))
 
     def layout_home_sections(self, canvas: tk.Canvas, hero_window: int, grid_window: int, hero: tk.Widget) -> None:
         hero_height = max(hero.winfo_reqheight(), hero.winfo_height(), 220)
@@ -1855,14 +1902,18 @@ class FelbApp(AppBase):
             save_settings(self.settings)
 
     def startup_target_and_args(self) -> tuple[Path, str]:
+        app_settings = load_settings().get("app", {})
+        start_in_background = app_settings.get("start_in_background", False)
+        bg_arg = " --background" if start_in_background else ""
+
         if getattr(sys, "frozen", False):
-            return Path(sys.executable).resolve(), ""
+            return Path(sys.executable).resolve(), bg_arg.strip()
 
         python_exe = Path(sys.executable).resolve()
         pythonw = python_exe.with_name("pythonw.exe")
         if pythonw.exists():
             python_exe = pythonw
-        return python_exe, f'"{(BASE_DIR / "felb_app.py").resolve()}"'
+        return python_exe, f'"{(BASE_DIR / "felb_app.py").resolve()}"{bg_arg}'
 
     def startup_command(self) -> str:
         target, arguments = self.startup_target_and_args()
@@ -1983,30 +2034,23 @@ class FelbApp(AppBase):
             pass
 
     def set_start_with_windows(self, enabled: bool) -> None:
-        if enabled:
-            startup_task_error = None
-            startup_shortcut_error = None
-            # Clean previous duplicate entry before creating a fresh startup config.
-            self.remove_startup_shortcut()
-            try:
-                self.create_startup_task()
-            except Exception as exc:
-                startup_task_error = exc
-                # Fallback only if Task Scheduler fails.
-                try:
-                    self.create_startup_entry()
-                except Exception as shortcut_exc:
-                    startup_shortcut_error = shortcut_exc
-            self.clear_legacy_run_key()
-            if startup_task_error and startup_shortcut_error:
-                raise RuntimeError(
-                    f"Task Scheduler: {startup_task_error}; Startup shortcut: {startup_shortcut_error}"
-                )
-            return
+        import winreg
 
+        # Clean legacy methods
         self.remove_startup_task()
         self.remove_startup_shortcut()
         self.clear_legacy_run_key()
+
+        run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        
+        if enabled:
+            target, arguments = self.startup_target_and_args()
+            command = f'"{target}" {arguments}'.strip() if arguments else f'"{target}"'
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
+                    winreg.SetValueEx(key, APP_TITLE, 0, winreg.REG_SZ, command)
+            except Exception as exc:
+                raise RuntimeError(f"Falha ao escrever no Registro do Windows: {exc}")
 
     def check_for_updates(self, on_done=None) -> None:
         if not UPDATE_REPO:
@@ -2458,6 +2502,7 @@ if __name__ == "__main__":
             pass
         raise SystemExit(0)
     try:
-        FelbApp().mainloop()
+        start_minimized = "--background" in sys.argv or "-background" in sys.argv
+        FelbApp(start_minimized=start_minimized).mainloop()
     finally:
         release_single_instance_mutex(instance_mutex)

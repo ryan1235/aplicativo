@@ -539,7 +539,7 @@ class MacroRecorder:
                 if self.user32.GetAsyncKeyState(VK_ESCAPE) & 0x8000:
                     self.stop_replay_event.set()
                     break
-                time.sleep(0.01)
+                time.sleep(0.05)
 
         threading.Thread(target=escape_watcher, daemon=True).start()
         

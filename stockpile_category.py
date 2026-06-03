@@ -851,7 +851,8 @@ class StockpileCategory(ttk.Frame):
 
     def tick_relative_update_clock(self) -> None:
         self.relative_update_job = None
-        self.draw_visual_stockpile()
+        if self.active:
+            self.draw_visual_stockpile()
         self.schedule_relative_update_clock()
 
     def parsed_last_update(self) -> datetime | None:
