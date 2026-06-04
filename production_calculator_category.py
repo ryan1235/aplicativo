@@ -116,14 +116,23 @@ def parent_surface_color(parent, fallback: str) -> str:
     for option in ("fg_color", "bg"):
         try:
             value = parent.cget(option)
-            if isinstance(value, tuple):
-                return value[-1]
+            if isinstance(value, (tuple, list)):
+                return str(value[-1])
             if value:
                 return str(value)
         except Exception:
             pass
     return fallback
 
+
+def widget_color(widget, fallback: str) -> str:
+    if ctk is not None:
+        try:
+            color = widget.cget("fg_color")
+            if isinstance(color, tuple): return color[-1]
+            return color
+        except Exception: return fallback
+    return widget.cget("bg")
 
 def modern_frame(parent, color: str, radius: int = 18, border: int = 0, border_color: str | None = None):
     if ctk is not None:
@@ -136,6 +145,18 @@ def modern_frame(parent, color: str, radius: int = 18, border: int = 0, border_c
             border_color=border_color or color,
         )
     return tk.Frame(parent, bg=color, highlightthickness=border, highlightbackground=border_color or color)
+
+def modern_radiobutton(parent, text: str, variable, value, command=None, font=("Segoe UI", 11, "bold")):
+    if ctk is not None:
+        bg = widget_color(parent, COLORS.get("card", "#111c31"))
+        return ctk.CTkRadioButton(
+            parent, text=text, variable=variable, value=value, command=command,
+            bg_color=bg, fg_color=COLORS.get("accent_2", "#8ab4ff"),
+            hover_color=COLORS.get("accent", "#5eead4"), text_color=COLORS.get("text", "#edf6ff"),
+            border_color=COLORS.get("line", "#2d496f"), font=font, radiobutton_width=20,
+            radiobutton_height=20, border_width_unchecked=2, border_width_checked=5
+        )
+    return tk.Radiobutton(parent, text=text, variable=variable, value=value, command=command, bg=COLORS.get("card"), fg=COLORS.get("text"), selectcolor=COLORS.get("soft"), font=font)
 
 
 def clean_enum(value: str | None) -> str:
@@ -320,18 +341,13 @@ class ProductionCalculatorCategory(ttk.Frame):
         filters.grid(row=1, column=0, sticky="ew", pady=(0, 6))
         filters.columnconfigure(4, weight=1)
         
-        tk.Radiobutton(
+        modern_radiobutton(
             filters,
             text=self.tr.t("production.mode_factory"),
             variable=self.mode_var,
             value="factory",
             command=self.on_mode_changed,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["card_2"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 8, "bold"),
+            font=("Segoe UI", 8, "bold")
         ).grid(row=0, column=0, sticky="w", padx=(0, 4))
         
         mult_frame = tk.Frame(filters, bg=COLORS["card"])
@@ -353,33 +369,23 @@ class ProductionCalculatorCategory(ttk.Frame):
         tk.Label(mult_frame, textvariable=self.factory_multiplier, bg=COLORS["card"], fg=COLORS["accent"], font=("Segoe UI", 8, "bold"), width=3).pack(side="left")
         tk.Button(mult_frame, text="+", command=inc, bg=COLORS["card_2"], fg=COLORS["text"], relief="flat", activebackground=COLORS["line"]).pack(side="left")
 
-        tk.Radiobutton(
+        modern_radiobutton(
             filters,
             text=self.tr.t("production.mode_mpf"),
             variable=self.mode_var,
             value="mpf",
             command=self.on_mode_changed,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["card_2"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 8, "bold"),
+            font=("Segoe UI", 8, "bold")
         ).grid(row=0, column=2, sticky="w", padx=(0, 8))
 
         for value, column in (("Neutral", 0), ("Colonial", 1), ("Warden", 2)):
-            tk.Radiobutton(
+            modern_radiobutton(
                 filters,
                 text=self.tr.t(f"production.faction_{value.lower()}"),
                 variable=self.faction_filter,
                 value=value,
                 command=self.refresh_item_grid,
-                bg=COLORS["card"],
-                fg=COLORS["text"],
-                selectcolor=COLORS["card_2"],
-                activebackground=COLORS["card"],
-                activeforeground=COLORS["text"],
-                font=("Segoe UI", 8, "bold"),
+                font=("Segoe UI", 8, "bold")
             ).grid(row=1, column=column, sticky="w", padx=(0, 8), pady=(4, 0))
         search_wrap = modern_frame(filters, "#050914", radius=8, border=1, border_color="#24405f")
         search_wrap.grid(row=0, column=4, rowspan=2, sticky="e", padx=(10, 0))
@@ -865,8 +871,8 @@ class ProductionCalculatorCategory(ttk.Frame):
         controls.pack(pady=(0, 12))
         
         if self.mode_var.get() == "mpf":
-            tk.Radiobutton(controls, text="Dunne (Solto)", variable=self.mpf_vehicle_mode, value="Dunne", bg=COLORS["card"], fg=COLORS["text"], selectcolor=COLORS["card_2"], activebackground=COLORS["card"], activeforeground=COLORS["text"], command=lambda: refresh_routes()).pack(side="left", padx=10)
-            tk.Radiobutton(controls, text="Flatbed (Caixas)", variable=self.mpf_vehicle_mode, value="Flatbed", bg=COLORS["card"], fg=COLORS["text"], selectcolor=COLORS["card_2"], activebackground=COLORS["card"], activeforeground=COLORS["text"], command=lambda: refresh_routes()).pack(side="left", padx=10)
+            modern_radiobutton(controls, text="Dunne (Solto)", variable=self.mpf_vehicle_mode, value="Dunne", font=("Segoe UI", 8, "bold"), command=lambda: refresh_routes()).pack(side="left", padx=10)
+            modern_radiobutton(controls, text="Flatbed (Caixas)", variable=self.mpf_vehicle_mode, value="Flatbed", font=("Segoe UI", 8, "bold"), command=lambda: refresh_routes()).pack(side="left", padx=10)
         else:
             tk.Label(controls, text="Veículo: Dunne Transport (15 Slots)", bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 9)).pack()
             self.mpf_vehicle_mode.set("Dunne")

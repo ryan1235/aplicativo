@@ -142,6 +142,188 @@ def configure_button_color(button, color: str, text_color: str | None = None) ->
         button.configure(**kwargs)
 
 
+def modern_option_menu(parent, variable, values: list[str], width: int = 120, command=None):
+    if ctk is not None:
+        bg = widget_color(parent, COLORS["card"])
+        menu = ctk.CTkOptionMenu(
+            parent,
+            variable=variable,
+            values=values,
+            width=width,
+            height=30,
+            bg_color=bg,
+            fg_color=COLORS["soft"],
+            button_color=COLORS["soft"],
+            button_hover_color=COLORS["card_2"],
+            dropdown_fg_color=COLORS["card"],
+            dropdown_hover_color=COLORS["card_2"],
+            dropdown_text_color=COLORS["text"],
+            text_color=COLORS["text"],
+            font=("Segoe UI", 11, "bold"),
+            dropdown_font=("Segoe UI", 11),
+            corner_radius=6,
+            command=command
+        )
+        def custom_open():
+            current_values = menu._values
+            if not current_values:
+                return
+
+            top = tk.Toplevel(parent)
+            top.overrideredirect(True)
+            top.attributes("-topmost", True)
+            top.configure(bg=COLORS["line"])
+            
+            x = menu.winfo_rootx()
+            y = menu.winfo_rooty() + menu.winfo_height() + 2
+            w = menu.winfo_width()
+            
+            # Limitar a altura se tiver muitos itens (ex: hotkeys)
+            max_items = min(len(current_values), 8)
+            item_height = 28
+            h = max_items * item_height + 2
+            top.geometry(f"{w}x{h}+{x}+{y}")
+            
+            original_rooty = menu.winfo_rooty()
+            def check_position():
+                if not top.winfo_exists(): return
+                try:
+                    if menu.winfo_rooty() != original_rooty:
+                        top.destroy()
+                        return
+                except tk.TclError:
+                    pass
+                top.after(50, check_position)
+            top.after(50, check_position)
+            
+            max_items = min(len(current_values), 8)
+            item_height = 25
+            h = max_items * item_height + 4
+            top.geometry(f"{w}x{h}+{x}+{y}")
+            
+            frame = tk.Frame(top, bg=COLORS["card"])
+            frame.pack(fill="both", expand=True, padx=1, pady=1)
+            
+            scrollbar = tk.Scrollbar(frame, orient="vertical")
+            lb = tk.Listbox(frame, bg=COLORS["card"], fg=COLORS["text"],
+                            selectbackground=COLORS["card_2"], selectforeground=COLORS["text"],
+                            font=("Segoe UI", 10, "bold"), bd=0, highlightthickness=0, relief="flat",
+                            activestyle="none", yscrollcommand=scrollbar.set)
+            scrollbar.config(command=lb.yview)
+            
+            if len(current_values) > max_items:
+                scrollbar.pack(side="right", fill="y")
+            lb.pack(side="left", fill="both", expand=True)
+            
+            for v in current_values:
+                lb.insert("end", f"  {v}")
+                
+            def motion(e):
+                idx = lb.nearest(e.y)
+                if idx >= 0:
+                    lb.selection_clear(0, "end")
+                    lb.selection_set(idx)
+                    
+            def select(e=None):
+                sel = lb.curselection()
+                if sel:
+                    menu._dropdown_callback(current_values[sel[0]])
+                top.destroy()
+                
+            lb.bind("<Motion>", motion)
+            lb.bind("<Leave>", lambda e: lb.selection_clear(0, "end"))
+            lb.bind("<ButtonRelease-1>", select)
+            
+            def on_mousewheel(e):
+                lb.yview_scroll(int(-1*(e.delta/120)), "units")
+                return "break"
+                
+            top.bind("<MouseWheel>", on_mousewheel)
+            
+            def on_focus_out(event):
+                if not top.winfo_exists(): return
+                focused = top.focus_get()
+                if not focused or not str(focused).startswith(str(top)):
+                    top.destroy()
+                    
+            top.bind("<FocusOut>", on_focus_out)
+            top.after(50, top.focus_set)
+        
+        menu._open_dropdown_menu = custom_open
+        return menu
+    cb = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", width=width//10)
+    if command:
+        cb.bind("<<ComboboxSelected>>", lambda e: command(variable.get()))
+    return cb
+
+def modern_checkbutton(parent, text: str, variable, command=None, font=("Segoe UI", 11, "bold")):
+    if ctk is not None:
+        bg = widget_color(parent, COLORS["card"])
+        return ctk.CTkCheckBox(
+            parent,
+            text=text,
+            variable=variable,
+            command=command,
+            bg_color=bg,
+            fg_color=COLORS["accent_2"],
+            hover_color=COLORS["accent"],
+            checkmark_color=COLORS["bg"],
+            text_color=COLORS["text"],
+            border_color=COLORS["line"],
+            font=font,
+            checkbox_width=20,
+            checkbox_height=20,
+            border_width=2,
+            corner_radius=6,
+        )
+    return tk.Checkbutton(
+        parent,
+        text=text,
+        variable=variable,
+        command=command,
+        bg=COLORS["card"],
+        fg=COLORS["text"],
+        selectcolor=COLORS["soft"],
+        activebackground=COLORS["card"],
+        activeforeground=COLORS["text"],
+        font=font,
+    )
+
+def modern_radiobutton(parent, text: str, variable, value, command=None, font=("Segoe UI", 11, "bold")):
+    if ctk is not None:
+        bg = widget_color(parent, COLORS["card"])
+        return ctk.CTkRadioButton(
+            parent,
+            text=text,
+            variable=variable,
+            value=value,
+            command=command,
+            bg_color=bg,
+            fg_color=COLORS["accent_2"],
+            hover_color=COLORS["accent"],
+            text_color=COLORS["text"],
+            border_color=COLORS["line"],
+            font=font,
+            radiobutton_width=20,
+            radiobutton_height=20,
+            border_width_unchecked=2,
+            border_width_checked=5,
+        )
+    return tk.Radiobutton(
+        parent,
+        text=text,
+        variable=variable,
+        value=value,
+        command=command,
+        bg=COLORS["card"],
+        fg=COLORS["text"],
+        selectcolor=COLORS["soft"],
+        activebackground=COLORS["card"],
+        activeforeground=COLORS["text"],
+        font=font,
+    )
+
+
 def widget_color(widget, fallback: str) -> str:
     if ctk is not None:
         try:
@@ -924,9 +1106,14 @@ class FunctionsCategory(ttk.Frame):
         self.add_label(controls, self.tr.t("clicker.key"), 0)
         auto_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
         auto_hotkey_row.grid(row=0, column=1, sticky="w", padx=14, pady=10)
-        auto_hotkey_combo = ttk.Combobox(auto_hotkey_row, textvariable=self.hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        auto_hotkey_combo = modern_option_menu(
+            auto_hotkey_row, 
+            variable=self.hotkey_var, 
+            values=list(ACTION_KEYS.keys()), 
+            width=120,
+            command=lambda v: self.save_clicker_settings()
+        )
         auto_hotkey_combo.grid(row=0, column=0, sticky="w")
-        auto_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
         modern_button(
             auto_hotkey_row,
             text=self.tr.t("clicker.detect_key"),
@@ -941,9 +1128,14 @@ class FunctionsCategory(ttk.Frame):
         self.add_label(controls, self.tr.t("clicker.key_move"), 1)
         move_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
         move_hotkey_row.grid(row=1, column=1, sticky="w", padx=14, pady=10)
-        move_hotkey_combo = ttk.Combobox(move_hotkey_row, textvariable=self.move_hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        move_hotkey_combo = modern_option_menu(
+            move_hotkey_row, 
+            variable=self.move_hotkey_var, 
+            values=list(ACTION_KEYS.keys()), 
+            width=120,
+            command=lambda v: self.save_clicker_settings()
+        )
         move_hotkey_combo.grid(row=0, column=0, sticky="w")
-        move_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
         modern_button(
             move_hotkey_row,
             text=self.tr.t("clicker.detect_key"),
@@ -958,9 +1150,14 @@ class FunctionsCategory(ttk.Frame):
         self.add_label(controls, self.tr.t("clicker.key_fixed"), 2)
         fixed_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
         fixed_hotkey_row.grid(row=2, column=1, sticky="w", padx=14, pady=10)
-        fixed_hotkey_combo = ttk.Combobox(fixed_hotkey_row, textvariable=self.fixed_hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        fixed_hotkey_combo = modern_option_menu(
+            fixed_hotkey_row, 
+            variable=self.fixed_hotkey_var, 
+            values=list(ACTION_KEYS.keys()), 
+            width=120,
+            command=lambda v: self.save_clicker_settings()
+        )
         fixed_hotkey_combo.grid(row=0, column=0, sticky="w")
-        fixed_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
         modern_button(
             fixed_hotkey_row,
             text=self.tr.t("clicker.detect_key"),
@@ -975,9 +1172,14 @@ class FunctionsCategory(ttk.Frame):
         self.add_label(controls, self.tr.t("clicker.key_pilot"), 3)
         pilot_hotkey_row = modern_frame(controls, COLORS["soft"], radius=0)
         pilot_hotkey_row.grid(row=3, column=1, sticky="w", padx=14, pady=10)
-        pilot_hotkey_combo = ttk.Combobox(pilot_hotkey_row, textvariable=self.pilot_hotkey_var, values=list(ACTION_KEYS.keys()), state="readonly", width=12)
+        pilot_hotkey_combo = modern_option_menu(
+            pilot_hotkey_row, 
+            variable=self.pilot_hotkey_var, 
+            values=list(ACTION_KEYS.keys()), 
+            width=120,
+            command=lambda v: self.save_clicker_settings()
+        )
         pilot_hotkey_combo.grid(row=0, column=0, sticky="w")
-        pilot_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
         modern_button(
             pilot_hotkey_row,
             text=self.tr.t("clicker.detect_key"),
@@ -990,18 +1192,28 @@ class FunctionsCategory(ttk.Frame):
         ).grid(row=0, column=1, sticky="w", padx=(8, 0))
 
         self.add_label(controls, self.tr.t("clicker.speed"), 4)
-        speed_combo = ttk.Combobox(controls, textvariable=self.speed_display_var, values=self.speed_labels(), state="readonly", width=12)
+        speed_combo = modern_option_menu(
+            controls, 
+            variable=self.speed_display_var, 
+            values=self.speed_labels(), 
+            width=120,
+            command=lambda v: self.on_speed_selected(None)
+        )
         speed_combo.grid(
             row=4, column=1, sticky="w", padx=14, pady=10
         )
-        speed_combo.bind("<<ComboboxSelected>>", self.on_speed_selected)
 
         self.add_label(controls, self.tr.t("clicker.button"), 5)
-        mouse_button_combo = ttk.Combobox(controls, textvariable=self.mouse_button_display_var, values=self.mouse_button_labels(), state="readonly", width=12)
+        mouse_button_combo = modern_option_menu(
+            controls, 
+            variable=self.mouse_button_display_var, 
+            values=self.mouse_button_labels(), 
+            width=120,
+            command=lambda v: self.on_mouse_button_selected(None)
+        )
         mouse_button_combo.grid(
             row=5, column=1, sticky="w", padx=14, pady=10
         )
-        mouse_button_combo.bind("<<ComboboxSelected>>", self.on_mouse_button_selected)
 
         self.add_label(controls, self.tr.t("clicker.slot_positions"), 6)
         slots_row = modern_frame(controls, COLORS["soft"], radius=0)
@@ -1129,33 +1341,31 @@ class FunctionsCategory(ttk.Frame):
         tk.Label(overlay_card, text=self.tr.t("overlay.title"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=20, pady=(18, 8)
         )
-        tk.Checkbutton(
+        modern_checkbutton(
             overlay_card,
             text=self.tr.t("overlay.show"),
             variable=self.overlay_enabled_var,
             command=self.save_clicker_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 10, "bold"),
         ).grid(row=1, column=0, columnspan=2, sticky="w", padx=20, pady=(0, 8))
         self.add_label(overlay_card, self.tr.t("overlay.hotkey"), 2)
-        overlay_hotkey_combo = ttk.Combobox(overlay_card, textvariable=self.overlay_hotkey_var, values=list(HOTKEYS.keys()), state="readonly", width=12)
+        overlay_hotkey_combo = modern_option_menu(
+            overlay_card, 
+            variable=self.overlay_hotkey_var, 
+            values=list(HOTKEYS.keys()), 
+            width=120,
+            command=lambda v: self.save_clicker_settings()
+        )
         overlay_hotkey_combo.grid(row=2, column=1, sticky="w", padx=14, pady=8)
-        overlay_hotkey_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_clicker_settings())
         self.add_label(overlay_card, self.tr.t("overlay.color"), 3)
         self.overlay_color_display_var.set(self.overlay_color_label(self.overlay_color_var.get()))
-        overlay_color_combo = ttk.Combobox(
+        overlay_color_combo = modern_option_menu(
             overlay_card,
-            textvariable=self.overlay_color_display_var,
+            variable=self.overlay_color_display_var,
             values=self.overlay_color_labels(),
-            state="readonly",
-            width=12,
+            width=120,
+            command=lambda v: self.save_overlay_color_selection()
         )
         overlay_color_combo.grid(row=3, column=1, sticky="w", padx=14, pady=8)
-        overlay_color_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_overlay_color_selection())
         checks = modern_frame(overlay_card, COLORS["card"], radius=0)
         checks.grid(row=4, column=0, columnspan=2, sticky="ew", padx=20, pady=(4, 18))
         for index, (label, variable) in enumerate(
@@ -1166,17 +1376,12 @@ class FunctionsCategory(ttk.Frame):
                 (self.tr.t("overlay.upload_notification"), self.overlay_notification_var),
             )
         ):
-            tk.Checkbutton(
+            modern_checkbutton(
                 checks,
                 text=label,
                 variable=variable,
                 command=self.save_clicker_settings,
-                bg=COLORS["card"],
-                fg=COLORS["text"],
-                selectcolor=COLORS["soft"],
-                activebackground=COLORS["card"],
-                activeforeground=COLORS["text"],
-                font=("Segoe UI", 9),
+                font=("Segoe UI", 11)
             ).grid(row=0, column=index, sticky="w", padx=(0, 16))
         action_row = modern_frame(overlay_card, COLORS["card"], radius=0)
         action_row.grid(row=5, column=0, columnspan=2, sticky="ew", padx=20, pady=(0, 20))
@@ -1949,29 +2154,18 @@ class SettingsCategory(ttk.Frame):
         tk.Label(app_card, text=self.tr.t("settings.app_title"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).grid(
             row=0, column=0, sticky="w", padx=20, pady=(18, 4)
         )
-        tk.Checkbutton(
+        modern_checkbutton(
             app_card,
             text=self.tr.t("settings.start_windows"),
             variable=self.start_with_windows_var,
             command=self.save_app_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 10, "bold"),
         ).grid(row=1, column=0, sticky="w", padx=20, pady=(8, 4))
-        tk.Checkbutton(
+        modern_checkbutton(
             app_card,
             text=self.tr.t("settings.start_background") if self.tr.t("settings.start_background") != "settings.start_background" else "Iniciar Minimizado (Segundo Plano)",
             variable=self.start_in_background_var,
             command=self.save_app_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 9, "bold"),
+            font=("Segoe UI", 10, "bold")
         ).grid(row=2, column=0, sticky="w", padx=40, pady=(0, 4))
 
         close_row = modern_frame(app_card, COLORS["card"], radius=0)
@@ -1987,18 +2181,12 @@ class SettingsCategory(ttk.Frame):
             ),
             start=1,
         ):
-            tk.Radiobutton(
+            modern_radiobutton(
                 close_row,
                 text=self.tr.t(label_key),
                 value=value,
                 variable=self.close_action_var,
                 command=self.save_app_settings,
-                bg=COLORS["card"],
-                fg=COLORS["text"],
-                selectcolor=COLORS["soft"],
-                activebackground=COLORS["card"],
-                activeforeground=COLORS["text"],
-                font=("Segoe UI", 9, "bold"),
             ).grid(row=0, column=index, sticky="w", padx=(0, 14))
 
         self.controller.build_overlay_controls(container, row=3)
@@ -2017,53 +2205,29 @@ class SettingsCategory(ttk.Frame):
             wraplength=760,
             justify="left",
         ).grid(row=1, column=0, sticky="w", padx=20, pady=(0, 18))
-        tk.Checkbutton(
+        modern_checkbutton(
             sound_card,
             text=self.tr.t("settings.sound_stockpile"),
             variable=self.stockpile_sound_enabled_var,
             command=self.save_app_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 10, "bold"),
         ).grid(row=2, column=0, sticky="w", padx=20, pady=(0, 8))
-        tk.Checkbutton(
+        modern_checkbutton(
             sound_card,
             text=self.tr.t("settings.sound_squadlock"),
             variable=self.squadlock_sound_enabled_var,
             command=self.save_app_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 10, "bold"),
         ).grid(row=3, column=0, sticky="w", padx=20, pady=(0, 8))
-        tk.Checkbutton(
+        modern_checkbutton(
             sound_card,
             text=self.tr.t("settings.chat_mention_overlay"),
             variable=self.chat_mention_overlay_enabled_var,
             command=self.save_app_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 10, "bold"),
         ).grid(row=4, column=0, sticky="w", padx=20, pady=(0, 8))
-        tk.Checkbutton(
+        modern_checkbutton(
             sound_card,
             text=self.tr.t("settings.chat_mention_sound"),
             variable=self.chat_mention_sound_enabled_var,
             command=self.save_app_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 10, "bold"),
         ).grid(row=5, column=0, sticky="w", padx=20, pady=(0, 18))
         self.bind_mousewheel_recursive(outer, canvas)
 

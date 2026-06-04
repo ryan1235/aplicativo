@@ -14,6 +14,7 @@ from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
+import emoji
 
 from settings_store import load_settings
 
@@ -136,6 +137,7 @@ class HomeChatPanel(ttk.Frame):
         self.messages_retry_after = 0.0
         self.send_retry_after = 0.0
         self.messages_in_flight = False
+        self.is_backgrounded = False
         self.pending_message_slug: str | None = None
         self.avatar_cache: dict[str, tk.PhotoImage] = {}
         self.pending_avatar_requests: set[str] = set()
@@ -174,6 +176,33 @@ class HomeChatPanel(ttk.Frame):
         self.columnconfigure(0, weight=1)
         self.load_whisper_cache()
         self.build()
+        self.after(100, self._setup_focus_bindings)
+
+    def _setup_focus_bindings(self):
+        try:
+            top = self.winfo_toplevel()
+            # Foco e minimização
+            top.bind("<FocusIn>", self._on_app_focus_in, add="+")
+            top.bind("<FocusOut>", self._on_app_focus_out, add="+")
+            top.bind("<Unmap>", self._on_app_focus_out, add="+")
+            top.bind("<Map>", self._on_app_focus_in, add="+")
+        except Exception:
+            pass
+
+    def _on_app_focus_in(self, event):
+        if event.widget == self.winfo_toplevel():
+            if self.is_backgrounded:
+                self.is_backgrounded = False
+                # Wake up imediato
+                self.schedule_refresh(0)
+                self.schedule_mention_notifications(0)
+
+    def _on_app_focus_out(self, event):
+        if event.widget == self.winfo_toplevel():
+            if not self.is_backgrounded:
+                self.is_backgrounded = True
+                import gc
+                gc.collect()
         self.log("panel initialized")
         self.log("waiting for steam profile refresh before authenticate")
 
@@ -299,11 +328,13 @@ class HomeChatPanel(ttk.Frame):
 
         self.emoji_label = tk.Label(send_label_row, text=self.tr.t("home.chat.emoji"), bg="#07111f", fg="#7f90aa", font=("Segoe UI", 8, "bold"))
         self.emoji_label.pack(side="left", padx=(12, 6))
-        for emoji in QUICK_EMOJIS:
-            tk.Button(
+        for emoji_char in QUICK_EMOJIS:
+            photo = self.get_twemoji_async(emoji_char, size=20)
+            btn = tk.Button(
                 send_label_row,
-                text=emoji,
-                command=lambda value=emoji: self.insert_emoji(value),
+                image=photo if photo else "",
+                text="" if photo else emoji_char,
+                command=lambda value=emoji_char: self.insert_emoji(value),
                 bg="#0d1729",
                 fg="#edf6ff",
                 activebackground="#182d49",
@@ -311,13 +342,16 @@ class HomeChatPanel(ttk.Frame):
                 relief="flat",
                 bd=0,
                 font=("Segoe UI Emoji", 10),
-                padx=6,
-                pady=1,
+                padx=6 if not photo else 2,
+                pady=1 if not photo else 2,
                 cursor="hand2",
-            ).pack(side="left", padx=(0, 3))
+            )
+            if photo:
+                btn.image = photo
+            btn.pack(side="left", padx=(0, 3))
         self.gif_button = tk.Button(
             send_label_row,
-            text=self.tr.t("home.chat.gif"),
+            text="🙂 GIFs & Emojis",
             command=self.prompt_gif_url,
             bg="#172844",
             fg="#8ab4ff",
@@ -465,16 +499,20 @@ class HomeChatPanel(ttk.Frame):
             pass
 
     def prompt_gif_url(self) -> None:
-        url = simpledialog.askstring(
-            self.tr.t("home.chat.gif_title"),
-            self.tr.t("home.chat.gif_prompt"),
-            parent=self,
-        )
-        if not url:
+        self.open_emoji_picker()
+
+    def open_emoji_picker(self):
+        if hasattr(self, "emoji_picker") and self.emoji_picker.winfo_exists():
+            self.emoji_picker.destroy()
             return
-        current = self.input_var.get().strip()
-        separator = " " if current else ""
-        self.input_var.set(f"{current}{separator}{url.strip()}")
+            
+        self.emoji_picker = EmojiGifPicker(self.winfo_toplevel(), self)
+        
+        x = self.winfo_rootx() + 20
+        y = self.winfo_rooty() + self.winfo_height() - 480
+        if y < 0:
+            y = 0
+        self.emoji_picker.geometry(f"+{x}+{y}")
         self.message_entry.icursor(tk.END)
         self.message_entry.focus_set()
 
@@ -802,7 +840,13 @@ class HomeChatPanel(ttk.Frame):
             delay = int(retry_seconds * 1000) + 1000
         else:
             delay = 15000
-        return delay if self.active else delay * 3
+        
+        if not self.active:
+            delay *= 3
+        if self.is_backgrounded:
+            delay = 60000
+            
+        return delay
 
     def poll_refresh(self) -> None:
         self.refresh_job = None
@@ -917,10 +961,13 @@ class HomeChatPanel(ttk.Frame):
                 pass
             self.notification_job = None
 
-    def schedule_mention_notifications(self, delay_ms: int = 6000) -> None:
+    def schedule_mention_notifications(self, override_delay: int | None = None) -> None:
         self.cancel_mention_notifications()
-        delay = delay_ms if getattr(self, "active", True) else delay_ms * 3
         if self.active and self.chat_token:
+            if override_delay is not None:
+                delay_ms = override_delay
+            else:
+                delay_ms = 20000 if self.is_backgrounded else 2500
             self.notification_job = self.after(delay_ms, self.poll_mention_notifications)
 
     def poll_mention_notifications(self) -> None:
@@ -1772,7 +1819,51 @@ class HomeChatPanel(ttk.Frame):
         self.render_message_mentions(body, message, visible_content, align_right=False)
         self.render_message_previews(body, content, align_right=False)
 
+    def get_twemoji_async(self, char: str, size: int = 18) -> tk.PhotoImage | None:
+        if not char:
+            return None
+        points = [f"{ord(c):x}" for c in char]
+        points = [p for p in points if p != "fe0f"]
+        hex_str = "-".join(points)
+        cache_key = f"twemoji_{hex_str}_{size}"
+        if cache_key in self.preview_cache:
+            return self.preview_cache[cache_key]
+        emoji_dir = Path("user_data") / "emojis"
+        emoji_dir.mkdir(parents=True, exist_ok=True)
+        img_path = emoji_dir / f"{hex_str}.png"
+        if img_path.exists():
+            try:
+                if Image and ImageTk:
+                    image = Image.open(img_path).convert("RGBA")
+                    image.thumbnail((size, size), Image.Resampling.LANCZOS)
+                    photo = ImageTk.PhotoImage(image)
+                    self.preview_cache[cache_key] = photo
+                    self.preview_image_refs.append(photo)
+                    return photo
+            except Exception:
+                pass
+        if not Image or not ImageTk:
+            return None
+        blank = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        photo = ImageTk.PhotoImage(blank)
+        self.preview_cache[cache_key] = photo
+        self.preview_image_refs.append(photo)
+        def worker():
+            try:
+                url = f"https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.0.3/assets/72x72/{hex_str}.png"
+                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    img_path.write_bytes(response.read())
+                image = Image.open(img_path).convert("RGBA")
+                image.thumbnail((size, size), Image.Resampling.LANCZOS)
+                self.after(0, lambda i=image, p=photo: p.paste(i))
+            except Exception as exc:
+                self.log(f"Twemoji async fetch failed for {char} ({hex_str}): {exc}")
+        threading.Thread(target=worker, daemon=True).start()
+        return photo
+
     def render_message_text(self, parent: tk.Widget, content: str, message: dict[str, Any], bubble_bg: str, *, align_right: bool = False) -> None:
+        content = emoji.emojize(content, language='alias')
         line_count = max(1, content.count("\n") + (len(content) // 82) + 1)
         text = tk.Text(
             parent,
@@ -1791,9 +1882,53 @@ class HomeChatPanel(ttk.Frame):
         )
         text.pack(fill="x", padx=0, pady=(0, 4))
         text.tag_configure("body", justify="left")
-        text.insert("1.0", content, ("body",))
+        text.tag_configure("bold", font=("Segoe UI", 10, "bold"))
+        text.tag_configure("italic", font=("Segoe UI", 10, "italic"))
+        text.tag_configure("strikethrough", overstrike=True)
+        text.tag_configure("code", font=("Consolas", 10), background="#101e33", foreground="#8ab4ff")
+
+        pattern = re.compile(r'(\*\*.*?\*\*|\*.*?\*|~~.*?~~|`.*?`)')
+        parts = pattern.split(content)
+        for part in parts:
+            if not part:
+                continue
+            tags = ("body",)
+            if part.startswith("**") and part.endswith("**") and len(part) > 4:
+                part = part[2:-2]
+                tags = ("body", "bold")
+            elif part.startswith("*") and part.endswith("*") and len(part) > 2:
+                part = part[1:-1]
+                tags = ("body", "italic")
+            elif part.startswith("~~") and part.endswith("~~") and len(part) > 4:
+                part = part[2:-2]
+                tags = ("body", "strikethrough")
+            elif part.startswith("`") and part.endswith("`") and len(part) > 2:
+                part = part[1:-1]
+                tags = ("body", "code")
+            
+            emojis_in_part = emoji.emoji_list(part)
+            if not emojis_in_part:
+                text.insert("end", part, tags)
+            else:
+                last_idx = 0
+                for em in emojis_in_part:
+                    start = em["match_start"]
+                    end = em["match_end"]
+                    char = em["emoji"]
+                    if start > last_idx:
+                        text.insert("end", part[last_idx:start], tags)
+                    photo = self.get_twemoji_async(char, size=18)
+                    if photo:
+                        text.image_create("end", image=photo)
+                    else:
+                        text.insert("end", char, tags)
+                    last_idx = end
+                if last_idx < len(part):
+                    text.insert("end", part[last_idx:], tags)
+
+        final_text = text.get("1.0", "end-1c")
         mention_users = self.message_mention_users(message)
-        for index, match in enumerate(MENTION_RE.finditer(content)):
+        for index, match in enumerate(MENTION_RE.finditer(final_text)):
             name = match.group(1)
             user = mention_users.get(name.casefold()) or self.find_online_user(name) or {"mention": name}
             tag = f"mention_{index}"
@@ -2269,3 +2404,359 @@ class HomeChatPanel(ttk.Frame):
         self.cancel_mention_notifications()
         self.hide_mention_hover_card()
         self.hide_mention_overlay()
+
+
+import tkinter as tk
+from tkinter import ttk
+from PIL import Image, ImageTk
+import io
+import threading
+from pathlib import Path
+
+POPULAR_EMOJIS = [
+    "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "🥲", "☺️", "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰", "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜", "🤪", "🤨", "🧐", "🤓", "😎", "🥸", "🤩", "🥳", "😏", "😒", "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖", "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡", "🤬", "🤯", "😳", "🥵", "🥶", "😱", "😨", "😰", "😥", "😓", "🤗", "🤔", "🫣", "🤭", "🫢", "🫡", "🤫", "🫠", "🤥", "😶", "😶‍🌫️", "😐", "😑", "😬", "🫨", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱", "😴", "🤤", "😪", "😮‍💨", "😵", "😵‍💫", "🤐", "🥴", "🤢", "🤮", "🤧", "😷", "🤒", "🤕", "🤑", "🤠", "😈", "👿", "👹", "👺", "🤡", "💩", "👻", "💀", "☠️", "👽", "👾", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾",
+    "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "❤️‍🩹", "❣️", "💕", "💞", "💓", "💗", "💖", "💘", "💝", "💯", "💢", "💥", "💫", "💦", "💨", "🕳️", "💣", "💬", "👁️‍🗨️", "🗨️", "🗯️", "💭", "💤",
+    "👋", "🤚", "🖐️", "✋", "🖖", "🫱", "🫲", "🫳", "🫴", "👌", "🤌", "🤏", "✌️", "🤞", "🫰", "🤟", "🤘", "🤙", "👈", "👉", "👆", "🖕", "👇", "☝️", "👍", "👎", "✊", "👊", "🤛", "🤜", "👏", "🙌", "🫶", "👐", "🤲", "🤝", "🙏", "✍️", "💅", "🤳", "💪", "🦾", "🦿", "🦵", "🦶", "👂", "🦻", "👃", "🧠", "🫀", "🫁", "🦷", "🦴", "👀", "👁️", "👅", "👄", "🫦",
+    "🔥", "🌟", "✨", "⚡", "☀️", "🌤️", "⛅", "🌥️", "☁️", "🌦️", "🌧️", "⛈️", "🌩️", "🌨️", "❄️", "☃️", "⛄", "🌬️", "💨", "🌪️", "🌫️", "☂️", "☔", "💧", "💦", "🌊"
+]
+
+class EmojiGifPicker(tk.Toplevel):
+    def __init__(self, parent: tk.Widget, panel) -> None:
+        super().__init__(parent)
+        self.panel = panel
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
+        self.configure(bg="#2b2d31", highlightthickness=1, highlightbackground="#1e1f22")
+        self.geometry("360x420")
+        
+        self.current_tab = "emoji"
+        self.gif_images = []
+        self.emoji_images = []
+        
+        tabs_frame = tk.Frame(self, bg="#2b2d31")
+        tabs_frame.pack(fill="x", padx=10, pady=10)
+        
+        self.emoji_tab_btn = tk.Button(tabs_frame, text="Emojis", command=lambda: self.switch_tab("emoji"), bg="#404249", fg="#ffffff", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", bd=0)
+        self.emoji_tab_btn.pack(side="left", padx=5)
+        
+        self.gif_tab_btn = tk.Button(tabs_frame, text="GIFs", command=lambda: self.switch_tab("gif"), bg="#2b2d31", fg="#b5bac1", relief="flat", font=("Segoe UI", 9, "bold"), cursor="hand2", bd=0)
+        self.gif_tab_btn.pack(side="left", padx=5)
+        
+        close_btn = tk.Button(tabs_frame, text="✖", command=self.destroy, bg="#2b2d31", fg="#b5bac1", relief="flat", font=("Segoe UI", 10), cursor="hand2", bd=0)
+        close_btn.pack(side="right", padx=5)
+        
+        self.container = tk.Frame(self, bg="#2b2d31")
+        self.container.pack(fill="both", expand=True)
+        
+        self.emoji_frame = tk.Frame(self.container, bg="#2b2d31")
+        self.gif_frame = tk.Frame(self.container, bg="#2b2d31")
+        
+        self.build_emoji_tab()
+        self.build_gif_tab()
+        
+        self.switch_tab("emoji")
+        
+        self.emoji_search_data = {}
+        self.gif_next_pos = None
+        self.gif_current_query = "foxhole"
+        
+        # Iniciar download do dicionário de emojis (multilíngue) silenciosamente
+        def load_emoji_langs():
+            langs = ['pt', 'en', 'es', 'fr']
+            combined = {}
+            import urllib.request, json
+            for lang in langs:
+                try:
+                    url = f"https://unpkg.com/emojibase-data@15.3.0/{lang}/data.json"
+                    req = urllib.request.Request(url, headers={"User-Agent": "GG/1.0"})
+                    with urllib.request.urlopen(req, timeout=8) as res:
+                        data = json.loads(res.read())
+                        for item in data:
+                            char = item.get('emoji')
+                            if not char: continue
+                            text = (item.get('label', '') + ' ' + ' '.join(item.get('tags', []))).lower()
+                            combined[char] = combined.get(char, "") + " " + text
+                except Exception:
+                    pass
+            self.panel.after(0, lambda: setattr(self, "emoji_search_data", combined))
+            
+        threading.Thread(target=load_emoji_langs, daemon=True).start()
+        
+        top = parent.winfo_toplevel()
+        self.unmap_bind_id = top.bind("<Unmap>", lambda e: self.on_unmap(e), add="+")
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.bind("<MouseWheel>", self.on_mousewheel)
+
+    def on_mousewheel(self, event):
+        if self.current_tab == "emoji":
+            if hasattr(self, "emoji_canvas"):
+                self.emoji_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        else:
+            if hasattr(self, "gif_canvas"):
+                self.gif_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+    def on_unmap(self, event):
+        if hasattr(self, "winfo_exists") and self.winfo_exists():
+            self.destroy()
+
+    def destroy(self):
+        try:
+            top = self.master.winfo_toplevel()
+            top.unbind("<Unmap>", self.unmap_bind_id)
+        except Exception:
+            pass
+        super().destroy()
+
+
+
+    def switch_tab(self, tab):
+        self.current_tab = tab
+        if tab == "emoji":
+            self.gif_frame.pack_forget()
+            self.emoji_frame.pack(fill="both", expand=True)
+            self.emoji_tab_btn.configure(bg="#404249", fg="#ffffff")
+            self.gif_tab_btn.configure(bg="#2b2d31", fg="#b5bac1")
+        else:
+            self.emoji_frame.pack_forget()
+            self.gif_frame.pack(fill="both", expand=True)
+            self.emoji_tab_btn.configure(bg="#2b2d31", fg="#b5bac1")
+            self.gif_tab_btn.configure(bg="#404249", fg="#ffffff")
+
+    def build_emoji_tab(self):
+        search_frame = tk.Frame(self.emoji_frame, bg="#1e1f22", bd=1, relief="solid")
+        search_frame.pack(fill="x", padx=10, pady=5)
+        
+        self.emoji_search_var = tk.StringVar()
+        entry = tk.Entry(search_frame, textvariable=self.emoji_search_var, bg="#1e1f22", fg="#dbdee1", insertbackground="#dbdee1", relief="flat", font=("Segoe UI", 10))
+        entry.pack(side="left", fill="x", expand=True, padx=8, pady=6)
+        entry.bind("<KeyRelease>", lambda e: self.filter_emojis())
+        
+        btn = tk.Label(search_frame, text="🔍", bg="#1e1f22", fg="#dbdee1")
+        btn.pack(side="right", padx=5)
+
+        self.emoji_canvas = tk.Canvas(self.emoji_frame, bg="#2b2d31", highlightthickness=0)
+        self.emoji_scrollbar = ttk.Scrollbar(self.emoji_frame, orient="vertical", command=self.emoji_canvas.yview)
+        self.emoji_scrollable_frame = tk.Frame(self.emoji_canvas, bg="#2b2d31")
+
+        self.emoji_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.emoji_canvas.configure(scrollregion=self.emoji_canvas.bbox("all"))
+        )
+        self.emoji_canvas.create_window((0, 0), window=self.emoji_scrollable_frame, anchor="nw")
+        self.emoji_canvas.configure(yscrollcommand=self.emoji_scrollbar.set)
+        
+        self.emoji_canvas.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+        self.emoji_scrollbar.pack(side="right", fill="y")
+        
+        self.render_emoji_grid(POPULAR_EMOJIS)
+
+    def filter_emojis(self):
+        query = self.emoji_search_var.get().strip().lower()
+        if not query:
+            self.render_emoji_grid(POPULAR_EMOJIS)
+            return
+            
+        if not self.emoji_search_data:
+            return  # Dicionário ainda carregando
+            
+        results = []
+        for em in POPULAR_EMOJIS:
+            text = self.emoji_search_data.get(em, "")
+            if query in text:
+                results.append(em)
+                
+        # Se encontrou poucos nos populares, busca no resto do dicionario inteiro!
+        if len(results) < 15:
+            for char, text in self.emoji_search_data.items():
+                if query in text and char not in results:
+                    results.append(char)
+                if len(results) > 60:
+                    break
+                    
+        self.render_emoji_grid(results)
+
+    def render_emoji_grid(self, emoji_list):
+        for widget in self.emoji_scrollable_frame.winfo_children():
+            widget.destroy()
+            
+        row, col = 0, 0
+        for em in emoji_list:
+            photo = self.panel.get_twemoji_async(em, size=30)
+            if photo not in self.emoji_images:
+                self.emoji_images.append(photo)
+            
+            btn = tk.Label(
+                self.emoji_scrollable_frame,
+                image=photo if photo else "",
+                text="" if photo else em,
+                bg="#2b2d31",
+                font=("Segoe UI Emoji", 14),
+                cursor="hand2",
+                width=36 if photo else 4,
+                height=36 if photo else 2
+            )
+            if photo:
+                btn.image = photo
+                
+            btn.bind("<Enter>", lambda e, w=btn: w.configure(bg="#404249"))
+            btn.bind("<Leave>", lambda e, w=btn: w.configure(bg="#2b2d31"))
+            btn.bind("<Button-1>", lambda e, val=em: self.insert_emoji(val))
+            
+            btn.grid(row=row, column=col, padx=3, pady=3)
+            col += 1
+            if col > 6:
+                col = 0
+                row += 1
+
+    def build_gif_tab(self):
+        search_frame = tk.Frame(self.gif_frame, bg="#1e1f22", bd=1, relief="solid")
+        search_frame.pack(fill="x", padx=10, pady=5)
+        
+        self.search_var = tk.StringVar()
+        entry = tk.Entry(search_frame, textvariable=self.search_var, bg="#1e1f22", fg="#dbdee1", insertbackground="#dbdee1", relief="flat", font=("Segoe UI", 10))
+        entry.pack(side="left", fill="x", expand=True, padx=8, pady=6)
+        entry.bind("<Return>", lambda e: self.search_gifs())
+        
+        btn = tk.Button(search_frame, text="🔍", bg="#1e1f22", fg="#dbdee1", relief="flat", command=self.search_gifs, cursor="hand2", bd=0)
+        btn.pack(side="right", padx=5)
+        
+        self.gif_canvas = tk.Canvas(self.gif_frame, bg="#2b2d31", highlightthickness=0)
+        self.gif_scrollbar = ttk.Scrollbar(self.gif_frame, orient="vertical", command=self.gif_canvas.yview)
+        self.gif_scrollable_frame = tk.Frame(self.gif_canvas, bg="#2b2d31")
+        
+        self.gif_scrollable_frame.bind("<Configure>", lambda e: self.gif_canvas.configure(scrollregion=self.gif_canvas.bbox("all")))
+        self.gif_canvas.create_window((0, 0), window=self.gif_scrollable_frame, anchor="nw")
+        self.gif_canvas.configure(yscrollcommand=self.gif_scrollbar.set)
+        
+        self.gif_canvas.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+        self.gif_scrollbar.pack(side="right", fill="y")
+        
+        # Ao abrir a aba pela primeira vez, executa pesquisa foxhole
+        self.search_var.set("foxhole")
+        self.search_gifs()
+
+    def search_gifs(self, load_more=False):
+        query = self.search_var.get().strip()
+        if not query:
+            return
+            
+        if not load_more:
+            self.gif_current_query = query
+            self.gif_next_pos = None
+            for widget in self.gif_scrollable_frame.winfo_children():
+                widget.destroy()
+            self.loading_label = tk.Label(self.gif_scrollable_frame, text="Carregando...", bg="#2b2d31", fg="#b5bac1", font=("Segoe UI", 10))
+            self.loading_label.pack(pady=20)
+            self.gif_images = []
+        else:
+            # Substituir conteúdo por loading
+            for widget in self.gif_scrollable_frame.winfo_children():
+                widget.destroy()
+            self.loading_label = tk.Label(self.gif_scrollable_frame, text="Carregando próxima página...", bg="#2b2d31", fg="#b5bac1", font=("Segoe UI", 10))
+            self.loading_label.pack(pady=20)
+            self.gif_images = []
+        
+        def worker():
+            try:
+                import urllib.request, urllib.parse, json
+                url = f"https://g.tenor.com/v1/search?q={urllib.parse.quote(self.gif_current_query)}&key=LIVDSRZULELA&limit=16"
+                if self.gif_next_pos:
+                    url += f"&pos={self.gif_next_pos}"
+                req = urllib.request.Request(url, headers={"User-Agent": "GG Coalition/1.0"})
+                with urllib.request.urlopen(req, timeout=8) as response:
+                    data = json.loads(response.read())
+                
+                self.gif_next_pos = data.get("next")
+                results = []
+                for item in data.get("results", []):
+                    preview_url = item["media"][0]["tinygif"]["url"]
+                    full_url = item["media"][0]["gif"]["url"]
+                    results.append((preview_url, full_url))
+                
+                self.panel.after(0, self.display_gifs, results)
+            except Exception as e:
+                self.panel.after(0, self.display_error, str(e))
+                
+        threading.Thread(target=worker, daemon=True).start()
+
+    def display_error(self, msg):
+        for widget in self.gif_scrollable_frame.winfo_children():
+            widget.destroy()
+        tk.Label(self.gif_scrollable_frame, text=f"Erro: {msg}", bg="#2b2d31", fg="#fca5a5", wraplength=300).pack(pady=20)
+
+    def display_gifs(self, results):
+        for widget in self.gif_scrollable_frame.winfo_children():
+            widget.destroy()
+        if not results:
+            tk.Label(self.gif_scrollable_frame, text="Nenhum GIF encontrado.", bg="#2b2d31", fg="#b5bac1").pack(pady=20)
+            return
+            
+        row, col = 0, 0
+        for preview_url, full_url in results:
+            frame = tk.Frame(self.gif_scrollable_frame, bg="#2b2d31")
+            frame.grid(row=row, column=col, padx=6, pady=6)
+            
+            lbl = tk.Label(frame, text="Carregando...", bg="#1e1f22", fg="#80848e", width=18, height=6, cursor="hand2")
+            lbl.pack()
+            
+            def on_enter(e, l=lbl):
+                l.master.configure(bg="#404249")
+            def on_leave(e, l=lbl):
+                l.master.configure(bg="#2b2d31")
+                
+            lbl.bind("<Enter>", on_enter)
+            lbl.bind("<Leave>", on_leave)
+            lbl.bind("<Button-1>", lambda e, url=full_url: self.insert_gif(url))
+            
+            self.load_gif_preview(preview_url, lbl)
+            
+            col += 1
+            if col > 1:
+                col = 0
+                row += 1
+                
+        if self.gif_next_pos:
+            btn_more = tk.Button(
+                self.gif_scrollable_frame, text="Carregar mais ⬇", bg="#404249", fg="#ffffff",
+                relief="flat", font=("Segoe UI", 10, "bold"), cursor="hand2", command=lambda: self.search_gifs(load_more=True)
+            )
+            btn_more.grid(row=row, column=0, columnspan=2, pady=15, ipadx=20, ipady=6)
+            
+        self.gif_canvas.yview_moveto(0)
+
+    def load_gif_preview(self, url, label):
+        def worker():
+            try:
+                import urllib.request, io
+                req = urllib.request.Request(url, headers={"User-Agent": "GG Coalition/1.0"})
+                with urllib.request.urlopen(req, timeout=8) as response:
+                    data = response.read()
+                image = Image.open(io.BytesIO(data))
+                image = image.convert("RGBA")
+                image.thumbnail((140, 100), Image.Resampling.LANCZOS)
+                self.panel.after(0, self.apply_gif_preview, image, label)
+            except Exception:
+                pass
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_gif_preview(self, image, label):
+        try:
+            photo = ImageTk.PhotoImage(image)
+            self.gif_images.append(photo)
+            label.configure(image=photo, text="", width=140, height=100)
+            label.image = photo
+        except Exception:
+            pass
+
+    def insert_emoji(self, em):
+        current = self.panel.input_var.get()
+        if current and not current.endswith(" "):
+            self.panel.input_var.set(current + " " + em)
+        else:
+            self.panel.input_var.set(current + em)
+        self.destroy()
+
+    def insert_gif(self, url):
+        self.panel.input_var.set(url)
+        self.panel.send_message()
+        self.destroy()

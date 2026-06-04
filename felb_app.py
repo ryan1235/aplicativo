@@ -1,10 +1,15 @@
-﻿import ctypes
+﻿from typing import Any
+import ctypes
 import base64
 from datetime import datetime, timezone
 import os
 from pathlib import Path
 import subprocess
 import sys
+
+# Garante que o diretório de trabalho seja sempre a pasta do aplicativo (corrige o bug do Winreg)
+os.chdir(Path(__file__).resolve().parent)
+
 import tempfile
 import threading
 import tkinter as tk
@@ -52,12 +57,13 @@ from settings_store import load_settings, save_settings, selected_language
 from steam_profile import SteamProfile, get_local_steam_profile
 from stockpile_category import StockpileCategory
 from time_task_category import TimeTaskCategory
+from window_utils import make_window_frameless
 
 
 APP_TITLE = "GG Coalition"
 APP_EXE_NAME = f"{APP_TITLE}.exe"
 UPDATER_EXE_NAME = "GG Updater.exe"
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.8.6"
 UPDATE_REPO = "ryan1235/aplicativo"  # Exemplo: "seu-usuario/gg-coalition"
 FOXHOLE_APP_ID = "505460"
 SIDEBAR_WIDTH = 302
@@ -144,8 +150,8 @@ def parent_surface_color(parent, fallback: str) -> str:
     for option in ("fg_color", "bg"):
         try:
             value = parent.cget(option)
-            if isinstance(value, tuple):
-                return value[-1]
+            if isinstance(value, (tuple, list)):
+                return str(value[-1])
             if value:
                 return str(value)
         except Exception:
@@ -377,33 +383,70 @@ class FelbApp(AppBase):
         except tk.TclError:
             pass
 
-        splash.geometry("440x350")
+        splash.geometry("500x380")
         splash.update_idletasks()
-        x = (splash.winfo_screenwidth() - 440) // 2
-        y = (splash.winfo_screenheight() - 350) // 2
-        splash.geometry(f"440x350+{x}+{y}")
+        x = (splash.winfo_screenwidth() - 500) // 2
+        y = (splash.winfo_screenheight() - 380) // 2
+        splash.geometry(f"500x380+{x}+{y}")
 
-        panel = modern_frame(splash, COLORS["bg"], radius=16, border=1, border_color=COLORS["line"])
+        panel = modern_frame(splash, COLORS["card"], radius=24, border=1, border_color=COLORS["line"])
         panel.pack(fill="both", expand=True)
         
-        inner = tk.Frame(panel, bg=COLORS["bg"])
+        inner = tk.Frame(panel, bg=COLORS["card"])
         inner.pack(fill="both", expand=True, padx=2, pady=2)
 
         self.splash_logo_frames = self.load_splash_frames(size=120)
         self.splash_logo_image = self.splash_logo_frames[0][0] if self.splash_logo_frames else self.load_splash_logo()
         if self.splash_logo_image:
-            self.splash_logo_label = tk.Label(inner, image=self.splash_logo_image, bg=COLORS["bg"])
-            self.splash_logo_label.pack(pady=(36, 12))
+            self.splash_logo_label = tk.Label(inner, image=self.splash_logo_image, bg=COLORS["card"])
+            self.splash_logo_label.pack(pady=(40, 16))
             self.animate_splash_logo()
         
-        tk.Label(inner, text=APP_TITLE, bg=COLORS["bg"], fg=COLORS["text"], font=("Segoe UI", 26, "bold")).pack()
-        tk.Label(inner, text=self.tr.t("app.subtitle"), bg=COLORS["bg"], fg=COLORS["accent"], font=("Segoe UI", 10, "bold")).pack(pady=(0, 24))
+        tk.Label(inner, text=APP_TITLE, bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 28, "bold")).pack()
+        tk.Label(inner, text=self.tr.t("app.subtitle"), bg=COLORS["card"], fg=COLORS["accent"], font=("Segoe UI", 11, "bold")).pack(pady=(0, 28))
         
-        self.loading_label = tk.Label(inner, text=self.tr.t("loading.starting"), bg=COLORS["bg"], fg=COLORS["muted"], font=("Segoe UI", 9))
+        self.loading_label = tk.Label(inner, text=self.tr.t("loading.starting"), bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 9))
         self.loading_label.pack()
-        progress = ttk.Progressbar(inner, mode="indeterminate", length=240)
-        progress.pack(pady=(12, 0))
-        progress.start(12)
+        
+        bar_width = 280
+        bar_height = 6
+        
+        if ctk is not None:
+            self.progress_container = ctk.CTkFrame(inner, width=bar_width, height=bar_height, fg_color=COLORS["line"], corner_radius=3)
+            self.progress_container.pack(pady=(12, 0))
+            self.progress_container.pack_propagate(False)
+            self.progress_bar = ctk.CTkFrame(self.progress_container, width=4, height=bar_height, fg_color=COLORS["accent"], corner_radius=3)
+            self.progress_bar.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self.progress_container = tk.Frame(inner, width=bar_width, height=bar_height, bg=COLORS["line"])
+            self.progress_container.pack(pady=(12, 0))
+            self.progress_container.pack_propagate(False)
+            self.progress_bar = tk.Frame(self.progress_container, bg=COLORS["accent"], width=4, height=bar_height)
+            self.progress_bar.place(relx=0.5, rely=0.5, anchor="center")
+            
+        self.splash_anim_time = 0.0
+        
+        def animate_progress():
+            if not getattr(self, "loading_screen", None) or not self.loading_screen.winfo_exists():
+                return
+            self.splash_anim_time += 0.02
+            if self.splash_anim_time > 1.0:
+                self.splash_anim_time = 0.0
+            
+            # Ease out (starts fast, slows down at edges)
+            t = self.splash_anim_time
+            eased = 1 - (1 - t) ** 3
+            
+            w = max(4, int(bar_width * eased))
+            if ctk is not None:
+                self.progress_bar.configure(width=w)
+            else:
+                self.progress_bar.place_configure(width=w)
+                
+            self.loading_screen.after(16, animate_progress)
+            
+        # Garante que a animação comece após a janela ser criada
+        self.after(50, animate_progress)
         
         self.loading_screen = splash
         self.update()
@@ -546,7 +589,7 @@ class FelbApp(AppBase):
         sidebar = modern_frame(self, COLORS["sidebar"], radius=0)
         sidebar.grid(row=0, column=0, sticky="ns")
         sidebar.grid_propagate(False)
-        sidebar.configure(width=0)
+        sidebar.configure(width=SIDEBAR_WIDTH)
         sidebar.columnconfigure(0, weight=1)
         sidebar.rowconfigure(0, weight=1)
         self.sidebar = sidebar
@@ -585,50 +628,13 @@ class FelbApp(AppBase):
         self.pages["production_calculator"] = self.production_calculator_page
         self.pages["time_task"] = self.time_task_page
 
-        command_page.grid(row=0, column=0, sticky="nsew")
-        self.functions_page.grid(row=0, column=0, sticky="nsew")
-        self.settings_page.grid(row=0, column=0, sticky="nsew")
-        self.stockpile_page.grid(row=0, column=0, sticky="nsew")
-        self.notifications_page.grid(row=0, column=0, sticky="nsew")
-        self.item_search_page.grid(row=0, column=0, sticky="nsew")
-        self.identify_item_page.grid(row=0, column=0, sticky="nsew")
-        self.production_calculator_page.grid(row=0, column=0, sticky="nsew")
-        self.time_task_page.grid(row=0, column=0, sticky="nsew")
-        sidebar.configure(width=0)
-        sidebar.grid_remove()
-
-    def build_sidebar_shell(self, sidebar: tk.Frame) -> None:
-        canvas = tk.Canvas(sidebar, bg=COLORS["sidebar"], highlightthickness=0, bd=0)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        if ctk is not None:
-            scrollbar = ctk.CTkScrollbar(
-                sidebar,
-                orientation="vertical",
-                command=canvas.yview,
-                width=10,
-                fg_color=COLORS["sidebar"],
-                button_color=COLORS["card_2"],
-                button_hover_color=COLORS["accent"],
-            )
-        else:
-            scrollbar = ttk.Scrollbar(sidebar, orient="vertical", command=canvas.yview, style="Vertical.TScrollbar")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        inner = tk.Frame(canvas, bg=COLORS["sidebar"])
-        window_id = canvas.create_window((0, 0), window=inner, anchor="nw", width=SIDEBAR_WIDTH - 18)
-        inner.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window_id, width=max(1, event.width)))
-
-        self.sidebar_canvas = canvas
-        self.sidebar_inner = inner
-        self.build_sidebar(inner)
-        self.bind_mousewheel_recursive(sidebar, canvas)
-
-    def bind_mousewheel_recursive(self, widget: tk.Widget, canvas: tk.Canvas) -> None:
-        def on_mousewheel(event) -> str:
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-            return "break"
+        # Initialize all pages to be cached (not mapped to screen yet)
+        for name, page in self.pages.items():
+            if name == "inicio":
+                page.place(x=0, y=0, relwidth=1, relheight=1)
+            else:
+                page.place(x=5000, y=5000, relwidth=1, relheight=1)
+        
         sidebar.configure(width=0)
         sidebar.grid_remove()
 
@@ -882,18 +888,16 @@ class FelbApp(AppBase):
         header.grid(row=0, column=0, sticky="ew", padx=24, pady=(24, 18))
         header.columnconfigure(1, weight=1)
 
-        self.menu_button = tk.Button(
+        self.menu_button = modern_button(
             header,
             text="\u2630",
             command=self.toggle_sidebar,
-            bg=COLORS["bg"],
-            fg=COLORS["muted"],
-            activebackground=COLORS["bg"],
-            activeforeground=COLORS["text"],
-            relief="flat",
-            bd=0,
+            color=COLORS["bg"],
+            text_color=COLORS["muted"],
+            hover=COLORS["card_2"],
+            width=42,
+            height=42,
             font=("Segoe UI", 20),
-            cursor="hand2",
         )
         self.menu_button.grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, 18), pady=(0, 0))
 
@@ -939,6 +943,23 @@ class FelbApp(AppBase):
             )
             button.grid(row=0, column=index, padx=2)
             self.language_buttons[language] = button
+            
+        tutorial_button = tk.Button(
+            header,
+            text="❓",
+            command=self.show_tutorial,
+            bg=COLORS["bg"],
+            fg=COLORS["accent"],
+            activebackground=COLORS["card_2"],
+            activeforeground=COLORS["accent"],
+            relief="flat",
+            font=("Segoe UI Emoji", 14),
+            padx=10,
+            pady=0,
+            cursor="hand2",
+            bd=0
+        )
+        tutorial_button.grid(row=0, column=4, rowspan=2, sticky="e", padx=(10, 0))
         self.quick_stock_button = modern_button(
             language_box,
             text=self.tr.t("stockpile.nav"),
@@ -988,14 +1009,20 @@ class FelbApp(AppBase):
             self.sidebar_visible = False
             if self.menu_button:
                 self.configure_button_color(self.menu_button, COLORS["card"])
-                self.menu_button.configure(text="\u2630")
+                try:
+                    self.menu_button.configure(text="\u2630")
+                except tk.TclError:
+                    pass
         else:
             self.sidebar.configure(width=SIDEBAR_WIDTH)
             self.sidebar.grid(row=0, column=0, sticky="ns")
             self.sidebar_visible = True
             if self.menu_button:
                 self.configure_button_color(self.menu_button, COLORS["card_2"])
-                self.menu_button.configure(text="X")
+                try:
+                    self.menu_button.configure(text="X")
+                except tk.TclError:
+                    pass
 
     def pulse_menu_button(self, first_color: str, final_color: str) -> None:
         if not self.menu_button:
@@ -1004,16 +1031,20 @@ class FelbApp(AppBase):
         self.configure_button_color(self.menu_button, final_color)
 
     def configure_button_color(self, button, color: str, text_color: str | None = None) -> None:
-        if ctk is not None:
+        try:
             kwargs = {"fg_color": color}
             if text_color:
                 kwargs["text_color"] = text_color
             button.configure(**kwargs)
-        else:
-            kwargs = {"bg": color}
+        except tk.TclError:
+            kwargs = {"bg": color, "activebackground": color}
             if text_color:
                 kwargs["fg"] = text_color
-            button.configure(**kwargs)
+                kwargs["activeforeground"] = text_color
+            try:
+                button.configure(**kwargs)
+            except tk.TclError:
+                pass
 
     def change_language(self, language: str) -> None:
         target_language = normalize_language(language)
@@ -1045,10 +1076,10 @@ class FelbApp(AppBase):
 
     def confirm_language_change(self, target_language: str) -> bool:
         dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        make_window_frameless(dialog)
         dialog.title(self.tr.t("language.change_title"))
         dialog.geometry("430x210")
         dialog.resizable(False, False)
-        configure_surface(dialog, COLORS["bg"])
         dialog.transient(self)
         dialog.grab_set()
         result = {"value": False}
@@ -1564,12 +1595,14 @@ class FelbApp(AppBase):
         self.current_page = page_name
         for name, page in self.pages.items():
             if name == page_name:
+                page.place(x=0, y=0, relwidth=1, relheight=1)
                 page.tkraise()
                 button = self.nav_buttons.get(name)
                 if button:
                     button.is_active = True
                     self.configure_button_color(button, COLORS["card_2"], COLORS["text"])
             else:
+                page.place(x=5000, y=5000, relwidth=1, relheight=1)
                 button = self.nav_buttons.get(name)
                 if button:
                     button.is_active = False
@@ -1782,7 +1815,100 @@ class FelbApp(AppBase):
 
     def run_post_update_prompts(self) -> None:
         self.configure_windows_startup()
-        self.show_release_notes_if_needed()
+        self.show_startup_tips_if_needed()
+
+    def show_startup_tips_if_needed(self) -> None:
+        self.settings = load_settings()
+        app_settings = self.settings.setdefault("app", {})
+        if app_settings.get("last_tips_version") == APP_VERSION:
+            self.show_release_notes_if_needed()
+            return
+        self.show_startup_tips_dialog()
+
+    def show_startup_tips_dialog(self) -> None:
+        dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        make_window_frameless(dialog)
+        dialog.title(self.tr.t("startup.tips.title"))
+        
+        if self.app_icon_image:
+            try:
+                dialog.iconphoto(True, self.app_icon_image)
+            except tk.TclError:
+                pass
+        elif ICON_ICO_PATH.exists():
+            try:
+                dialog.iconbitmap(default=str(ICON_ICO_PATH))
+            except tk.TclError:
+                pass
+
+        dialog.geometry("520x620")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.update_idletasks()
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - 520) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - 620) // 2)
+        dialog.geometry(f"520x620+{x}+{y}")
+
+        panel = modern_frame(dialog, COLORS["card"], radius=22, border=1, border_color=COLORS["line"])
+        panel.pack(fill="both", expand=True, padx=16, pady=16)
+        
+        tk.Label(
+            panel,
+            text=self.tr.t("startup.tips.title"),
+            bg=COLORS["card"],
+            fg=COLORS["text"],
+            font=("Segoe UI", 18, "bold"),
+        ).pack(anchor="w", padx=22, pady=(16, 10))
+        
+        dica_path = BASE_DIR / "img" / "dicas.png"
+        if dica_path.exists():
+            from PIL import Image, ImageTk
+            img = Image.open(dica_path).convert("RGBA")
+            img.thumbnail((450, 250), Image.Resampling.LANCZOS)
+            photo = ImageTk.PhotoImage(img)
+            img_label = tk.Label(panel, image=photo, bg=COLORS["card"])
+            img_label.image = photo
+            img_label.pack(pady=(0, 10))
+        
+        notes = tk.Text(
+            panel,
+            bg=COLORS["card_2"],
+            fg=COLORS["text"],
+            insertbackground=COLORS["accent"],
+            relief="flat",
+            padx=20,
+            pady=16,
+            font=("Segoe UI", 10),
+            wrap="word",
+        )
+        notes.pack(fill="both", expand=True, padx=22, pady=(0, 16))
+        
+        content = self.tr.t("startup.tips.content")
+        parsed_data = self.parse_markdown_and_emojis(content)
+        self.apply_release_notes_data(notes, parsed_data)
+        
+        actions = modern_frame(panel, COLORS["card"], radius=0)
+        actions.pack(fill="x", padx=22, pady=(0, 18))
+        
+        def close_tips() -> None:
+            self.settings = load_settings()
+            app_settings = self.settings.setdefault("app", {})
+            app_settings["last_tips_version"] = APP_VERSION
+            save_settings(self.settings)
+            dialog.grab_release()
+            dialog.destroy()
+            self.after(100, self.show_release_notes_if_needed)
+
+        modern_button(
+            actions,
+            text=self.tr.t("release.ok"),
+            command=close_tips,
+            color=COLORS["accent"],
+            text_color=COLORS["accent_text"],
+            hover=COLORS["accent_2"],
+            width=120,
+            height=36,
+        ).pack(side="right")
 
     def show_release_notes_if_needed(self) -> None:
         self.settings = load_settings()
@@ -1793,12 +1919,11 @@ class FelbApp(AppBase):
 
     def show_release_notes_dialog(self) -> None:
         dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        make_window_frameless(dialog)
         dialog.title(self.tr.t("release.title", version=APP_VERSION))
         dialog.geometry("520x390")
         dialog.resizable(False, False)
-        configure_surface(dialog, COLORS["bg"])
         dialog.transient(self)
-        dialog.grab_set()
         dialog.update_idletasks()
         x = self.winfo_rootx() + max(0, (self.winfo_width() - 520) // 2)
         y = self.winfo_rooty() + max(0, (self.winfo_height() - 390) // 2)
@@ -1825,19 +1950,19 @@ class FelbApp(AppBase):
 
         notes = tk.Text(
             panel,
-            height=9,
-            bg=COLORS["soft"],
+            height=12,
+            bg=COLORS["card_2"],
             fg=COLORS["text"],
             insertbackground=COLORS["accent"],
             relief="flat",
-            padx=14,
-            pady=12,
+            padx=20,
+            pady=16,
             font=("Segoe UI", 10),
             wrap="word",
         )
         notes.pack(fill="both", expand=True, padx=22, pady=(0, 16))
         fallback_notes = self.tr.t("release.body")
-        notes.insert("1.0", fallback_notes)
+        notes.insert("1.0", self.tr.t("loading.starting"))
         notes.configure(state="disabled")
         self.load_release_notes_from_github(notes, fallback_notes)
 
@@ -1871,17 +1996,119 @@ class FelbApp(AppBase):
                 return
             if not release_text or release_text.strip() == fallback_notes.strip():
                 return
-            self.after(0, self.apply_release_notes_text, notes, release_text)
+                
+            parsed_data = self.parse_markdown_and_emojis(release_text)
+            self.after(0, self.apply_release_notes_data, notes, parsed_data)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def apply_release_notes_text(self, notes: tk.Text, release_text: str) -> None:
+    def parse_markdown_and_emojis(self, text: str) -> list[tuple[str, str | None, Any | None]]:
+        import re
+        import emoji
+        from urllib.request import urlopen, Request
+        from PIL import Image
+        import io
+
+        if not hasattr(self, "release_emoji_cache"):
+            self.release_emoji_cache = {}
+
+        def get_twemoji(char: str):
+            hex_str = "-".join(f"{ord(c):x}" for c in char)
+            if "200d" not in hex_str:
+                hex_str = hex_str.replace("-fe0f", "")
+            
+            if hex_str in self.release_emoji_cache:
+                return self.release_emoji_cache[hex_str]
+                
+            url = f"https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.0.3/assets/72x72/{hex_str}.png"
+            try:
+                req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urlopen(req, timeout=3) as resp:
+                    data = resp.read()
+                img = Image.open(io.BytesIO(data)).convert("RGBA")
+                img = img.resize((20, 20), Image.Resampling.LANCZOS)
+                self.release_emoji_cache[hex_str] = img
+                return img
+            except Exception:
+                return None
+
+        result = []
+        lines = text.split("\n")
+        for line in lines:
+            line_tag = None
+            if line.startswith("# "):
+                line = line[2:]
+                line_tag = "h1"
+            elif line.startswith("## "):
+                line = line[3:]
+                line_tag = "h2"
+            elif line.startswith("### "):
+                line = line[4:]
+                line_tag = "h3"
+            elif line.startswith("- ") or line.startswith("* "):
+                line = "• " + line[2:]
+                line_tag = "li"
+            
+            parts = re.split(r'(\*\*.*?\*\*)', line)
+            for part in parts:
+                if part.startswith("**") and part.endswith("**"):
+                    chunk_tag = "bold"
+                    part = part[2:-2]
+                else:
+                    chunk_tag = line_tag
+                
+                if hasattr(emoji, "analyze"):
+                    chunks = []
+                    last_idx = 0
+                    for token in emoji.analyze(part):
+                        start = token.value.start
+                        end = token.value.end
+                        if start > last_idx:
+                            chunks.append((part[last_idx:start], chunk_tag, None))
+                        emoji_char = token.chars
+                        img = get_twemoji(emoji_char)
+                        if img:
+                            chunks.append((emoji_char, chunk_tag, img))
+                        else:
+                            chunks.append((emoji_char, chunk_tag, None))
+                        last_idx = end
+                    if last_idx < len(part):
+                        chunks.append((part[last_idx:], chunk_tag, None))
+                    result.extend(chunks)
+                else:
+                    result.append((part, chunk_tag, None))
+            result.append(("\n", None, None))
+        return result
+
+    def apply_release_notes_data(self, notes: tk.Text, parsed_data: list) -> None:
         try:
             if not notes.winfo_exists():
                 return
             notes.configure(state="normal")
             notes.delete("1.0", "end")
-            notes.insert("1.0", release_text)
+            
+            notes.tag_configure("h1", font=("Segoe UI", 16, "bold"), foreground=COLORS["accent_2"], spacing1=10, spacing3=5)
+            notes.tag_configure("h2", font=("Segoe UI", 14, "bold"), foreground=COLORS["text"], spacing1=8, spacing3=4)
+            notes.tag_configure("h3", font=("Segoe UI", 12, "bold"), foreground=COLORS["text"], spacing1=6, spacing3=2)
+            notes.tag_configure("bold", font=("Segoe UI", 10, "bold"))
+            notes.tag_configure("li", lmargin1=20, lmargin2=35, spacing1=2)
+
+            if not hasattr(self, "release_photo_refs"):
+                self.release_photo_refs = []
+            
+            from PIL import ImageTk
+            
+            for text_chunk, tag, img in parsed_data:
+                if img:
+                    photo = ImageTk.PhotoImage(img)
+                    self.release_photo_refs.append(photo)
+                    notes.image_create("end", image=photo, padx=2)
+                else:
+                    if tag:
+                        notes.insert("end", text_chunk, tag)
+                    else:
+                        notes.insert("end", text_chunk)
+                        
             notes.configure(state="disabled")
         except tk.TclError:
             pass
@@ -1913,11 +2140,116 @@ class FelbApp(AppBase):
         pythonw = python_exe.with_name("pythonw.exe")
         if pythonw.exists():
             python_exe = pythonw
+            
         return python_exe, f'"{(BASE_DIR / "felb_app.py").resolve()}"{bg_arg}'
+
+
 
     def startup_command(self) -> str:
         target, arguments = self.startup_target_and_args()
         return f'"{target}" {arguments}'.strip()
+
+    def show_tutorial(self) -> None:
+        if not self.current_page:
+            return
+            
+        title = self.tr.t(f"tutorial.{self.current_page}.title")
+        content = self.tr.t(f"tutorial.{self.current_page}.content")
+        
+        # Se não houver tradução para a tela, não exibe nada
+        if title == f"tutorial.{self.current_page}.title":
+            return
+            
+        if hasattr(self, "tutorial_window") and self.tutorial_window.winfo_exists():
+            self.tutorial_window.destroy()
+            
+        if ctk is not None:
+            top = ctk.CTkToplevel(self)
+        else:
+            top = tk.Toplevel(self)
+        make_window_frameless(top)
+            
+        top.title(title)
+        top.geometry("500x550")
+        top.minsize(400, 400)
+        
+        # Centraliza a janela
+        top.update_idletasks()
+        x = self.winfo_rootx() + (self.winfo_width() // 2) - (500 // 2)
+        y = self.winfo_rooty() + (self.winfo_height() // 2) - (550 // 2)
+        top.geometry(f"+{x}+{y}")
+        
+        top.transient(self)
+        top.columnconfigure(0, weight=1)
+        top.rowconfigure(0, weight=1)
+        
+        main_frame = modern_frame(top, COLORS["card"], radius=18, border=1, border_color=COLORS["line"])
+        main_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(1, weight=1)
+        
+        header_frame = tk.Frame(main_frame, bg=COLORS["card"])
+        header_frame.grid(row=0, column=0, sticky="ew", padx=20, pady=(20, 10))
+        
+        tk.Label(
+            header_frame, 
+            text=title, 
+            bg=COLORS["card"], 
+            fg=COLORS["accent"], 
+            font=("Segoe UI", 16, "bold")
+        ).pack(side="left")
+        
+        # Usando Text widget para renderizar o markdown
+        text_bg = COLORS["card"]
+        text_fg = COLORS["text"]
+        
+        text_widget = tk.Text(
+            main_frame,
+            wrap="word",
+            bg=text_bg,
+            fg=text_fg,
+            font=("Segoe UI", 10),
+            relief="flat",
+            bd=0,
+            padx=20,
+            pady=10,
+            cursor="arrow"
+        )
+        text_widget.grid(row=1, column=0, sticky="nsew", padx=2, pady=2)
+        
+        # Adicionar Scrollbar
+        if ctk is not None:
+            scrollbar = ctk.CTkScrollbar(
+                main_frame,
+                orientation="vertical",
+                command=text_widget.yview,
+                width=10,
+                fg_color=COLORS["card"],
+                button_color=COLORS["card_2"],
+                button_hover_color=COLORS["accent"],
+            )
+        else:
+            scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=text_widget.yview, style="Vertical.TScrollbar")
+            
+        scrollbar.grid(row=1, column=1, sticky="ns", pady=2, padx=(0, 2))
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        # Renderiza o markdown usando as funções existentes
+        parsed_data = self.parse_markdown_and_emojis(content)
+        self.apply_release_notes_data(text_widget, parsed_data)
+        
+        # Botão Fechar
+        close_btn = modern_button(
+            main_frame,
+            text="Fechar",
+            command=top.destroy,
+            color=COLORS["card_2"],
+            text_color=COLORS["text"],
+            hover=COLORS["hover"]
+        )
+        close_btn.grid(row=2, column=0, columnspan=2, pady=(10, 20))
+        
+        self.tutorial_window = top
 
     def startup_dir(self) -> Path:
         appdata = os.environ.get("APPDATA")
@@ -2035,12 +2367,9 @@ class FelbApp(AppBase):
 
     def set_start_with_windows(self, enabled: bool) -> None:
         import winreg
-
-        # Clean legacy methods
         self.remove_startup_task()
         self.remove_startup_shortcut()
-        self.clear_legacy_run_key()
-
+        
         run_key = r"Software\Microsoft\Windows\CurrentVersion\Run"
         
         if enabled:
@@ -2050,7 +2379,15 @@ class FelbApp(AppBase):
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
                     winreg.SetValueEx(key, APP_TITLE, 0, winreg.REG_SZ, command)
             except Exception as exc:
-                raise RuntimeError(f"Falha ao escrever no Registro do Windows: {exc}")
+                print(f"Falha ao escrever no Registro do Windows: {exc}", flush=True)
+        else:
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, run_key, 0, winreg.KEY_SET_VALUE) as key:
+                    winreg.DeleteValue(key, APP_TITLE)
+            except FileNotFoundError:
+                pass
+            except Exception as exc:
+                print(f"Falha ao remover do Registro do Windows: {exc}", flush=True)
 
     def check_for_updates(self, on_done=None) -> None:
         if not UPDATE_REPO:
@@ -2112,10 +2449,10 @@ class FelbApp(AppBase):
 
     def ask_update_dialog(self, update) -> bool:
         dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        make_window_frameless(dialog)
         dialog.title(self.tr.t("update.available_title"))
         dialog.geometry("560x430")
         dialog.resizable(False, False)
-        configure_surface(dialog, COLORS["bg"])
         dialog.transient(self)
         dialog.grab_set()
         result = {"value": False}
@@ -2191,10 +2528,10 @@ class FelbApp(AppBase):
 
     def show_update_progress(self, version: str):
         dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        make_window_frameless(dialog)
         dialog.title(self.tr.t("update.progress_title"))
         dialog.geometry("430x180")
         dialog.resizable(False, False)
-        configure_surface(dialog, COLORS["bg"])
         dialog.transient(self)
         dialog.grab_set()
         dialog.update_idletasks()
@@ -2310,10 +2647,10 @@ class FelbApp(AppBase):
 
     def show_close_dialog(self) -> None:
         dialog = ctk.CTkToplevel(self) if ctk is not None else tk.Toplevel(self)
+        make_window_frameless(dialog)
         dialog.title(self.tr.t("close.title"))
         dialog.geometry("430x230")
         dialog.resizable(False, False)
-        configure_surface(dialog, COLORS["bg"])
         dialog.transient(self)
         dialog.grab_set()
         dialog.update_idletasks()
@@ -2342,9 +2679,15 @@ class FelbApp(AppBase):
                 panel,
                 text=self.tr.t("close.remember"),
                 variable=remember_var,
-                fg_color=COLORS["accent"],
-                hover_color=COLORS["accent_2"],
+                bg_color=COLORS["card"],
+                fg_color=COLORS["accent_2"],
+                hover_color=COLORS["accent"],
+                checkmark_color=COLORS["bg"],
                 text_color=COLORS["text"],
+                border_color=COLORS["line"],
+                checkbox_width=20,
+                checkbox_height=20,
+                border_width=2,
                 corner_radius=6,
             )
         else:

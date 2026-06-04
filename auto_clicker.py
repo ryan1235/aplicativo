@@ -136,7 +136,10 @@ class AutoClicker:
 
     def log(self, message: str) -> None:
         if DEBUG_CONSOLE:
-            print(f"[AutoClicker] {message}", flush=True)
+            try:
+                print(f"[AutoClicker] {message}", flush=True)
+            except Exception:
+                pass
 
     def set_slot_positions(self, positions: dict[int, tuple[int, int]]) -> None:
         for slot, value in positions.items():

@@ -41,8 +41,8 @@ def parent_surface_color(parent, fallback: str) -> str:
     for option in ("fg_color", "bg"):
         try:
             value = parent.cget(option)
-            if isinstance(value, tuple):
-                return value[-1]
+            if isinstance(value, (tuple, list)):
+                return str(value[-1])
             if value:
                 return str(value)
         except Exception:

@@ -62,8 +62,8 @@ def parent_surface_color(parent, fallback: str) -> str:
     for option in ("fg_color", "bg"):
         try:
             value = parent.cget(option)
-            if isinstance(value, tuple):
-                return value[-1]
+            if isinstance(value, (tuple, list)):
+                return str(value[-1])
             if value:
                 return str(value)
         except Exception:
@@ -134,6 +134,101 @@ def widget_color(widget, fallback: str) -> str:
         except Exception:
             return fallback
     return widget.cget("bg")
+
+def modern_option_menu(parent, variable, values: list[str], width: int = 120, command=None):
+    if ctk is not None:
+        bg = widget_color(parent, COLORS.get("card", "#111c31"))
+        menu = ctk.CTkOptionMenu(
+            parent, variable=variable, values=values, width=width, height=30,
+            bg_color=bg, fg_color=COLORS.get("soft", "#0e1a2d"),
+            button_color=COLORS.get("soft", "#0e1a2d"), button_hover_color=COLORS.get("card_2", "#1d3353"),
+            dropdown_fg_color=COLORS.get("card", "#111c31"), dropdown_hover_color=COLORS.get("card_2", "#1d3353"),
+            dropdown_text_color=COLORS.get("text", "#edf6ff"), text_color=COLORS.get("text", "#edf6ff"),
+            font=("Segoe UI", 11, "bold"), dropdown_font=("Segoe UI", 11), corner_radius=6, command=command
+        )
+        def custom_open():
+            current_values = menu._values
+            if not current_values:
+                return
+            top = tk.Toplevel(parent)
+            top.overrideredirect(True)
+            top.attributes("-topmost", True)
+            top.configure(bg=COLORS.get("line", "#2d496f"))
+            x = menu.winfo_rootx()
+            y = menu.winfo_rooty() + menu.winfo_height() + 2
+            w = menu.winfo_width()
+            max_items = min(len(current_values), 8)
+            item_height = 28
+            h = max_items * item_height + 2
+            top.geometry(f"{w}x{h}+{x}+{y}")
+            original_rooty = menu.winfo_rooty()
+            def check_position():
+                if not top.winfo_exists(): return
+                try:
+                    if menu.winfo_rooty() != original_rooty:
+                        top.destroy()
+                        return
+                except tk.TclError:
+                    pass
+                top.after(50, check_position)
+            top.after(50, check_position)
+            
+            max_items = min(len(current_values), 8)
+            item_height = 25
+            h = max_items * item_height + 4
+            top.geometry(f"{w}x{h}+{x}+{y}")
+            
+            frame = tk.Frame(top, bg=COLORS.get("card", "#111c31"))
+            frame.pack(fill="both", expand=True, padx=1, pady=1)
+            
+            scrollbar = tk.Scrollbar(frame, orient="vertical")
+            lb = tk.Listbox(frame, bg=COLORS.get("card", "#111c31"), fg=COLORS.get("text", "#edf6ff"),
+                            selectbackground=COLORS.get("card_2", "#1d3353"), selectforeground=COLORS.get("text", "#edf6ff"),
+                            font=("Segoe UI", 10, "bold"), bd=0, highlightthickness=0, relief="flat",
+                            activestyle="none", yscrollcommand=scrollbar.set)
+            scrollbar.config(command=lb.yview)
+            
+            if len(current_values) > max_items:
+                scrollbar.pack(side="right", fill="y")
+            lb.pack(side="left", fill="both", expand=True)
+            
+            for v in current_values:
+                lb.insert("end", f"  {v}")
+                
+            def motion(e):
+                idx = lb.nearest(e.y)
+                if idx >= 0:
+                    lb.selection_clear(0, "end")
+                    lb.selection_set(idx)
+                    
+            def select(e=None):
+                sel = lb.curselection()
+                if sel:
+                    menu._dropdown_callback(current_values[sel[0]])
+                top.destroy()
+                
+            lb.bind("<Motion>", motion)
+            lb.bind("<Leave>", lambda e: lb.selection_clear(0, "end"))
+            lb.bind("<ButtonRelease-1>", select)
+            
+            def on_mousewheel(e):
+                lb.yview_scroll(int(-1*(e.delta/120)), "units")
+                return "break"
+                
+            top.bind("<MouseWheel>", on_mousewheel)
+            
+            def on_focus_out(event):
+                if not top.winfo_exists(): return
+                focused = top.focus_get()
+                if not focused or not str(focused).startswith(str(top)):
+                    top.destroy()
+                    
+            top.bind("<FocusOut>", on_focus_out)
+            top.after(50, top.focus_set)
+        
+        menu._open_dropdown_menu = custom_open
+        return menu
+    return ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", width=width//10)
 
 
 def stockpile_sound_path() -> Path | None:
@@ -307,9 +402,12 @@ class StockpileCategory(ttk.Frame):
         tk.Label(selector, text=self.tr.t("stockpile.visual_select"), bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 9, "bold")).grid(
             row=0, column=0, sticky="e", padx=(0, 8)
         )
-        self.warehouse_combo = ttk.Combobox(selector, textvariable=self.selected_warehouse_var, state="readonly", width=34)
+        self.warehouse_combo = modern_option_menu(selector, variable=self.selected_warehouse_var, width=340, values=[])
         self.warehouse_combo.grid(row=0, column=1, sticky="e")
-        self.warehouse_combo.bind("<<ComboboxSelected>>", lambda _event: self.draw_visual_stockpile())
+        if ctk is not None:
+            self.warehouse_combo.configure(command=lambda _event: self.draw_visual_stockpile())
+        else:
+            self.warehouse_combo.bind("<<ComboboxSelected>>", lambda _event: self.draw_visual_stockpile())
         self.visual_canvas = tk.Canvas(visual_box, height=310, bg="#030303", highlightthickness=0)
         self.visual_canvas.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 14))
         self.visual_canvas.bind("<Configure>", lambda _event: self.draw_visual_stockpile())

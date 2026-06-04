@@ -45,14 +45,35 @@ def parent_surface_color(parent, fallback: str) -> str:
     for option in ("fg_color", "bg"):
         try:
             value = parent.cget(option)
-            if isinstance(value, tuple):
-                return value[-1]
+            if isinstance(value, (tuple, list)):
+                return str(value[-1])
             if value:
                 return str(value)
         except Exception:
             pass
     return fallback
 
+
+def widget_color(widget, fallback: str) -> str:
+    if ctk is not None:
+        try:
+            color = widget.cget("fg_color")
+            if isinstance(color, tuple): return color[-1]
+            return color
+        except Exception: return fallback
+    return widget.cget("bg")
+
+def modern_checkbutton(parent, text: str, variable, command=None, font=("Segoe UI", 11, "bold")):
+    if ctk is not None:
+        bg = widget_color(parent, COLORS.get("card", "#111c31"))
+        return ctk.CTkCheckBox(
+            parent, text=text, variable=variable, command=command,
+            bg_color=bg, fg_color=COLORS.get("accent_2", "#8ab4ff"),
+            hover_color=COLORS.get("accent", "#5eead4"), checkmark_color=COLORS.get("bg", "#070b16"),
+            text_color=COLORS.get("text", "#edf6ff"), border_color=COLORS.get("line", "#2d496f"),
+            font=font, checkbox_width=20, checkbox_height=20, border_width=2, corner_radius=6
+        )
+    return tk.Checkbutton(parent, text=text, variable=variable, command=command, bg=COLORS.get("card"), fg=COLORS.get("text"), selectcolor=COLORS.get("soft"), font=font)
 
 def modern_frame(parent, color: str, radius: int = 18, border: int = 0, border_color: str | None = None):
     if ctk is not None:
@@ -376,17 +397,11 @@ class NotificationsCategory(ttk.Frame):
 
         options = modern_frame(card, COLORS["card"], radius=0)
         options.grid(row=4, column=0, sticky="ew", padx=20, pady=(0, 14))
-        tk.Checkbutton(
+        modern_checkbutton(
             options,
             text=self.tr.t("notifications.show_overlay"),
             variable=self.overlay_enabled_var,
             command=self.save_settings,
-            bg=COLORS["card"],
-            fg=COLORS["text"],
-            selectcolor=COLORS["soft"],
-            activebackground=COLORS["card"],
-            activeforeground=COLORS["text"],
-            font=("Segoe UI", 9, "bold"),
         ).grid(row=0, column=0, sticky="w")
 
         actions = modern_frame(card, COLORS["card"], radius=0)

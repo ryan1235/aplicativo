@@ -7,3 +7,4 @@ opencv-python
 nuitka
 ordered-set
 zstandard
+emoji
