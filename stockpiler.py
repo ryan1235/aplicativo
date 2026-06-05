@@ -34,15 +34,20 @@ def foxhole_savegames_dir() -> Path:
 
 
 def discover_map_data_file() -> Path | None:
+    files = discover_map_data_files()
+    return files[0] if files else None
+
+
+def discover_map_data_files() -> list[Path]:
     savegames = foxhole_savegames_dir()
     if not savegames.exists():
-        return None
+        return []
     try:
         candidates = [path for path in savegames.glob("*_MapData.sav") if path.is_file()]
     except OSError:
-        return None
+        return []
     if not candidates:
-        return None
+        return []
     dated_candidates: list[tuple[float, Path]] = []
     for path in candidates:
         try:
@@ -50,8 +55,8 @@ def discover_map_data_file() -> Path | None:
         except OSError:
             continue
     if not dated_candidates:
-        return None
-    return max(dated_candidates, key=lambda item: item[0])[1]
+        return []
+    return [path for _mtime, path in sorted(dated_candidates, key=lambda item: item[0], reverse=True)]
 
 
 def default_watch_file() -> Path:
@@ -92,13 +97,23 @@ ICON_TABLES = (
     "aircraft",
 )
 UE_TICKS_AT_UNIX_EPOCH = 621_355_968_000_000_000
+MAX_LOG_MESSAGE_CHARS = 4000
 
 
 class ExtractError(RuntimeError):
     pass
 
 
+def _compact_log_message(message: object) -> str:
+    text = str(message)
+    if len(text) <= MAX_LOG_MESSAGE_CHARS:
+        return text
+    omitted = len(text) - MAX_LOG_MESSAGE_CHARS
+    return f"{text[:MAX_LOG_MESSAGE_CHARS]}... <truncated {omitted} chars>"
+
+
 def _debug_log(message: str) -> None:
+    message = _compact_log_message(message)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {message}"
     print(line, flush=True)
@@ -111,6 +126,7 @@ def _debug_log(message: str) -> None:
 
 
 def _runtime_log(message: str) -> None:
+    message = _compact_log_message(message)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}", flush=True)
 
@@ -731,14 +747,14 @@ def extract_and_post(
     _runtime_log(
         "[Stockpile] "
         f"capture_changed={capture_changed} api_payload_changed={api_payload_changed} "
-        f"force_api_refresh_ignored={force_api_refresh} output={output} last_sent={sent_output}"
+        f"force_api_refresh={force_api_refresh} output={output} last_sent={sent_output}"
     )
     if capture_changed:
         write_json(payload, output)
     else:
         _runtime_log("[Stockpile] captured JSON unchanged")
 
-    if not api_payload_changed:
+    if not api_payload_changed and not force_api_refresh:
         log_stockpile_debug_details(
             payload,
             source_file=path,
@@ -763,7 +779,7 @@ def extract_and_post(
         capture_changed=capture_changed,
         api_payload_changed=api_payload_changed,
         extracted_entries=extracted_entries,
-        action="POST to API",
+        action="POST to API" if api_payload_changed else "POST to API (forced refresh)",
     )
     _debug_log(f"[Stockpile] posting {report_count} private API reports")
     api_message = post_json(payload, api_url)
@@ -823,85 +839,105 @@ class StockpileWatcher:
             self.status_callback(message)
 
     def _run(self) -> None:
-        path = self.file_path.resolve()
+        configured_path = self.file_path.resolve()
         self._status("running")
-        initial_stat = path.stat() if path.exists() else None
-        last_mtime_ns = initial_stat.st_mtime_ns if initial_stat else 0
-        last_size = initial_stat.st_size if initial_stat else -1
+        watched_path: Path | None = None
+        watched_stat: tuple[int, int] | None = None
+        pending_path: Path | None = None
+        pending_at: float | None = None
+        pending_upload_reason = ""
         _debug_log(
             "[Stockpile Watcher] started "
-            f"file={path} exists={initial_stat is not None} "
-            f"size={last_size} mtime_ns={last_mtime_ns} extract_initial={self.extract_initial}"
+            f"configured_file={configured_path} extract_initial={self.extract_initial}"
         )
-        pending_at = time.monotonic() if self.extract_initial else None
-        pending_upload_reason = "startup" if self.extract_initial else "file_changed"
-        if not path.exists():
-            _debug_log(f"[Stockpile Watcher] waiting for Foxhole save file={path}")
-            self._status(f"waiting for Foxhole save file: {path}")
+        initial_scan_done = False
+        if not self._candidate_file():
+            _debug_log(f"[Stockpile Watcher] waiting for Foxhole save files in {foxhole_savegames_dir()}")
+            self._status(f"waiting for Foxhole save files in: {foxhole_savegames_dir()}")
 
         while not self.stop_event.is_set():
+            now = time.monotonic()
+            candidate = self._candidate_file()
+            if candidate is None:
+                initial_scan_done = True
+                time.sleep(self.interval)
+                continue
+
             try:
-                stat = path.stat()
+                resolved = candidate.resolve()
+                stat = resolved.stat()
             except FileNotFoundError:
-                discovered = discover_map_data_file()
-                if discovered and discovered.resolve() != path:
-                    path = discovered.resolve()
-                    self.file_path = path
-                    stat = path.stat()
-                    last_mtime_ns = stat.st_mtime_ns
-                    last_size = stat.st_size
-                    pending_at = time.monotonic()
-                    _debug_log(
-                        "[Stockpile Watcher] discovered new save "
-                        f"file={path} size={last_size} mtime_ns={last_mtime_ns}"
-                    )
-                    self._status(f"found Foxhole save file: {path}")
-                    time.sleep(self.interval)
-                    continue
+                initial_scan_done = True
                 time.sleep(self.interval)
                 continue
             except OSError as exc:
-                _debug_log(f"[Stockpile Watcher] cannot read file={path} error={exc}")
-                self._status(f"cannot read Foxhole save file: {path}: {exc}")
+                _debug_log(f"[Stockpile Watcher] cannot read file={candidate} error={exc}")
+                self._status(f"cannot read Foxhole save file: {candidate}: {exc}")
+                initial_scan_done = True
                 time.sleep(self.interval)
                 continue
 
-            now = time.monotonic()
-            file_size = stat.st_size
-            mtime_ns = stat.st_mtime_ns
-            if mtime_ns != last_mtime_ns or file_size != last_size:
-                last_mtime_ns = mtime_ns
-                last_size = file_size
+            current_stat = (stat.st_mtime_ns, stat.st_size)
+            is_new_active_file = watched_path is None or resolved != watched_path
+            if is_new_active_file:
+                watched_path = resolved
+                watched_stat = current_stat
+                self.file_path = resolved
+                if self.extract_initial or initial_scan_done:
+                    pending_path = resolved
+                    pending_at = now
+                    pending_upload_reason = "startup" if not initial_scan_done else "file_changed"
+                _debug_log(
+                    "[Stockpile Watcher] tracking latest save "
+                    f"file={resolved} size={stat.st_size} mtime_ns={stat.st_mtime_ns}"
+                )
+                status_prefix = "found newer Foxhole save file" if initial_scan_done else "found Foxhole save file"
+                self._status(f"{status_prefix}: {resolved}")
+            elif current_stat != watched_stat:
+                watched_stat = current_stat
+                pending_path = resolved
                 pending_at = now
                 pending_upload_reason = "file_changed"
                 _debug_log(
                     "[Stockpile Watcher] reload detected "
-                    f"file={path} size={file_size} mtime_ns={mtime_ns}"
+                    f"file={resolved} size={stat.st_size} mtime_ns={stat.st_mtime_ns}"
                 )
-                self._status("reload detected")
+                self._status(f"reload detected: {resolved.name}")
+            initial_scan_done = True
 
-            if pending_at is not None and now - pending_at >= self.debounce:
+            if pending_path is not None and pending_at is not None and now - pending_at >= self.debounce:
+                path = pending_path
+                upload_reason = pending_upload_reason
+                pending_path = None
                 pending_at = None
+                pending_upload_reason = ""
                 try:
-                    _debug_log(f"[Stockpile Watcher] processing reload reason={pending_upload_reason} file={path}")
-                    self._status("processing reload")
+                    _debug_log(f"[Stockpile Watcher] processing reload reason={upload_reason} file={path}")
+                    self._status(f"processing reload: {path.name}")
                     result = extract_and_post(
                         path,
                         self.out_dir,
                         self.api_url,
-                        upload_reason=pending_upload_reason,
+                        upload_reason=upload_reason,
                     )
-                    pending_upload_reason = "file_changed"
                     if result is None:
-                        self._status("stockpile unchanged")
+                        self._status(f"stockpile unchanged: {path.name}")
                     else:
                         self.send_count += 1
                         result["send_count"] = self.send_count
                         self._status(result)
                 except Exception as exc:
-                    self._status(f"error: {exc}")
+                    self._status(f"error processing {path.name}: {exc}")
 
             time.sleep(self.interval)
+
+    def _candidate_file(self) -> Path | None:
+        discovered = discover_map_data_file()
+        if discovered:
+            return discovered
+        if self.file_path.exists():
+            return self.file_path
+        return None
 
 
 def stockpile_settings_from_env() -> dict[str, Any]:
