@@ -48,6 +48,7 @@ DATA_DIRS = [
     ("efeitos sonoros", "efeitos sonoros"),
     ("translations", "translations"),
     ("Content", "Content"),
+    ("qml", "qml"),
 ]
 
 DATA_FILES = [
@@ -80,9 +81,12 @@ def quote_inno(value: str | Path) -> str:
 
 
 def app_version() -> str:
-    text = (ROOT / "felb_app.py").read_text(encoding="utf-8-sig")
-    match = re.search(r'^APP_VERSION\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
-    return match.group(1) if match else "1.0.0"
+    for source in ("qt_controllers.py", "felb_app.py"):
+        text = (ROOT / source).read_text(encoding="utf-8-sig")
+        match = re.search(r'^APP_VERSION\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
+        if match:
+            return match.group(1)
+    return "1.0.0"
 
 
 def has_nuitka() -> bool:
@@ -110,9 +114,8 @@ def install_build_deps() -> None:
         "nuitka",
         "ordered-set",
         "zstandard",
-        "customtkinter",
+        "PySide6",
         "pillow",
-        "pystray",
         "numpy",
         "opencv-python",
     ])
@@ -235,14 +238,12 @@ def build_app() -> Path:
         "--standalone",
         "--assume-yes-for-downloads",
         "--windows-console-mode=disable",
-        "--enable-plugin=tk-inter",
         f"--file-version={app_version()}",
         f"--product-version={app_version()}",
         f"--product-name={APP_NAME}",
         f"--file-description={APP_NAME} - Aplicativo",
         "--copyright=GG Coalition",
-        "--include-package=customtkinter",
-        "--include-package=pystray",
+        "--include-package=PySide6",
         "--include-package=pygvas",
         "--include-package=pydantic",
         "--include-package=pydantic_core",
@@ -251,7 +252,6 @@ def build_app() -> Path:
         "--include-package=numpy",
         "--include-package=cv2",
         "--include-module=PIL.Image",
-        "--include-module=PIL.ImageTk",
         f"--output-dir={DIST_DIR}",
         f"--output-filename={output.name}",
         *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
@@ -277,7 +277,6 @@ def build_updater() -> Path:
         "--standalone",
         "--assume-yes-for-downloads",
         "--windows-console-mode=disable",
-        "--enable-plugin=tk-inter",
         f"--file-version={app_version()}",
         f"--product-version={app_version()}",
         f"--product-name={UPDATER_NAME}",

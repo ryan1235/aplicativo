@@ -317,6 +317,7 @@ class AutoClicker:
             self.move_hotkey_vk,
             self.pilot_hotkey_vk,
             self.fixed_hotkey_vk,
+            HOTKEYS["F5"],
             VK_1,
             VK_2,
             VK_3,
@@ -330,6 +331,7 @@ class AutoClicker:
             self.handle_key_press(self.hotkey_vk, self.toggle)
             self.handle_key_press(self.fixed_hotkey_vk, self.toggle_fixed_click)
             self.handle_key_press(self.pilot_hotkey_vk, self.run_forward_sequence)
+            self.handle_key_press(HOTKEYS["F5"], self.open_orders_menu)
 
             if self.fixed_click_enabled:
                 self.handle_key_press(VK_1, lambda: self.trigger_slot_click(1))

@@ -1,7 +1,6 @@
 pygvas
-customtkinter
+PySide6
 pillow
-pystray
 numpy
 opencv-python
 nuitka

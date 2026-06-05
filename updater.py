@@ -13,10 +13,12 @@ import sys
 import tempfile
 import threading
 import time
-import tkinter as tk
-from tkinter import ttk
 import zipfile
 import traceback
+
+import PySide6
+from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtWidgets import QApplication, QLabel, QProgressBar, QVBoxLayout, QWidget
 
 try:
     from i18n import Translator, normalize_language
@@ -104,55 +106,90 @@ def _t(key: str, **kwargs) -> str:
     return TR.t(key, **kwargs)
 
 
-class UpdateWindow:
+def configure_qt_runtime() -> None:
+    pyside_dir = Path(PySide6.__file__).resolve().parent
+    try:
+        os.add_dll_directory(str(pyside_dir))
+    except (AttributeError, OSError):
+        pass
+    os.environ["PATH"] = str(pyside_dir) + os.pathsep + os.environ.get("PATH", "")
+    os.environ.setdefault("QT_PLUGIN_PATH", str(pyside_dir / "plugins"))
+
+
+class UpdateWindow(QObject):
+    progress_requested = Signal(int, str, str)
+
     def __init__(self) -> None:
-        self.root = tk.Tk()
-        self.root.title(_t("update.runner_window_title"))
-        self.root.geometry("460x240")
-        self.root.resizable(False, False)
-        self.root.configure(bg=COLORS["bg"])
-        self.root.protocol("WM_DELETE_WINDOW", lambda: None)
-
-        style = ttk.Style(self.root)
-        style.theme_use("clam")
-        style.configure("TProgressbar", troughcolor=COLORS["bg"], background=COLORS["accent"], bordercolor=COLORS["line"])
-
-        panel = tk.Frame(self.root, bg=COLORS["card"], highlightthickness=1, highlightbackground=COLORS["line"])
-        panel.pack(fill="both", expand=True, padx=18, pady=18)
-
-        tk.Label(panel, text=_t("update.runner_heading"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).pack(
-            anchor="w", padx=22, pady=(22, 4)
+        super().__init__()
+        self.window = QWidget()
+        self.window.setWindowTitle(_t("update.runner_window_title"))
+        self.window.setFixedSize(460, 240)
+        self.window.setStyleSheet(
+            f"""
+            QWidget {{ background: {COLORS['bg']}; color: {COLORS['text']}; font-family: Segoe UI; }}
+            #panel {{ background: {COLORS['card']}; border: 1px solid {COLORS['line']}; border-radius: 8px; }}
+            QLabel#heading {{ font-size: 24px; font-weight: 700; color: {COLORS['text']}; }}
+            QLabel#status {{ font-size: 13px; color: {COLORS['muted']}; }}
+            QLabel#detail {{ font-size: 12px; font-weight: 700; color: {COLORS['accent']}; }}
+            QProgressBar {{ border: 1px solid {COLORS['line']}; border-radius: 6px; background: {COLORS['bg']}; height: 14px; }}
+            QProgressBar::chunk {{ background: {COLORS['accent']}; border-radius: 6px; }}
+            """
         )
-        self.status_var = tk.StringVar(value=_t("update.runner_prepare"))
-        tk.Label(panel, textvariable=self.status_var, bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 10)).pack(
-            anchor="w", padx=22, pady=(0, 18)
-        )
-        self.progress = ttk.Progressbar(panel, mode="determinate", maximum=100, value=0)
-        self.progress.pack(fill="x", padx=22, pady=(0, 14))
-        self.detail_var = tk.StringVar(value="")
-        tk.Label(panel, textvariable=self.detail_var, bg=COLORS["card"], fg=COLORS["accent"], font=("Segoe UI", 9, "bold"), wraplength=390, justify="left").pack(
-            anchor="w", padx=22
-        )
+
+        outer = QVBoxLayout(self.window)
+        outer.setContentsMargins(18, 18, 18, 18)
+        panel = QWidget()
+        panel.setObjectName("panel")
+        outer.addWidget(panel)
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(22, 22, 22, 22)
+        layout.setSpacing(12)
+
+        heading = QLabel(_t("update.runner_heading"))
+        heading.setObjectName("heading")
+        layout.addWidget(heading)
+
+        self.status_label = QLabel(_t("update.runner_prepare"))
+        self.status_label.setObjectName("status")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        layout.addWidget(self.progress)
+
+        self.detail_label = QLabel("")
+        self.detail_label.setObjectName("detail")
+        self.detail_label.setWordWrap(True)
+        layout.addWidget(self.detail_label, stretch=1)
+
+        self.progress_requested.connect(self._set_progress)
         self.center()
+        self.window.show()
 
     def center(self) -> None:
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() - width) // 2
-        y = (self.root.winfo_screenheight() - height) // 2
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+        rect = screen.availableGeometry()
+        frame = self.window.frameGeometry()
+        frame.moveCenter(rect.center())
+        self.window.move(frame.topLeft())
 
     def set_progress(self, value: int, status: str, detail: str = "") -> None:
-        self.root.after(0, self._set_progress, value, status, detail)
+        self.progress_requested.emit(value, status, detail)
 
+    @Slot(int, str, str)
     def _set_progress(self, value: int, status: str, detail: str = "") -> None:
-        self.progress.configure(value=value)
-        self.status_var.set(status)
-        self.detail_var.set(detail)
+        self.progress.setValue(value)
+        self.status_label.setText(status)
+        self.detail_label.setText(detail)
 
     def close(self) -> None:
-        self.root.after(650, self.root.destroy)
+        QTimer.singleShot(650, self.window.close)
 
 
 def wait_for_process(pid: int, window: UpdateWindow, timeout: float = 25.0) -> None:
@@ -489,10 +526,11 @@ def main() -> int:
     parser.add_argument("--pid", type=int, default=0)
     args = parser.parse_args()
 
+    configure_qt_runtime()
+    app = QApplication(sys.argv)
     window = UpdateWindow()
     threading.Thread(target=run_update, args=(args, window), daemon=True).start()
-    window.root.mainloop()
-    return 0
+    return app.exec()
 
 
 if __name__ == "__main__":
