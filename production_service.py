@@ -55,7 +55,7 @@ CATEGORY_RULES = {
     "Heavy Ammunition": {"min": 3, "max": 9, "units": None, "mark": "AM", "factory": True, "mpf": True},
     "Utility": {"min": 3, "max": 9, "units": None, "mark": "UT", "factory": True, "mpf": False},
     "Medical": {"min": 3, "max": 9, "units": None, "mark": "MD", "factory": True, "mpf": False},
-    "Resource": {"min": 3, "max": 9, "units": None, "mark": "RS", "factory": True, "mpf": False},
+    "Resource": {"min": 3, "max": 9, "units": None, "mark": "RS", "factory": True, "mpf": True},
     "Uniforms": {"min": 3, "max": 9, "units": None, "mark": "UN", "factory": True, "mpf": True},
     "Vehicles": {"min": 1, "max": 5, "units": 3, "mark": "VH", "factory": False, "mpf": True},
     "Structures": {"min": 1, "max": 5, "units": 3, "mark": "ST", "factory": False, "mpf": True},
