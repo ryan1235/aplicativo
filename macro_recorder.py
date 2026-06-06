@@ -306,7 +306,7 @@ class MacroRecorder:
             frame_t = self._event_time()
             self._poll_keyboard(frame_t)
             self._poll_mouse(frame_t)
-            time.sleep(0.008)
+            time.sleep(0.016)
 
     def _poll_mouse(self, event_t: float | None = None) -> None:
         event_t = self._event_time() if event_t is None else event_t

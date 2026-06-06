@@ -398,9 +398,18 @@ def can_stage_locked_file(destination: Path, exc: OSError) -> bool:
 
 
 def save_locked_file_copy(source: Path, destination: Path, window: UpdateWindow) -> None:
-    pending = destination.with_name(f"{destination.name}.new")
-    shutil.copy2(source, pending)
-    window.set_progress(85, _t("update.runner_locked_saved"), pending.name)
+    old_file = destination.with_name(f"{destination.name}.old")
+    if old_file.exists():
+        try:
+            old_file.unlink()
+        except OSError:
+            pass
+    try:
+        destination.rename(old_file)
+    except OSError:
+        pass
+    shutil.copy2(source, destination)
+    window.set_progress(85, _t("update.runner_locked_saved"), destination.name)
 
 
 def extract_zip(zip_path: Path, window: UpdateWindow) -> Path:

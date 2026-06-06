@@ -253,7 +253,7 @@ def build_app() -> Path:
         "--include-package=cv2",
         "--include-module=PIL.Image",
         "--enable-plugin=pyside6",
-        "--include-qt-plugins=qml",
+        "--include-qt-plugins=qml,websockets,network",
         f"--output-dir={DIST_DIR}",
         f"--output-filename={output.name}",
         *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
