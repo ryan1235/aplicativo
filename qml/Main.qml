@@ -114,6 +114,8 @@ ApplicationWindow {
 
     function pageSource(page) {
         if (page === "home") return "pages/HomePage.qml"
+        if (page === "profile") return "pages/ProfilePage.qml"
+        if (page === "profile") return "pages/ProfilePage.qml"
         if (page === "chat") return "pages/ChatPage.qml"
         if (page === "autoClicker") return "pages/AutoClickerPage.qml"
         if (page === "stockpile") return "pages/StockpilePage.qml"
@@ -153,7 +155,7 @@ ApplicationWindow {
             return
         }
         close.accepted = false
-        handleCloseRequest()
+        hideToTray()
     }
 
     Connections {
@@ -165,6 +167,19 @@ ApplicationWindow {
         }
         function onQuitRequested() {
             exitApplication()
+        }
+        function onOpenFoxholeRequested() {
+            appController.openFoxhole()
+        }
+        function onToggleAutoClickerRequested() {
+            autoClickerController.toggle()
+        }
+        function onToggleMacroRequested() {
+            if (timeTaskController.recording) {
+                timeTaskController.stopRecording()
+            } else {
+                timeTaskController.startRecording()
+            }
         }
     }
 
@@ -353,35 +368,53 @@ ApplicationWindow {
         modal: true
         visible: updateController.offerVisible
         width: Math.min(560, window.width - 48)
-        height: Math.min(430, window.height - 48)
+        height: Math.min(460, window.height - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
         closePolicy: Popup.NoAutoClose
-        title: tr("update.available_title")
 
         background: Rectangle {
-            radius: 8
-            color: "#111c31"
+            radius: 16
+            color: Qt.rgba(0.04, 0.08, 0.15, 0.96)
             border.color: "#5eead4"
+            border.width: 1
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.6)
+                radius: 32
+                samples: 65
+            }
         }
 
         contentItem: ColumnLayout {
-            spacing: 12
-            Text {
-                text: tr("update.available_title")
-                color: "#edf6ff"
-                font.family: "Segoe UI"
-                font.pixelSize: 19
-                font.bold: true
-                Layout.fillWidth: true
-                elide: Text.ElideRight
+            spacing: 16
+            anchors.margins: 8
+
+            RowLayout {
+                spacing: 14
+                AnimatedImage {
+                    Layout.preferredWidth: 48
+                    Layout.preferredHeight: 48
+                    source: appController.assetUrl("img/ggimege.gif")
+                    fillMode: Image.PreserveAspectCrop
+                }
+                Text {
+                    text: tr("update.available_title")
+                    color: "#5eead4"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 22
+                    font.bold: true
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
             }
+
             Text {
                 text: updateController.updateAvailableBody
-                color: "#8ab4ff"
+                color: "#a4b9d6"
                 font.family: "Segoe UI"
-                font.pixelSize: 12
-                font.bold: true
+                font.pixelSize: 14
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
             }
@@ -394,35 +427,40 @@ ApplicationWindow {
                 selectByMouse: true
                 color: "#edf6ff"
                 font.family: "Segoe UI"
-                font.pixelSize: 12
+                font.pixelSize: 13
                 wrapMode: TextArea.Wrap
                 background: Rectangle {
-                    radius: 7
-                    color: "#07111f"
-                    border.color: "#24486d"
+                    radius: 8
+                    color: "#070b16"
+                    border.color: "#1e3554"
                 }
             }
         }
 
         footer: Item {
-            implicitHeight: 58
+            implicitHeight: 64
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
-                anchors.bottomMargin: 18
-                spacing: 10
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.bottomMargin: 24
+                spacing: 12
                 PrimaryButton {
                     text: tr("update.later")
                     Layout.fillWidth: true
-                    fill: "#1d3353"
-                    hoverFill: "#2d496f"
-                    textFill: "#edf6ff"
+                    Layout.preferredHeight: 40
+                    fill: "#111c31"
+                    hoverFill: "#1d3353"
+                    textFill: "#99abc4"
                     onClicked: updateController.dismissOffer()
                 }
                 PrimaryButton {
                     text: tr("update.install_now")
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 40
+                    fill: "#5eead4"
+                    hoverFill: "#2dd4bf"
+                    textFill: "#022c22"
                     onClicked: updateController.installAvailableUpdate()
                 }
             }
@@ -433,54 +471,78 @@ ApplicationWindow {
         id: updateProgressDialog
         modal: true
         visible: updateController.progressVisible
-        width: Math.min(460, window.width - 48)
+        width: Math.min(480, window.width - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
         closePolicy: Popup.NoAutoClose
-        title: tr("update.progress_title")
 
         background: Rectangle {
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            radius: 16
+            color: Qt.rgba(0.04, 0.08, 0.15, 0.96)
+            border.color: "#1e3554"
+            border.width: 1
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.6)
+                radius: 32
+                samples: 65
+            }
         }
 
         contentItem: ColumnLayout {
-            spacing: 14
-            Text {
-                text: tr("update.progress_title")
-                color: "#edf6ff"
-                font.family: "Segoe UI"
-                font.pixelSize: 19
-                font.bold: true
-                Layout.fillWidth: true
-                elide: Text.ElideRight
+            spacing: 18
+            anchors.margins: 12
+
+            RowLayout {
+                spacing: 14
+                AnimatedImage {
+                    Layout.preferredWidth: 40
+                    Layout.preferredHeight: 40
+                    source: appController.assetUrl("img/ggimege.gif")
+                    fillMode: Image.PreserveAspectCrop
+                }
+                ColumnLayout {
+                    spacing: 4
+                    Layout.fillWidth: true
+                    Text {
+                        text: tr("update.progress_title")
+                        color: "#edf6ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 20
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        text: updateController.progressText
+                        color: "#99abc4"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 13
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
-            Text {
-                text: updateController.progressText
-                color: "#99abc4"
-                font.family: "Segoe UI"
-                font.pixelSize: 12
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-            }
+
             ProgressBar {
                 Layout.fillWidth: true
                 value: updateController.progressValue / 100
                 background: Rectangle {
-                    implicitHeight: 12
-                    radius: 6
-                    color: "#07111f"
-                    border.color: "#24486d"
+                    implicitHeight: 14
+                    radius: 7
+                    color: "#070b16"
+                    border.color: "#1e3554"
+                    border.width: 1
                 }
                 contentItem: Item {
-                    implicitHeight: 12
+                    implicitHeight: 14
                     Rectangle {
                         width: parent.width * (updateController.progressValue / 100)
                         height: parent.height
-                        radius: 6
+                        radius: 7
                         color: "#5eead4"
-                        Behavior on width { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                        Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
                     }
                 }
             }
@@ -494,35 +556,61 @@ ApplicationWindow {
         width: Math.min(500, window.width - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
-        title: tr("update.error_title")
         closePolicy: Popup.CloseOnEscape
         onRejected: updateController.dismissError()
 
         background: Rectangle {
-            radius: 8
-            color: "#111c31"
-            border.color: "#ff7a90"
+            radius: 16
+            color: Qt.rgba(0.04, 0.08, 0.15, 0.96)
+            border.color: "#ff3366"
+            border.width: 1
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.6)
+                radius: 32
+                samples: 65
+            }
         }
 
-        contentItem: Text {
-            text: updateController.errorText
-            color: "#edf6ff"
-            font.family: "Segoe UI"
-            font.pixelSize: 12
-            wrapMode: Text.WordWrap
+        contentItem: ColumnLayout {
+            spacing: 12
+            anchors.margins: 12
+
+            Text {
+                text: tr("update.error_title")
+                color: "#ff3366"
+                font.family: "Segoe UI"
+                font.pixelSize: 20
+                font.bold: true
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: updateController.errorText
+                color: "#edf6ff"
+                font.family: "Segoe UI"
+                font.pixelSize: 14
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
         }
 
         footer: Item {
-            implicitHeight: 58
+            implicitHeight: 64
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
-                anchors.bottomMargin: 18
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.bottomMargin: 24
                 Item { Layout.fillWidth: true }
                 PrimaryButton {
                     text: tr("release.ok")
                     Layout.preferredWidth: 128
+                    Layout.preferredHeight: 40
+                    fill: "#ff3366"
+                    hoverFill: "#e62e5c"
+                    textFill: "#ffffff"
                     onClicked: updateController.dismissError()
                 }
             }
@@ -599,6 +687,7 @@ ApplicationWindow {
         color: "#070b16"
 
         RowLayout {
+            id: mainLayout
             anchors.fill: parent
             spacing: 0
 
@@ -675,7 +764,9 @@ ApplicationWindow {
                             anchors.fill: parent
                             hoverEnabled: true
                             onClicked: {
-                                if (chatController.currentProvider !== "discord") {
+                                if (chatController.currentProvider === "discord") {
+                                    appController.setCurrentPage("profile")
+                                } else {
                                     chatController.connectWithDiscord()
                                 }
                             }
@@ -782,6 +873,8 @@ ApplicationWindow {
                                     source: {
                                         var map = {
                                             "home": "home.png",
+                                            "user": "generic.png",
+                                            "user": "generic.png",
                                             "chat": "aovivo.png",
                                             "bolt": "autoclicker.png",
                                             "timer": "generic.png",
@@ -914,7 +1007,139 @@ ApplicationWindow {
                         source: pageSource(appController.currentPage)
                         asynchronous: true
                         opacity: status === Loader.Ready ? 1 : 0
+                        visible: opacity > 0
                         Behavior on opacity { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
+                    }
+                }
+        }
+        }
+
+        // Discord Login Overlay
+        Item {
+            id: discordLoginOverlay
+            anchors.fill: parent
+            z: 9999
+            visible: chatController.discordLoginRequired
+
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true // Block all mouse events behind it
+                onWheel: function(wheel) { wheel.accepted = true; } // Block scroll
+            }
+
+            FastBlur {
+                anchors.fill: parent
+                source: mainLayout
+                radius: 56
+                transparentBorder: false
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: "#040810"
+                opacity: 0.40 // Make it very transparent to see the blur
+            }
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: 440
+                height: 390
+                radius: 16
+                color: Qt.rgba(0.05, 0.1, 0.18, 0.85) // More transparent card
+                border.color: "#1e3554"
+                border.width: 1
+
+                layer.enabled: true
+                layer.effect: DropShadow {
+                    transparentBorder: true
+                    color: Qt.rgba(0, 0, 0, 0.6)
+                    radius: 20
+                    samples: 41
+                    verticalOffset: 6
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 36
+                    spacing: 24
+
+                    Item {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 100
+                        Layout.preferredHeight: 100
+                        
+                        Rectangle {
+                            id: floatingLogo
+                            anchors.centerIn: parent
+                            width: 90
+                            height: 90
+                            radius: 45
+                            color: "#040810"
+                            border.color: "#2d496f"
+                            border.width: 1
+                            clip: true
+                            
+                            layer.enabled: true
+                            layer.effect: DropShadow {
+                                transparentBorder: true
+                                color: Qt.rgba(0.368, 0.917, 0.831, 0.5) // Glow
+                                radius: 18
+                                samples: 31
+                                spread: 0.1
+                            }
+
+                            SequentialAnimation on anchors.verticalCenterOffset {
+                                loops: Animation.Infinite
+                                running: chatController.discordLoginRequired
+                                NumberAnimation { from: 0; to: -8; duration: 1600; easing.type: Easing.InOutSine }
+                                NumberAnimation { from: -8; to: 0; duration: 1600; easing.type: Easing.InOutSine }
+                            }
+
+                            AnimatedImage {
+                                anchors.fill: parent
+                                source: appController.assetUrl("img/ggimege.gif")
+                                fillMode: Image.PreserveAspectCrop
+                                playing: chatController.discordLoginRequired
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
+                        spacing: 10
+                        Layout.alignment: Qt.AlignHCenter
+                        
+                        Text {
+                            text: "Acesso Restrito"
+                            color: "#edf6ff"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 28
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: "Para garantir uma experiência completa, faça\no login com a sua conta do Discord."
+                            color: "#99abc4"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 15
+                            lineHeight: 1.4
+                            horizontalAlignment: Text.AlignHCenter
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
+
+                    PrimaryButton {
+                        text: "Login com Discord"
+                        fill: "#5865F2"
+                        hoverFill: "#4752C4"
+                        textFill: "#ffffff"
+                        Layout.preferredHeight: 52
+                        Layout.fillWidth: true
+                        font.pixelSize: 16
+                        font.bold: true
+                        onClicked: chatController.connectWithDiscord()
                     }
                 }
             }

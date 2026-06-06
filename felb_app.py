@@ -85,7 +85,16 @@ def configure_qt() -> None:
     QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
 
 
+def cleanup_old_files() -> None:
+    for file in BASE_DIR.rglob("*.old"):
+        try:
+            file.unlink()
+        except OSError:
+            pass
+
+
 def main() -> int:
+    cleanup_old_files()
     load_env_file(BASE_DIR / ".env")
     configure_qt()
     background = any(arg.lower() in BACKGROUND_ARGS for arg in sys.argv[1:])

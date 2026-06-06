@@ -210,6 +210,7 @@ Popup {
                         fillMode: Image.PreserveAspectCrop
                         cache: true
                         asynchronous: true
+                        playing: root.currentTab === 1 && root.visible
                     }
                     
                     MouseArea {

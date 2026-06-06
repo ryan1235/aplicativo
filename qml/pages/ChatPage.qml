@@ -8,11 +8,35 @@ Rectangle {
     id: root
     color: "transparent"
     property int lastMessageCount: 0
+    property string replyingTo: ""
+    property string replyingToLabel: ""
+    property string reactingToMsgId: ""
+    property string whisperingTo: ""
+    property string whisperingToLabel: ""
     property string lastSelectedRoom: ""
     property bool preservingOlderMessages: false
     property bool stickMessagesToBottom: true
     property real olderContentHeight: 0
     property real olderContentY: 0
+
+    function scrollToMessage(msgId) {
+        for (var i = 0; i < messagesColumn.children.length; i++) {
+            if (chatController.messagesRows[i] && chatController.messagesRows[i].id === msgId) {
+                var targetY = messagesColumn.children[i].y;
+                messageScroll.contentY = Math.max(0, Math.min(targetY, messagesColumn.height - messageScroll.height));
+                
+                // Add a small flash effect to highlight the message
+                var item = messagesColumn.children[i]
+                var oldColor = item.color
+                item.color = "#2a3b22"
+                Qt.callLater(function() {
+                    var animation = Qt.createQmlObject('import QtQuick; ColorAnimation { target: item; property: "color"; to: "' + oldColor + '"; duration: 1000 }', item)
+                    animation.start()
+                })
+                return;
+            }
+        }
+    }
 
     function tr(key) {
         i18nController.revision
@@ -251,6 +275,24 @@ Rectangle {
                                         Text { text: modelData.name; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                         Text { text: modelData.detail || ("@" + modelData.mention); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
                                     }
+                                    Rectangle {
+                                        Layout.preferredWidth: 28
+                                        Layout.preferredHeight: 28
+                                        radius: 14
+                                        color: whisperArea.containsMouse ? "#24486d" : "transparent"
+                                        visible: modelData.discordId !== "" && modelData.discordId !== chatController.discordId
+                                        Text { anchors.centerIn: parent; text: "💬"; font.pixelSize: 12 }
+                                        MouseArea {
+                                            id: whisperArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: {
+                                                root.whisperingTo = modelData.discordId
+                                                root.whisperingToLabel = modelData.name
+                                                messageInput.forceActiveFocus()
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -345,14 +387,12 @@ Rectangle {
                                 width: messagesColumn.width
                                 implicitHeight: messageCardColumn.implicitHeight + 20
                                 radius: 8
-                                color: modelData.mentioned ? "#2a3b22" : (mouseMsg.containsMouse ? "#122036" : (modelData.mine ? "#0a1321" : "transparent"))
+                                color: modelData.mentioned ? "#2a3b22" : (hoverMsg.hovered ? "#122036" : (modelData.mine ? "#0a1321" : "transparent"))
                                 border.color: modelData.mentioned ? "#ffd166" : "transparent"
                                 Behavior on color { ColorAnimation { duration: 120 } }
                                 
-                                MouseArea {
-                                    id: mouseMsg
-                                    anchors.fill: parent
-                                    hoverEnabled: true
+                                HoverHandler {
+                                    id: hoverMsg
                                 }
 
                                 ColumnLayout {
@@ -362,6 +402,26 @@ Rectangle {
                                     anchors.top: parent.top
                                     anchors.margins: 10
                                     spacing: 6
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 20
+                                        color: hoverReplyTarget.containsMouse ? "#24395e" : "#1a293e"
+                                        radius: 4
+                                        visible: modelData.replyToMessageId !== ""
+                                        MouseArea {
+                                            id: hoverReplyTarget
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: root.scrollToMessage(modelData.replyToMessageId)
+                                        }
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            spacing: 4
+                                            Text { text: "↩ " + modelData.replyToAuthor; color: "#8ab4ff"; font.bold: true; font.pixelSize: 10 }
+                                            Text { text: modelData.replyToBody; color: "#99abc4"; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        }
+                                    }
                                     RowLayout {
                                         Layout.fillWidth: true
                                         spacing: 12
@@ -408,22 +468,67 @@ Rectangle {
                                         visible: modelData.mediaUrl !== "" && modelData.isGif
                                         source: modelData.mediaUrl
                                         playing: visible
-                                        asynchronous: true
+                                        asynchronous: false
                                         Layout.preferredWidth: Math.min(420, messageScroll.width - 48)
-                                        Layout.preferredHeight: visible ? Math.min(230, implicitHeight > 0 ? implicitHeight : 180) : 0
+                                        Layout.preferredHeight: visible ? 200 : 0
                                         fillMode: Image.PreserveAspectFit
                                         cache: true
                                     }
                                     Image {
                                         visible: modelData.mediaUrl !== "" && !modelData.isGif
                                         source: modelData.mediaUrl
-                                        asynchronous: true
+                                        asynchronous: false
                                         sourceSize.width: Math.min(420, messageScroll.width - 48)
-                                        sourceSize.height: 220
+                                        sourceSize.height: 200
                                         Layout.preferredWidth: Math.min(420, messageScroll.width - 48)
-                                        Layout.preferredHeight: visible ? 220 : 0
+                                        Layout.preferredHeight: visible ? 200 : 0
                                         fillMode: Image.PreserveAspectFit
                                         cache: true
+                                    }
+
+                                }
+                                
+                                // Hover action row (Reply, React, Whisper)
+                                RowLayout {
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.rightMargin: 8
+                                    anchors.topMargin: -12
+                                    spacing: 4
+                                    visible: hoverMsg.hovered
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 30
+                                        Layout.preferredHeight: 30
+                                        radius: 15
+                                        color: hoverReply.containsMouse ? "#24486d" : "#1d3353"
+                                        Text { anchors.centerIn: parent; text: "↩"; font.pixelSize: 14; color: "#edf6ff" }
+                                        MouseArea {
+                                            id: hoverReply
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: {
+                                                root.replyingTo = modelData.id
+                                                root.replyingToLabel = modelData.author + ": " + modelData.body
+                                            }
+                                        }
+                                    }
+                                    Rectangle {
+                                        Layout.preferredWidth: 30
+                                        Layout.preferredHeight: 30
+                                        radius: 15
+                                        color: hoverWhisper.containsMouse ? "#24486d" : "#1d3353"
+                                        Text { anchors.centerIn: parent; text: "W"; font.pixelSize: 14; color: "#edf6ff"; font.bold: true }
+                                        visible: modelData.authorDiscordId !== "" && !modelData.mine
+                                        MouseArea {
+                                            id: hoverWhisper
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: {
+                                                root.whisperingTo = modelData.authorDiscordId || ""
+                                                root.whisperingToLabel = modelData.author
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -466,11 +571,69 @@ Rectangle {
                     }
                 }
 
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 4
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
+                        radius: 6
+                        color: "#2a1636"
+                        visible: root.whisperingTo !== ""
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            spacing: 8
+                            Text { text: "🔒 Sussurrando para: " + root.whisperingToLabel; color: "#f3e8ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Text {
+                                text: "✖ "
+                                color: "#f87171"
+                                font.pixelSize: 14
+                                font.bold: true
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -4
+                                    onClicked: {
+                                        root.whisperingTo = ""
+                                        root.whisperingToLabel = ""
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
+                        radius: 6
+                        color: "#1d3353"
+                        visible: root.replyingTo !== ""
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            spacing: 8
+                            Text { text: "↩ Resposta para: " + root.replyingToLabel; color: "#edf6ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Text {
+                                text: "✖ "
+                                color: "#f87171"
+                                font.pixelSize: 14
+                                font.bold: true
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -4
+                                    onClicked: {
+                                        root.replyingTo = ""
+                                        root.replyingToLabel = ""
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-                    Button {
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        Button {
                         id: pickerButton
                         Layout.preferredWidth: 40
                         Layout.preferredHeight: 40
@@ -498,21 +661,42 @@ Rectangle {
                         selectByMouse: true
                         onTextChanged: chatController.updateMentionSuggestions(text)
                         onAccepted: {
-                            chatController.sendMessage(text)
-                            text = ""
-                            chatController.updateMentionSuggestions("")
+                            if (text.trim().length > 0) {
+                                if (root.whisperingTo !== "") {
+                                    chatController.sendWhisperToUser(root.whisperingTo, text)
+                                } else if (root.replyingTo !== "") {
+                                    chatController.sendMessageReply(text, root.replyingTo)
+                                    root.replyingTo = ""
+                                    root.replyingToLabel = ""
+                                } else {
+                                    chatController.sendMessage(text)
+                                }
+                                text = ""
+                                chatController.updateMentionSuggestions("")
+                            }
                         }
                         background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
                     }
                     PrimaryButton {
                         text: tr("home.chat.send")
                         onClicked: {
-                            chatController.sendMessage(messageInput.text)
-                            messageInput.text = ""
-                            chatController.updateMentionSuggestions("")
+                            if (messageInput.text.trim().length > 0) {
+                                if (root.whisperingTo !== "") {
+                                    chatController.sendWhisperToUser(root.whisperingTo, messageInput.text)
+                                } else if (root.replyingTo !== "") {
+                                    chatController.sendMessageReply(messageInput.text, root.replyingTo)
+                                    root.replyingTo = ""
+                                    root.replyingToLabel = ""
+                                } else {
+                                    chatController.sendMessage(messageInput.text)
+                                }
+                                messageInput.text = ""
+                                chatController.updateMentionSuggestions("")
+                            }
                         }
                     }
                 }
+                } // Close ColumnLayout
             }
         }
     }
