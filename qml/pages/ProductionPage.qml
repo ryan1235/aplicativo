@@ -292,25 +292,59 @@ Rectangle {
                         MetricCard {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 88
-                            title: tr("production.queue")
+                            title: tr("production.summary")
                             value: productionController.summary
                             detail: productionController.orders
                             contentMargins: 10
                             contentSpacing: 3
-                            valuePixelSize: 20
-                            detailPixelSize: 11
+                            valuePixelSize: 19
+                            detailPixelSize: 10
+                            detailMaximumLineCount: 2
                         }
                         MetricCard {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 88
-                            title: tr("production.warning_title")
-                            value: productionController.warning || "-"
-                            detail: tr("production.warning_detail")
-                            accent: productionController.warning ? "#ffd166" : "#62d7a4"
+                            title: tr("production.materials")
+                            value: productionController.materialSummary
+                            detail: productionController.materialDetail
+                            accent: "#8ab4ff"
                             contentMargins: 10
                             contentSpacing: 3
-                            valuePixelSize: productionController.warning ? 14 : 20
-                            detailPixelSize: 11
+                            valuePixelSize: 17
+                            detailPixelSize: 10
+                            detailMaximumLineCount: 2
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: String(productionController.warning || "") !== ""
+                        Layout.preferredHeight: visible ? warningText.implicitHeight + 12 : 0
+                        radius: 7
+                        color: "#201b12"
+                        border.color: "#ffd166"
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            spacing: 7
+                            Text {
+                                text: "!"
+                                color: "#ffd166"
+                                font.family: "Segoe UI"
+                                font.pixelSize: 12
+                                font.bold: true
+                                Layout.preferredWidth: 12
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            Text {
+                                id: warningText
+                                text: productionController.warning
+                                color: "#ffd166"
+                                font.family: "Segoe UI"
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
                         }
                     }
 

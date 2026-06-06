@@ -3677,8 +3677,9 @@ class IdentifyItemController(QObject):
 class ProductionController(QObject):
     changed = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, i18n: I18nController | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
+        self.i18n = i18n
         self.availableItems = DictListModel(
             ["key", "name", "category", "faction", "mode", "icon", "quantityPerCrate", "bmat", "emat", "rmat", "hemat", "relic"],
             self,
@@ -3699,8 +3700,12 @@ class ProductionController(QObject):
         self._route_vehicle_mode = "Dunne"
         self._summary = "-"
         self._orders = "-"
+        self._material_summary = "-"
+        self._material_detail = "-"
         self._route_summary = "-"
         self._warning = ""
+        if self.i18n:
+            self.i18n.changed.connect(self.refresh)
         self.refresh()
 
 
@@ -3757,6 +3762,14 @@ class ProductionController(QObject):
     @Property(str, notify=changed)
     def orders(self) -> str:
         return self._orders
+
+    @Property(str, notify=changed)
+    def materialSummary(self) -> str:
+        return self._material_summary
+
+    @Property(str, notify=changed)
+    def materialDetail(self) -> str:
+        return self._material_detail
 
     @Property(str, notify=changed)
     def routeSummary(self) -> str:
@@ -3941,16 +3954,29 @@ class ProductionController(QObject):
                 for category in categories
             ]
         )
+        totals = calculate_queue(self._queue, mode=self._mode)
+        material_rows = self._material_rows(totals["totals"])
         self.queue.set_items(self._queue_rows())
         self.queueCategories.set_items(self._queue_category_rows(categories))
-        totals = calculate_queue(self._queue, mode=self._mode)
-        self.materials.set_items(self._material_rows(totals["totals"]))
+        self.materials.set_items(material_rows)
         self.routeTrips.set_items(self._route_rows())
-        self._summary = f"{totals['total_crates']} crates | {totals['total_items']} produced items"
+        material_crates = sum(int(row.get("crates", 0) or 0) for row in material_rows)
+        self._summary = self._t("production.total_value", items=totals["total_items"])
         if self._mode == "mpf":
-            self._orders = f"{totals['active_orders']} orders | {totals['discount']:.1f}% material discount"
+            self._orders = self._t(
+                "production.total_detail_mpf",
+                crates=totals["total_crates"],
+                orders=totals["active_orders"],
+                discount=f"{totals['discount']:.1f}",
+            )
         else:
-            self._orders = f"{totals['total_crates']} crates | {totals['max_factory']} factories needed"
+            self._orders = self._t(
+                "production.total_detail_factory",
+                crates=totals["total_crates"],
+                factories=totals["max_factory"],
+            )
+        self._material_summary = self._t("production.material_total_value", crates=material_crates)
+        self._material_detail = self._format_material_detail(material_rows)
         self._route_summary = f"{self.routeTrips.count()} trips | {self._route_vehicle_mode}"
         self._warning = "  ".join(totals["warnings"])
         if self._all_items:
@@ -4065,6 +4091,32 @@ class ProductionController(QObject):
                 }
             )
         return rows
+
+    def _format_material_detail(self, rows: list[dict[str, Any]]) -> str:
+        if not rows:
+            return self._t("production.material_empty")
+        parts = [
+            self._t(
+                "production.material_line",
+                quantity=row.get("quantity", 0),
+                label=row.get("label", ""),
+                crates=row.get("crates", 0),
+            )
+            for row in rows
+        ]
+        if len(parts) <= 2:
+            return " | ".join(parts)
+        return " | ".join(parts[:2]) + "\n" + " | ".join(parts[2:])
+
+    def _t(self, key: str, **kwargs: Any) -> str:
+        if self.i18n:
+            return self.i18n.translator.t(key, **kwargs)
+        if kwargs:
+            try:
+                return key.format(**kwargs)
+            except Exception:
+                return key
+        return key
 
     def _route_rows(self) -> list[dict[str, Any]]:
         trips = plan_transport_routes(self._queue, mode=self._mode, vehicle=self._route_vehicle_mode)
@@ -5945,7 +5997,7 @@ class ControllerRegistry(QObject):
         self.chatController = ChatController(self.steamController, self.settings_data, self.i18nController, self)
         self.itemSearchController = ItemSearchController(self.settings_data, self)
         self.identifyItemController = IdentifyItemController(self.itemSearchController, self)
-        self.productionController = ProductionController(self)
+        self.productionController = ProductionController(self.i18nController, self)
         self.timeTaskController = TimeTaskController(self.i18nController, self)
         self.notificationsController = NotificationsController(self.settings_data, self)
         self.updateController = UpdateController(self.i18nController, self)
