@@ -55,6 +55,8 @@ VK_RBUTTON = 0x02
 VK_MBUTTON = 0x04
 VK_RETURN = 0x0D
 VK_CONTROL = 0x11
+VK_SHIFT = 0x10
+VK_S = 0x53
 
 
 class POINT(ctypes.Structure):
@@ -99,6 +101,25 @@ class AutoClicker:
         self.pilot_hotkey_name = "F4"
         self.pilot_hotkey_vk = ACTION_KEYS[self.pilot_hotkey_name]
         self.last_pilot_until = 0.0
+        # Pilot toggle mode: holds W, Enter to enter vehicle, S pauses W
+        self.pilot_enabled = False
+        self.pilot_w_paused = False
+        self.pilot_w_hwnd = 0
+
+        # W double-tap to hold W mode
+        self.w_hold_enabled = False
+        self.w_hold_hwnd = 0
+        self.w_last_tap = 0.0
+        self.w_double_tap_threshold = 0.35  # seconds between taps
+        self.w_doubletap_enabled = True  # can be toggled from UI
+
+        # Shift hold with autoclick
+        self.shift_enabled = False
+
+        # Artilharia: R + Left Click
+        self.artillery_hotkey_name = "F7"
+        self.artillery_hotkey_vk = ACTION_KEYS[self.artillery_hotkey_name]
+        self.artillery_enabled = False
 
         # F2 - move-click segurando esquerdo
         self.move_click_enabled = False
@@ -163,13 +184,15 @@ class AutoClicker:
         self.log(f"Config: hotkey={self.hotkey_name} botao={self.mouse_button} intervalo={self.interval:.2f}s")
         self.status_callback(self.status_text())
 
-    def configure_action_hotkeys(self, move_hotkey: str, fixed_hotkey: str, pilot_hotkey: str) -> None:
+    def configure_action_hotkeys(self, move_hotkey: str, fixed_hotkey: str, pilot_hotkey: str, artillery_hotkey: str = "F7") -> None:
         self.move_hotkey_name = move_hotkey if move_hotkey in ACTION_KEYS else "F2"
         self.fixed_hotkey_name = fixed_hotkey if fixed_hotkey in ACTION_KEYS else "F6"
         self.pilot_hotkey_name = pilot_hotkey if pilot_hotkey in ACTION_KEYS else "F4"
+        self.artillery_hotkey_name = artillery_hotkey if artillery_hotkey in ACTION_KEYS else "F7"
         self.move_hotkey_vk = ACTION_KEYS[self.move_hotkey_name]
         self.fixed_hotkey_vk = ACTION_KEYS[self.fixed_hotkey_name]
         self.pilot_hotkey_vk = ACTION_KEYS[self.pilot_hotkey_name]
+        self.artillery_hotkey_vk = ACTION_KEYS[self.artillery_hotkey_name]
         self.log(
             f"Hotkeys extras: move={self.move_hotkey_name} "
             f"fixed={self.fixed_hotkey_name} pilot={self.pilot_hotkey_name}"
@@ -219,7 +242,7 @@ class AutoClicker:
                 visible_windows.append((hwnd, process_name, title))
             if any(blocked in process_name for blocked in IGNORED_PROCESS_HINTS):
                 return True
-            if self.is_foxhole_process(process_name, process_path):
+            if self.is_foxhole_process(process_name, process_path) or title.strip() == "Foxhole":
                 self.log(f"Foxhole confirmado: hwnd={hwnd} processo={process_name} titulo='{title}' caminho='{process_path}'")
                 matches.append((hwnd, title))
             return True
@@ -253,13 +276,23 @@ class AutoClicker:
             if self.kernel32.QueryFullProcessImageNameW(process_handle, 0, path_buffer, ctypes.byref(size)):
                 return path_buffer.value
             return ""
+        except Exception:
+            return ""
         finally:
             self.kernel32.CloseHandle(process_handle)
 
     def is_foxhole_window(self, hwnd: int) -> bool:
         process_name = self.get_window_process_name(hwnd).lower()
         process_path = self.get_window_process_path(hwnd).lower()
-        return self.is_foxhole_process(process_name, process_path)
+        
+        length = self.user32.GetWindowTextLengthW(hwnd)
+        title = ""
+        if length > 0:
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            self.user32.GetWindowTextW(hwnd, buffer, length + 1)
+            title = buffer.value
+            
+        return self.is_foxhole_process(process_name, process_path) or title.strip() == "Foxhole"
 
     @staticmethod
     def is_foxhole_process(process_name: str, process_path: str) -> bool:
@@ -289,11 +322,14 @@ class AutoClicker:
         self.pause()
         self.disable_fixed_click("stop")
         self.disable_move_click("stop")
+        self.disable_artillery("stop")
+        self.disable_pilot("stop")
+        self.disable_w_hold("stop")
         self.stop_event.set()
         self.log("Parando AutoClicker")
 
     def status_text(self) -> str:
-        running = self.enabled or self.fixed_click_enabled
+        running = self.enabled or self.fixed_click_enabled or self.artillery_enabled or self.pilot_enabled or self.w_hold_enabled
         if running and (not self.target_hwnd or not self.user32.IsWindow(self.target_hwnd) or self.waiting_for_foxhole):
             return f"Ligado | aguardando Foxhole | {self.hotkey_name}"
         state = "Ligado" if running else "Desligado"
@@ -308,6 +344,14 @@ class AutoClicker:
             mode.append(self.fixed_hotkey_name)
         if time.monotonic() < self.last_pilot_until:
             mode.append(self.pilot_hotkey_name)
+        if self.artillery_enabled:
+            mode.append(self.artillery_hotkey_name)
+        if self.pilot_enabled:
+            mode.append(f"{self.pilot_hotkey_name}:PILOTO{'(S=PAUSE)' if self.pilot_w_paused else ''}")
+        if self.w_hold_enabled:
+            mode.append("W-HOLD")
+        if self.shift_enabled:
+            mode.append("SHIFT")
         mode_text = ",".join(mode) if mode else "-"
         return f"{state} | {target} | virtual {point} | cliques {self.click_count} | {self.hotkey_name} | {self.interval:.2f}s | {mode_text}"
 
@@ -317,20 +361,22 @@ class AutoClicker:
             self.move_hotkey_vk,
             self.pilot_hotkey_vk,
             self.fixed_hotkey_vk,
+            self.artillery_hotkey_vk,
             HOTKEYS["F5"],
-            VK_1,
-            VK_2,
-            VK_3,
-            VK_4,
+            VK_1, VK_2, VK_3, VK_4,
         ]
         for vk in watch_keys:
             self.key_was_down[vk] = False
+
+        # W double-tap monitoring runs in its own thread
+        threading.Thread(target=self._w_doubletap_monitor, daemon=True).start()
 
         while not self.stop_event.is_set():
             self.handle_key_press(self.move_hotkey_vk, self.toggle_move_click)
             self.handle_key_press(self.hotkey_vk, self.toggle)
             self.handle_key_press(self.fixed_hotkey_vk, self.toggle_fixed_click)
-            self.handle_key_press(self.pilot_hotkey_vk, self.run_forward_sequence)
+            self.handle_key_press(self.pilot_hotkey_vk, self.toggle_w_hold)  # F4 = segurar W
+            self.handle_key_press(self.artillery_hotkey_vk, self.toggle_artillery)
             self.handle_key_press(HOTKEYS["F5"], self.open_orders_menu)
 
             if self.fixed_click_enabled:
@@ -340,7 +386,7 @@ class AutoClicker:
                 self.handle_key_press(VK_4, lambda: self.trigger_slot_click(4))
 
             self.check_cancel_shortcuts()
-            time.sleep(0.02)
+            time.sleep(0.03)
 
     def handle_key_press(self, vk: int, callback) -> None:
         is_down = bool(self.user32.GetAsyncKeyState(vk) & 0x8000)
@@ -362,9 +408,17 @@ class AutoClicker:
         if self.move_click_enabled and (esc or lbtn or rbtn or mbtn):
             self.disable_move_click("cancel: esc/outro clique")
 
-        # Double-click fixo cancela com mouse/wasd/esc
-        if self.fixed_click_enabled and (esc or lbtn or rbtn or mbtn or wasd):
-            self.disable_fixed_click("cancel: mouse/wasd/esc")
+        # Double-click fixo cancela com mouse/asd/esc (W excludido pois w_hold usa W)
+        asd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (VK_A, VK_S, VK_D))
+        if self.fixed_click_enabled and (esc or lbtn or rbtn or mbtn or asd):
+            self.disable_fixed_click("cancel: mouse/asd/esc")
+
+        if self.artillery_enabled and (esc or rbtn or mbtn):
+            self.disable_artillery("cancel: esc")
+
+        # W-hold cancels on Esc only (not on W press — that would cancel itself)
+        if self.w_hold_enabled and esc:
+            self.disable_w_hold("cancel: esc")
 
     def click_loop(self) -> None:
         while not self.stop_event.is_set():
@@ -394,6 +448,22 @@ class AutoClicker:
                         self.last_status_update = now
                         self.status_callback(self.status_text())
                     time.sleep(random.uniform(*self.double_click_range))
+                else:
+                    if not self.waiting_for_foxhole:
+                        self.waiting_for_foxhole = True
+                        self.log("Aguardando Foxhole: target inexistente ou janela fechada")
+                        self.status_callback(self.status_text())
+                    time.sleep(0.12)
+            elif self.artillery_enabled:
+                self.refresh_target_if_needed()
+                if self.target_hwnd and self.user32.IsWindow(self.target_hwnd):
+                    self.waiting_for_foxhole = False
+                    self.artillery_step()
+                    now = time.monotonic()
+                    if now - self.last_status_update >= 1:
+                        self.last_status_update = now
+                        self.status_callback(self.status_text())
+                    time.sleep(self.interval)
                 else:
                     if not self.waiting_for_foxhole:
                         self.waiting_for_foxhole = True
@@ -463,24 +533,148 @@ class AutoClicker:
         self.move_click_lparam = 0
         self.log(f"F2 off: {reason}")
 
-    def run_forward_sequence(self) -> None:
-        self.last_pilot_until = time.monotonic() + 5.0
-        self.status_callback(self.status_text())
-        threading.Thread(target=self._forward_sequence_worker, daemon=True).start()
 
-    def _forward_sequence_worker(self) -> None:
-        self.log(f"{self.pilot_hotkey_name}: piloto automatico iniciando (Enter -> Ctrl+W -> Enter)")
-        self.send_key_pair(VK_RETURN)
-        time.sleep(0.08)
-        self.key_down(VK_CONTROL)
-        time.sleep(0.03)
-        self.send_key_pair(VK_W)
-        time.sleep(0.03)
-        self.key_up(VK_CONTROL)
-        time.sleep(0.08)
-        self.send_key_pair(VK_RETURN)
-        self.log(f"{self.pilot_hotkey_name}: piloto automatico concluido")
+
+    def toggle_artillery(self) -> None:
+        if self.artillery_enabled:
+            self.disable_artillery(f"{self.artillery_hotkey_name} off")
+        else:
+            self.enable_artillery()
+
+    def enable_artillery(self) -> None:
+        self.pause()
+        self.disable_fixed_click("artillery on")
+        self.use_foxhole_window()
+        self.artillery_enabled = True
+        self.waiting_for_foxhole = False
+        self.log(f"{self.artillery_hotkey_name} on: artilharia ativa")
         self.status_callback(self.status_text())
+
+    def disable_artillery(self, reason: str) -> None:
+        if not self.artillery_enabled:
+            return
+        self.artillery_enabled = False
+        self.waiting_for_foxhole = False
+        self.log(f"{self.artillery_hotkey_name} off: {reason}")
+        self.status_callback(self.status_text())
+
+    def artillery_step(self) -> None:
+        # Press R
+        vk_r = 0x52
+        hwnd = self.click_hwnd or self.target_hwnd
+        if not hwnd:
+            return
+        self.send_key_pair(vk_r)
+        time.sleep(0.02)
+        # Click left
+        self.click_at(hwnd, self.click_x, self.click_y, "Esquerdo")
+
+    # -----------------------------------------------------------------------
+    # W-HOLD MODE (F4 ou duplo-toque W)
+    # Usa PostMessageW direto na janela do jogo (funciona mesmo sem foco)
+    # Parar: F4 de novo, apertar W fisicamente, ou Esc
+    # Pausar: segurar S (solta W), soltar S (retoma W)
+    # -----------------------------------------------------------------------
+    def toggle_w_hold(self) -> None:
+        if self.w_hold_enabled:
+            self.disable_w_hold(f"{self.pilot_hotkey_name} off")
+        else:
+            self.enable_w_hold()
+
+    # legacy compat
+    def toggle_pilot(self) -> None:
+        self.toggle_w_hold()
+
+    def enable_pilot(self) -> None:
+        self.enable_w_hold()
+
+    def _post_key(self, hwnd: int, vk: int, *, down: bool) -> None:
+        """Send WM_KEYDOWN or WM_KEYUP directly to the game window via PostMessageW."""
+        scan = self.user32.MapVirtualKeyW(vk, 0)
+        if down:
+            lparam = 1 | (scan << 16)
+            self.user32.PostMessageW(hwnd, WM_KEYDOWN, vk, lparam)
+        else:
+            lparam = 1 | (scan << 16) | (0xC0 << 24)
+            self.user32.PostMessageW(hwnd, WM_KEYUP, vk, lparam)
+
+    def enable_w_hold(self) -> None:
+        self.use_foxhole_window(quiet=True)
+        self.w_hold_enabled = True
+        self.pilot_w_paused = False
+        self.user32.keybd_event(VK_W, 0, 0, 0)  # global WM_KEYDOWN → Foxhole responds to this
+        self.log(f"W-Hold ON ({self.pilot_hotkey_name}) — F4/Esc para parar, S pausa")
+        self.status_callback(self.status_text())
+        threading.Thread(target=self._w_hold_worker, daemon=True).start()
+
+    def disable_w_hold(self, reason: str) -> None:
+        if not self.w_hold_enabled:
+            return
+        self.w_hold_enabled = False
+        self.pilot_w_paused = False
+        self.user32.keybd_event(VK_W, 0, 0x0002, 0)  # global WM_KEYUP
+        self.log(f"W-Hold OFF: {reason}")
+        self.status_callback(self.status_text())
+
+    def _w_hold_worker(self) -> None:
+        """Monitors S for pause/resume. Runs while w_hold is active.
+        NOTE: We do NOT detect W press here — keybd_event sets GetAsyncKeyState(W)=True,
+        so we can't distinguish physical W from our synthetic hold.
+        Stop is handled by: F4 (handle_key_press in monitor loop) or Esc (check_cancel).
+        """
+        prev_s = False
+        while self.w_hold_enabled and not self.stop_event.is_set():
+            s_down = bool(self.user32.GetAsyncKeyState(VK_S) & 0x8000)
+
+            # S pressed → pause W (keybd_event keyup)
+            if s_down and not prev_s and not self.pilot_w_paused:
+                self.pilot_w_paused = True
+                self.user32.keybd_event(VK_W, 0, 0x0002, 0)
+                self.log("W-Hold: pausado (S pressionado)")
+                self.status_callback(self.status_text())
+
+            # S released → resume W (keybd_event keydown)
+            if not s_down and prev_s and self.pilot_w_paused and self.w_hold_enabled:
+                self.pilot_w_paused = False
+                self.user32.keybd_event(VK_W, 0, 0, 0)
+                self.log("W-Hold: retomado (S solto)")
+                self.status_callback(self.status_text())
+
+            prev_s = s_down
+            time.sleep(0.03)
+
+
+    def _w_doubletap_monitor(self) -> None:
+        """Background thread: detects W double-tap.
+        NOTE: Cannot use GetAsyncKeyState(VK_W) when w_hold is active via keybd_event,
+        because keybd_event itself sets the async key state. Instead, we track rising
+        edges of VK_W only when w_hold is NOT active.
+        """
+        prev_w = False
+        last_tap = 0.0
+        while not self.stop_event.is_set():
+            if self.w_hold_enabled:
+                # While holding W via keybd_event, skip detection to avoid false triggers
+                prev_w = True  # treat as "held" so we don't see a false rising edge after disable
+                time.sleep(0.05)
+                continue
+
+            w_down = bool(self.user32.GetAsyncKeyState(VK_W) & 0x8000)
+            if w_down and not prev_w:
+                now = time.monotonic()
+                if self.w_doubletap_enabled and (now - last_tap) <= self.w_double_tap_threshold:
+                    self.enable_w_hold()
+                last_tap = now
+            prev_w = w_down
+            time.sleep(0.03)
+
+
+    # -----------------------------------------------------------------------
+    # LEGADO (usado por configure_action_hotkeys como forward_sequence compat)
+    # -----------------------------------------------------------------------
+    def run_forward_sequence(self) -> None:
+        """Legacy: just toggle pilot now."""
+        self.toggle_pilot()
 
     def open_orders_menu(self) -> None:
         self.log("F5: abrir menu ordens/estoques")
@@ -567,13 +761,17 @@ class AutoClicker:
     def click_at(self, hwnd: int, x: int, y: int, mouse_button: str) -> None:
         button = MOUSE_BUTTONS.get(mouse_button, MOUSE_BUTTONS["Esquerdo"])
         lparam = self.make_lparam(x, y)
+        if self.shift_enabled:
+            self.user32.keybd_event(VK_SHIFT, 0, 0, 0)  # Shift down
         move_sent = self.user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
         down_sent = self.user32.PostMessageW(hwnd, button["down"], button["mk"], lparam)
         up_sent = self.user32.PostMessageW(hwnd, button["up"], 0, lparam)
+        if self.shift_enabled:
+            self.user32.keybd_event(VK_SHIFT, 0, 0x0002, 0)  # Shift up
         if down_sent and up_sent:
             self.click_count += 1
             if self.click_count == 1 or self.click_count % 20 == 0:
-                self.log(f"Clique enviado #{self.click_count}: hwnd={hwnd} ponto={x},{y} move={bool(move_sent)}")
+                self.log(f"Clique enviado #{self.click_count}: hwnd={hwnd} ponto={x},{y} move={bool(move_sent)} shift={self.shift_enabled}")
         else:
             error = self.kernel32.GetLastError()
             self.log(f"Falha clique hwnd={hwnd} ponto={x},{y} erro={error}")

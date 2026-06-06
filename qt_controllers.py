@@ -21,6 +21,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from PySide6.QtNetwork import QNetworkAccessManager
+from PySide6.QtWebSockets import QWebSocket
 from PySide6.QtCore import (
     QAbstractListModel,
     QModelIndex,
@@ -100,6 +102,7 @@ PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 SQUADLOCK_SECONDS = 30 * 60
 BASE_DIR = Path(__file__).resolve().parent
 CHAT_API_BASE = "https://archpixel.squareweb.app"
+CHAT_WS_BASE = "wss://archpixel.squareweb.app"
 CHAT_DISCORD_AUTH_PATHS = ("/chat/auth/discord", "/chat/auth/login")
 CHAT_STEAM_AUTH_PATHS = ("/chat/auth/steam", "/chat/auth/local")
 CHAT_USERS_PATHS = ("/chat/users", "/chat/users/online")
@@ -131,8 +134,24 @@ OVERLAY_COLOR_LABEL_KEYS = {
 }
 
 
-def file_url(path: Path | str) -> str:
+def file_url(path: str | Path) -> str:
     return QUrl.fromLocalFile(str(Path(path).resolve())).toString()
+
+def obfuscate_string(text: str) -> str:
+    if not text:
+        return text
+    return base64.b64encode(text.encode("utf-8")[::-1]).decode("utf-8")
+
+def deobfuscate_string(text: str) -> str:
+    if not text:
+        return text
+    try:
+        return base64.b64decode(text.encode("utf-8"))[::-1].decode("utf-8")
+    except Exception:
+        return text
+
+def now_milliseconds() -> int:
+    return int(time.time() * 1000)
 
 
 def now_label() -> str:
@@ -408,6 +427,7 @@ class AppController(QObject):
         self.navItems.set_items(
             [
                 {"key": "home", "labelKey": "nav.home", "icon": "home", "section": "core"},
+
                 {"key": "chat", "labelKey": "home.chat.title", "icon": "chat", "section": "core"},
                 {"key": "autoClicker", "labelKey": "nav.auto_clicker", "icon": "bolt", "section": "automation"},
                 {"key": "timeTask", "labelKey": "timetask.nav", "icon": "timer", "section": "automation"},
@@ -630,6 +650,25 @@ class SteamController(QObject):
     def avatarUrl(self) -> str:
         return file_url(self._profile.avatar_path) if self._profile.avatar_path else ""
 
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
+
     @Property(str, notify=changed)
     def status(self) -> str:
         return self._status
@@ -684,6 +723,25 @@ class SettingsController(QObject):
     @Property(str, notify=changed)
     def startupCommand(self) -> str:
         return startup_command(self.settings)
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -871,12 +929,13 @@ class AutoClickerController(QObject):
         self.clicker.configure(
             str(data.get("hotkey", "F3")),
             str(data.get("mouse_button", "Esquerdo")),
-            float(data.get("interval", 0.05)),
+            0.3,
         )
         self.clicker.configure_action_hotkeys(
             str(data.get("move_hotkey", "F2")),
             str(data.get("fixed_hotkey", "F6")),
             str(data.get("pilot_hotkey", "F4")),
+            str(data.get("artillery_hotkey", "F7")),
         )
         self.clicker.set_slot_positions(
             {
@@ -897,6 +956,25 @@ class AutoClickerController(QObject):
     @Property(bool, notify=changed)
     def available(self) -> bool:
         return self._available
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -947,12 +1025,16 @@ class AutoClickerController(QObject):
         return str(self._clicker_settings().get("pilot_hotkey", "F4"))
 
     @Property(str, notify=changed)
+    def artilleryHotkey(self) -> str:
+        return str(self._clicker_settings().get("artillery_hotkey", "F7"))
+
+    @Property(str, notify=changed)
     def mouseButton(self) -> str:
         return str(self._clicker_settings().get("mouse_button", "Esquerdo"))
 
     @Property(float, notify=changed)
     def interval(self) -> float:
-        return float(self._clicker_settings().get("interval", 0.05))
+        return 0.3
 
     @Property(str, notify=changed)
     def targetTitle(self) -> str:
@@ -1010,6 +1092,7 @@ class AutoClickerController(QObject):
                 f"{self.moveHotkey}: Move-Click hold",
                 f"{self.fixedHotkey}: fixed double-click and slots 1-4",
                 f"{self.pilotHotkey}: pilot sequence",
+                f"{self.artilleryHotkey}: artillery sequence",
                 "F5: orders and stock menu",
             ]
         )
@@ -1052,14 +1135,44 @@ class AutoClickerController(QObject):
             self._save_and_apply()
 
     @Slot(str)
+    def setArtilleryHotkey(self, value: str) -> None:
+        if value in ACTION_KEYS:
+            self._clicker_settings()["artillery_hotkey"] = value
+            self._save_and_apply()
+
+    @Slot(str)
     def setMouseButton(self, value: str) -> None:
         if value in MOUSE_BUTTONS:
             self._clicker_settings()["mouse_button"] = value
             self._save_and_apply()
 
+    @Property(bool, notify=changed)
+    def shiftEnabled(self) -> bool:
+        return bool(self._clicker_settings().get("shift_enabled", False))
+
+    @Slot(bool)
+    def setShiftEnabled(self, value: bool) -> None:
+        self._clicker_settings()["shift_enabled"] = bool(value)
+        save_settings(self.settings)
+        if self.clicker:
+            self.clicker.shift_enabled = bool(value)
+        self.changed.emit()
+
+    @Property(bool, notify=changed)
+    def wDoubleTapEnabled(self) -> bool:
+        return bool(self._clicker_settings().get("w_doubletap_enabled", True))
+
+    @Slot(bool)
+    def setWDoubleTapEnabled(self, value: bool) -> None:
+        self._clicker_settings()["w_doubletap_enabled"] = bool(value)
+        save_settings(self.settings)
+        if self.clicker:
+            self.clicker.w_doubletap_enabled = bool(value)
+        self.changed.emit()
+
     @Slot(float)
     def setInterval(self, value: float) -> None:
-        self._clicker_settings()["interval"] = max(0.03, float(value))
+        pass
         self._save_and_apply()
 
     @Slot(int, int, int)
@@ -1167,6 +1280,25 @@ class StockpileController(QObject):
     @Property(bool, notify=changed)
     def running(self) -> bool:
         return self._running
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -1458,6 +1590,16 @@ class StockpileController(QObject):
                 self._status = "API data loaded."
             else:
                 self._status = f"{self._report_count} reports, {self._item_count} items"
+                if message.get("payload_changed") and self.parent():
+                    # Attempt to invoke postStockpileHelp on the chat controller
+                    try:
+                        app = QApplication.instance()
+                        for obj in app.children():
+                            if type(obj).__name__ == "ControllerRegistry":
+                                obj.chatController.postStockpileHelp("Estoque atualizado")
+                                break
+                    except Exception:
+                        pass
             self._append_log(self._last_response)
             try:
                 self.items.set_items(normalize_item_rows(rows))
@@ -1771,11 +1913,11 @@ class ChatController(QObject):
         self._online_rows: list[dict[str, Any]] = []
         self.rooms = DictListModel(["slug", "label", "unread"], self)
         self.messages = DictListModel(
-            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned"],
+            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody"],
             self,
         )
-        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention"], self)
-        self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention"], self)
+        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
+        self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
         self.resultFromWorker.connect(self._apply_result)
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(15000)
@@ -1792,6 +1934,71 @@ class ChatController(QObject):
         self.steam.changed.connect(self._maybe_auto_connect)
         self._auto_connect_timer.start()
         QTimer.singleShot(0, self._maybe_auto_connect)
+        self._ws = QWebSocket()
+        self._ws.connected.connect(self._on_ws_connected)
+        self._ws.disconnected.connect(self._on_ws_disconnected)
+        self._ws.textMessageReceived.connect(self._on_ws_text_received)
+
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+
+
+
+    @Slot(str)
+    def fetchProfile(self, user_id: str = "") -> None:
+        if not self._token:
+            return
+        def run():
+            try:
+                if user_id:
+                    res = http_json("GET", f"/chat/users/{user_id}/profile", token=self._token)
+                else:
+                    res = http_json("GET", "/chat/profile", token=self._token)
+                self.resultFromWorker.emit("profile-fetched", res.get("profile", {}))
+            except Exception as e:
+                self.resultFromWorker.emit("profile-error", str(e))
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str)
+    def updateRegiment(self, regiment: str) -> None:
+        if not self._token:
+            return
+        def run():
+            try:
+                res = http_json("PATCH", "/chat/profile", token=self._token, payload={"regiment": regiment})
+                self.resultFromWorker.emit("profile-updated", res.get("profile", {}))
+            except Exception as e:
+                self.resultFromWorker.emit("profile-error", str(e))
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str)
+    def postStockpileHelp(self, note: str) -> None:
+        if not self._token:
+            return
+        def run():
+            try:
+                http_json("POST", "/chat/profile/stock-help", token=self._token, payload={"note": note})
+            except Exception:
+                pass
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -1889,13 +2096,13 @@ class ChatController(QObject):
         return self.i18n.translator.t(key, **kwargs)
 
     def _saved_discord_id(self) -> str:
-        return str(self._discord_user_settings.get("id") or "").strip()
+        return deobfuscate_string(str(self._discord_user_settings.get("id") or "").strip())
 
     def _saved_discord_name(self) -> str:
-        return str(self._discord_user_settings.get("displayName") or self._discord_user_settings.get("username") or "").strip()
+        return deobfuscate_string(str(self._discord_user_settings.get("displayName") or self._discord_user_settings.get("username") or "").strip())
 
     def _saved_discord_avatar(self) -> str:
-        return str(self._discord_user_settings.get("avatar") or "").strip()
+        return deobfuscate_string(str(self._discord_user_settings.get("avatar") or "").strip())
 
     def _discord_client_id(self) -> str:
         return str(os.environ.get("DISCORD_CLIENT_ID") or self._discord_settings.get("clientId") or "").strip()
@@ -1914,7 +2121,7 @@ class ChatController(QObject):
         discord_id = str(user.get("discordId") or self._current_user_discord_id or self._saved_discord_id()).strip()
         if not discord_id:
             return
-        self._discord_user_settings["id"] = discord_id
+        self._discord_user_settings["id"] = obfuscate_string(discord_id)
         name = str(
             user.get("displayName")
             or user.get("globalName")
@@ -1925,13 +2132,13 @@ class ChatController(QObject):
             or self.steam.personaName
         ).strip()
         if name:
-            self._discord_user_settings["displayName"] = name
+            self._discord_user_settings["displayName"] = obfuscate_string(name)
         username = str(user.get("username") or "").strip()
         if username:
-            self._discord_user_settings["username"] = username
+            self._discord_user_settings["username"] = obfuscate_string(username)
         avatar = user_avatar_url(user).strip()
         if avatar:
-            self._discord_user_settings["avatar"] = avatar
+            self._discord_user_settings["avatar"] = obfuscate_string(avatar)
         save_settings(self.settings)
 
     def _discord_oauth_profile(self) -> dict[str, Any]:
@@ -2331,19 +2538,40 @@ class ChatController(QObject):
     def sendMessage(self, body: str) -> None:
         if not self._token or not self._selected_room or not body.strip():
             return
-        self._status = self._t("home.chat.sending")
-        self.changed.emit()
+        self._ws.sendTextMessage(json.dumps({
+            "type": "send_message",
+            "chatSlug": self._selected_room,
+            "content": body.strip()
+        }))
 
-        def worker() -> None:
-            try:
-                path = f"/chat/chats/{urllib.parse.quote(self._selected_room)}/messages"
-                result = http_json("POST", path, token=self._token, payload={"content": body.strip()})
-                self.resultFromWorker.emit("sent", result)
-            except Exception as exc:
-                self.resultFromWorker.emit("error", str(exc))
+    @Slot(str, str)
+    def sendMessageReply(self, body: str, replyToMessageId: str) -> None:
+        if not self._token or not self._selected_room or not body.strip():
+            return
+        self._ws.sendTextMessage(json.dumps({
+            "type": "send_message",
+            "chatSlug": self._selected_room,
+            "content": body.strip(),
+            "replyToMessageId": replyToMessageId
+        }))
 
-        threading.Thread(target=worker, daemon=True).start()
+    @Slot(str, str)
+    def reactMessage(self, messageId: str, emoji: str) -> None:
+        if not self._token or not messageId or not emoji: return
+        self._ws.sendTextMessage(json.dumps({
+            "type": "react_message",
+            "messageId": messageId,
+            "emoji": emoji
+        }))
 
+    @Slot(str, str)
+    def sendWhisperToUser(self, targetDiscordId: str, body: str) -> None:
+        if not self._token or not targetDiscordId or not body.strip(): return
+        self._ws.sendTextMessage(json.dumps({
+            "type": "send_whisper",
+            "targetDiscordId": targetDiscordId,
+            "content": body.strip()
+        }))
     @Slot(str)
     def sendGif(self, url: str) -> None:
         self.sendMessage(url)
@@ -2418,6 +2646,14 @@ class ChatController(QObject):
                 self._current_user_steam_id = self.steam.steamId
             self._status = self._t("home.chat.connected") if self._token else "Connected without token"
             if self._token:
+                try:
+                    profile_res = http_json("GET", "/chat/profile", token=self._token)
+                    self._profile = profile_res.get("profile", {})
+                    self.changed.emit()
+                except Exception:
+                    pass
+                self._connect_ws()
+
                 if self._auto_connect_timer.isActive():
                     self._auto_connect_timer.stop()
                 self._notifications_seeded = False
@@ -2481,6 +2717,15 @@ class ChatController(QObject):
         elif kind == "sent":
             self._status = self._t("home.chat.sent")
             self.selectRoom(self._selected_room)
+        elif kind == "profile-fetched" or kind == "profile-updated":
+            if isinstance(payload, dict):
+                # If it's my own profile (no ID passed, or ID matches me), save to self._profile
+                if not payload.get("id") or payload.get("id") == self._current_user_id or kind == "profile-updated":
+                    self._profile = payload
+                    self.changed.emit()
+                else:
+                    # Notify UI about someone else's profile
+                    self.resultFromWorker.emit("other-profile-ready", payload)
         elif kind == "notifications" and isinstance(payload, dict):
             self._apply_notifications(payload)
         elif kind == "notification-error":
@@ -2540,6 +2785,7 @@ class ChatController(QObject):
             "detail": detail,
             "avatar": str(user.get("avatarUrl") or user.get("avatar") or user.get("avatarfull") or user.get("avatarmedium") or ""),
             "mention": mention,
+            "discordId": str(user.get("discordId") or ""),
         }
 
     @staticmethod
@@ -2683,6 +2929,73 @@ class ChatController(QObject):
         except Exception:
             pass
 
+
+    def _connect_ws(self) -> None:
+        if not self._token: return
+        self._ws.close()
+        url = QUrl(f"{CHAT_WS_BASE}/ws/chat?token={self._token}")
+        self._ws.open(url)
+
+    @Slot()
+    def _on_ws_connected(self) -> None:
+        self._status = self._t("home.chat.connected")
+        self.changed.emit()
+        if self._selected_room:
+            self._ws.sendTextMessage(json.dumps({"type": "join_chat", "chatSlug": self._selected_room}))
+
+    @Slot()
+    def _on_ws_disconnected(self) -> None:
+        if self._token:
+            QTimer.singleShot(5000, self._connect_ws)
+
+    @Slot(str)
+    def _on_ws_text_received(self, text: str) -> None:
+        try:
+            data = json.loads(text)
+        except Exception:
+            return
+        dtype = data.get("type")
+        if dtype == "message_created":
+            msg = data.get("message")
+            if msg:
+                self._handle_ws_message(msg)
+        elif dtype == "message_updated" or dtype == "message_reaction_updated":
+            msg = data.get("message")
+            if msg:
+                self._handle_ws_message_update(msg)
+        elif dtype == "message_deleted":
+            msg_id = data.get("messageId") or (data.get("message") or {}).get("id")
+            if msg_id:
+                self._handle_ws_message_delete(msg_id)
+
+    def _handle_ws_message(self, msg: dict) -> None:
+        rows = normalize_messages([msg], self.currentUserName, self._current_user_steam_id, self.discordId)
+        if not rows: return
+        row = rows[0]
+        current_rows = [self.messages.get(i) for i in range(self.messages.count())]
+        current_rows.append(row)
+        self.messages.set_items(current_rows)
+        self.changed.emit()
+
+    def _handle_ws_message_update(self, msg: dict) -> None:
+        rows = normalize_messages([msg], self.currentUserName, self._current_user_steam_id, self.discordId)
+        if not rows: return
+        row = rows[0]
+        current_rows = [self.messages.get(i) for i in range(self.messages.count())]
+        for i, r in enumerate(current_rows):
+            if str(r.get("id")) == str(row["id"]):
+                current_rows[i] = row
+                break
+        self.messages.set_items(current_rows)
+        self.changed.emit()
+
+    def _handle_ws_message_delete(self, msg_id: str) -> None:
+        current_rows = [self.messages.get(i) for i in range(self.messages.count())]
+        current_rows = [r for r in current_rows if str(r.get("id")) != str(msg_id)]
+        self.messages.set_items(current_rows)
+        self.changed.emit()
+
+
     @Slot()
     def shutdown(self) -> None:
         self._refresh_timer.stop()
@@ -2716,6 +3029,25 @@ class ItemSearchController(QObject):
         self._all_rows: list[dict[str, Any]] = []
         self.rowsLoaded.connect(self._apply_loaded_rows)
         QTimer.singleShot(0, self.refresh)
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -2960,6 +3292,25 @@ class IdentifyItemController(QObject):
         self._monitor_timer.timeout.connect(self._run_monitor_tick)
         self.scanFinished.connect(self._apply_scan_result)
         self.monitorFinished.connect(self._apply_monitor_result)
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -3351,6 +3702,25 @@ class ProductionController(QObject):
         self._route_summary = "-"
         self._warning = ""
         self.refresh()
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -3779,6 +4149,25 @@ class TimeTaskController(QObject):
     @Property(QObject, constant=True)
     def macros(self) -> DictListModel:
         return self._macros
+
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -4572,6 +4961,25 @@ class UpdateController(QObject):
     def _t(self, key: str, **kwargs: Any) -> str:
         return self.i18n.translator.t(key, **kwargs)
 
+
+    @Property("QVariantMap", notify=changed)
+    def userProfile(self) -> dict:
+        return getattr(self, "_profile", {})
+
+    @Slot()
+    def logout(self) -> None:
+        self._token = ""
+        self._discord_user_settings.clear()
+        save_settings(self.settings)
+        self._ws.close()
+        self._discord_login_required = True
+        self._current_user_id = ""
+        self._profile = {}
+        self._status = "Disconnected"
+        self.changed.emit()
+
+
+
     @Property(str, notify=changed)
     def status(self) -> str:
         return self._status
@@ -4930,7 +5338,13 @@ class OverlayController(QObject):
         if time.monotonic() <= self._preview_until:
             self._set_visible(True)
             return
+        # Also show overlay when pilot (w_hold) is active
+        clicker = self.auto_clicker.clicker
+        if clicker and getattr(clicker, "w_hold_enabled", False):
+            self._set_visible(True)
+            return
         self._set_visible(self._is_foxhole_overlay_context())
+
 
     def _is_foxhole_overlay_context(self) -> bool:
         clicker = self.auto_clicker.clicker
@@ -5193,6 +5607,11 @@ def normalize_messages(
                 "mediaUrl": media_url,
                 "isGif": media_url.lower().split("?", 1)[0].endswith(".gif"),
                 "mentioned": mentioned,
+                "reactions": message.get("reactions") or [],
+                "replyToMessageId": str(message.get("replyToMessageId") or ""),
+                "replyToAuthor": str((message.get("replyToMessage") or {}).get("authorName") or ""),
+                "replyToBody": str((message.get("replyToMessage") or {}).get("content") or ""),
+                "authorDiscordId": author_discord,
             }
         )
     return sorted(
