@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import Qt5Compat.GraphicalEffects
 import "components"
 
 ApplicationWindow {
@@ -13,6 +14,92 @@ ApplicationWindow {
     visible: true
     title: appController.appTitle
     color: "#070b16"
+    flags: Qt.Window | Qt.FramelessWindowHint
+
+    header: Rectangle {
+        id: customTitleBar
+        width: parent.width
+        height: 32
+        color: "#0a1020"
+        z: 9999
+
+        MouseArea {
+            anchors.fill: parent
+            onPressed: function(mouse) { window.startSystemMove() }
+            onDoubleClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized()
+        }
+
+        RowLayout {
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            spacing: 8
+            
+            Text {
+                text: window.title
+                color: "#99abc4"
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                font.bold: true
+                Layout.alignment: Qt.AlignVCenter
+            }
+        }
+
+        RowLayout {
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            spacing: 0
+
+            Button {
+                Layout.preferredWidth: 46
+                Layout.fillHeight: true
+                background: Rectangle {
+                    color: parent.hovered ? "#1d3353" : "transparent"
+                }
+                contentItem: Text {
+                    text: "—"
+                    color: "#edf6ff"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: window.showMinimized()
+            }
+
+            Button {
+                Layout.preferredWidth: 46
+                Layout.fillHeight: true
+                background: Rectangle {
+                    color: parent.hovered ? "#1d3353" : "transparent"
+                }
+                contentItem: Text {
+                    text: window.visibility === Window.Maximized ? "❐" : "☐"
+                    color: "#edf6ff"
+                    font.pixelSize: 14
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized()
+            }
+
+            Button {
+                Layout.preferredWidth: 46
+                Layout.fillHeight: true
+                background: Rectangle {
+                    color: parent.hovered ? "#e81123" : "transparent"
+                }
+                contentItem: Text {
+                    text: "✕"
+                    color: "#edf6ff"
+                    font.pixelSize: 12
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: window.close()
+            }
+        }
+    }
 
     property bool sidebarOpen: true
     property bool exiting: false
@@ -577,41 +664,93 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: window.sidebarOpen ? 86 : 54
                         radius: 8
-                        color: "#0e1a2d"
+                        color: profileMouseArea.containsMouse ? "#172943" : "#0e1a2d"
                         border.color: "#1e3554"
+                        border.width: 1
+                        Behavior on color { ColorAnimation { duration: 150 } }
                         Behavior on Layout.preferredHeight { NumberAnimation { duration: 160 } }
+
+                        MouseArea {
+                            id: profileMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                if (chatController.currentProvider !== "discord") {
+                                    chatController.connectWithDiscord()
+                                }
+                            }
+                        }
+
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: window.sidebarOpen ? 10 : 3
-                            spacing: window.sidebarOpen ? 10 : 0
+                            anchors.margins: window.sidebarOpen ? 12 : 6
+                            spacing: window.sidebarOpen ? 12 : 0
+
                             Rectangle {
                                 Layout.preferredWidth: 42
                                 Layout.preferredHeight: 42
                                 Layout.alignment: Qt.AlignVCenter | (window.sidebarOpen ? Qt.AlignLeft : Qt.AlignHCenter)
                                 radius: 21
                                 color: "#1d3353"
+
                                 Image {
+                                    id: profileImage
                                     anchors.fill: parent
-                                    anchors.margins: 1
-                                    source: steamController.avatarUrl
+                                    source: chatController.currentUserAvatar
                                     fillMode: Image.PreserveAspectCrop
-                                    visible: steamController.avatarUrl !== ""
+                                    visible: chatController.currentUserAvatar !== ""
+                                    layer.enabled: true
+                                    layer.effect: OpacityMask {
+                                        maskSource: Rectangle {
+                                            width: profileImage.width
+                                            height: profileImage.height
+                                            radius: width / 2
+                                        }
+                                    }
                                 }
                                 Text {
                                     anchors.centerIn: parent
-                                    text: "GG"
-                                    visible: steamController.avatarUrl === ""
+                                    text: chatController.currentUserName !== "" ? chatController.currentUserName.charAt(0).toUpperCase() : "GG"
+                                    visible: chatController.currentUserAvatar === ""
                                     color: "#5eead4"
                                     font.bold: true
                                 }
                             }
+
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 visible: window.sidebarOpen
                                 opacity: window.sidebarOpen ? 1 : 0
+                                spacing: 2
                                 Behavior on opacity { NumberAnimation { duration: 120 } }
-                                Text { text: steamController.personaName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: steamController.status; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+
+                                Text {
+                                    text: chatController.currentUserName
+                                    color: "#edf6ff"
+                                    font.family: "Segoe UI"
+                                    font.bold: true
+                                    font.pixelSize: 14
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                                RowLayout {
+                                    spacing: 4
+                                    Layout.fillWidth: true
+                                    Rectangle {
+                                        width: 8
+                                        height: 8
+                                        radius: 4
+                                        color: chatController.currentProvider === "discord" ? "#5865F2" : "#5eead4"
+                                    }
+                                    Text {
+                                        text: chatController.currentProvider === "discord" ? "Discord Online" : steamController.status
+                                        color: "#99abc4"
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 11
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                }
                             }
                         }
                     }
@@ -638,6 +777,29 @@ ApplicationWindow {
                                 anchors.rightMargin: 12
                                 spacing: 12
 
+                                Image {
+                                    id: menuIcon
+                                    source: {
+                                        var map = {
+                                            "home": "home.png",
+                                            "chat": "aovivo.png",
+                                            "bolt": "autoclicker.png",
+                                            "timer": "generic.png",
+                                            "database": "estoque.png",
+                                            "factory": "calculadora.png",
+                                            "search": "buscar.png",
+                                            "target": "buscariten.png",
+                                            "bell": "notificação.png",
+                                            "settings": "config.png"
+                                        }
+                                        return map[icon] ? appController.assetUrl("img/iconmenu/" + map[icon]) : ""
+                                    }
+                                    visible: source != ""
+                                    Layout.preferredWidth: 20
+                                    Layout.preferredHeight: 20
+                                    Layout.alignment: Qt.AlignVCenter
+                                    fillMode: Image.PreserveAspectFit
+                                }
                                 Text {
                                     text: icon.length > 0 ? icon.substring(0, 1).toUpperCase() : "-"
                                     color: appController.currentPage === key ? "#5eead4" : "#8ab4ff"
@@ -646,6 +808,7 @@ ApplicationWindow {
                                     font.bold: true
                                     Layout.preferredWidth: 24
                                     horizontalAlignment: Text.AlignHCenter
+                                    visible: menuIcon.source == ""
                                 }
                                 Text {
                                     text: tr(labelKey)

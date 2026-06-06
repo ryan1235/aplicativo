@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 import "../components"
 
 Rectangle {
@@ -69,24 +70,14 @@ Rectangle {
         }
     }
 
-    Dialog {
-        id: gifDialog
-        title: tr("home.chat.gif_title")
-        modal: true
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        width: Math.min(root.width - 80, 520)
-        x: (root.width - width) / 2
-        y: 80
-        onAccepted: {
-            chatController.sendGif(gifInput.text)
-            gifInput.text = ""
+    EmojiGifPicker {
+        id: pickerPopup
+        onEmojiSelected: function(emoji) {
+            messageInput.text += emoji
+            messageInput.forceActiveFocus()
         }
-        contentItem: TextField {
-            id: gifInput
-            placeholderText: tr("home.chat.gif_prompt")
-            color: "#edf6ff"
-            selectByMouse: true
-            background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
+        onGifSelected: function(gifUrl) {
+            chatController.sendGif(gifUrl)
         }
     }
 
@@ -126,16 +117,9 @@ Rectangle {
                 RowLayout {
                     Layout.fillWidth: true
                     PrimaryButton {
-                        text: chatController.connected ? tr("home.chat.connected") : tr("home.chat.connect")
+                        text: chatController.connected ? tr("home.chat.connected") : tr("home.chat.connect_discord")
                         visible: !chatController.connected
-                        onClicked: chatController.connectWithSteam()
-                    }
-                    PrimaryButton {
-                        text: tr("home.chat.refresh")
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
-                        onClicked: chatController.refreshRooms()
+                        onClicked: chatController.connectWithDiscord()
                     }
                 }
 
@@ -235,15 +219,29 @@ Rectangle {
                                     anchors.margins: 8
                                     spacing: 8
                                     Rectangle {
-                                        Layout.preferredWidth: 28
-                                        Layout.preferredHeight: 28
-                                        radius: 14
+                                        Layout.preferredWidth: 32
+                                        Layout.preferredHeight: 32
+                                        radius: 16
                                         color: "#1d3353"
-                                        Image {
+                                        
+                                        Rectangle {
+                                            id: maskOnline
                                             anchors.fill: parent
                                             anchors.margins: 1
+                                            radius: 15
+                                            visible: false
+                                        }
+                                        Image {
+                                            id: imgOnline
+                                            anchors.fill: maskOnline
                                             source: modelData.avatar
                                             fillMode: Image.PreserveAspectCrop
+                                            visible: false
+                                        }
+                                        OpacityMask {
+                                            anchors.fill: maskOnline
+                                            source: imgOnline
+                                            maskSource: maskOnline
                                             visible: modelData.avatar !== ""
                                         }
                                     }
@@ -347,9 +345,15 @@ Rectangle {
                                 width: messagesColumn.width
                                 implicitHeight: messageCardColumn.implicitHeight + 20
                                 radius: 8
-                                color: modelData.mentioned ? "#25351f" : modelData.mine ? "#173444" : "#0e1a2d"
+                                color: modelData.mentioned ? "#2a3b22" : (mouseMsg.containsMouse ? "#122036" : (modelData.mine ? "#0a1321" : "transparent"))
                                 border.color: modelData.mentioned ? "#ffd166" : "transparent"
                                 Behavior on color { ColorAnimation { duration: 120 } }
+                                
+                                MouseArea {
+                                    id: mouseMsg
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                }
 
                                 ColumnLayout {
                                     id: messageCardColumn
@@ -360,17 +364,31 @@ Rectangle {
                                     spacing: 6
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        spacing: 8
+                                        spacing: 12
                                         Rectangle {
-                                            Layout.preferredWidth: 30
-                                            Layout.preferredHeight: 30
-                                            radius: 15
+                                            Layout.preferredWidth: 38
+                                            Layout.preferredHeight: 38
+                                            radius: 19
                                             color: "#1d3353"
-                                            Image {
+                                            
+                                            Rectangle {
+                                                id: maskMsg
                                                 anchors.fill: parent
                                                 anchors.margins: 1
+                                                radius: 18
+                                                visible: false
+                                            }
+                                            Image {
+                                                id: imgMsg
+                                                anchors.fill: maskMsg
                                                 source: modelData.avatar
                                                 fillMode: Image.PreserveAspectCrop
+                                                visible: false
+                                            }
+                                            OpacityMask {
+                                                anchors.fill: maskMsg
+                                                source: imgMsg
+                                                maskSource: maskMsg
                                                 visible: modelData.avatar !== ""
                                             }
                                         }
@@ -378,7 +396,8 @@ Rectangle {
                                         Text { text: modelData.meta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11 }
                                     }
                                     Text {
-                                        text: modelData.body
+                                        text: modelData.mediaUrl !== "" ? modelData.body.replace(modelData.mediaUrl, "").trim() : modelData.body
+                                        visible: text.length > 0
                                         color: "#edf6ff"
                                         font.family: "Segoe UI"
                                         font.pixelSize: 13
@@ -389,10 +408,11 @@ Rectangle {
                                         visible: modelData.mediaUrl !== "" && modelData.isGif
                                         source: modelData.mediaUrl
                                         playing: visible
+                                        asynchronous: true
                                         Layout.preferredWidth: Math.min(420, messageScroll.width - 48)
                                         Layout.preferredHeight: visible ? Math.min(230, implicitHeight > 0 ? implicitHeight : 180) : 0
                                         fillMode: Image.PreserveAspectFit
-                                        cache: false
+                                        cache: true
                                     }
                                     Image {
                                         visible: modelData.mediaUrl !== "" && !modelData.isGif
@@ -403,7 +423,7 @@ Rectangle {
                                         Layout.preferredWidth: Math.min(420, messageScroll.width - 48)
                                         Layout.preferredHeight: visible ? 220 : 0
                                         fillMode: Image.PreserveAspectFit
-                                        cache: false
+                                        cache: true
                                     }
                                 }
                             }
@@ -450,35 +470,24 @@ Rectangle {
                     Layout.fillWidth: true
                     spacing: 8
 
-                    ListView {
-                        Layout.preferredWidth: 272
-                        Layout.preferredHeight: 38
-                        orientation: ListView.Horizontal
-                        model: chatController.quickEmojis
-                        spacing: 6
-                        delegate: Button {
-                            width: 34
-                            height: 34
-                            text: modelData
-                            font.pixelSize: 16
-                            onClicked: {
-                                messageInput.text = messageInput.text + (messageInput.text.endsWith(" ") || messageInput.text.length === 0 ? "" : " ") + modelData + " "
-                                messageInput.forceActiveFocus()
-                            }
-                            background: Rectangle {
-                                radius: 8
-                                color: hovered ? "#1d3353" : "#0e1a2d"
-                                border.color: "#24486d"
-                            }
+                    Button {
+                        id: pickerButton
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        text: "😀"
+                        font.pixelSize: 18
+                        background: Rectangle {
+                            radius: 20
+                            color: hovered ? "#1d3353" : "#0e1a2d"
+                            border.color: "#24486d"
                         }
-                    }
-
-                    PrimaryButton {
-                        text: tr("home.chat.gif")
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
-                        onClicked: gifDialog.open()
+                        onClicked: {
+                            // Calculate position relative to the main window or view
+                            var pos = pickerButton.mapToItem(root, 0, 0)
+                            pickerPopup.x = Math.max(0, pos.x - 140)
+                            pickerPopup.y = Math.max(0, pos.y - pickerPopup.height - 10)
+                            pickerPopup.open()
+                        }
                     }
 
                     TextField {

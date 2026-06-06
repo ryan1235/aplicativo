@@ -65,6 +65,7 @@ Desktop.ini
 # Configurações locais
 # ===================================
 
+.env
 felb_settings.json
 
 # ===================================

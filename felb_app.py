@@ -24,6 +24,24 @@ ALLOW_MULTIPLE_ENV = "FELB_ALLOW_MULTIPLE"
 TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
 def allow_multiple_instances() -> bool:
     return os.environ.get(ALLOW_MULTIPLE_ENV, "").strip().lower() in TRUE_ENV_VALUES
 
@@ -68,6 +86,7 @@ def configure_qt() -> None:
 
 
 def main() -> int:
+    load_env_file(BASE_DIR / ".env")
     configure_qt()
     background = any(arg.lower() in BACKGROUND_ARGS for arg in sys.argv[1:])
     allow_multiple = allow_multiple_instances()

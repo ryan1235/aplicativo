@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import base64
 import ctypes
 from datetime import datetime, timezone
+import hashlib
+import html
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
 import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import sys
 import threading
@@ -95,9 +100,16 @@ PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 SQUADLOCK_SECONDS = 30 * 60
 BASE_DIR = Path(__file__).resolve().parent
 CHAT_API_BASE = "https://archpixel.squareweb.app"
-CHAT_AUTH_PATHS = ("/chat/auth/steam", "/chat/auth/local")
+CHAT_DISCORD_AUTH_PATHS = ("/chat/auth/discord", "/chat/auth/login")
+CHAT_STEAM_AUTH_PATHS = ("/chat/auth/steam", "/chat/auth/local")
 CHAT_USERS_PATHS = ("/chat/users", "/chat/users/online")
 CHAT_ONLINE_PATHS = ("/chat/presence/online", "/chat/users/online")
+DISCORD_API_BASE = "https://discord.com/api/v10"
+DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
+DISCORD_TOKEN_URL = f"{DISCORD_API_BASE}/oauth2/token"
+DISCORD_USER_URL = f"{DISCORD_API_BASE}/users/@me"
+DISCORD_DEFAULT_REDIRECT_PORT = 53624
+DISCORD_DEFAULT_REDIRECT_PATH = "/discord/callback"
 IMAGE_URL_RE = re.compile(r"https?://[^\s<>\"]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s<>\"]*)?", re.IGNORECASE)
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_.-]{1,32})")
 QUICK_EMOJIS = ("👍", "❤️", "😂", "🔥", "✅", "🫡", "👀", "🚚", "⚠️", "🎯")
@@ -1732,12 +1744,20 @@ class ChatController(QObject):
         self._rooms_in_flight = False
         self._messages_in_flight = False
         self._auth_retry_after = 0.0
+        self._current_user_id = ""
         self._current_user_name = ""
+        self._current_user_avatar = ""
+        self._current_user_provider = ""
+        self._current_user_discord_id = ""
         self._current_user_steam_id = ""
+        self._discord_configuration_checked = False
+        self._discord_login_required = False
         self._mention_overlay_visible = False
         self._mention_overlay_title = ""
         self._mention_overlay_body = ""
         app_settings = self.settings.setdefault("app", {})
+        self._discord_user_settings = self.settings.setdefault("discord", {})
+        self._discord_settings = app_settings.setdefault("chat_discord", {})
         seen_message_mentions = app_settings.get("chat_seen_message_mentions", [])
         self._known_message_ids: set[str] = set()
         self._notified_message_ids: set[str] = {str(item) for item in seen_message_mentions if str(item)}
@@ -1795,7 +1815,19 @@ class ChatController(QObject):
 
     @Property(str, notify=changed)
     def currentUserName(self) -> str:
-        return self._current_user_name or self.steam.personaName
+        return self._current_user_name or self._saved_discord_name() or self.steam.personaName
+
+    @Property(str, notify=changed)
+    def currentUserAvatar(self) -> str:
+        return self._current_user_avatar or self._saved_discord_avatar() or self.steam.avatarUrl
+
+    @Property(str, notify=changed)
+    def currentProvider(self) -> str:
+        return self._current_user_provider or ("discord" if self._saved_discord_id() else "steam")
+
+    @Property(str, notify=changed)
+    def discordId(self) -> str:
+        return self._current_user_discord_id or self._saved_discord_id()
 
     @Property("QVariantList", notify=changed)
     def roomsRows(self) -> list[dict[str, Any]]:
@@ -1815,7 +1847,27 @@ class ChatController(QObject):
 
     @Property(bool, notify=changed)
     def connected(self) -> bool:
-        return bool(self._token)
+        return bool(self._token and (self._current_user_discord_id or self._saved_discord_id()))
+
+    @Property(bool, notify=changed)
+    def discordOAuthConfigured(self) -> bool:
+        return bool(self._discord_client_id())
+
+    @Property(str, notify=changed)
+    def discordRedirectUri(self) -> str:
+        return discord_redirect_uri(self._discord_redirect_port())
+
+    @Property(bool, notify=changed)
+    def discordConfigurationChecked(self) -> bool:
+        return self._discord_configuration_checked
+
+    @Property(bool, notify=changed)
+    def discordLoginRequired(self) -> bool:
+        return self._discord_login_required
+
+    @Property(bool, notify=changed)
+    def authInFlight(self) -> bool:
+        return self._auth_in_flight
 
     @Property(bool, notify=changed)
     def mentionOverlayVisible(self) -> bool:
@@ -1836,9 +1888,151 @@ class ChatController(QObject):
     def _t(self, key: str, **kwargs: Any) -> str:
         return self.i18n.translator.t(key, **kwargs)
 
+    def _saved_discord_id(self) -> str:
+        return str(self._discord_user_settings.get("id") or "").strip()
+
+    def _saved_discord_name(self) -> str:
+        return str(self._discord_user_settings.get("displayName") or self._discord_user_settings.get("username") or "").strip()
+
+    def _saved_discord_avatar(self) -> str:
+        return str(self._discord_user_settings.get("avatar") or "").strip()
+
+    def _discord_client_id(self) -> str:
+        return str(os.environ.get("DISCORD_CLIENT_ID") or self._discord_settings.get("clientId") or "").strip()
+
+    def _discord_client_secret(self) -> str:
+        return str(os.environ.get("DISCORD_CLIENT_SECRET") or self._discord_settings.get("clientSecret") or "").strip()
+
+    def _discord_redirect_port(self) -> int:
+        try:
+            port = int(os.environ.get("DISCORD_REDIRECT_PORT") or self._discord_settings.get("redirectPort") or DISCORD_DEFAULT_REDIRECT_PORT)
+        except (TypeError, ValueError):
+            return DISCORD_DEFAULT_REDIRECT_PORT
+        return port if 1024 <= port <= 65535 else DISCORD_DEFAULT_REDIRECT_PORT
+
+    def _save_discord_profile(self, user: dict[str, Any]) -> None:
+        discord_id = str(user.get("discordId") or self._current_user_discord_id or self._saved_discord_id()).strip()
+        if not discord_id:
+            return
+        self._discord_user_settings["id"] = discord_id
+        name = str(
+            user.get("displayName")
+            or user.get("globalName")
+            or user.get("username")
+            or user.get("name")
+            or user.get("personaname")
+            or self._current_user_name
+            or self.steam.personaName
+        ).strip()
+        if name:
+            self._discord_user_settings["displayName"] = name
+        username = str(user.get("username") or "").strip()
+        if username:
+            self._discord_user_settings["username"] = username
+        avatar = user_avatar_url(user).strip()
+        if avatar:
+            self._discord_user_settings["avatar"] = avatar
+        save_settings(self.settings)
+
+    def _discord_oauth_profile(self) -> dict[str, Any]:
+        client_id = self._discord_client_id()
+        if not client_id:
+            raise RuntimeError(self._t("home.chat.discord_config_missing", uri=self.discordRedirectUri))
+        port = self._discord_redirect_port()
+        redirect_uri = discord_redirect_uri(port)
+        state = secrets.token_urlsafe(24)
+        verifier = secrets.token_urlsafe(64)
+        query = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": "identify",
+            "state": state,
+            "code_challenge": pkce_challenge(verifier),
+            "code_challenge_method": "S256",
+            "prompt": "consent",
+        }
+        auth_url = f"{DISCORD_AUTHORIZE_URL}?{urllib.parse.urlencode(query)}"
+        code = wait_for_discord_oauth_code(state, port, auth_url=auth_url, language=self.i18n.translator.language)
+        form = {
+            "client_id": client_id,
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "code_verifier": verifier,
+        }
+        client_secret = self._discord_client_secret()
+        if client_secret:
+            form["client_secret"] = client_secret
+        token_result = http_json_url("POST", DISCORD_TOKEN_URL, form=form, timeout=20)
+        access_token = str(token_result.get("access_token") or "")
+        if not access_token:
+            raise RuntimeError("Discord OAuth did not return an access token.")
+        user = http_json_url("GET", DISCORD_USER_URL, token=access_token, timeout=20)
+        if not user.get("id"):
+            raise RuntimeError("Discord OAuth did not return a user profile.")
+        avatar_url = discord_avatar_url(user)
+        if avatar_url:
+            user["avatarUrl"] = avatar_url
+            user["avatarfull"] = avatar_url
+            user["avatarmedium"] = avatar_url
+        user["discordId"] = str(user.get("id") or "")
+        user["displayName"] = str(user.get("global_name") or user.get("username") or "")
+        user["globalName"] = str(user.get("global_name") or "")
+        user["discriminator"] = str(user.get("discriminator") or "")
+        user["discordAvatar"] = str(user.get("avatar") or "")
+        return user
+
+    def _discord_auth_payload(self, discord_id: str) -> dict[str, str]:
+        payload: dict[str, str] = {"discordId": discord_id}
+        steam_id = self.steam.steamId
+        if steam_id:
+            payload["steamId"] = steam_id
+        display_name = self._saved_discord_name() or self.steam.personaName
+        if display_name:
+            payload["displayName"] = display_name
+            payload["personaname"] = display_name
+        username = str(self._discord_settings.get("username") or "").strip()
+        if username:
+            payload["username"] = username
+        avatar = self._saved_discord_avatar()
+        if avatar:
+            payload["avatar"] = avatar
+            payload["avatarmedium"] = avatar
+            payload["avatarfull"] = avatar
+        return payload
+
+    def _discord_auth_payload_from_profile(self, user: dict[str, Any]) -> dict[str, str]:
+        discord_id = str(user.get("discordId") or user.get("id") or "").strip()
+        payload = self._discord_auth_payload(discord_id)
+        field_map = {
+            "username": "username",
+            "globalName": "globalName",
+            "displayName": "displayName",
+            "discriminator": "discriminator",
+            "avatar": "avatar",
+            "avatarfull": "avatarfull",
+            "avatarmedium": "avatarmedium",
+            "discordAvatar": "discordAvatar",
+        }
+        for target, source in field_map.items():
+            value = str(user.get(source) or "").strip()
+            if value:
+                payload[target] = value
+        return payload
+
+    def _auth_with_discord(self, payload: dict[str, str]) -> dict[str, Any]:
+        last_error: Exception | None = None
+        for path in CHAT_DISCORD_AUTH_PATHS:
+            try:
+                return http_json("POST", path, payload=payload, timeout=12)
+            except Exception as exc:
+                last_error = exc
+        raise RuntimeError(str(last_error) if last_error else "chat auth failed")
+
     def _auth_with_steam(self, payload: dict[str, str]) -> dict[str, Any]:
         last_error: Exception | None = None
-        for path in CHAT_AUTH_PATHS:
+        for path in CHAT_STEAM_AUTH_PATHS:
             try:
                 return http_json("POST", path, payload=payload, timeout=12)
             except Exception as exc:
@@ -1855,6 +2049,17 @@ class ChatController(QObject):
         raise RuntimeError(str(last_error) if last_error else "chat users failed")
 
     def _request_online_users(self) -> dict[str, Any]:
+        discord_id = self._current_user_discord_id or self._saved_discord_id()
+        if discord_id:
+            try:
+                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"discordId": discord_id}, timeout=10)
+            except Exception:
+                pass
+        if self._current_user_id:
+            try:
+                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"userId": self._current_user_id}, timeout=10)
+            except Exception:
+                pass
         steam_id = self._current_user_steam_id or self.steam.steamId
         if steam_id:
             try:
@@ -1874,6 +2079,71 @@ class ChatController(QObject):
         if cursor:
             path = f"{path}&cursor={urllib.parse.quote(cursor)}"
         return http_json("GET", path, token=self._token)
+
+    @Slot()
+    def connectWithDiscord(self) -> None:
+        self._connect_with_discord(allow_oauth=True)
+
+    @Slot()
+    def autoConnectWithSavedDiscord(self) -> None:
+        if self._saved_discord_id():
+            self._discord_configuration_checked = True
+            self._discord_login_required = False
+            self.changed.emit()
+            self._connect_with_discord(allow_oauth=False)
+            return
+        self._discord_configuration_checked = True
+        self._discord_login_required = True
+        self._status = self._t("home.chat.no_discord")
+        self.changed.emit()
+
+    def _connect_with_discord(self, *, allow_oauth: bool = False) -> None:
+        if self._auth_in_flight:
+            return
+        if self._token:
+            self.refreshRooms()
+            self.refreshPresence()
+            self.refreshNotifications()
+            return
+        now = time.monotonic()
+        if now < self._auth_retry_after:
+            retry_seconds = int(max(1, self._auth_retry_after - now))
+            self._status = self._t("home.chat.auth_needed") + f" ({retry_seconds}s)"
+            self.changed.emit()
+            return
+        discord_id = self._saved_discord_id()
+        if not discord_id:
+            self._discord_configuration_checked = True
+            self._discord_login_required = True
+            if not allow_oauth:
+                self._status = self._t("home.chat.no_discord")
+                self.changed.emit()
+                return
+            if not self._discord_client_id():
+                self._status = self._t("home.chat.discord_config_missing", uri=self.discordRedirectUri)
+                self.changed.emit()
+                return
+
+        def worker() -> None:
+            try:
+                if discord_id:
+                    result = self._auth_with_discord(self._discord_auth_payload(discord_id))
+                else:
+                    profile = self._discord_oauth_profile()
+                    self._save_discord_profile(profile)
+                    result = self._auth_with_discord(self._discord_auth_payload_from_profile(profile))
+                self.resultFromWorker.emit("auth", result)
+            except Exception as exc:
+                message = str(exc)
+                if "access_denied" in message or "oauth_cancelled" in message:
+                    message = self._t("home.chat.discord_cancelled")
+                self.resultFromWorker.emit("auth-error", self._t("home.chat.auth_error", message=message))
+
+        self._auth_in_flight = True
+        self._discord_login_required = False
+        self._status = self._t("home.chat.authenticating_discord") if discord_id else self._t("home.chat.discord_opening")
+        self.changed.emit()
+        threading.Thread(target=worker, daemon=True).start()
 
     @Slot()
     def connectWithSteam(self) -> None:
@@ -1918,16 +2188,18 @@ class ChatController(QObject):
             return
         if self._auth_in_flight:
             return
-        if not self.steam.steamId:
-            self._status = self._t("home.chat.no_steam")
-            self.changed.emit()
+        if self._saved_discord_id():
+            self._connect_with_discord(allow_oauth=False)
             return
-        self.connectWithSteam()
+        self._discord_configuration_checked = True
+        self._discord_login_required = True
+        self._status = self._t("home.chat.no_discord")
+        self.changed.emit()
 
     @Slot()
     def refreshRooms(self) -> None:
         if not self._token:
-            self.connectWithSteam()
+            self.connectWithDiscord()
             return
         if self._rooms_in_flight:
             return
@@ -2114,19 +2386,35 @@ class ChatController(QObject):
         if kind == "auth" and isinstance(payload, dict):
             self._auth_in_flight = False
             self._auth_retry_after = 0.0
+            self._discord_configuration_checked = True
+            self._discord_login_required = False
             self._token = str(payload.get("token") or payload.get("accessToken") or "")
             user = payload.get("user") or payload.get("profile") or {}
             if isinstance(user, dict):
+                self._current_user_id = str(user.get("id") or "")
+                self._current_user_provider = str(user.get("provider") or ("discord" if user.get("discordId") else "steam"))
+                self._current_user_discord_id = str(user.get("discordId") or self._saved_discord_id())
+                self._current_user_steam_id = str(user.get("steamId") or self.steam.steamId)
                 self._current_user_name = str(
-                    user.get("name")
+                    user.get("displayName")
+                    or user.get("globalName")
+                    or user.get("name")
                     or user.get("personaName")
                     or user.get("personaname")
                     or user.get("nickname")
+                    or user.get("username")
+                    or self._saved_discord_name()
                     or self.steam.personaName
                 )
-                self._current_user_steam_id = str(user.get("steamId") or self.steam.steamId)
+                self._current_user_avatar = user_avatar_url(user)
+                if self._current_user_discord_id:
+                    self._save_discord_profile(user)
             else:
-                self._current_user_name = self.steam.personaName
+                self._current_user_id = ""
+                self._current_user_provider = "discord" if self._saved_discord_id() else "steam"
+                self._current_user_discord_id = self._saved_discord_id()
+                self._current_user_name = self._saved_discord_name() or self.steam.personaName
+                self._current_user_avatar = self._saved_discord_avatar() or self.steam.avatarUrl
                 self._current_user_steam_id = self.steam.steamId
             self._status = self._t("home.chat.connected") if self._token else "Connected without token"
             if self._token:
@@ -2141,6 +2429,8 @@ class ChatController(QObject):
             self.refreshRooms()
         elif kind == "auth-error":
             self._auth_in_flight = False
+            self._discord_configuration_checked = True
+            self._discord_login_required = not bool(self._saved_discord_id())
             self._auth_retry_after = time.monotonic() + 30
             self._status = str(payload)
         elif kind == "rooms" and isinstance(payload, dict):
@@ -2169,7 +2459,12 @@ class ChatController(QObject):
             result = payload.get("result") if isinstance(payload.get("result"), dict) else payload
             append_older = bool(payload.get("appendOlder"))
             messages = (result.get("messages") or []) if isinstance(result, dict) else []
-            rows = normalize_messages(messages, self._current_user_name or self.steam.personaName, self._current_user_steam_id or self.steam.steamId)
+            rows = normalize_messages(
+                messages,
+                self._current_user_name or self._saved_discord_name() or self.steam.personaName,
+                self._current_user_steam_id or self.steam.steamId,
+                self._current_user_discord_id or self._saved_discord_id(),
+            )
             current_rows = [self.messages.get(index) for index in range(self.messages.count())]
             if append_older or current_rows:
                 rows = merge_message_rows(rows, current_rows)
@@ -2233,11 +2528,16 @@ class ChatController(QObject):
 
     @staticmethod
     def _user_to_row(user: dict[str, Any]) -> dict[str, Any]:
-        name = str(user.get("name") or user.get("personaName") or user.get("personaname") or user.get("nickname") or "User")
-        mention = str(user.get("mention") or user.get("username") or name).strip().lstrip("@")
+        name = user_display_name(user)
+        mention = str(user.get("mention") or user.get("username") or user.get("globalName") or name).strip().lstrip("@")
+        detail = str(user.get("status") or "").strip()
+        if not detail and user.get("provider") == "discord":
+            detail = f"@{mention}" if mention else str(user.get("discordId") or "")
+        if not detail:
+            detail = str(user.get("steamId") or user.get("discordId") or "")
         return {
             "name": name,
-            "detail": str(user.get("status") or user.get("steamId") or ""),
+            "detail": detail,
             "avatar": str(user.get("avatarUrl") or user.get("avatar") or user.get("avatarfull") or user.get("avatarmedium") or ""),
             "mention": mention,
         }
@@ -4818,7 +5118,9 @@ def message_user(message: dict[str, Any]) -> dict[str, Any]:
 
 def user_display_name(user: dict[str, Any]) -> str:
     return str(
-        user.get("name")
+        user.get("displayName")
+        or user.get("globalName")
+        or user.get("name")
         or user.get("personaName")
         or user.get("personaname")
         or user.get("nickname")
@@ -4828,7 +5130,7 @@ def user_display_name(user: dict[str, Any]) -> str:
 
 
 def user_avatar_url(user: dict[str, Any]) -> str:
-    return str(user.get("avatarUrl") or user.get("avatarmedium") or user.get("avatarfull") or user.get("avatar") or "")
+    return str(user.get("avatarUrl") or user.get("avatarfull") or user.get("avatarmedium") or user.get("avatar") or "")
 
 
 def first_media_url(content: str) -> str:
@@ -4836,30 +5138,46 @@ def first_media_url(content: str) -> str:
     return match.group(0).rstrip(").,;]") if match else ""
 
 
-def normalize_messages(messages: list[dict[str, Any]], current_name: str = "", current_steam_id: str = "") -> list[dict[str, Any]]:
+def normalize_messages(
+    messages: list[dict[str, Any]],
+    current_name: str = "",
+    current_steam_id: str = "",
+    current_discord_id: str = "",
+) -> list[dict[str, Any]]:
     result = []
     local_name = str(current_name or "").strip().casefold()
     local_steam = str(current_steam_id or "").strip()
+    local_discord = str(current_discord_id or "").strip()
     for index, message in enumerate(messages):
         author = message_user(message)
         author_name = user_display_name(author) if author else str(message.get("authorName") or message.get("username") or "User")
         avatar = user_avatar_url(author)
         author_steam = str(author.get("steamId") or author.get("steam_id") or "")
+        author_discord = str(author.get("discordId") or author.get("discord_id") or "")
         created = message.get("createdAt") or message.get("created_at") or message.get("timestamp") or message.get("sentAt") or ""
         body = str(message.get("content") or message.get("body") or message.get("text") or message.get("message") or "")
         media_url = first_media_url(body)
         is_mine = bool(message.get("mine") or False)
         if not is_mine:
             remote_name = author_name.strip().casefold()
-            is_mine = bool((local_steam and author_steam == local_steam) or (local_name and remote_name == local_name))
+            is_mine = bool(
+                (local_discord and author_discord == local_discord)
+                or (local_steam and author_steam == local_steam)
+                or (local_name and remote_name == local_name)
+            )
         mentioned = bool(local_name and f"@{local_name}" in body.casefold())
         for mention in message.get("mentions") or []:
             mentioned_user = mention.get("mentionedUser") or mention.get("user") or mention if isinstance(mention, dict) else {}
             if not isinstance(mentioned_user, dict):
                 continue
             mention_steam = str(mentioned_user.get("steamId") or mentioned_user.get("steam_id") or "")
+            mention_discord = str(mentioned_user.get("discordId") or mentioned_user.get("discord_id") or "")
             mention_name = user_display_name(mentioned_user).strip().casefold()
-            if (local_steam and mention_steam == local_steam) or (local_name and mention_name == local_name):
+            if (
+                (local_discord and mention_discord == local_discord)
+                or (local_steam and mention_steam == local_steam)
+                or (local_name and mention_name == local_name)
+            ):
                 mentioned = True
                 break
         result.append(
@@ -4946,6 +5264,251 @@ def http_json(
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
         raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {body or 'empty response'}") from exc
+
+
+def http_json_url(
+    method: str,
+    url: str,
+    *,
+    token: str | None = None,
+    payload: Any | None = None,
+    form: dict[str, str] | None = None,
+    timeout: int = 15,
+) -> dict[str, Any]:
+    data = None
+    headers = {"Accept": "application/json", "User-Agent": "GG Coalition/1.0"}
+    if payload is not None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    elif form is not None:
+        data = urllib.parse.urlencode(form).encode("utf-8")
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            return json.loads(body) if body else {}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {body or 'empty response'}") from exc
+
+
+def discord_avatar_url(user: dict[str, Any]) -> str:
+    user_id = str(user.get("id") or "")
+    avatar = str(user.get("avatar") or "")
+    if not user_id or not avatar:
+        return ""
+    ext = "gif" if avatar.startswith("a_") else "png"
+    return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar}.{ext}?size=256"
+
+
+def discord_redirect_uri(port: int = DISCORD_DEFAULT_REDIRECT_PORT) -> str:
+    return f"http://127.0.0.1:{port}{DISCORD_DEFAULT_REDIRECT_PATH}"
+
+
+def pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def gg_logo_data_uri() -> str:
+    logo_path = BASE_DIR / "img" / "ggimege.gif"
+    try:
+        data = logo_path.read_bytes()
+    except OSError:
+        return ""
+    return "data:image/gif;base64," + base64.b64encode(data).decode("ascii")
+
+
+def discord_oauth_callback_html(*, success: bool, language: str) -> bytes:
+    copy = {
+        "pt": {
+            "ok_title": "Login recebido",
+            "ok_body": "Voce ja pode voltar para o GG Coalition.",
+            "cancel_title": "Login cancelado",
+            "cancel_body": "A autorizacao do Discord foi cancelada. Volte ao aplicativo para tentar de novo.",
+            "small": "Esta aba pode ser fechada.",
+        },
+        "en": {
+            "ok_title": "Login received",
+            "ok_body": "You can return to GG Coalition.",
+            "cancel_title": "Login cancelled",
+            "cancel_body": "Discord authorization was cancelled. Return to the app to try again.",
+            "small": "This tab can be closed.",
+        },
+        "es": {
+            "ok_title": "Login recibido",
+            "ok_body": "Ya puedes volver a GG Coalition.",
+            "cancel_title": "Login cancelado",
+            "cancel_body": "La autorizacion de Discord fue cancelada. Vuelve a la aplicacion para intentarlo otra vez.",
+            "small": "Esta pestana se puede cerrar.",
+        },
+        "fr": {
+            "ok_title": "Login recu",
+            "ok_body": "Vous pouvez retourner dans GG Coalition.",
+            "cancel_title": "Login annule",
+            "cancel_body": "L'autorisation Discord a ete annulee. Retournez dans l'application pour reessayer.",
+            "small": "Cet onglet peut etre ferme.",
+        },
+    }.get(normalize_language(language), {})
+    title = copy["ok_title"] if success else copy["cancel_title"]
+    body_text = copy["ok_body"] if success else copy["cancel_body"]
+    mark = "✓" if success else "!"
+    color = "#5eead4" if success else "#ffd166"
+    logo_uri = gg_logo_data_uri()
+    logo_html = (
+        f'<img class="logo-img" src="{html.escape(logo_uri)}" alt="GG Coalition">'
+        if logo_uri
+        else f'<div class="mark">{html.escape(mark)}</div>'
+    )
+    return f"""
+<!doctype html>
+<html lang="{html.escape(normalize_language(language))}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GG Coalition</title>
+  <style>
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #edf6ff;
+      background:
+        radial-gradient(circle at 50% 30%, rgba(94,234,212,.12), transparent 28rem),
+        linear-gradient(145deg, #070b16, #0d1729 58%, #08111f);
+    }}
+    .card {{
+      width: min(420px, calc(100vw - 32px));
+      padding: 34px 30px;
+      border: 1px solid #24486d;
+      border-radius: 10px;
+      background: rgba(17,28,49,.88);
+      box-shadow: 0 24px 70px rgba(0,0,0,.34);
+      text-align: center;
+      animation: in .28s ease-out both;
+    }}
+    .logo {{
+      width: 78px;
+      height: 78px;
+      margin: 0 auto 18px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #0e1a2d;
+      border: 1px solid #2d496f;
+      overflow: hidden;
+      position: relative;
+    }}
+    .logo::after {{
+      content: "{html.escape(mark)}";
+      position: absolute;
+      right: -4px;
+      bottom: -4px;
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #06111c;
+      background: {color};
+      font-size: 18px;
+      font-weight: 900;
+      border: 3px solid #0e1a2d;
+    }}
+    .logo-img {{
+      width: 70px;
+      height: 70px;
+      object-fit: contain;
+    }}
+    .mark {{
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 18px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: #0e1a2d;
+      border: 1px solid #2d496f;
+      color: {color};
+      font-size: 28px;
+      font-weight: 800;
+    }}
+    h1 {{ margin: 0; font-size: 24px; line-height: 1.2; }}
+    p {{ margin: 10px 0 0; color: #c7d7ed; font-size: 14px; line-height: 1.5; }}
+    .small {{ color: #7f93ad; font-size: 12px; margin-top: 18px; }}
+    @keyframes in {{
+      from {{ opacity: 0; transform: translateY(8px) scale(.98); }}
+      to {{ opacity: 1; transform: translateY(0) scale(1); }}
+    }}
+  </style>
+  <script>setTimeout(function () {{ window.close(); }}, 1200);</script>
+</head>
+<body>
+  <main class="card">
+    <div class="logo">{logo_html}</div>
+    <h1>{html.escape(title)}</h1>
+    <p>{html.escape(body_text)}</p>
+    <p class="small">{html.escape(copy["small"])}</p>
+  </main>
+</body>
+</html>
+    """.encode("utf-8")
+
+
+def wait_for_discord_oauth_code(expected_state: str, port: int, timeout: int = 180, auth_url: str = "", language: str = "pt") -> str:
+    result: dict[str, str] = {}
+    finished = threading.Event()
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: Any) -> None:
+            return
+
+        def do_GET(self) -> None:
+            parsed = urllib.parse.urlparse(self.path)
+            params = urllib.parse.parse_qs(parsed.query)
+            if parsed.path != DISCORD_DEFAULT_REDIRECT_PATH:
+                self.send_response(404)
+                self.end_headers()
+                return
+            state = (params.get("state") or [""])[0]
+            if state != expected_state:
+                result["error"] = "invalid_oauth_state"
+            elif params.get("error"):
+                result["error"] = (params.get("error_description") or params.get("error") or ["oauth_cancelled"])[0]
+            else:
+                result["code"] = (params.get("code") or [""])[0]
+            body = discord_oauth_callback_html(success=bool(result.get("code")) and not result.get("error"), language=language)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            finished.set()
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.timeout = 0.5
+    try:
+        if auth_url and not QDesktopServices.openUrl(QUrl(auth_url)):
+            raise RuntimeError("discord_browser_error")
+        while not finished.wait(0):
+            server.handle_request()
+            if timeout <= 0:
+                break
+            timeout -= 0.5
+    finally:
+        server.server_close()
+    if result.get("error"):
+        raise RuntimeError(result["error"])
+    code = result.get("code", "")
+    if not code:
+        raise RuntimeError("discord_oauth_timeout")
+    return code
 
 
 class ControllerRegistry(QObject):

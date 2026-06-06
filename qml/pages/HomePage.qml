@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 import "../components"
 
 Flickable {
@@ -192,41 +193,69 @@ Flickable {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    Column {
-                        id: onlinePreviewColumn
+                    Flow {
+                        id: onlinePreviewFlow
                         width: onlinePreview.width
-                        spacing: 8
+                        spacing: 12
+
                         Repeater {
                             model: chatController.onlineRows
-                            delegate: Rectangle {
-                                width: onlinePreviewColumn.width
-                                height: 48
-                                radius: 7
-                                color: "#0e1a2d"
-                                RowLayout {
+                            delegate: Item {
+                                width: 44
+                                height: 44
+
+                                Rectangle {
                                     anchors.fill: parent
-                                    anchors.margins: 10
-                                    spacing: 10
+                                    radius: 22
+                                    color: "#1d3353"
+                                    border.color: hoverArea.containsMouse ? "#5eead4" : "transparent"
+                                    border.width: 2
+                                    clip: true
+
+                                    Behavior on border.color { ColorAnimation { duration: 150 } }
+
                                     Rectangle {
-                                        width: 28
-                                        height: 28
-                                        radius: 14
-                                        color: "#1d3353"
-                                        Image {
-                                            anchors.fill: parent
-                                            anchors.margins: 1
-                                            source: modelData.avatar
-                                            fillMode: Image.PreserveAspectCrop
-                                            visible: modelData.avatar !== ""
-                                        }
+                                        id: maskRect
+                                        anchors.fill: parent
+                                        anchors.margins: 2
+                                        radius: width / 2
+                                        visible: false
                                     }
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 0
-                                        Text { text: modelData.name; color: "#edf6ff"; font.bold: true; font.family: "Segoe UI"; elide: Text.ElideRight; Layout.fillWidth: true }
-                                        Text { text: modelData.detail; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
+
+                                    Image {
+                                        id: avatarImg
+                                        anchors.fill: maskRect
+                                        source: modelData.avatar
+                                        fillMode: Image.PreserveAspectCrop
+                                        visible: false
+                                    }
+
+                                    OpacityMask {
+                                        anchors.fill: maskRect
+                                        source: avatarImg
+                                        maskSource: maskRect
+                                        visible: modelData.avatar !== ""
+                                    }
+                                    
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: modelData.name.substring(0, 2).toUpperCase()
+                                        color: "#5eead4"
+                                        font.bold: true
+                                        font.pixelSize: 16
+                                        visible: modelData.avatar === ""
                                     }
                                 }
+
+                                MouseArea {
+                                    id: hoverArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                }
+
+                                ToolTip.visible: hoverArea.containsMouse
+                                ToolTip.text: modelData.name + (modelData.detail ? "\n" + modelData.detail : "")
+                                ToolTip.delay: 150
                             }
                         }
                     }
