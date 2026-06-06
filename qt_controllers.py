@@ -1618,6 +1618,8 @@ class StockpileController(QObject):
 
     def _append_log(self, message: str) -> None:
         self.logs.append({"time": now_label(), "message": message})
+        if self.logs.count() > 200:
+            self.logs.set_items(self.logs.items()[-200:])
 
     @Slot()
     def dismissUploadOverlay(self) -> None:
@@ -2707,6 +2709,8 @@ class ChatController(QObject):
             seed_mentions = append_older or slug not in self._seeded_message_rooms
             self._notify_mentions(rows, slug=slug, seed=seed_mentions)
             self._seeded_message_rooms.add(slug)
+            if len(rows) > 200:
+                rows = rows[-200:]
             if not same_message_rows(rows, current_rows):
                 self.messages.set_items(rows)
             self._next_message_cursor = str(result.get("nextCursor") or "") if isinstance(result, dict) else ""
@@ -2974,6 +2978,8 @@ class ChatController(QObject):
         row = rows[0]
         current_rows = [self.messages.get(i) for i in range(self.messages.count())]
         current_rows.append(row)
+        if len(current_rows) > 200:
+            current_rows = current_rows[-200:]
         self.messages.set_items(current_rows)
         self.changed.emit()
 
@@ -3027,6 +3033,7 @@ class ItemSearchController(QObject):
         )
         self.suggestions = DictListModel(["name"], self)
         self._all_rows: list[dict[str, Any]] = []
+        self._cached_item_names: list[str] = []
         self.rowsLoaded.connect(self._apply_loaded_rows)
         QTimer.singleShot(0, self.refresh)
 
@@ -3145,6 +3152,10 @@ class ItemSearchController(QObject):
             self.changed.emit()
             return
         self._all_rows = list(rows) if isinstance(rows, list) else []
+        self._cached_item_names = sorted(
+            {str(item.get("display_name") or "-") for item in self._all_rows if item.get("display_name")},
+            key=str.lower,
+        )
         self._last_update = last_update or "-"
         self._loaded = True
         self._status_key = "item_search.loaded"
@@ -3165,8 +3176,7 @@ class ItemSearchController(QObject):
         self.changed.emit()
 
     def _item_names(self) -> list[str]:
-        names = {str(item.get("display_name") or "-") for item in self._all_rows if item.get("display_name")}
-        return sorted(names, key=str.lower)
+        return self._cached_item_names
 
     def _suggestions_for_query(self, query: str) -> list[str]:
         lower = query.strip().lower()
@@ -3272,8 +3282,9 @@ class IdentifyItemController(QObject):
         self.item_search = item_search
         self.results = DictListModel(["name", "score", "scoreText", "icon", "path"], self)
         self.monitorMatches = DictListModel(["matchX", "matchY", "matchW", "matchH"], self)
-        self._templates, self._status = index_icon_templates()
-        self._status = f"{self._status} | {identify_dependencies_status()}"
+        self._templates: list[Any] = []
+        self._templates_loaded = False
+        self._status = identify_dependencies_status()
         self._selected_path: Path | None = None
         self._selected_image_url = ""
         self._mode = "Hybrid"
@@ -3292,6 +3303,15 @@ class IdentifyItemController(QObject):
         self._monitor_timer.timeout.connect(self._run_monitor_tick)
         self.scanFinished.connect(self._apply_scan_result)
         self.monitorFinished.connect(self._apply_monitor_result)
+
+    def _ensure_templates_loaded(self) -> None:
+        """Load icon templates lazily on first use to avoid spending 50-80MB at startup."""
+        if self._templates_loaded:
+            return
+        self._templates, load_status = index_icon_templates()
+        self._templates_loaded = True
+        self._status = f"{load_status} | {identify_dependencies_status()}"
+        self.changed.emit()
 
 
     @Property("QVariantMap", notify=changed)
@@ -3370,8 +3390,9 @@ class IdentifyItemController(QObject):
 
     @Slot()
     def reindex(self) -> None:
-        self._templates, self._status = index_icon_templates()
-        self._status = f"{self._status} | {identify_dependencies_status()}"
+        self._templates, load_status = index_icon_templates()
+        self._templates_loaded = True
+        self._status = f"{load_status} | {identify_dependencies_status()}"
         self.changed.emit()
 
     @Slot(str)
@@ -3428,6 +3449,7 @@ class IdentifyItemController(QObject):
             self._status = "Select, paste, or capture an image first."
             self.changed.emit()
             return
+        self._ensure_templates_loaded()
         self._begin_scan()
 
         def worker() -> None:
@@ -3513,6 +3535,7 @@ class IdentifyItemController(QObject):
             self._status = "Run an identification first."
             self.changed.emit()
             return
+        self._ensure_templates_loaded()
         self._monitoring = True
         self._monitor_tick = 0
         self._status = f"Monitoring: {self._monitor_target_name or 'selected image'}"
@@ -3689,8 +3712,8 @@ class ProductionController(QObject):
         self.queueCategories = DictListModel(["name", "mark", "count", "limit", "active", "icon", "slots"], self)
         self.materials = DictListModel(["key", "label", "quantity", "crates", "icon"], self)
         self.routeTrips = DictListModel(["title", "vehicle", "materials", "orders", "inputSlots", "outputCrates", "capacity"], self)
-        self._all_items, self._status = load_production_items()
-        self._items_by_key = {item.key: item for item in self._all_items}
+        all_items, self._status = load_production_items()
+        self._items_by_key = {item.key: item for item in all_items}
         self._queue: dict[str, list[ProductionItem]] = {category: [] for category in CATEGORY_ORDER}
         self._mode = "mpf"
         self._faction = "Neutral"
@@ -3817,8 +3840,8 @@ class ProductionController(QObject):
 
     @Slot()
     def reload(self) -> None:
-        self._all_items, self._status = load_production_items()
-        self._items_by_key = {item.key: item for item in self._all_items}
+        all_items, self._status = load_production_items()
+        self._items_by_key = {item.key: item for item in all_items}
         self._category = self._first_available_category()
         self.clear()
 
@@ -3903,7 +3926,7 @@ class ProductionController(QObject):
 
     @Slot(str, int)
     def addItem(self, name: str, quantity: int) -> None:
-        match = next((item for item in self._all_items if item.name.lower() == name.strip().lower() and item.mode == self._mode), None)
+        match = next((item for item in self._items_by_key.values() if item.name.lower() == name.strip().lower() and item.mode == self._mode), None)
         if not match:
             self._warning = f"Item not found: {name}"
             self.changed.emit()
@@ -3930,12 +3953,13 @@ class ProductionController(QObject):
 
     @Slot()
     def refresh(self) -> None:
-        categories = available_categories(self._all_items, self._mode)
+        _all_items = list(self._items_by_key.values())
+        categories = available_categories(_all_items, self._mode)
         if self._category not in categories:
             self._category = categories[0] if categories else ""
 
         filtered = filter_items(
-            self._all_items,
+            _all_items,
             mode=self._mode,
             category=self._category,
             faction=self._faction,
@@ -3979,12 +4003,12 @@ class ProductionController(QObject):
         self._material_detail = self._format_material_detail(material_rows)
         self._route_summary = f"{self.routeTrips.count()} trips | {self._route_vehicle_mode}"
         self._warning = "  ".join(totals["warnings"])
-        if self._all_items:
-            self._status = f"{len(filtered)} visible / {len(self._all_items)} loaded"
+        if self._items_by_key:
+            self._status = f"{len(filtered)} visible / {len(self._items_by_key)} loaded"
         self.changed.emit()
 
     def _first_available_category(self) -> str:
-        categories = available_categories(self._all_items, self._mode)
+        categories = available_categories(list(self._items_by_key.values()), self._mode)
         return categories[0] if categories else ""
 
     def _add_item(self, item: ProductionItem, *, fill: bool, emit: bool = True) -> None:
@@ -4132,6 +4156,7 @@ class ProductionController(QObject):
                     "inputSlots": int(trip.get("input_slots") or 0),
                     "outputCrates": int(trip.get("output_crates") or 0),
                     "capacity": int(trip.get("max_slots") or 15),
+                    "warning": str(trip.get("warning") or ""),
                 }
             )
         return rows
@@ -4140,6 +4165,7 @@ class ProductionController(QObject):
 class TimeTaskController(QObject):
     changed = Signal()
     statusFromWorker = Signal(str)
+    restoreAppRequested = Signal()
 
     def __init__(self, i18n: I18nController | None = None, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -4457,10 +4483,23 @@ class TimeTaskController(QObject):
             self._countdown_timer.stop()
             events = self._recorder.stop_recording()
             self._status = self._t("timetask.overlay_events", events=len(events))
+            
+            if events:
+                import time
+                name_to_save = self._macro_name
+                if name_to_save == "macro" or not name_to_save.strip():
+                    name_to_save = f"Macro_{time.strftime('%H%M%S')}"
+                path = self._recorder.save_macro(name_to_save)
+                self._selected_path = path
+                self._show_replay_overlay(path.stem)
+            else:
+                self._show_replay_overlay()
+                
             self._record_overlay_visible = False
-            self._show_replay_overlay()
+            
         self.refreshMacros()
         self._sync_poll_timer()
+        self.restoreAppRequested.emit()
         self.changed.emit()
 
     @Slot()
@@ -4483,6 +4522,7 @@ class TimeTaskController(QObject):
         self._record_overlay_visible = False
         self.refreshMacros()
         self._show_replay_overlay(path.stem)
+        self.restoreAppRequested.emit()
         self.changed.emit()
 
     @Slot()

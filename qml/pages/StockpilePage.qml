@@ -96,7 +96,7 @@ Flickable {
                             elide: Text.ElideRight
                         }
                     }
-                    ComboBox {
+                    PrimaryComboBox {
                         id: visualWarehouseBox
                         Layout.preferredWidth: Math.min(300, Math.max(210, root.width * 0.25))
                         Layout.preferredHeight: 32

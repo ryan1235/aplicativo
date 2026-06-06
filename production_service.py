@@ -285,9 +285,15 @@ def order_materials(items: list[ProductionItem], *, mode: str) -> dict[str, floa
     return materials
 
 
-def input_slots(materials: dict[str, float]) -> int:
+def input_slots(materials: dict[str, float], is_flatbed: bool = False) -> int:
+    if is_flatbed:
+        return sum(
+            math.ceil(max(0.0, materials.get(key, 0.0)) / MATERIAL_CRATE_SIZES[key])
+            for key, _label in MATERIALS
+            if materials.get(key, 0.0) > 0
+        )
     return sum(
-        math.ceil(max(0.0, materials.get(key, 0.0)) / MATERIAL_CRATE_SIZES[key])
+        math.ceil(max(0.0, materials.get(key, 0.0)) / 100.0)
         for key, _label in MATERIALS
         if materials.get(key, 0.0) > 0
     )
@@ -304,33 +310,50 @@ def plan_transport_routes(
     trips: list[dict[str, Any]] = []
 
     for category, chunk in route_orders(queue, mode=mode):
-        materials = order_materials(chunk, mode=mode)
-        placed = False
-        for trip in trips:
-            test_materials = {
-                key: trip["materials"].get(key, 0.0) + materials.get(key, 0.0)
-                for key, _label in MATERIALS
-            }
-            test_input_slots = input_slots(test_materials)
-            test_output_crates = int(trip["output_crates"]) + len(chunk)
-            if test_input_slots <= max_slots and test_output_crates <= max_slots:
-                trip["orders"].append((category, chunk))
-                trip["materials"] = test_materials
-                trip["input_slots"] = test_input_slots
-                trip["output_crates"] = test_output_crates
-                placed = True
-                break
-        if not placed:
-            trips.append(
-                {
-                    "orders": [(category, chunk)],
-                    "materials": materials,
-                    "input_slots": input_slots(materials),
-                    "output_crates": len(chunk),
-                    "vehicle": "Flatbed" if is_flatbed else "Dunne",
-                    "max_slots": max_slots,
-                }
-            )
+        if not chunk:
+            continue
+            
+        total_materials = order_materials(chunk, mode=mode)
+        
+        input_units = []
+        for key, _label in MATERIALS:
+            val = total_materials.get(key, 0.0)
+            if val > 0:
+                if is_flatbed:
+                    count = math.ceil(max(0.0, val) / MATERIAL_CRATE_SIZES[key])
+                else:
+                    count = math.ceil(max(0.0, val) / 100.0)
+                input_units.extend([key] * count)
+                
+        output_items = list(chunk)
+        
+        needs_warning = is_flatbed and (len(input_units) > 60 or len(output_items) > 60)
+        warning_msg = "Essa fila é mais de 60 caixas então tome cuidado para não ser roubado" if needs_warning else ""
+        
+        while input_units or output_items:
+            trip_in_keys = input_units[:max_slots]
+            input_units = input_units[max_slots:]
+            
+            trip_out_items = output_items[:max_slots]
+            output_items = output_items[max_slots:]
+            
+            trip_materials = {key: 0.0 for key, _label in MATERIALS}
+            for key in trip_in_keys:
+                if is_flatbed:
+                    trip_materials[key] += MATERIAL_CRATE_SIZES[key]
+                else:
+                    trip_materials[key] += 100.0
+                    
+            trips.append({
+                "orders": [(category, trip_out_items)] if trip_out_items else [],
+                "materials": trip_materials,
+                "input_slots": len(trip_in_keys),
+                "output_crates": len(trip_out_items),
+                "vehicle": "Flatbed" if is_flatbed else "Dunne",
+                "max_slots": max_slots,
+                "warning": warning_msg,
+            })
+            
     return trips
 
 
@@ -355,5 +378,9 @@ def format_route_orders(orders: list[tuple[str, list[ProductionItem]]]) -> str:
     for _category, chunk in orders:
         if not chunk:
             continue
-        lines.append(f"{len(chunk)}x {chunk[0].name}")
+        counts = {}
+        for item in chunk:
+            counts[item.name] = counts.get(item.name, 0) + 1
+        for name, count in counts.items():
+            lines.append(f"{count}x {name} ({count} caixas)")
     return "\n".join(lines) if lines else "-"

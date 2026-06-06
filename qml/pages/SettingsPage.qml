@@ -161,7 +161,7 @@ Flickable {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
-                    ComboBox {
+                    PrimaryComboBox {
                         id: closeActionCombo
                         Layout.preferredWidth: 190
                         implicitHeight: 38

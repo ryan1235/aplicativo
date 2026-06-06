@@ -190,6 +190,15 @@ ApplicationWindow {
         }
     }
 
+    Connections {
+        target: timeTaskController
+        function onRestoreAppRequested() {
+            window.visible = true
+            window.raise()
+            window.requestActivate()
+        }
+    }
+
     Timer {
         interval: 700
         running: true
@@ -856,7 +865,7 @@ ApplicationWindow {
                         delegate: Rectangle {
                             id: navRow
                             width: navList.width
-                            height: 44
+                            height: 48
                             radius: 8
                             color: appController.currentPage === key ? "#1d3353" : mouse.containsMouse ? "#172943" : "transparent"
                             border.color: appController.currentPage === key ? "#2d496f" : "transparent"
@@ -874,7 +883,6 @@ ApplicationWindow {
                                         var map = {
                                             "home": "home.png",
                                             "user": "generic.png",
-                                            "user": "generic.png",
                                             "chat": "aovivo.png",
                                             "bolt": "autoclicker.png",
                                             "timer": "generic.png",
@@ -888,10 +896,12 @@ ApplicationWindow {
                                         return map[icon] ? appController.assetUrl("img/iconmenu/" + map[icon]) : ""
                                     }
                                     visible: source != ""
-                                    Layout.preferredWidth: 20
-                                    Layout.preferredHeight: 20
+                                    Layout.preferredWidth: 32
+                                    Layout.preferredHeight: 32
                                     Layout.alignment: Qt.AlignVCenter
                                     fillMode: Image.PreserveAspectFit
+                                    mipmap: true
+                                    smooth: true
                                 }
                                 Text {
                                     text: icon.length > 0 ? icon.substring(0, 1).toUpperCase() : "-"
@@ -1600,8 +1610,8 @@ ApplicationWindow {
 
     Window {
         id: timeTaskRecordWindow
-        width: 420
-        height: 126
+        width: 440
+        height: recordColumn.implicitHeight + 40
         visible: timeTaskController.recordOverlayVisible
         color: "transparent"
         transientParent: null
@@ -1632,11 +1642,11 @@ ApplicationWindow {
         Rectangle {
             anchors.fill: parent
             anchors.margins: 4
-            radius: 8
-            color: "#111c31"
+            radius: 12
+            color: "#0a121e"
             border.color: timeTaskController.recordOverlayAccent
             border.width: 1
-            opacity: 0.96
+            opacity: 0.98
 
             MouseArea {
                 anchors.fill: parent
@@ -1661,84 +1671,116 @@ ApplicationWindow {
             }
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 4
-                Text {
-                    text: timeTaskController.recordOverlayTitle
-                    color: timeTaskController.recordOverlayAccent
-                    font.family: "Segoe UI"
-                    font.pixelSize: 12
-                    font.bold: true
+                id: recordColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 16
+                spacing: 12
+
+                RowLayout {
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    spacing: 8
+                    
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: timeTaskController.recordOverlayAccent
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Text {
+                        text: timeTaskController.recordOverlayTitle
+                        color: timeTaskController.recordOverlayAccent
+                        font.family: "Segoe UI"
+                        font.pixelSize: 14
+                        font.bold: true
+                        font.letterSpacing: 0.5
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        width: 24
+                        height: 24
+                        radius: 12
+                        color: closeRecordMouse.containsMouse ? "#ff7a90" : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "×"
+                            color: closeRecordMouse.containsMouse ? "#ffffff" : "#60728c"
+                            font.pixelSize: 22
+                            font.family: "Segoe UI"
+                            anchors.verticalCenterOffset: -2
+                        }
+                        MouseArea {
+                            id: closeRecordMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: timeTaskController.hideRecordOverlay()
+                        }
+                    }
                 }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 1
+                    color: "#1d3353"
+                    opacity: 0.6
+                }
+
                 Text {
                     text: timeTaskController.recordOverlayDetail
                     color: "#edf6ff"
                     font.family: "Segoe UI"
-                    font.pixelSize: 12
+                    font.pixelSize: 14
                     font.bold: true
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    wrapMode: Text.WordWrap
                 }
+
                 Text {
                     text: timeTaskController.recordOverlayHint
-                    color: "#99abc4"
+                    color: "#8ab4ff"
                     font.family: "Segoe UI"
-                    font.pixelSize: 10
+                    font.pixelSize: 12
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    wrapMode: Text.WordWrap
+                    opacity: 0.8
                 }
+
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    Layout.topMargin: 8
+                    spacing: 12
+
                     PrimaryButton {
                         text: window.tr("timetask.start")
                         Layout.fillWidth: true
-                        implicitHeight: 24
-                        font.pixelSize: 9
+                        implicitHeight: 36
+                        font.pixelSize: 12
                         onClicked: timeTaskController.beginCountdownRecording()
                     }
                     PrimaryButton {
                         text: window.tr("timetask.pause")
                         Layout.fillWidth: true
-                        implicitHeight: 24
+                        implicitHeight: 36
                         fill: "#1d3353"
                         hoverFill: "#2d496f"
                         textFill: "#edf6ff"
-                        font.pixelSize: 9
+                        font.pixelSize: 12
                         onClicked: timeTaskController.pauseResume()
                     }
                     PrimaryButton {
                         text: window.tr("timetask.stop")
                         Layout.fillWidth: true
-                        implicitHeight: 24
+                        implicitHeight: 36
                         fill: "#ff7a90"
                         hoverFill: "#b94a5d"
-                        textFill: "#edf6ff"
-                        font.pixelSize: 9
+                        textFill: "#111c31"
+                        font.pixelSize: 12
                         onClicked: timeTaskController.stopRecording()
-                    }
-                    PrimaryButton {
-                        text: window.tr("timetask.save")
-                        Layout.fillWidth: true
-                        implicitHeight: 24
-                        fill: "#62d7a4"
-                        hoverFill: "#5eead4"
-                        textFill: "#041014"
-                        font.pixelSize: 9
-                        onClicked: timeTaskController.saveCurrent()
-                    }
-                    PrimaryButton {
-                        text: "X"
-                        Layout.preferredWidth: 28
-                        implicitHeight: 24
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
-                        font.pixelSize: 9
-                        onClicked: timeTaskController.hideRecordOverlay()
                     }
                 }
             }
@@ -1747,8 +1789,8 @@ ApplicationWindow {
 
     Window {
         id: timeTaskReplayWindow
-        width: 360
-        height: 104
+        width: 420
+        height: replayColumn.implicitHeight + 40
         visible: timeTaskController.replayOverlayVisible
         color: "transparent"
         transientParent: null
@@ -1779,14 +1821,15 @@ ApplicationWindow {
         Rectangle {
             anchors.fill: parent
             anchors.margins: 4
-            radius: 8
-            color: "#111c31"
+            radius: 12
+            color: "#0a121e"
             border.color: timeTaskController.replayOverlayAccent
             border.width: 1
-            opacity: 0.96
+            opacity: 0.98
 
             MouseArea {
                 anchors.fill: parent
+                enabled: !timeTaskController.replaying
                 onPressed: function(mouse) {
                     timeTaskReplayWindow.dragStartX = mouse.x
                     timeTaskReplayWindow.dragStartY = mouse.y
@@ -1808,69 +1851,121 @@ ApplicationWindow {
             }
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 5
-                Text {
-                    text: timeTaskController.replayOverlayTitle
-                    color: timeTaskController.replayOverlayAccent
-                    font.family: "Segoe UI"
-                    font.pixelSize: 12
-                    font.bold: true
+                id: replayColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 16
+                spacing: 12
+
+                RowLayout {
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    spacing: 8
+                    
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: timeTaskController.replayOverlayAccent
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Text {
+                        text: timeTaskController.replayOverlayTitle
+                        color: timeTaskController.replayOverlayAccent
+                        font.family: "Segoe UI"
+                        font.pixelSize: 14
+                        font.bold: true
+                        font.letterSpacing: 0.5
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+
+                    Rectangle {
+                        width: 24
+                        height: 24
+                        radius: 12
+                        color: closeReplayMouse.containsMouse ? "#ff7a90" : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "×"
+                            color: closeReplayMouse.containsMouse ? "#ffffff" : "#60728c"
+                            font.pixelSize: 22
+                            font.family: "Segoe UI"
+                            anchors.verticalCenterOffset: -2
+                        }
+                        MouseArea {
+                            id: closeReplayMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: timeTaskController.hideReplayOverlay()
+                        }
+                    }
                 }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 1
+                    color: "#1d3353"
+                    opacity: 0.6
+                }
+
                 Text {
                     text: timeTaskController.replayOverlayDetail
                     color: "#edf6ff"
                     font.family: "Segoe UI"
-                    font.pixelSize: 12
+                    font.pixelSize: 14
                     font.bold: true
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    wrapMode: Text.WordWrap
                 }
+
+                Text {
+                    text: "⚠️ Macro em execução!\nPressione ESC para cancelar."
+                    color: "#ffd166"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 13
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.fillWidth: true
+                    visible: timeTaskController.replaying
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    Layout.topMargin: 8
+                    spacing: 12
+                    visible: !timeTaskController.replaying
+
                     PrimaryButton {
                         text: window.tr("timetask.play")
                         Layout.fillWidth: true
-                        implicitHeight: 24
+                        implicitHeight: 36
                         fill: "#62d7a4"
                         hoverFill: "#5eead4"
                         textFill: "#041014"
-                        font.pixelSize: 9
+                        font.pixelSize: 12
                         onClicked: timeTaskController.playSelected()
                     }
                     PrimaryButton {
                         text: window.tr("timetask.pause")
                         Layout.fillWidth: true
-                        implicitHeight: 24
+                        implicitHeight: 36
                         fill: "#1d3353"
                         hoverFill: "#2d496f"
                         textFill: "#edf6ff"
-                        font.pixelSize: 9
+                        font.pixelSize: 12
                         onClicked: timeTaskController.pauseResume()
                     }
                     PrimaryButton {
                         text: window.tr("timetask.stop")
                         Layout.fillWidth: true
-                        implicitHeight: 24
+                        implicitHeight: 36
                         fill: "#ff7a90"
                         hoverFill: "#b94a5d"
-                        textFill: "#edf6ff"
-                        font.pixelSize: 9
+                        textFill: "#111c31"
+                        font.pixelSize: 12
                         onClicked: timeTaskController.stopReplay()
-                    }
-                    PrimaryButton {
-                        text: "X"
-                        Layout.preferredWidth: 28
-                        implicitHeight: 24
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
-                        font.pixelSize: 9
-                        onClicked: timeTaskController.hideReplayOverlay()
                     }
                 }
             }

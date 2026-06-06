@@ -149,7 +149,7 @@ Flickable {
                     font.family: "Segoe UI"
                     font.bold: true
                 }
-                ComboBox {
+                PrimaryComboBox {
                     Layout.preferredWidth: 140
                     model: identifyItemController.modes
                     currentIndex: Math.max(0, identifyItemController.modes.indexOf(identifyItemController.mode))

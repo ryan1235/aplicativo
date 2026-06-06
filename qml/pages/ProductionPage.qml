@@ -54,39 +54,82 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 10
+            spacing: 16
 
-            ComboBox {
-                id: modeBox
-                Layout.preferredWidth: 130
-                model: productionController.modes
-                currentIndex: Math.max(0, productionController.modes.indexOf(productionController.mode))
-                onActivated: productionController.setMode(currentText)
-            }
-            ComboBox {
-                Layout.preferredWidth: 150
-                model: productionController.factions
-                currentIndex: Math.max(0, productionController.factions.indexOf(productionController.faction))
-                onActivated: productionController.setFaction(currentText)
-            }
+            // Mode Selection
             RowLayout {
-                visible: productionController.mode === "factory"
-                spacing: 6
-                Text { text: tr("production.factories"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
-                SpinBox {
-                    from: 1
-                    to: 2
-                    value: productionController.factoryMultiplier
-                    onValueModified: productionController.setFactoryMultiplier(value)
-                    Layout.preferredWidth: 90
+                spacing: 8
+                RadioButton {
+                    text: "Fábrica comum"
+                    checked: productionController.mode === "factory"
+                    onClicked: productionController.setMode("factory")
+                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
+                }
+                RowLayout {
+                    visible: productionController.mode === "factory"
+                    spacing: 4
+                    PrimaryButton {
+                        text: "-"
+                        leftPadding: 0; rightPadding: 0
+                        implicitWidth: 24; implicitHeight: 24; font.pixelSize: 12
+                        onClicked: productionController.setFactoryMultiplier(Math.max(1, productionController.factoryMultiplier - 1))
+                    }
+                    Text {
+                        text: productionController.factoryMultiplier
+                        color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 14; font.bold: true
+                    }
+                    PrimaryButton {
+                        text: "+"
+                        leftPadding: 0; rightPadding: 0
+                        implicitWidth: 24; implicitHeight: 24; font.pixelSize: 12
+                        onClicked: productionController.setFactoryMultiplier(productionController.factoryMultiplier + 1)
+                    }
+                }
+                RadioButton {
+                    text: "MPF"
+                    checked: productionController.mode === "mpf"
+                    onClicked: productionController.setMode("mpf")
+                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
                 }
             }
-            TextField {
-                Layout.fillWidth: true
-                placeholderText: tr("production.search_placeholder")
-                color: "#edf6ff"
-                onTextChanged: productionController.search(text)
-                background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
+
+            Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: "#24486d" }
+
+            // Faction Selection
+            RowLayout {
+                spacing: 8
+                RadioButton {
+                    text: "Neutro"
+                    checked: productionController.faction === "Neutral"
+                    onClicked: productionController.setFaction("Neutral")
+                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
+                }
+                RadioButton {
+                    text: "Colonial"
+                    checked: productionController.faction === "Colonial"
+                    onClicked: productionController.setFaction("Colonial")
+                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
+                }
+                RadioButton {
+                    text: "Warden"
+                    checked: productionController.faction === "Warden"
+                    onClicked: productionController.setFaction("Warden")
+                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
+                }
+            }
+
+            Item { Layout.fillWidth: true } // Spacer
+
+            ColumnLayout {
+                spacing: 2
+                Text { text: "SHIFT-CLIQUE PREENCHE A CATEGORIA"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.alignment: Qt.AlignRight }
+                TextField {
+                    Layout.preferredWidth: 260
+                    placeholderText: tr("production.search_placeholder") || "Buscar item..."
+                    color: "#edf6ff"
+                    onTextChanged: productionController.search(text)
+                    background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
+                }
             }
         }
 
@@ -104,66 +147,31 @@ Rectangle {
                     model: productionController.categoryRows
                     delegate: Button {
                         property var row: modelData
-                        width: 112
-                        height: 46
+                        width: 76
+                        height: 76
                         onClicked: productionController.setCategory(row.name || "")
                         background: Rectangle {
-                            radius: 8
+                            radius: 4
                             color: row.active ? "#5eead4" : "#111c31"
                             border.color: row.active ? "#5eead4" : "#24486d"
                             Behavior on color { ColorAnimation { duration: 120 } }
                         }
                         contentItem: ColumnLayout {
-                            spacing: 1
-                            Item {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 25
-                                Image {
-                                    anchors.centerIn: parent
-                                    source: row.icon || ""
-                                    width: 24
-                                    height: 24
-                                    fillMode: Image.PreserveAspectFit
-                                    visible: String(row.icon || "") !== ""
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: row.mark || ""
-                                    color: row.active ? "#041014" : "#edf6ff"
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                    visible: String(row.icon || "") === ""
-                                }
-                                Rectangle {
-                                    visible: (row.count || 0) > 0
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: 26
-                                    anchors.top: parent.top
-                                    width: Math.max(16, countText.implicitWidth + 8)
-                                    height: 16
-                                    radius: 7
-                                    color: row.active ? "#07111f" : "#5eead4"
-                                    border.color: row.active ? "#041014" : "#5eead4"
-                                    Text {
-                                        id: countText
-                                        anchors.centerIn: parent
-                                        text: String(row.count || 0)
-                                        color: row.active ? "#5eead4" : "#041014"
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 9
-                                        font.bold: true
-                                    }
-                                }
+                            spacing: 4
+                            Image {
+                                Layout.alignment: Qt.AlignHCenter
+                                source: row.icon || ""
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
+                                fillMode: Image.PreserveAspectFit
                             }
                             Text {
-                                text: row.name || ""
-                                color: row.active ? "#041014" : "#99abc4"
+                                Layout.alignment: Qt.AlignHCenter
+                                text: (row.mark || "") + " " + String(row.count || 0)
+                                color: row.active ? "#041014" : "#edf6ff"
                                 font.family: "Segoe UI"
-                                font.pixelSize: 9
-                                horizontalAlignment: Text.AlignHCenter
-                                Layout.fillWidth: true
-                                elide: Text.ElideRight
+                                font.pixelSize: 11
+                                font.bold: true
                             }
                         }
                     }
@@ -284,35 +292,84 @@ Rectangle {
                     anchors.margins: 8
                     spacing: 7
 
-                    GridLayout {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        columns: 2
-                        columnSpacing: 8
-                        rowSpacing: 8
-                        MetricCard {
+                        spacing: 8
+
+                        Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 88
-                            title: tr("production.summary")
-                            value: productionController.summary
-                            detail: productionController.orders
-                            contentMargins: 10
-                            contentSpacing: 3
-                            valuePixelSize: 19
-                            detailPixelSize: 10
-                            detailMaximumLineCount: 2
+                            implicitHeight: summaryCol.implicitHeight + 20
+                            radius: 8
+                            color: "#0e1a2d"
+                            border.color: "#1e3554"
+                            
+                            RowLayout {
+                                id: summaryCol
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                anchors.margins: 10
+                                spacing: 12
+                                
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "Resultado"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                    Text { text: productionController.summary; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
+                                    Text { text: productionController.orders; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                }
+                                
+                                Rectangle {
+                                    Layout.preferredWidth: 1
+                                    Layout.fillHeight: true
+                                    color: "#1e3554"
+                                }
+                                
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text { text: "Materiais"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                    Text { text: productionController.materialDetail; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true; wrapMode: Text.WordWrap; maximumLineCount: 2 }
+                                }
+                            }
                         }
-                        MetricCard {
+
+                        RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 88
-                            title: tr("production.materials")
-                            value: productionController.materialSummary
-                            detail: productionController.materialDetail
-                            accent: "#8ab4ff"
-                            contentMargins: 10
-                            contentSpacing: 3
-                            valuePixelSize: 17
-                            detailPixelSize: 10
-                            detailMaximumLineCount: 2
+                            spacing: 8
+                            
+                            Repeater {
+                                model: productionController.materialRows
+                                delegate: Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 56
+                                    radius: 6
+                                    color: "#07111f"
+                                    border.color: "#1e3554"
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 4
+                                        spacing: 4
+                                        Image {
+                                            source: modelData.icon || ""
+                                            Layout.preferredWidth: 24
+                                            Layout.preferredHeight: 24
+                                            fillMode: Image.PreserveAspectFit
+                                        }
+                                        ColumnLayout {
+                                            spacing: 0
+                                            Layout.fillWidth: true
+                                            Text { text: modelData.label || ""; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                            RowLayout {
+                                                spacing: 4
+                                                Text { text: String(modelData.quantity || 0); color: "#8ab4ff"; font.family: "Segoe UI"; font.pixelSize: 13; font.bold: true }
+                                                Text { text: String(modelData.crates || 0) + "cx"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -501,7 +558,7 @@ Rectangle {
                                             Layout.fillWidth: true
                                             elide: Text.ElideRight
                                         }
-                                        ComboBox {
+                                        PrimaryComboBox {
                                             Layout.preferredWidth: 116
                                             model: productionController.routeVehicleOptions
                                             currentIndex: Math.max(0, productionController.routeVehicleOptions.indexOf(productionController.routeVehicleMode))
@@ -518,33 +575,96 @@ Rectangle {
                                             delegate: Rectangle {
                                                 property var row: modelData
                                                 width: routeTripsColumn.width
-                                                height: 84
-                                                radius: 7
-                                                color: "#07111f"
-                                                border.color: "#1e3554"
-                                                RowLayout {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 7
+                                                height: mainCol.implicitHeight + 16
+                                                radius: 8
+                                                color: "#0a1526"
+                                                border.color: row.warning ? "#8c2e2e" : "#1e3554"
+                                                
+                                                ColumnLayout {
+                                                    id: mainCol
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    anchors.top: parent.top
+                                                    anchors.margins: 8
                                                     spacing: 8
-                                                    ColumnLayout {
-                                                        Layout.preferredWidth: 78
-                                                        spacing: 2
-                                                        Text { text: row.title || ""; color: "#5eead4"; font.family: "Segoe UI"; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
-                                                        Text { text: row.vehicle || ""; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
-                                                        Text { text: String(row.inputSlots || 0) + "/" + String(row.capacity || 0) + " " + tr("production.route_input"); color: "#ffd166"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
-                                                        Text { text: String(row.outputCrates || 0) + "/" + String(row.capacity || 0) + " " + tr("production.route_output"); color: "#8ab4ff"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
-                                                    }
-                                                    ColumnLayout {
+                                                    
+                                                    RowLayout {
+                                                        id: contentLayout
                                                         Layout.fillWidth: true
-                                                        spacing: 2
-                                                        Text { text: tr("production.route_take"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true }
-                                                        Text { text: row.materials || "-"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 10; wrapMode: Text.WordWrap; maximumLineCount: 3; Layout.fillWidth: true }
+                                                        spacing: 12
+                                                        
+                                                        // Left side: Trip info
+                                                        ColumnLayout {
+                                                            Layout.preferredWidth: 84
+                                                            spacing: 6
+                                                            Rectangle {
+                                                                Layout.fillWidth: true
+                                                                Layout.preferredHeight: 22
+                                                                radius: 4
+                                                                color: "#132b43"
+                                                                Text { anchors.centerIn: parent; text: row.title || ""; color: "#5eead4"; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 12 }
+                                                            }
+                                                            RowLayout {
+                                                                spacing: 4
+                                                                Text { text: tr("production.route_input") || "Ida:"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10 }
+                                                                Item { Layout.fillWidth: true }
+                                                                Text { text: String(row.inputSlots || 0) + "/" + String(row.capacity || 0); color: "#ffd166"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                                            }
+                                                            RowLayout {
+                                                                spacing: 4
+                                                                Text { text: tr("production.route_output") || "Volta:"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10 }
+                                                                Item { Layout.fillWidth: true }
+                                                                Text { text: String(row.outputCrates || 0) + "/" + String(row.capacity || 0); color: "#8ab4ff"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                                            }
+                                                        }
+                                                        
+                                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: "#1e3554"; Layout.topMargin: 2; Layout.bottomMargin: 2 }
+                                                        
+                                                        // Middle: Materials to Take
+                                                        ColumnLayout {
+                                                            Layout.fillWidth: true
+                                                            Layout.alignment: Qt.AlignTop
+                                                            spacing: 4
+                                                            Text { text: tr("production.route_take") || "Levar"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                                            Text { text: row.materials || "-"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 11; wrapMode: Text.WordWrap; maximumLineCount: 4; Layout.fillWidth: true; lineHeight: 1.2 }
+                                                        }
+                                                        
+                                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: "#1e3554"; Layout.topMargin: 2; Layout.bottomMargin: 2 }
+                                                        
+                                                        // Right: Items to Collect
+                                                        ColumnLayout {
+                                                            Layout.fillWidth: true
+                                                            Layout.alignment: Qt.AlignTop
+                                                            spacing: 4
+                                                            Text { text: tr("production.route_collect") || "Retirar"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                                            Text { text: row.orders || "-"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 11; wrapMode: Text.WordWrap; maximumLineCount: 4; Layout.fillWidth: true; lineHeight: 1.2 }
+                                                        }
                                                     }
-                                                    ColumnLayout {
+                                                    
+                                                    Rectangle {
                                                         Layout.fillWidth: true
-                                                        spacing: 2
-                                                        Text { text: tr("production.route_collect"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true }
-                                                        Text { text: row.orders || "-"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 10; wrapMode: Text.WordWrap; maximumLineCount: 3; Layout.fillWidth: true }
+                                                        Layout.minimumHeight: 26
+                                                        implicitHeight: warningRow.implicitHeight + 8
+                                                        radius: 4
+                                                        color: "#2a1111"
+                                                        border.color: "#5c2b2b"
+                                                        visible: Boolean(row.warning)
+                                                        RowLayout {
+                                                            id: warningRow
+                                                            anchors.fill: parent
+                                                            anchors.margins: 4
+                                                            spacing: 6
+                                                            Text { text: "⚠️"; font.pixelSize: 12; Layout.alignment: Qt.AlignTop }
+                                                            Text { 
+                                                                text: row.warning || ""
+                                                                color: "#ff9999"
+                                                                font.family: "Segoe UI"
+                                                                font.pixelSize: 11
+                                                                font.bold: true
+                                                                Layout.fillWidth: true
+                                                                wrapMode: Text.WordWrap
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }

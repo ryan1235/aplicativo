@@ -134,7 +134,7 @@ Flickable {
                         onKeySelected: function(key) { autoClickerController.setHotkey(key) }
                     }
 
-                    ComboBox {
+                    PrimaryComboBox {
                         id: mouseCombo
                         Layout.preferredWidth: 110
                         Layout.preferredHeight: 32
@@ -317,7 +317,7 @@ Flickable {
                     Item { Layout.fillWidth: true }
 
                     Text { text: "Cor:"; color: "#99abc4"; font.pixelSize: 12; font.bold: true }
-                    ComboBox {
+                    PrimaryComboBox {
                         id: colorCombo
                         Layout.preferredWidth: 120
                         Layout.preferredHeight: 32

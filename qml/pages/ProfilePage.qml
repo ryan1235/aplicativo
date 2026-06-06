@@ -319,7 +319,7 @@ Rectangle {
                             Layout.fillWidth: true
                         }
 
-                        ComboBox {
+                        PrimaryComboBox {
                             id: regimentCombo
                             Layout.fillWidth: true
                             Layout.preferredHeight: 44

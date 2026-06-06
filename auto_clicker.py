@@ -323,7 +323,6 @@ class AutoClicker:
         self.disable_fixed_click("stop")
         self.disable_move_click("stop")
         self.disable_artillery("stop")
-        self.disable_pilot("stop")
         self.disable_w_hold("stop")
         self.stop_event.set()
         self.log("Parando AutoClicker")

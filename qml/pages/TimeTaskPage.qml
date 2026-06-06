@@ -172,7 +172,7 @@ Flickable {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Text { text: tr("timetask.speed"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
-                    ComboBox {
+                    PrimaryComboBox {
                         Layout.fillWidth: true
                         model: timeTaskController.speedOptions
                         currentIndex: Math.max(0, timeTaskController.speedOptions.indexOf(timeTaskController.speed))
@@ -196,7 +196,7 @@ Flickable {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Text { text: tr("timetask.delay"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
-                    ComboBox {
+                    PrimaryComboBox {
                         Layout.fillWidth: true
                         model: timeTaskController.delayOptions
                         currentIndex: Math.max(0, timeTaskController.delayOptions.indexOf(timeTaskController.delay))
@@ -221,7 +221,7 @@ Flickable {
                     Layout.columnSpan: root.width > 900 ? 2 : 1
                     Layout.fillWidth: true
                     Text { text: tr("timetask.stock_macro"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
-                    ComboBox {
+                    PrimaryComboBox {
                         Layout.fillWidth: true
                         model: timeTaskController.stockMacroOptions
                         currentIndex: Math.max(0, timeTaskController.stockMacroOptions.indexOf(timeTaskController.stockMacroName))
