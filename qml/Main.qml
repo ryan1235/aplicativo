@@ -112,6 +112,8 @@ ApplicationWindow {
         return i18nController.t(key)
     }
 
+    Component.onCompleted: chatController.autoConnectWithSavedDiscord()
+
     function pageSource(page) {
         if (page === "home") return "pages/HomePage.qml"
         if (page === "profile") return "pages/ProfilePage.qml"
@@ -1048,7 +1050,9 @@ ApplicationWindow {
             id: discordLoginOverlay
             anchors.fill: parent
             z: 9999
-            visible: chatController.discordLoginRequired
+            visible: chatController.profileGateVisible
+            property bool waitingForProfile: chatController.authInFlight || chatController.profileLoading
+            property bool profileNeedsRetry: chatController.connected && !chatController.profileReady && !waitingForProfile
 
             MouseArea {
                 anchors.fill: parent
@@ -1119,7 +1123,7 @@ ApplicationWindow {
 
                             SequentialAnimation on anchors.verticalCenterOffset {
                                 loops: Animation.Infinite
-                                running: chatController.discordLoginRequired
+                                running: discordLoginOverlay.visible
                                 NumberAnimation { from: 0; to: -8; duration: 1600; easing.type: Easing.InOutSine }
                                 NumberAnimation { from: -8; to: 0; duration: 1600; easing.type: Easing.InOutSine }
                             }
@@ -1128,7 +1132,7 @@ ApplicationWindow {
                                 anchors.fill: parent
                                 source: appController.assetUrl("img/ggimege.gif")
                                 fillMode: Image.PreserveAspectCrop
-                                playing: chatController.discordLoginRequired
+                                playing: discordLoginOverlay.visible
                             }
                         }
                     }
@@ -1138,7 +1142,7 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignHCenter
                         
                         Text {
-                            text: "Acesso Restrito"
+                            text: discordLoginOverlay.waitingForProfile ? "Carregando perfil..." : (discordLoginOverlay.profileNeedsRetry ? "Perfil indisponivel" : "Acesso Restrito")
                             color: "#edf6ff"
                             font.family: "Segoe UI"
                             font.pixelSize: 28
@@ -1147,7 +1151,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Text {
-                            text: "Para garantir uma experiência completa, faça\no login com a sua conta do Discord."
+                            text: discordLoginOverlay.waitingForProfile ? (chatController.status || "Buscando dados do usuario...") : (discordLoginOverlay.profileNeedsRetry ? (chatController.status || "Nao foi possivel carregar seu perfil.") : "Para garantir uma experiencia completa, faca\no login com a sua conta do Discord.")
                             color: "#99abc4"
                             font.family: "Segoe UI"
                             font.pixelSize: 15
@@ -1160,10 +1164,11 @@ ApplicationWindow {
                     Item { Layout.fillHeight: true }
 
                     PrimaryButton {
-                        text: "Login com Discord"
-                        fill: "#5865F2"
+                        text: discordLoginOverlay.waitingForProfile ? "Aguarde..." : (discordLoginOverlay.profileNeedsRetry ? "Tentar novamente" : "Login com Discord")
+                        fill: discordLoginOverlay.waitingForProfile ? "#4752C4" : "#5865F2"
                         hoverFill: "#4752C4"
                         textFill: "#ffffff"
+                        enabled: !discordLoginOverlay.waitingForProfile
                         Layout.preferredHeight: 52
                         Layout.fillWidth: true
                         font.pixelSize: 16

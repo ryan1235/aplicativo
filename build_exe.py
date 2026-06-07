@@ -252,7 +252,6 @@ def build_app() -> Path:
         "--include-package=PIL",
         "--include-package=numpy",
         "--include-package=cv2",
-        "--include-module=PIL.Image",
         "--enable-plugin=pyside6",
         "--include-qt-plugins=qml",
         f"--output-dir={DIST_DIR}",

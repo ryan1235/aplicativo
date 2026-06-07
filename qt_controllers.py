@@ -89,7 +89,7 @@ from stockpiler import (
 
 
 APP_TITLE = "GG Coalition"
-APP_VERSION = "1.8.6"
+APP_VERSION = "1.8.8"
 UPDATE_REPO = "ryan1235/aplicativo"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
@@ -109,6 +109,7 @@ DISCORD_TOKEN_URL = f"{DISCORD_API_BASE}/oauth2/token"
 DISCORD_USER_URL = f"{DISCORD_API_BASE}/users/@me"
 DISCORD_DEFAULT_REDIRECT_PORT = 53624
 DISCORD_DEFAULT_REDIRECT_PATH = "/discord/callback"
+DISCORD_DEFAULT_CLIENT_ID = "1512509453067358489"
 IMAGE_URL_RE = re.compile(r"https?://[^\s<>\"]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s<>\"]*)?", re.IGNORECASE)
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_.-]{1,32})")
 QUICK_EMOJIS = ("👍", "❤️", "😂", "🔥", "✅", "🫡", "👀", "🚚", "⚠️", "🎯")
@@ -403,11 +404,13 @@ class AppController(QObject):
     closeRequested = Signal()
     startupDialogChanged = Signal()
     tutorialDialogChanged = Signal()
+    panelAccessResult = Signal(str, str)
 
     def __init__(self, i18n: I18nController, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.i18n = i18n
         self.settings = settings
+        self.panelAccessResult.connect(self._on_panel_access_result)
         self._current_page = "home"
         self._foxhole_status = "Checking Foxhole..."
         self._startup_dialog_visible = False
@@ -454,21 +457,66 @@ class AppController(QObject):
 
     @Slot(str)
     def openAdminPanel(self, token: str) -> None:
-        try:
-            import admin_server
-            admin_server.start_admin_server()
-        except Exception as e:
-            print(f"Failed to start admin server: {e}")
-        
-        import urllib.parse
-        params = urllib.parse.urlencode({"token": token or "", "apiUrl": CHAT_API_BASE})
-        url_str = f"http://localhost:3334/?{params}"
-        print("Opening admin panel URL:", url_str)
-        success = QDesktopServices.openUrl(QUrl(url_str))
-        print("QDesktopServices.openUrl success:", success)
-        if not success:
-            import webbrowser
-            webbrowser.open(url_str)
+        """Verifica acesso na API antes de abrir o painel administrativo."""
+        if not token:
+            self.showStartupDialog(
+                kind="error",
+                title="Acesso Negado",
+                subtitle="Sem autenticação",
+                body="Você precisa estar logado com o Discord para acessar o painel.",
+                image_url="",
+            )
+            return
+
+        def _check_and_open() -> None:
+            try:
+                # Extrai o discordId do token via /chat/profile
+                profile_res = http_json("GET", "/chat/profile", token=token)
+                profile = profile_res.get("profile") or profile_res
+                discord_id = str(profile.get("discordId") or "")
+                if not discord_id:
+                    self.panelAccessResult.emit("error", "Não foi possível obter seu Discord ID. Faça login novamente.")
+                    return
+
+                # Verifica acesso via POST /chat/panel/access
+                access_res = http_json("POST", "/chat/panel/access", token=token, body={"discordId": discord_id})
+                can_login = bool(access_res.get("canLoginPanel"))
+                if can_login:
+                    self.panelAccessResult.emit("ok", token)
+                else:
+                    reason = str(access_res.get("message") or "Você não tem permissão para acessar o painel.")
+                    self.panelAccessResult.emit("error", reason)
+            except Exception as exc:
+                self.panelAccessResult.emit("error", f"Erro ao verificar acesso: {exc}")
+
+        self.panelAccessResult.emit("checking", "")
+        threading.Thread(target=_check_and_open, daemon=True).start()
+
+    @Slot(str, str)
+    def _on_panel_access_result(self, status: str, payload: str) -> None:
+        if status == "ok":
+            token = payload
+            try:
+                import admin_server
+                admin_server.start_admin_server()
+            except Exception as e:
+                print(f"Failed to start admin server: {e}")
+            import urllib.parse
+            params = urllib.parse.urlencode({"token": token or "", "apiUrl": CHAT_API_BASE})
+            url_str = f"http://localhost:3334/?{params}"
+            success = QDesktopServices.openUrl(QUrl(url_str))
+            if not success:
+                import webbrowser
+                webbrowser.open(url_str)
+        elif status == "error":
+            self.showStartupDialog(
+                kind="error",
+                title="Acesso Negado ao Painel",
+                subtitle="Permissão insuficiente",
+                body=payload,
+                image_url="",
+            )
+        # "checking" = noop (just waiting)
 
     @Property(str, constant=True)
     def appTitle(self) -> str:
@@ -1262,8 +1310,6 @@ class AutoClickerController(QObject):
         save_settings(self.settings)
         self._apply_settings()
         self._refresh_models()
-        self.changed.emit()
-
     @Slot()
     def shutdown(self) -> None:
         if self.clicker:
@@ -1273,6 +1319,7 @@ class AutoClickerController(QObject):
 class StockpileController(QObject):
     changed = Signal()
     statusFromWorker = Signal(object)
+    visualGroupRowsChanged = Signal()
 
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -1293,6 +1340,7 @@ class StockpileController(QObject):
         self._visual_items: list[dict[str, Any]] = []
         self._visual_warehouses: list[dict[str, Any]] = []
         self._visual_warehouse = ""
+        self._cached_visual_groups: list[dict[str, Any]] = []
         self._watcher: StockpileWatcher | None = None
         self._api_loading = False
         self._upload_overlay_timer = QTimer(self)
@@ -1421,9 +1469,9 @@ class StockpileController(QObject):
                 return format_to_local_pc_time(str(item.get("last_update") or item.get("updatedAt") or "-"))
         return "-"
 
-    @Property("QVariantList", notify=changed)
+    @Property("QVariantList", notify=visualGroupRowsChanged)
     def visualGroupRows(self) -> list[dict[str, Any]]:
-        return self._visual_groups()
+        return self._cached_visual_groups
 
     @Slot(str)
     def setVisualWarehouse(self, value: str) -> None:
@@ -1431,6 +1479,8 @@ class StockpileController(QObject):
         if value == self._visual_warehouse:
             return
         self._visual_warehouse = value
+        self._cached_visual_groups = self._visual_groups()
+        self.visualGroupRowsChanged.emit()
         self.changed.emit()
 
     @Slot(str)
@@ -1618,6 +1668,11 @@ class StockpileController(QObject):
                 self._visual_warehouse = stockpiles[0]
             elif not stockpiles:
                 self._visual_warehouse = ""
+            
+            # Update cache since items or warehouse might have changed
+            self._cached_visual_groups = self._visual_groups()
+            self.visualGroupRowsChanged.emit()
+            
             self._last_response = str(message.get("api_response") or message.get("message") or "OK")
             self._last_update = str(message.get("api_last_update") or api_last_update(message) or now_label())
             if message.get("kind") == "api_snapshot":
@@ -1928,6 +1983,9 @@ class ChatController(QObject):
         self._current_user_provider = ""
         self._current_user_discord_id = ""
         self._current_user_steam_id = ""
+        self._profile: dict[str, Any] = {}
+        self._profile_loading = False
+        self._profile_ready = False
         self._discord_configuration_checked = False
         self._discord_login_required = False
         self._mention_overlay_visible = False
@@ -2007,6 +2065,20 @@ class ChatController(QObject):
     def userProfile(self) -> dict:
         return getattr(self, "_profile", {})
 
+    @Property(bool, notify=changed)
+    def profileLoading(self) -> bool:
+        return self._profile_loading
+
+    @Property(bool, notify=changed)
+    def profileReady(self) -> bool:
+        return self._profile_ready
+
+    @Property(bool, notify=changed)
+    def profileGateVisible(self) -> bool:
+        if self._token and self._profile_ready and not self._profile_loading:
+            return False
+        return True
+
 
 
 
@@ -2014,6 +2086,13 @@ class ChatController(QObject):
     def fetchProfile(self, user_id: str = "") -> None:
         if not self._token:
             return
+        is_current_user = not str(user_id or "").strip()
+        if is_current_user:
+            if self._profile_loading:
+                return
+            self._profile_loading = True
+            self._status = self._t("status.checking_user")
+            self.changed.emit()
         def run():
             try:
                 if user_id:
@@ -2059,6 +2138,8 @@ class ChatController(QObject):
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
+        self._profile_loading = False
+        self._profile_ready = False
         self._status = "Disconnected"
         self.changed.emit()
 
@@ -2185,7 +2266,7 @@ class ChatController(QObject):
         return deobfuscate_string(str(self._discord_user_settings.get("avatar") or "").strip())
 
     def _discord_client_id(self) -> str:
-        return str(os.environ.get("DISCORD_CLIENT_ID") or self._discord_settings.get("clientId") or "").strip()
+        return str(os.environ.get("DISCORD_CLIENT_ID") or self._discord_settings.get("clientId") or DISCORD_DEFAULT_CLIENT_ID).strip()
 
     def _discord_client_secret(self) -> str:
         return str(os.environ.get("DISCORD_CLIENT_SECRET") or self._discord_settings.get("clientSecret") or "").strip()
@@ -2308,6 +2389,31 @@ class ChatController(QObject):
                 payload[target] = value
         return payload
 
+    def _apply_current_user_profile(self, user: dict[str, Any]) -> None:
+        self._current_user_id = str(user.get("id") or self._current_user_id or "")
+        self._current_user_provider = str(
+            user.get("provider")
+            or self._current_user_provider
+            or ("discord" if user.get("discordId") or self._saved_discord_id() else "steam")
+        )
+        self._current_user_discord_id = str(user.get("discordId") or self._current_user_discord_id or self._saved_discord_id())
+        self._current_user_steam_id = str(user.get("steamId") or self._current_user_steam_id or self.steam.steamId)
+        self._current_user_name = str(
+            user.get("displayName")
+            or user.get("globalName")
+            or user.get("name")
+            or user.get("personaName")
+            or user.get("personaname")
+            or user.get("nickname")
+            or user.get("username")
+            or self._current_user_name
+            or self._saved_discord_name()
+            or self.steam.personaName
+        )
+        self._current_user_avatar = user_avatar_url(user) or self._current_user_avatar or self._saved_discord_avatar() or self.steam.avatarUrl
+        if self._current_user_discord_id:
+            self._save_discord_profile(user)
+
     def _auth_with_discord(self, payload: dict[str, str]) -> dict[str, Any]:
         discord_id = payload.get("discordId")
         if discord_id:
@@ -2405,7 +2511,7 @@ class ChatController(QObject):
         self.ensureStarted()
         if self._saved_discord_id():
             self._discord_configuration_checked = True
-            self._discord_login_required = False
+            # Keep _discord_login_required = True (or as it was) so the overlay stays up
             self.changed.emit()
             self._connect_with_discord(allow_oauth=False)
             return
@@ -2419,6 +2525,8 @@ class ChatController(QObject):
         if self._auth_in_flight:
             return
         if self._token:
+            if not self._profile_ready and not self._profile_loading:
+                self.fetchProfile()
             self.refreshRooms()
             self.refreshPresence()
             self.refreshNotifications()
@@ -2458,8 +2566,9 @@ class ChatController(QObject):
                 self.resultFromWorker.emit("auth-error", self._t("home.chat.auth_error", message=message))
 
         self._auth_in_flight = True
-        self._discord_login_required = False
         self._status = self._t("home.chat.authenticating_discord") if discord_id else self._t("home.chat.discord_opening")
+        # NOTE: Do NOT set _discord_login_required = False here!
+        # The overlay will only close once auth actually succeeds in _apply_result("auth").
         self.changed.emit()
         threading.Thread(target=worker, daemon=True).start()
 
@@ -2510,6 +2619,9 @@ class ChatController(QObject):
         if self._auth_in_flight:
             return
         if self._saved_discord_id():
+            self._discord_configuration_checked = True
+            self._discord_login_required = True
+            self.changed.emit()
             self._connect_with_discord(allow_oauth=False)
             return
         self._discord_configuration_checked = True
@@ -2731,27 +2843,11 @@ class ChatController(QObject):
             self._auth_retry_after = 0.0
             self._discord_configuration_checked = True
             self._discord_login_required = False
+            self._profile_ready = False
             self._token = str(payload.get("token") or payload.get("accessToken") or "")
             user = payload.get("user") or payload.get("profile") or {}
             if isinstance(user, dict):
-                self._current_user_id = str(user.get("id") or "")
-                self._current_user_provider = str(user.get("provider") or ("discord" if user.get("discordId") else "steam"))
-                self._current_user_discord_id = str(user.get("discordId") or self._saved_discord_id())
-                self._current_user_steam_id = str(user.get("steamId") or self.steam.steamId)
-                self._current_user_name = str(
-                    user.get("displayName")
-                    or user.get("globalName")
-                    or user.get("name")
-                    or user.get("personaName")
-                    or user.get("personaname")
-                    or user.get("nickname")
-                    or user.get("username")
-                    or self._saved_discord_name()
-                    or self.steam.personaName
-                )
-                self._current_user_avatar = user_avatar_url(user)
-                if self._current_user_discord_id:
-                    self._save_discord_profile(user)
+                self._apply_current_user_profile(user)
             else:
                 self._current_user_id = ""
                 self._current_user_provider = "discord" if self._saved_discord_id() else "steam"
@@ -2761,12 +2857,13 @@ class ChatController(QObject):
                 self._current_user_steam_id = self.steam.steamId
             self._status = self._t("home.chat.connected") if self._token else "Connected without token"
             if self._token:
-                try:
-                    profile_res = http_json("GET", "/chat/profile", token=self._token)
-                    self._profile = profile_res.get("profile") or profile_res
-                    self.changed.emit()
-                except Exception:
-                    pass
+                # Set initial profile from the auth response
+                if isinstance(user, dict) and user:
+                    self._profile = user
+
+                # Fetch fresh profile async
+                self.fetchProfile()
+
                 self._connect_ws()
 
                 if self._auto_connect_timer.isActive():
@@ -2780,6 +2877,8 @@ class ChatController(QObject):
             self.refreshRooms()
         elif kind == "auth-error":
             self._auth_in_flight = False
+            self._profile_loading = False
+            self._profile_ready = False
             self._discord_configuration_checked = True
             self._discord_login_required = not bool(self._saved_discord_id())
             self._auth_retry_after = time.monotonic() + 30
@@ -2835,14 +2934,23 @@ class ChatController(QObject):
             self._status = self._t("home.chat.sent")
             self.selectRoom(self._selected_room)
         elif kind == "profile-fetched" or kind == "profile-updated":
+            self._profile_loading = False
             if isinstance(payload, dict):
                 # If it's my own profile (no ID passed, or ID matches me), save to self._profile
                 if not payload.get("id") or payload.get("id") == self._current_user_id or kind == "profile-updated":
                     self._profile = payload
+                    self._apply_current_user_profile(payload)
+                    self._profile_ready = True
+                    self._discord_login_required = False
+                    self._status = self._t("home.chat.connected")
                     self.changed.emit()
                 else:
                     # Notify UI about someone else's profile
                     self.resultFromWorker.emit("other-profile-ready", payload)
+        elif kind == "profile-error":
+            self._profile_loading = False
+            self._profile_ready = False
+            self._status = self._t("home.chat.auth_error", message=str(payload))
         elif kind == "notifications" and isinstance(payload, dict):
             self._apply_notifications(payload)
         elif kind == "notification-error":
@@ -3946,6 +4054,13 @@ class ProductionController(QObject):
     def routeSummary(self) -> str:
         return self._route_summary
 
+    categoriesChanged = Signal()
+    itemsChanged = Signal()
+    queueChanged = Signal()
+    queueCategoriesChanged = Signal()
+    materialsChanged = Signal()
+    routesChanged = Signal()
+
     @Property(str, notify=changed)
     def warning(self) -> str:
         return self._warning
@@ -3962,29 +4077,29 @@ class ProductionController(QObject):
     def routeVehicleOptions(self) -> list[str]:
         return ["Dunne", "Flatbed"] if self._mode == "mpf" else ["Dunne"]
 
-    @Property("QVariantList", notify=changed)
+    @Property("QVariantList", notify=itemsChanged)
     def availableItemRows(self) -> list[dict[str, Any]]:
-        return self.availableItems.items()
+        return getattr(self, "_cached_available_items", self.availableItems.items())
 
-    @Property("QVariantList", notify=changed)
+    @Property("QVariantList", notify=categoriesChanged)
     def categoryRows(self) -> list[dict[str, Any]]:
-        return self.categories.items()
+        return getattr(self, "_cached_categories", self.categories.items())
 
-    @Property("QVariantList", notify=changed)
+    @Property("QVariantList", notify=queueChanged)
     def queueRows(self) -> list[dict[str, Any]]:
-        return self.queue.items()
+        return getattr(self, "_cached_queue", self.queue.items())
 
-    @Property("QVariantList", notify=changed)
+    @Property("QVariantList", notify=queueCategoriesChanged)
     def queueCategoryRows(self) -> list[dict[str, Any]]:
-        return self.queueCategories.items()
+        return getattr(self, "_cached_queue_categories", self.queueCategories.items())
 
-    @Property("QVariantList", notify=changed)
+    @Property("QVariantList", notify=materialsChanged)
     def materialRows(self) -> list[dict[str, Any]]:
-        return self.materials.items()
+        return getattr(self, "_cached_materials", self.materials.items())
 
-    @Property("QVariantList", notify=changed)
+    @Property("QVariantList", notify=routesChanged)
     def routeTripRows(self) -> list[dict[str, Any]]:
-        return self.routeTrips.items()
+        return getattr(self, "_cached_routes", self.routeTrips.items())
 
     @Property(QObject, constant=True)
     def availableItemsModel(self) -> QObject:
@@ -4157,25 +4272,42 @@ class ProductionController(QObject):
             faction=self._faction,
             query=self._query,
         )
-        self.availableItems.set_items([self._item_to_model(item) for item in filtered])
-        self.categories.set_items(
-            [
-                {
-                    "name": category,
-                    "mark": str(CATEGORY_RULES.get(category, {}).get("mark") or category[:2].upper()),
-                    "count": len(self._queue.get(category, [])),
-                    "active": category == self._category,
-                    "icon": self._category_icon_url(category),
-                }
-                for category in categories
-            ]
-        )
+        self._cached_available_items = [self._item_to_model(item) for item in filtered]
+        self.availableItems.set_items(self._cached_available_items)
+        self.itemsChanged.emit()
+
+        self._cached_categories = [
+            {
+                "name": category,
+                "mark": str(CATEGORY_RULES.get(category, {}).get("mark") or category[:2].upper()),
+                "count": len(self._queue.get(category, [])),
+                "active": category == self._category,
+                "icon": self._category_icon_url(category),
+            }
+            for category in categories
+        ]
+        self.categories.set_items(self._cached_categories)
+        self.categoriesChanged.emit()
+
         totals = calculate_queue(self._queue, mode=self._mode)
         material_rows = self._material_rows(totals["totals"])
-        self.queue.set_items(self._queue_rows())
-        self.queueCategories.set_items(self._queue_category_rows(categories))
-        self.materials.set_items(material_rows)
-        self.routeTrips.set_items(self._route_rows())
+
+        self._cached_queue = self._queue_rows()
+        self.queue.set_items(self._cached_queue)
+        self.queueChanged.emit()
+
+        self._cached_queue_categories = self._queue_category_rows(categories)
+        self.queueCategories.set_items(self._cached_queue_categories)
+        self.queueCategoriesChanged.emit()
+
+        self._cached_materials = material_rows
+        self.materials.set_items(self._cached_materials)
+        self.materialsChanged.emit()
+
+        self._cached_routes = self._route_rows()
+        self.routeTrips.set_items(self._cached_routes)
+        self.routesChanged.emit()
+
         material_crates = sum(int(row.get("crates", 0) or 0) for row in material_rows)
         self._summary = self._t("production.total_value", items=totals["total_items"])
         if self._mode == "mpf":
@@ -6221,8 +6353,15 @@ def wait_for_discord_oauth_code(expected_state: str, port: int, timeout: int = 1
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     server.timeout = 0.5
     try:
-        if auth_url and not QDesktopServices.openUrl(QUrl(auth_url)):
-            raise RuntimeError("discord_browser_error")
+        if auth_url:
+            try:
+                import webbrowser
+
+                opened = webbrowser.open(auth_url, new=2)
+            except Exception:
+                opened = False
+            if not opened and not QDesktopServices.openUrl(QUrl(auth_url)):
+                raise RuntimeError("discord_browser_error")
         while not finished.wait(0):
             server.handle_request()
             if timeout <= 0:

@@ -85,6 +85,23 @@ def configure_qt() -> None:
     QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
 
 
+import ctypes
+
+# Global reference to keep the timer alive
+_memory_timer = None
+
+def restrict_memory_to_200mb():
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        current_process = kernel32.GetCurrentProcess()
+        # Soft limit: 50MB to 250MB
+        min_size = 50 * 1024 * 1024
+        max_size = 250 * 1024 * 1024
+        kernel32.SetProcessWorkingSetSize(current_process, min_size, max_size)
+    except Exception:
+        pass
+
 def cleanup_old_files() -> None:
     for file in BASE_DIR.rglob("*.old"):
         try:
@@ -110,6 +127,8 @@ def main() -> int:
         return 0
 
     app = QApplication(sys.argv)
+    restrict_memory_to_200mb()
+    
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName(APP_TITLE)
     app.setOrganizationName("GG Coalition")
