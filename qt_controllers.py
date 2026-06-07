@@ -444,6 +444,24 @@ class AppController(QObject):
         self._foxhole_timer.start(5000)
         self.refreshFoxholeStatus()
 
+    @Slot(str)
+    def openAdminPanel(self, token: str) -> None:
+        try:
+            import admin_server
+            admin_server.start_admin_server()
+        except Exception as e:
+            print(f"Failed to start admin server: {e}")
+        
+        import urllib.parse
+        params = urllib.parse.urlencode({"token": token or "", "apiUrl": CHAT_API_BASE})
+        url_str = f"http://localhost:3334/?{params}"
+        print("Opening admin panel URL:", url_str)
+        success = QDesktopServices.openUrl(QUrl(url_str))
+        print("QDesktopServices.openUrl success:", success)
+        if not success:
+            import webbrowser
+            webbrowser.open(url_str)
+
     @Property(str, constant=True)
     def appTitle(self) -> str:
         return APP_TITLE
@@ -1943,6 +1961,10 @@ class ChatController(QObject):
 
 
 
+    @Property(str, notify=changed)
+    def apiToken(self) -> str:
+        return getattr(self, "_token", "")
+
     @Property("QVariantMap", notify=changed)
     def userProfile(self) -> dict:
         return getattr(self, "_profile", {})
@@ -1960,7 +1982,7 @@ class ChatController(QObject):
                     res = http_json("GET", f"/chat/users/{user_id}/profile", token=self._token)
                 else:
                     res = http_json("GET", "/chat/profile", token=self._token)
-                self.resultFromWorker.emit("profile-fetched", res.get("profile", {}))
+                self.resultFromWorker.emit("profile-fetched", res.get("profile") or res)
             except Exception as e:
                 self.resultFromWorker.emit("profile-error", str(e))
         threading.Thread(target=run, daemon=True).start()
@@ -2231,6 +2253,34 @@ class ChatController(QObject):
         return payload
 
     def _auth_with_discord(self, payload: dict[str, str]) -> dict[str, Any]:
+        discord_id = payload.get("discordId")
+        if discord_id:
+            try:
+                # Check if the user is allowed to login
+                access_info = http_json("POST", "/chat/panel/access", payload={"discordId": discord_id}, timeout=10)
+                if access_info.get("exists") and not access_info.get("canLoginChat", True):
+                    reason = access_info.get("message") or access_info.get("reason") or "Conta Bloqueada"
+                    raise ValueError(f"Acesso Negado: {reason}")
+            except ValueError as ve:
+                raise RuntimeError(str(ve))
+            except Exception as e:
+                # Parse HTTP error body if possible
+                err_msg = str(e)
+                try:
+                    # http_json raises RuntimeError("HTTP 403 Forbidden: {"exists": true, "canLoginChat": false...}")
+                    if "HTTP " in err_msg and ":" in err_msg:
+                        body_str = err_msg.split(":", 2)[-1].strip()
+                        if body_str.startswith("{"):
+                            import json
+                            err_data = json.loads(body_str)
+                            if err_data.get("exists") and not err_data.get("canLoginChat", True):
+                                reason = err_data.get("message") or err_data.get("reason") or "Conta Bloqueada"
+                                raise ValueError(f"Acesso Negado: {reason}")
+                except ValueError as ve:
+                    raise RuntimeError(str(ve))
+                except Exception:
+                    pass
+
         last_error: Exception | None = None
         for path in CHAT_DISCORD_AUTH_PATHS:
             try:
@@ -2650,7 +2700,7 @@ class ChatController(QObject):
             if self._token:
                 try:
                     profile_res = http_json("GET", "/chat/profile", token=self._token)
-                    self._profile = profile_res.get("profile", {})
+                    self._profile = profile_res.get("profile") or profile_res
                     self.changed.emit()
                 except Exception:
                     pass

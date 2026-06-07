@@ -97,9 +97,11 @@ def main() -> int:
     cleanup_old_files()
     load_env_file(BASE_DIR / ".env")
     configure_qt()
+    
     background = any(arg.lower() in BACKGROUND_ARGS for arg in sys.argv[1:])
     allow_multiple = allow_multiple_instances()
     mutex = None if allow_multiple else acquire_single_instance_mutex()
+    
     if not allow_multiple and mutex is None:
         if background:
             return 0
@@ -126,6 +128,18 @@ def main() -> int:
         return 1
     if background:
         engine.rootObjects()[0].setProperty("visible", False)
+
+    def on_state_changed(state: Qt.ApplicationState) -> None:
+        if state == Qt.ApplicationState.ApplicationHidden:
+            import gc
+            gc.collect()
+            engine.trimComponentCache()
+            try:
+                import ctypes
+                ctypes.windll.psapi.EmptyWorkingSet(ctypes.windll.kernel32.GetCurrentProcess())
+            except Exception:
+                pass
+    app.applicationStateChanged.connect(on_state_changed)
 
     app.aboutToQuit.connect(registry.shutdown)
     try:

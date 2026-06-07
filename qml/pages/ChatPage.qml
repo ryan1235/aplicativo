@@ -635,12 +635,12 @@ Rectangle {
 
                         Button {
                         id: pickerButton
-                        Layout.preferredWidth: 40
-                        Layout.preferredHeight: 40
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
                         text: "😀"
-                        font.pixelSize: 18
+                        font.pixelSize: 20
                         background: Rectangle {
-                            radius: 20
+                            radius: 22
                             color: hovered ? "#1d3353" : "#0e1a2d"
                             border.color: "#24486d"
                         }
@@ -656,8 +656,15 @@ Rectangle {
                     TextField {
                         id: messageInput
                         Layout.fillWidth: true
+                        Layout.preferredHeight: 44
                         placeholderText: tr("home.chat.message")
                         color: "#edf6ff"
+                        font.pixelSize: 15
+                        verticalAlignment: TextInput.AlignVCenter
+                        topPadding: 10
+                        bottomPadding: 10
+                        leftPadding: 15
+                        rightPadding: 15
                         selectByMouse: true
                         onTextChanged: chatController.updateMentionSuggestions(text)
                         onAccepted: {
@@ -675,25 +682,7 @@ Rectangle {
                                 chatController.updateMentionSuggestions("")
                             }
                         }
-                        background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
-                    }
-                    PrimaryButton {
-                        text: tr("home.chat.send")
-                        onClicked: {
-                            if (messageInput.text.trim().length > 0) {
-                                if (root.whisperingTo !== "") {
-                                    chatController.sendWhisperToUser(root.whisperingTo, messageInput.text)
-                                } else if (root.replyingTo !== "") {
-                                    chatController.sendMessageReply(messageInput.text, root.replyingTo)
-                                    root.replyingTo = ""
-                                    root.replyingToLabel = ""
-                                } else {
-                                    chatController.sendMessage(messageInput.text)
-                                }
-                                messageInput.text = ""
-                                chatController.updateMentionSuggestions("")
-                            }
-                        }
+                        background: Rectangle { radius: 22; color: "#0e1a2d"; border.color: "#2d496f" }
                     }
                 }
                 } // Close ColumnLayout

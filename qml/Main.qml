@@ -825,7 +825,11 @@ ApplicationWindow {
                                 Behavior on opacity { NumberAnimation { duration: 120 } }
 
                                 Text {
-                                    text: chatController.currentUserName
+                                    text: {
+                                        var p = chatController.userProfile;
+                                        var reg = (p && p.regiment) ? "[" + p.regiment + "] " : "";
+                                        return reg + (chatController.currentUserName || "Usuário");
+                                    }
                                     color: "#edf6ff"
                                     font.family: "Segoe UI"
                                     font.bold: true

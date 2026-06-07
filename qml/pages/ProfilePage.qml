@@ -375,6 +375,39 @@ Rectangle {
                 }
             }
             
+            // Painel Administrativo
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 60
+                radius: 12
+                color: "#1d3353"
+                border.color: "#5eead4"
+                border.width: 1
+                visible: profile.role === "DEV" || profile.role === "ADMIN" || profile.role === "WINNER"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 12
+
+                    Text {
+                        text: "Painel de Administração"
+                        color: "#5eead4"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 16
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    PrimaryButton {
+                        text: "Abrir Painel"
+                        Layout.preferredWidth: 150
+                        Layout.preferredHeight: 36
+                        onClicked: appController.openAdminPanel(chatController.apiToken)
+                    }
+                }
+            }
+            
             Item { Layout.preferredHeight: 40 }
         }
     }
