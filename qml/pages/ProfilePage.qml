@@ -15,6 +15,7 @@ Rectangle {
 
     onVisibleChanged: {
         if (visible) {
+            chatController.ensureStarted()
             chatController.fetchProfile()
         }
     }

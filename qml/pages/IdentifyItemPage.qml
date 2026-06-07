@@ -9,6 +9,8 @@ Flickable {
     contentWidth: width
     contentHeight: content.implicitHeight + 36
 
+    Component.onCompleted: identifyItemController.ensureLoaded()
+
     function tr(key) {
         i18nController.revision
         return i18nController.t(key)

@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
 import "../components"
 
 Flickable {
@@ -188,76 +187,60 @@ Flickable {
                     elide: Text.ElideRight
                 }
 
-                ScrollView {
+                GridView {
                     id: onlinePreview
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    Flow {
-                        id: onlinePreviewFlow
-                        width: onlinePreview.width
-                        spacing: 12
+                    cellWidth: 56
+                    cellHeight: 56
+                    reuseItems: true
+                    model: chatController.onlineUsersModel
+                    delegate: Item {
+                        width: 44
+                        height: 44
 
-                        Repeater {
-                            model: chatController.onlineRows
-                            delegate: Item {
-                                width: 44
-                                height: 44
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 22
+                            color: "#1d3353"
+                            border.color: hoverArea.containsMouse ? "#5eead4" : "transparent"
+                            border.width: 2
+                            clip: true
 
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: 22
-                                    color: "#1d3353"
-                                    border.color: hoverArea.containsMouse ? "#5eead4" : "transparent"
-                                    border.width: 2
-                                    clip: true
+                            Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                                    Behavior on border.color { ColorAnimation { duration: 150 } }
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                source: model.avatar || ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                                sourceSize.width: 56
+                                sourceSize.height: 56
+                                visible: String(model.avatar || "") !== ""
+                            }
 
-                                    Rectangle {
-                                        id: maskRect
-                                        anchors.fill: parent
-                                        anchors.margins: 2
-                                        radius: width / 2
-                                        visible: false
-                                    }
-
-                                    Image {
-                                        id: avatarImg
-                                        anchors.fill: maskRect
-                                        source: modelData.avatar
-                                        fillMode: Image.PreserveAspectCrop
-                                        visible: false
-                                    }
-
-                                    OpacityMask {
-                                        anchors.fill: maskRect
-                                        source: avatarImg
-                                        maskSource: maskRect
-                                        visible: modelData.avatar !== ""
-                                    }
-                                    
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: modelData.name.substring(0, 2).toUpperCase()
-                                        color: "#5eead4"
-                                        font.bold: true
-                                        font.pixelSize: 16
-                                        visible: modelData.avatar === ""
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: hoverArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                }
-
-                                ToolTip.visible: hoverArea.containsMouse
-                                ToolTip.text: modelData.name + (modelData.detail ? "\n" + modelData.detail : "")
-                                ToolTip.delay: 150
+                            Text {
+                                anchors.centerIn: parent
+                                text: String(model.name || "?").substring(0, 2).toUpperCase()
+                                color: "#5eead4"
+                                font.bold: true
+                                font.pixelSize: 16
+                                visible: String(model.avatar || "") === ""
                             }
                         }
+
+                        MouseArea {
+                            id: hoverArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+
+                        ToolTip.visible: hoverArea.containsMouse
+                        ToolTip.text: String(model.name || "") + (String(model.detail || "") !== "" ? "\n" + String(model.detail || "") : "")
+                        ToolTip.delay: 150
                     }
 
                     Text {
@@ -270,7 +253,7 @@ Flickable {
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.WordWrap
-                        visible: chatController.onlineRows.length === 0
+                        visible: onlinePreview.count === 0
                     }
                 }
             }

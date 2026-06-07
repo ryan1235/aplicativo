@@ -9,6 +9,8 @@ Flickable {
     contentWidth: width
     contentHeight: content.implicitHeight + 36
 
+    Component.onCompleted: itemSearchController.ensureLoaded()
+
     function tr(key) {
         i18nController.revision
         return i18nController.t(key)
@@ -124,44 +126,39 @@ Flickable {
                     }
                 }
 
-                ScrollView {
-                    id: suggestionScroll
+                ListView {
+                    id: suggestionList
                     Layout.fillWidth: true
-                    Layout.preferredHeight: itemSearchController.suggestionRowItems.length > 0 ? 38 : 0
-                    visible: itemSearchController.suggestionRowItems.length > 0
+                    Layout.preferredHeight: count > 0 ? 38 : 0
+                    visible: count > 0
                     clip: true
-                    ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-                    background: Rectangle { color: "transparent" }
-
-                    Row {
-                        spacing: 8
-                        Repeater {
-                            model: itemSearchController.suggestionRowItems
-                            delegate: Button {
-                                property var row: modelData
-                                height: 34
-                                width: Math.max(116, label.implicitWidth + 28)
-                                onClicked: itemSearchController.chooseSuggestion(row.name || "")
-                                contentItem: Text {
-                                    id: label
-                                    text: row.name || ""
-                                    color: "#edf6ff"
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-                                background: Rectangle {
-                                    radius: 7
-                                    color: parent.hovered ? "#2d496f" : "#1d3353"
-                                    border.color: "#3b5d87"
-                                    Behavior on color { ColorAnimation { duration: 120 } }
-                                }
-                            }
+                    orientation: ListView.Horizontal
+                    spacing: 8
+                    reuseItems: true
+                    model: itemSearchController.suggestionRows
+                    delegate: Button {
+                        height: 34
+                        width: Math.max(116, label.implicitWidth + 28)
+                        onClicked: itemSearchController.chooseSuggestion(String(model.name || ""))
+                        contentItem: Text {
+                            id: label
+                            text: model.name || ""
+                            color: "#edf6ff"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        background: Rectangle {
+                            radius: 7
+                            color: parent.hovered ? "#2d496f" : "#1d3353"
+                            border.color: "#3b5d87"
+                            Behavior on color { ColorAnimation { duration: 120 } }
                         }
                     }
+                    ScrollBar.horizontal: ScrollBar { active: suggestionList.moving }
                 }
             }
         }
@@ -216,92 +213,91 @@ Flickable {
                     elide: Text.ElideRight
                 }
 
-                ScrollView {
+                ListView {
                     id: results
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    background: Rectangle { color: "#0b1424"; radius: 7; border.color: "#1e3554" }
+                    spacing: 6
+                    reuseItems: true
+                    model: itemSearchController.resultRows
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar { active: results.moving }
+                    delegate: Rectangle {
+                        width: results.width
+                        height: model.rowType === "region" ? 42 : 50
+                        radius: 7
+                        color: model.rowType === "region" ? "#102039" : (index % 2 ? "#0e1a2d" : "#13213a")
+                        border.color: model.rowType === "region" ? "#24486d" : "#1e3554"
 
-                    Column {
-                        width: results.availableWidth
-                        spacing: 6
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: model.rowType === "region" ? 10 : 8
+                            spacing: 10
 
-                        Repeater {
-                            model: itemSearchController.resultRowItems
-                            delegate: Rectangle {
-                                property var row: modelData
-                                width: results.availableWidth
-                                height: row.rowType === "region" ? 42 : 50
-                                radius: 7
-                                color: row.rowType === "region" ? "#102039" : (index % 2 ? "#0e1a2d" : "#13213a")
-                                border.color: row.rowType === "region" ? "#24486d" : "#1e3554"
+                            Image {
+                                visible: model.rowType !== "region"
+                                source: model.icon || ""
+                                Layout.preferredWidth: 32
+                                Layout.preferredHeight: 32
+                                fillMode: Image.PreserveAspectFit
+                                asynchronous: true
+                                cache: false
+                                sourceSize.width: 40
+                                sourceSize.height: 40
+                            }
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: row.rowType === "region" ? 10 : 8
-                                    spacing: 10
-
-                                    Image {
-                                        visible: row.rowType !== "region"
-                                        source: row.icon || ""
-                                        Layout.preferredWidth: 32
-                                        Layout.preferredHeight: 32
-                                        fillMode: Image.PreserveAspectFit
-                                    }
-
-                                    ColumnLayout {
-                                        Layout.fillWidth: true
-                                        spacing: 1
-                                        Text {
-                                            text: row.rowType === "region"
-                                                ? tr("item_search.region_total").replace("{region}", row.region || "-").replace("{total}", String(row.total || 0))
-                                                : row.code || "-"
-                                            color: "#edf6ff"
-                                            font.family: "Segoe UI"
-                                            font.pixelSize: row.rowType === "region" ? 13 : 12
-                                            font.bold: true
-                                            Layout.fillWidth: true
-                                            elide: Text.ElideRight
-                                        }
-                                        Text {
-                                            visible: row.rowType !== "region"
-                                            text: (row.warehouse || "-") + " | " + tr("item_search.last_update").replace("{value}", row.updatedAt || "-")
-                                            color: "#99abc4"
-                                            font.family: "Segoe UI"
-                                            font.pixelSize: 10
-                                            Layout.fillWidth: true
-                                            elide: Text.ElideMiddle
-                                        }
-                                    }
-
-                                    Text {
-                                        visible: row.rowType !== "region"
-                                        text: String(row.quantity || 0)
-                                        color: "#5eead4"
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 14
-                                        font.bold: true
-                                        Layout.preferredWidth: 80
-                                        horizontalAlignment: Text.AlignRight
-                                    }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+                                Text {
+                                    text: model.rowType === "region"
+                                        ? tr("item_search.region_total").replace("{region}", model.region || "-").replace("{total}", String(model.total || 0))
+                                        : model.code || "-"
+                                    color: "#edf6ff"
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: model.rowType === "region" ? 13 : 12
+                                    font.bold: true
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    visible: model.rowType !== "region"
+                                    text: (model.warehouse || "-") + " | " + tr("item_search.last_update").replace("{value}", model.updatedAt || "-")
+                                    color: "#99abc4"
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideMiddle
                                 }
                             }
-                        }
 
-                        Text {
-                            width: results.availableWidth
-                            height: 120
-                            text: tr("item_search.empty")
-                            color: "#99abc4"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 13
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            wrapMode: Text.WordWrap
-                            visible: itemSearchController.resultRowItems.length === 0 && !itemSearchController.loading
+                            Text {
+                                visible: model.rowType !== "region"
+                                text: String(model.quantity || 0)
+                                color: "#5eead4"
+                                font.family: "Segoe UI"
+                                font.pixelSize: 14
+                                font.bold: true
+                                Layout.preferredWidth: 80
+                                horizontalAlignment: Text.AlignRight
+                            }
                         }
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        width: parent.width - 36
+                        height: 120
+                        text: tr("item_search.empty")
+                        color: "#99abc4"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 13
+                        font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        wrapMode: Text.WordWrap
+                        visible: results.count === 0 && !itemSearchController.loading
                     }
                 }
             }

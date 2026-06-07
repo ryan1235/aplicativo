@@ -46,9 +46,9 @@ Popup {
     function searchGifs(query) {
         gifsModel.clear()
         var xhr = new XMLHttpRequest();
-        var url = "https://g.tenor.com/v1/search?q=" + encodeURIComponent(query) + "&key=LIVDSRZULELA&limit=30";
+        var url = "https://g.tenor.com/v1/search?q=" + encodeURIComponent(query) + "&key=LIVDSRZULELA&limit=18";
         if (query === "") {
-            url = "https://g.tenor.com/v1/search?q=foxhole&key=LIVDSRZULELA&limit=30";
+            url = "https://g.tenor.com/v1/search?q=foxhole&key=LIVDSRZULELA&limit=18";
         }
         xhr.open("GET", url);
         xhr.onreadystatechange = function() {
@@ -196,6 +196,7 @@ Popup {
                 cellWidth: 140
                 cellHeight: 110
                 clip: true
+                reuseItems: true
                 model: root.gifsModel
                 delegate: Rectangle {
                     width: 136
@@ -208,7 +209,7 @@ Popup {
                         anchors.fill: parent
                         source: model.previewUrl
                         fillMode: Image.PreserveAspectCrop
-                        cache: true
+                        cache: false
                         asynchronous: true
                         playing: root.currentTab === 1 && root.visible
                     }

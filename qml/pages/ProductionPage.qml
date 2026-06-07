@@ -7,6 +7,8 @@ Rectangle {
     id: root
     color: "transparent"
 
+    Component.onCompleted: productionController.ensureLoaded()
+
     function tr(key) {
         i18nController.revision
         return i18nController.t(key)
@@ -144,31 +146,32 @@ Rectangle {
             Row {
                 spacing: 8
                 Repeater {
-                    model: productionController.categoryRows
+                    model: productionController.categoriesModel
                     delegate: Button {
-                        property var row: modelData
                         width: 76
                         height: 76
-                        onClicked: productionController.setCategory(row.name || "")
+                        onClicked: productionController.setCategory(String(model.name || ""))
                         background: Rectangle {
                             radius: 4
-                            color: row.active ? "#5eead4" : "#111c31"
-                            border.color: row.active ? "#5eead4" : "#24486d"
+                            color: model.active ? "#5eead4" : "#111c31"
+                            border.color: model.active ? "#5eead4" : "#24486d"
                             Behavior on color { ColorAnimation { duration: 120 } }
                         }
                         contentItem: ColumnLayout {
                             spacing: 4
                             Image {
                                 Layout.alignment: Qt.AlignHCenter
-                                source: row.icon || ""
+                                source: model.icon || ""
                                 Layout.preferredWidth: 32
                                 Layout.preferredHeight: 32
                                 fillMode: Image.PreserveAspectFit
+                                asynchronous: true
+                                cache: false
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: (row.mark || "") + " " + String(row.count || 0)
-                                color: row.active ? "#041014" : "#edf6ff"
+                                text: (model.mark || "") + " " + String(model.count || 0)
+                                color: model.active ? "#041014" : "#edf6ff"
                                 font.family: "Segoe UI"
                                 font.pixelSize: 11
                                 font.bold: true
@@ -204,75 +207,74 @@ Rectangle {
                         font.bold: true
                     }
 
-                    ScrollView {
-                        id: productScroll
+                    GridView {
+                        id: productGrid
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
-                        background: Rectangle { color: "transparent" }
+                        reuseItems: true
+                        cellWidth: 116
+                        cellHeight: 92
+                        model: productionController.availableItemsModel
+                        ScrollBar.vertical: ScrollBar { active: productGrid.moving }
 
-                        Flow {
-                            width: productScroll.availableWidth
-                            spacing: 8
+                        delegate: Rectangle {
+                            width: 108
+                            height: 84
+                            radius: 8
+                            color: mouse.containsMouse ? "#172943" : "#0e1a2d"
+                            border.color: "#2d496f"
+                            Behavior on color { ColorAnimation { duration: 120 } }
 
-                            Repeater {
-                                model: productionController.availableItemRows
-                                delegate: Rectangle {
-                                    property var row: modelData
-                                    width: 108
-                                    height: 84
-                                    radius: 8
-                                    color: mouse.containsMouse ? "#172943" : "#0e1a2d"
-                                    border.color: "#2d496f"
-                                    Behavior on color { ColorAnimation { duration: 120 } }
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 2
+                                Image {
+                                    source: model.icon || ""
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.preferredWidth: 30
+                                    Layout.preferredHeight: 30
+                                    fillMode: Image.PreserveAspectFit
+                                    asynchronous: true
+                                    cache: false
+                                    sourceSize.width: 40
+                                    sourceSize.height: 40
+                                }
+                                Text {
+                                    text: model.name || "-"
+                                    color: "#edf6ff"
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 9
+                                    font.bold: true
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 2
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                                Text {
+                                    text: (model.faction || "-") + " | " + String(model.quantityPerCrate || 0) + "/crate"
+                                    color: "#99abc4"
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 8
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
 
-                                    ColumnLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 6
-                                        spacing: 2
-                                        Image {
-                                            source: row.icon || ""
-                                            Layout.alignment: Qt.AlignHCenter
-                                            Layout.preferredWidth: 30
-                                            Layout.preferredHeight: 30
-                                            fillMode: Image.PreserveAspectFit
-                                        }
-                                        Text {
-                                            text: row.name || "-"
-                                            color: "#edf6ff"
-                                            font.family: "Segoe UI"
-                                            font.pixelSize: 9
-                                            font.bold: true
-                                            wrapMode: Text.WordWrap
-                                            maximumLineCount: 2
-                                            Layout.fillWidth: true
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
-                                        Text {
-                                            text: (row.faction || "-") + " | " + String(row.quantityPerCrate || 0) + "/crate"
-                                            color: "#99abc4"
-                                            font.family: "Segoe UI"
-                                            font.pixelSize: 8
-                                            Layout.fillWidth: true
-                                            horizontalAlignment: Text.AlignHCenter
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: mouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                        onClicked: function(event) {
-                                            if (event.button === Qt.RightButton)
-                                                productionController.removeItemByKey(row.key || "")
-                                            else if ((event.modifiers & Qt.ShiftModifier) || (event.modifiers & Qt.ControlModifier))
-                                                productionController.fillCategoryWithItem(row.key || "")
-                                            else
-                                                productionController.addItemByKey(row.key || "")
-                                        }
-                                    }
+                            MouseArea {
+                                id: mouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onClicked: function(event) {
+                                    if (event.button === Qt.RightButton)
+                                        productionController.removeItemByKey(String(model.key || ""))
+                                    else if ((event.modifiers & Qt.ShiftModifier) || (event.modifiers & Qt.ControlModifier))
+                                        productionController.fillCategoryWithItem(String(model.key || ""))
+                                    else
+                                        productionController.addItemByKey(String(model.key || ""))
                                 }
                             }
                         }
@@ -339,7 +341,7 @@ Rectangle {
                             spacing: 8
                             
                             Repeater {
-                                model: productionController.materialRows
+                                model: productionController.materialsModel
                                 delegate: Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 56
@@ -352,19 +354,21 @@ Rectangle {
                                         anchors.margins: 4
                                         spacing: 4
                                         Image {
-                                            source: modelData.icon || ""
+                                            source: model.icon || ""
                                             Layout.preferredWidth: 24
                                             Layout.preferredHeight: 24
                                             fillMode: Image.PreserveAspectFit
+                                            asynchronous: true
+                                            cache: false
                                         }
                                         ColumnLayout {
                                             spacing: 0
                                             Layout.fillWidth: true
-                                            Text { text: modelData.label || ""; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                            Text { text: model.label || ""; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                                             RowLayout {
                                                 spacing: 4
-                                                Text { text: String(modelData.quantity || 0); color: "#8ab4ff"; font.family: "Segoe UI"; font.pixelSize: 13; font.bold: true }
-                                                Text { text: String(modelData.crates || 0) + "cx"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                                Text { text: String(model.quantity || 0); color: "#8ab4ff"; font.family: "Segoe UI"; font.pixelSize: 13; font.bold: true }
+                                                Text { text: String(model.crates || 0) + "cx"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                                             }
                                         }
                                     }

@@ -22,7 +22,6 @@ import urllib.parse
 import urllib.request
 
 from PySide6.QtNetwork import QNetworkAccessManager
-from PySide6.QtWebSockets import QWebSocket
 from PySide6.QtCore import (
     QAbstractListModel,
     QModelIndex,
@@ -37,24 +36,21 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QDesktopServices, QGuiApplication, QIcon
 from PySide6.QtWidgets import QApplication, QFileDialog, QMenu, QMessageBox, QSystemTrayIcon
 
-from app_paths import extracted_dir, resolve_writable_path, resource_dir, settings_path
+from app_paths import extracted_dir, resolve_writable_path, resource_dir, settings_path, user_data_dir
 from app_update import UpdateInfo, check_latest_release, download_update, launch_updater
 from auto_clicker import ACTION_KEYS, HOTKEYS, MOUSE_BUTTONS, POINT, RECT, AutoClicker
+import identify_service
 from identify_service import (
-    ImageGrab as identify_image_grab,
-    cv2 as identify_cv2,
     dependencies_status as identify_dependencies_status,
     grab_clipboard_image,
     grab_screen_image,
     index_icon_templates,
-    np as identify_np,
     prepare_image,
     prepare_image_path,
     scan_image,
     scan_image_path,
 )
 from i18n import SUPPORTED_LANGUAGES, Translator, normalize_language
-from macro_recorder import MACRO_DIR, MacroRecorder
 from production_service import (
     CALCULATOR_MENU_DIR,
     CATEGORY_ORDER,
@@ -156,6 +152,18 @@ def now_milliseconds() -> int:
 
 def now_label() -> str:
     return datetime.now().strftime("%H:%M:%S")
+
+
+def debug_memory(label: str) -> None:
+    if not os.environ.get("FELB_DEBUG_MEMORY"):
+        return
+    try:
+        import psutil
+
+        rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+    except Exception:
+        return
+    print(f"[memory] {label}: {rss_mb:.1f} MB", flush=True)
 
 
 def format_duration(seconds: int) -> str:
@@ -678,7 +686,9 @@ class SteamController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -752,7 +762,9 @@ class SettingsController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -985,7 +997,9 @@ class AutoClickerController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -1309,7 +1323,9 @@ class StockpileController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -1917,6 +1933,8 @@ class ChatController(QObject):
         self._mention_overlay_visible = False
         self._mention_overlay_title = ""
         self._mention_overlay_body = ""
+        self._started = False
+        self._ws = None
         app_settings = self.settings.setdefault("app", {})
         self._discord_user_settings = self.settings.setdefault("discord", {})
         self._discord_settings = app_settings.setdefault("chat_discord", {})
@@ -1933,7 +1951,7 @@ class ChatController(QObject):
         self._online_rows: list[dict[str, Any]] = []
         self.rooms = DictListModel(["slug", "label", "unread"], self)
         self.messages = DictListModel(
-            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody"],
+            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId"],
             self,
         )
         self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
@@ -1951,14 +1969,34 @@ class ChatController(QObject):
         self._auto_connect_timer = QTimer(self)
         self._auto_connect_timer.setInterval(2500)
         self._auto_connect_timer.timeout.connect(self._maybe_auto_connect)
-        self.steam.changed.connect(self._maybe_auto_connect)
+
+
+    @Slot()
+    def ensureStarted(self) -> None:
+        if self._started:
+            return
+        self._started = True
+        try:
+            self.steam.changed.connect(self._maybe_auto_connect)
+        except RuntimeError:
+            pass
         self._auto_connect_timer.start()
         QTimer.singleShot(0, self._maybe_auto_connect)
-        self._ws = QWebSocket()
-        self._ws.connected.connect(self._on_ws_connected)
-        self._ws.disconnected.connect(self._on_ws_disconnected)
-        self._ws.textMessageReceived.connect(self._on_ws_text_received)
+        self.changed.emit()
 
+    def _ensure_ws(self):
+        if self._ws is None:
+            from PySide6.QtWebSockets import QWebSocket
+
+            self._ws = QWebSocket()
+            self._ws.connected.connect(self._on_ws_connected)
+            self._ws.disconnected.connect(self._on_ws_disconnected)
+            self._ws.textMessageReceived.connect(self._on_ws_text_received)
+        return self._ws
+
+    def _close_ws(self) -> None:
+        if self._ws is not None:
+            self._ws.close()
 
 
     @Property(str, notify=changed)
@@ -2015,7 +2053,9 @@ class ChatController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -2075,6 +2115,22 @@ class ChatController(QObject):
     @Property("QVariantList", notify=changed)
     def mentionSuggestionRows(self) -> list[dict[str, Any]]:
         return self.mentionSuggestions.items()
+
+    @Property(QObject, constant=True)
+    def roomsModel(self) -> QObject:
+        return self.rooms
+
+    @Property(QObject, constant=True)
+    def messagesModel(self) -> QObject:
+        return self.messages
+
+    @Property(QObject, constant=True)
+    def onlineUsersModel(self) -> QObject:
+        return self.onlineUsers
+
+    @Property(QObject, constant=True)
+    def mentionSuggestionsModel(self) -> QObject:
+        return self.mentionSuggestions
 
     @Property(bool, notify=changed)
     def connected(self) -> bool:
@@ -2341,10 +2397,12 @@ class ChatController(QObject):
 
     @Slot()
     def connectWithDiscord(self) -> None:
+        self.ensureStarted()
         self._connect_with_discord(allow_oauth=True)
 
     @Slot()
     def autoConnectWithSavedDiscord(self) -> None:
+        self.ensureStarted()
         if self._saved_discord_id():
             self._discord_configuration_checked = True
             self._discord_login_required = False
@@ -2357,6 +2415,7 @@ class ChatController(QObject):
         self.changed.emit()
 
     def _connect_with_discord(self, *, allow_oauth: bool = False) -> None:
+        self.ensureStarted()
         if self._auth_in_flight:
             return
         if self._token:
@@ -2406,6 +2465,7 @@ class ChatController(QObject):
 
     @Slot()
     def connectWithSteam(self) -> None:
+        self.ensureStarted()
         if self._auth_in_flight:
             return
         if self._token:
@@ -2441,6 +2501,8 @@ class ChatController(QObject):
 
     @Slot()
     def _maybe_auto_connect(self) -> None:
+        if not self._started:
+            return
         if self._token:
             if self._auto_connect_timer.isActive():
                 self._auto_connect_timer.stop()
@@ -2457,6 +2519,7 @@ class ChatController(QObject):
 
     @Slot()
     def refreshRooms(self) -> None:
+        self.ensureStarted()
         if not self._token:
             self.connectWithDiscord()
             return
@@ -2590,7 +2653,7 @@ class ChatController(QObject):
     def sendMessage(self, body: str) -> None:
         if not self._token or not self._selected_room or not body.strip():
             return
-        self._ws.sendTextMessage(json.dumps({
+        self._ensure_ws().sendTextMessage(json.dumps({
             "type": "send_message",
             "chatSlug": self._selected_room,
             "content": body.strip()
@@ -2600,7 +2663,7 @@ class ChatController(QObject):
     def sendMessageReply(self, body: str, replyToMessageId: str) -> None:
         if not self._token or not self._selected_room or not body.strip():
             return
-        self._ws.sendTextMessage(json.dumps({
+        self._ensure_ws().sendTextMessage(json.dumps({
             "type": "send_message",
             "chatSlug": self._selected_room,
             "content": body.strip(),
@@ -2610,7 +2673,7 @@ class ChatController(QObject):
     @Slot(str, str)
     def reactMessage(self, messageId: str, emoji: str) -> None:
         if not self._token or not messageId or not emoji: return
-        self._ws.sendTextMessage(json.dumps({
+        self._ensure_ws().sendTextMessage(json.dumps({
             "type": "react_message",
             "messageId": messageId,
             "emoji": emoji
@@ -2619,7 +2682,7 @@ class ChatController(QObject):
     @Slot(str, str)
     def sendWhisperToUser(self, targetDiscordId: str, body: str) -> None:
         if not self._token or not targetDiscordId or not body.strip(): return
-        self._ws.sendTextMessage(json.dumps({
+        self._ensure_ws().sendTextMessage(json.dumps({
             "type": "send_whisper",
             "targetDiscordId": targetDiscordId,
             "content": body.strip()
@@ -2986,20 +3049,21 @@ class ChatController(QObject):
 
     def _connect_ws(self) -> None:
         if not self._token: return
-        self._ws.close()
+        ws = self._ensure_ws()
+        ws.close()
         url = QUrl(f"{CHAT_WS_BASE}/ws/chat?token={self._token}")
-        self._ws.open(url)
+        ws.open(url)
 
     @Slot()
     def _on_ws_connected(self) -> None:
         self._status = self._t("home.chat.connected")
         self.changed.emit()
         if self._selected_room:
-            self._ws.sendTextMessage(json.dumps({"type": "join_chat", "chatSlug": self._selected_room}))
+            self._ensure_ws().sendTextMessage(json.dumps({"type": "join_chat", "chatSlug": self._selected_room}))
 
     @Slot()
     def _on_ws_disconnected(self) -> None:
-        if self._token:
+        if self._started and self._token:
             QTimer.singleShot(5000, self._connect_ws)
 
     @Slot(str)
@@ -3058,6 +3122,7 @@ class ChatController(QObject):
         self._notification_timer.stop()
         self._presence_timer.stop()
         self._auto_connect_timer.stop()
+        self._close_ws()
 
 
 class ItemSearchController(QObject):
@@ -3085,7 +3150,11 @@ class ItemSearchController(QObject):
         self._all_rows: list[dict[str, Any]] = []
         self._cached_item_names: list[str] = []
         self.rowsLoaded.connect(self._apply_loaded_rows)
-        QTimer.singleShot(0, self.refresh)
+
+    @Slot()
+    def ensureLoaded(self) -> None:
+        if not self._loaded and not self._loading:
+            self.refresh()
 
 
     @Property("QVariantMap", notify=changed)
@@ -3097,7 +3166,9 @@ class ItemSearchController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -3334,7 +3405,7 @@ class IdentifyItemController(QObject):
         self.monitorMatches = DictListModel(["matchX", "matchY", "matchW", "matchH"], self)
         self._templates: list[Any] = []
         self._templates_loaded = False
-        self._status = identify_dependencies_status()
+        self._status = "Ready."
         self._selected_path: Path | None = None
         self._selected_image_url = ""
         self._mode = "Hybrid"
@@ -3343,6 +3414,8 @@ class IdentifyItemController(QObject):
         self._clipboard_image = None
         self._last_result_rows: list[dict[str, Any]] = []
         self._monitoring = False
+        self._monitor_dependencies_checked = False
+        self._monitor_available = True
         self._monitor_target_name = ""
         self._monitor_overlay_visible = False
         self._monitor_worker_active = False
@@ -3353,6 +3426,10 @@ class IdentifyItemController(QObject):
         self._monitor_timer.timeout.connect(self._run_monitor_tick)
         self.scanFinished.connect(self._apply_scan_result)
         self.monitorFinished.connect(self._apply_monitor_result)
+
+    @Slot()
+    def ensureLoaded(self) -> None:
+        self.changed.emit()
 
     def _ensure_templates_loaded(self) -> None:
         """Load icon templates lazily on first use to avoid spending 50-80MB at startup."""
@@ -3373,7 +3450,9 @@ class IdentifyItemController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -3412,7 +3491,7 @@ class IdentifyItemController(QObject):
 
     @Property(bool, notify=changed)
     def monitorAvailable(self) -> bool:
-        return bool(identify_cv2 is not None and identify_np is not None and identify_image_grab is not None)
+        return self._monitor_available
 
     @Property(str, notify=changed)
     def monitorTarget(self) -> str:
@@ -3575,7 +3654,10 @@ class IdentifyItemController(QObject):
 
     @Slot()
     def startMonitor(self) -> None:
-        if not self.monitorAvailable:
+        np_module, cv2_module, image_grab = identify_service.monitor_dependencies()
+        self._monitor_dependencies_checked = True
+        self._monitor_available = bool(np_module is not None and cv2_module is not None and image_grab is not None)
+        if not self._monitor_available:
             self._status = "Install numpy and opencv-python for on-screen monitoring."
             self.changed.emit()
             return
@@ -3691,9 +3773,13 @@ class IdentifyItemController(QObject):
 
         def worker() -> None:
             try:
-                screenshot = identify_image_grab.grab(bbox=bbox) if bbox else identify_image_grab.grab()
-                screen_np = identify_np.array(screenshot)
-                gray = identify_cv2.cvtColor(screen_np, identify_cv2.COLOR_RGB2GRAY)
+                np_module, cv2_module, image_grab = identify_service.monitor_dependencies()
+                if np_module is None or cv2_module is None or image_grab is None:
+                    self.monitorFinished.emit([], "Monitor dependencies are unavailable.", False)
+                    return
+                screenshot = image_grab.grab(bbox=bbox) if bbox else image_grab.grab()
+                screen_np = np_module.array(screenshot)
+                gray = cv2_module.cvtColor(screen_np, cv2_module.COLOR_RGB2GRAY)
                 matches: list[dict[str, int]] = []
                 best_score = -1.0
                 for template in templates:
@@ -3702,12 +3788,12 @@ class IdentifyItemController(QObject):
                         tw = max(12, int(template.shape[1] * scale))
                         if th >= gray.shape[0] or tw >= gray.shape[1]:
                             continue
-                        interpolation = identify_cv2.INTER_AREA if scale < 1 else identify_cv2.INTER_CUBIC
-                        resized = identify_cv2.resize(template, (tw, th), interpolation=interpolation)
-                        result = identify_cv2.matchTemplate(gray, resized, identify_cv2.TM_CCOEFF_NORMED)
-                        _min_val, max_val, _min_loc, _max_loc = identify_cv2.minMaxLoc(result)
+                        interpolation = cv2_module.INTER_AREA if scale < 1 else cv2_module.INTER_CUBIC
+                        resized = cv2_module.resize(template, (tw, th), interpolation=interpolation)
+                        result = cv2_module.matchTemplate(gray, resized, cv2_module.TM_CCOEFF_NORMED)
+                        _min_val, max_val, _min_loc, _max_loc = cv2_module.minMaxLoc(result)
                         best_score = max(best_score, float(max_val))
-                        ys, xs = identify_np.where(result >= threshold)
+                        ys, xs = np_module.where(result >= threshold)
                         for x, y in zip(xs.tolist(), ys.tolist()):
                             gx = int(x + (bbox[0] if bbox else 0))
                             gy = int(y + (bbox[1] if bbox else 0))
@@ -3762,12 +3848,13 @@ class ProductionController(QObject):
         self.queueCategories = DictListModel(["name", "mark", "count", "limit", "active", "icon", "slots"], self)
         self.materials = DictListModel(["key", "label", "quantity", "crates", "icon"], self)
         self.routeTrips = DictListModel(["title", "vehicle", "materials", "orders", "inputSlots", "outputCrates", "capacity"], self)
-        all_items, self._status = load_production_items()
-        self._items_by_key = {item.key: item for item in all_items}
+        self._status = "Production database not loaded."
+        self._loaded = False
+        self._items_by_key: dict[str, ProductionItem] = {}
         self._queue: dict[str, list[ProductionItem]] = {category: [] for category in CATEGORY_ORDER}
         self._mode = "mpf"
         self._faction = "Neutral"
-        self._category = self._first_available_category()
+        self._category = ""
         self._query = ""
         self._factory_multiplier = 1
         self._route_vehicle_mode = "Dunne"
@@ -3779,6 +3866,15 @@ class ProductionController(QObject):
         self._warning = ""
         if self.i18n:
             self.i18n.changed.connect(self.refresh)
+
+    @Slot()
+    def ensureLoaded(self) -> None:
+        if self._loaded:
+            return
+        all_items, self._status = load_production_items()
+        self._items_by_key = {item.key: item for item in all_items}
+        self._category = self._first_available_category()
+        self._loaded = True
         self.refresh()
 
 
@@ -3791,7 +3887,9 @@ class ProductionController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -3888,15 +3986,40 @@ class ProductionController(QObject):
     def routeTripRows(self) -> list[dict[str, Any]]:
         return self.routeTrips.items()
 
+    @Property(QObject, constant=True)
+    def availableItemsModel(self) -> QObject:
+        return self.availableItems
+
+    @Property(QObject, constant=True)
+    def categoriesModel(self) -> QObject:
+        return self.categories
+
+    @Property(QObject, constant=True)
+    def queueModel(self) -> QObject:
+        return self.queue
+
+    @Property(QObject, constant=True)
+    def queueCategoriesModel(self) -> QObject:
+        return self.queueCategories
+
+    @Property(QObject, constant=True)
+    def materialsModel(self) -> QObject:
+        return self.materials
+
+    @Property(QObject, constant=True)
+    def routeTripsModel(self) -> QObject:
+        return self.routeTrips
+
     @Slot()
     def reload(self) -> None:
-        all_items, self._status = load_production_items()
-        self._items_by_key = {item.key: item for item in all_items}
-        self._category = self._first_available_category()
+        self._loaded = False
+        self._items_by_key = {}
         self.clear()
+        self.ensureLoaded()
 
     @Slot(str)
     def setMode(self, mode: str) -> None:
+        self.ensureLoaded()
         if mode not in {"mpf", "factory"} or mode == self._mode:
             return
         self._mode = mode
@@ -3908,6 +4031,7 @@ class ProductionController(QObject):
 
     @Slot(str)
     def setFaction(self, faction: str) -> None:
+        self.ensureLoaded()
         if faction not in {"Neutral", "Colonial", "Warden"}:
             return
         self._faction = faction
@@ -3915,6 +4039,7 @@ class ProductionController(QObject):
 
     @Slot(str)
     def setCategory(self, category: str) -> None:
+        self.ensureLoaded()
         if category not in CATEGORY_ORDER:
             return
         self._category = category
@@ -3922,16 +4047,19 @@ class ProductionController(QObject):
 
     @Slot(str)
     def search(self, query: str) -> None:
+        self.ensureLoaded()
         self._query = query
         self.refresh()
 
     @Slot(int)
     def setFactoryMultiplier(self, value: int) -> None:
+        self.ensureLoaded()
         self._factory_multiplier = min(2, max(1, int(value)))
         self.refresh()
 
     @Slot(str)
     def setRouteVehicleMode(self, value: str) -> None:
+        self.ensureLoaded()
         if value not in {"Dunne", "Flatbed"}:
             return
         if self._mode != "mpf":
@@ -3943,6 +4071,7 @@ class ProductionController(QObject):
 
     @Slot(str)
     def addItemByKey(self, key: str) -> None:
+        self.ensureLoaded()
         item = self._items_by_key.get(key)
         if not item:
             self._warning = "Item not found."
@@ -3952,6 +4081,7 @@ class ProductionController(QObject):
 
     @Slot(str)
     def fillCategoryWithItem(self, key: str) -> None:
+        self.ensureLoaded()
         item = self._items_by_key.get(key)
         if item:
             category_queue = self._queue.setdefault(item.category, [])
@@ -3964,6 +4094,7 @@ class ProductionController(QObject):
 
     @Slot(str)
     def removeItemByKey(self, key: str) -> None:
+        self.ensureLoaded()
         item = self._items_by_key.get(key)
         if not item:
             return
@@ -3976,6 +4107,7 @@ class ProductionController(QObject):
 
     @Slot(str, int)
     def addItem(self, name: str, quantity: int) -> None:
+        self.ensureLoaded()
         match = next((item for item in self._items_by_key.values() if item.name.lower() == name.strip().lower() and item.mode == self._mode), None)
         if not match:
             self._warning = f"Item not found: {name}"
@@ -3987,6 +4119,7 @@ class ProductionController(QObject):
 
     @Slot(str, int)
     def removeQueueRow(self, category: str, index: int) -> None:
+        self.ensureLoaded()
         rows = self._queue.get(category, [])
         if 0 <= index < len(rows):
             rows.pop(index)
@@ -4003,6 +4136,15 @@ class ProductionController(QObject):
 
     @Slot()
     def refresh(self) -> None:
+        if not self._loaded:
+            self.availableItems.set_items([])
+            self.categories.set_items([])
+            self.queue.set_items([])
+            self.queueCategories.set_items([])
+            self.materials.set_items([])
+            self.routeTrips.set_items([])
+            self.changed.emit()
+            return
         _all_items = list(self._items_by_key.values())
         categories = available_categories(_all_items, self._mode)
         if self._category not in categories:
@@ -4254,14 +4396,34 @@ class TimeTaskController(QObject):
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(300)
         self._poll_timer.timeout.connect(self._poll_state)
+        self._recorder = None
+        self._recorder_checked = False
+        self._available = True
+
+    @Slot()
+    def ensureLoaded(self) -> None:
+        self._ensure_recorder()
+        self.refreshMacros()
+
+    def _ensure_recorder(self) -> bool:
+        if self._recorder is not None:
+            return True
+        if self._recorder_checked:
+            return False
+        self._recorder_checked = True
         try:
+            from macro_recorder import MacroRecorder
+
             self._recorder = MacroRecorder(lambda message: self.statusFromWorker.emit(str(message)))
             self._available = True
         except Exception as exc:
             self._recorder = None
             self._available = False
             self._status = f"TimeTask unavailable: {exc}"
-        self.refreshMacros()
+            self.changed.emit()
+            return False
+        self.changed.emit()
+        return True
 
     @staticmethod
     def _int_or_default(value: Any, default: int) -> int:
@@ -4288,7 +4450,9 @@ class TimeTaskController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -4415,7 +4579,7 @@ class TimeTaskController(QObject):
 
     @Property(str, constant=True)
     def macroFolder(self) -> str:
-        return str(MACRO_DIR)
+        return str(user_data_dir() / "macros")
 
     @Slot(str)
     def setMacroName(self, value: str) -> None:
@@ -4482,7 +4646,7 @@ class TimeTaskController(QObject):
 
     @Slot()
     def startRecording(self) -> None:
-        if not self._recorder:
+        if not self._ensure_recorder():
             self._status = "TimeTask unavailable"
             self.changed.emit()
             return
@@ -4499,7 +4663,7 @@ class TimeTaskController(QObject):
 
     @Slot()
     def beginCountdownRecording(self) -> None:
-        if not self._recorder:
+        if not self._ensure_recorder():
             self._status = "TimeTask unavailable"
             self.changed.emit()
             return
@@ -4527,7 +4691,7 @@ class TimeTaskController(QObject):
 
     @Slot()
     def stopRecording(self) -> None:
-        if not self._recorder:
+        if not self._ensure_recorder():
             self._status = "No active recording"
         else:
             self._countdown_timer.stop()
@@ -4554,7 +4718,7 @@ class TimeTaskController(QObject):
 
     @Slot()
     def saveCurrent(self) -> None:
-        if not self._recorder:
+        if not self._ensure_recorder():
             self._status = "TimeTask unavailable"
             self.changed.emit()
             return
@@ -4577,7 +4741,7 @@ class TimeTaskController(QObject):
 
     @Slot()
     def pauseResume(self) -> None:
-        if not self._recorder:
+        if not self._ensure_recorder():
             return
         if self._recorder.recording:
             if self._recorder.paused:
@@ -4593,7 +4757,7 @@ class TimeTaskController(QObject):
 
     @Slot()
     def playSelected(self) -> None:
-        if not self._recorder:
+        if not self._ensure_recorder():
             self._status = "TimeTask unavailable"
             self.changed.emit()
             return
@@ -4678,7 +4842,7 @@ class TimeTaskController(QObject):
 
     @Slot()
     def refreshMacros(self) -> None:
-        if not self._recorder:
+        if not self._ensure_recorder():
             self._summaries = []
         else:
             try:
@@ -5113,7 +5277,9 @@ class UpdateController(QObject):
         self._token = ""
         self._discord_user_settings.clear()
         save_settings(self.settings)
-        self._ws.close()
+        ws = getattr(self, "_ws", None)
+        if ws is not None:
+            ws.close()
         self._discord_login_required = True
         self._current_user_id = ""
         self._profile = {}
@@ -6075,6 +6241,7 @@ def wait_for_discord_oauth_code(expected_state: str, port: int, timeout: int = 1
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
         super().__init__()
+        debug_memory("registry init start")
         self.settings_data = load_settings()
         self.i18nController = I18nController(self.settings_data, self)
         self.appController = AppController(self.i18nController, self.settings_data, self)
@@ -6096,6 +6263,7 @@ class ControllerRegistry(QObject):
         self.autoClickerController.orderRequested.connect(lambda _order: self.notificationsController.startSquadlock())
         if self.settings_data.get("stockpile", {}).get("enabled", True):
             QTimer.singleShot(0, self.stockpileController.start)
+        debug_memory("registry init ready")
 
     def expose(self, engine) -> None:
         context = engine.rootContext()
