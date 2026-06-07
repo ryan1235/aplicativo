@@ -186,13 +186,43 @@ Flickable {
                                 border.color: parent.highlighted ? "#5eead4" : "transparent"
                             }
                         }
-                        indicator: Text {
+                        indicator: Canvas {
+                            id: closeActionArrow
                             x: closeActionCombo.width - width - 12
                             y: closeActionCombo.topPadding + (closeActionCombo.availableHeight - height) / 2
-                            text: closeActionCombo.popup.visible ? "â–²" : "â–¼"
-                            color: closeActionCombo.enabled ? "#8ab4ff" : "#52657f"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 10
+                            width: 10
+                            height: 6
+                            contextType: "2d"
+
+                            Connections {
+                                target: closeActionCombo
+                                function onActiveFocusChanged() { closeActionArrow.requestPaint() }
+                                function onPressedChanged() { closeActionArrow.requestPaint() }
+                            }
+
+                            Connections {
+                                target: closeActionCombo.popup
+                                function onVisibleChanged() { closeActionArrow.requestPaint() }
+                            }
+
+                            onPaint: {
+                                context.reset()
+                                context.beginPath()
+                                if (closeActionCombo.popup.visible) {
+                                    context.moveTo(0, height)
+                                    context.lineTo(width / 2, 0)
+                                    context.lineTo(width, height)
+                                } else {
+                                    context.moveTo(0, 0)
+                                    context.lineTo(width / 2, height)
+                                    context.lineTo(width, 0)
+                                }
+                                context.strokeStyle = closeActionCombo.enabled
+                                    ? (closeActionCombo.activeFocus || closeActionCombo.popup.visible ? "#5eead4" : "#8ab4ff")
+                                    : "#52657f"
+                                context.lineWidth = 1.5
+                                context.stroke()
+                            }
                         }
                         background: Rectangle {
                             radius: 7

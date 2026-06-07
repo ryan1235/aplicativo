@@ -155,7 +155,7 @@ ApplicationWindow {
             return
         }
         close.accepted = false
-        hideToTray()
+        handleCloseRequest()
     }
 
     Connections {
@@ -783,37 +783,43 @@ ApplicationWindow {
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: window.sidebarOpen ? 12 : 6
+                            anchors.margins: window.sidebarOpen ? 12 : 0
                             spacing: window.sidebarOpen ? 12 : 0
 
-                            Rectangle {
-                                Layout.preferredWidth: 42
-                                Layout.preferredHeight: 42
-                                Layout.alignment: Qt.AlignVCenter | (window.sidebarOpen ? Qt.AlignLeft : Qt.AlignHCenter)
-                                radius: 21
-                                color: "#1d3353"
+                            Item {
+                                Layout.preferredWidth: window.sidebarOpen ? 42 : parent.width
+                                Layout.fillWidth: !window.sidebarOpen
+                                Layout.fillHeight: true
 
-                                Image {
-                                    id: profileImage
-                                    anchors.fill: parent
-                                    source: chatController.currentUserAvatar
-                                    fillMode: Image.PreserveAspectCrop
-                                    visible: chatController.currentUserAvatar !== ""
-                                    layer.enabled: true
-                                    layer.effect: OpacityMask {
-                                        maskSource: Rectangle {
-                                            width: profileImage.width
-                                            height: profileImage.height
-                                            radius: width / 2
+                                Rectangle {
+                                    width: 42
+                                    height: 42
+                                    anchors.centerIn: parent
+                                    radius: 21
+                                    color: "#1d3353"
+
+                                    Image {
+                                        id: profileImage
+                                        anchors.fill: parent
+                                        source: chatController.currentUserAvatar
+                                        fillMode: Image.PreserveAspectCrop
+                                        visible: chatController.currentUserAvatar !== ""
+                                        layer.enabled: true
+                                        layer.effect: OpacityMask {
+                                            maskSource: Rectangle {
+                                                width: profileImage.width
+                                                height: profileImage.height
+                                                radius: width / 2
+                                            }
                                         }
                                     }
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: chatController.currentUserName !== "" ? chatController.currentUserName.charAt(0).toUpperCase() : "GG"
-                                    visible: chatController.currentUserAvatar === ""
-                                    color: "#5eead4"
-                                    font.bold: true
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: chatController.currentUserName !== "" ? chatController.currentUserName.charAt(0).toUpperCase() : "GG"
+                                        visible: chatController.currentUserAvatar === ""
+                                        color: "#5eead4"
+                                        font.bold: true
+                                    }
                                 }
                             }
 
@@ -877,9 +883,14 @@ ApplicationWindow {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12
-                                anchors.rightMargin: 12
-                                spacing: 12
+                                anchors.leftMargin: window.sidebarOpen ? 12 : 0
+                                anchors.rightMargin: window.sidebarOpen ? 12 : 0
+                                spacing: window.sidebarOpen ? 12 : 0
+
+                                Item {
+                                    visible: !window.sidebarOpen
+                                    Layout.fillWidth: true
+                                }
 
                                 Image {
                                     id: menuIcon
@@ -916,6 +927,10 @@ ApplicationWindow {
                                     Layout.preferredWidth: 24
                                     horizontalAlignment: Text.AlignHCenter
                                     visible: menuIcon.source == ""
+                                }
+                                Item {
+                                    visible: !window.sidebarOpen
+                                    Layout.fillWidth: true
                                 }
                                 Text {
                                     text: tr(labelKey)
