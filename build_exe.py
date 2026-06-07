@@ -49,6 +49,7 @@ DATA_DIRS = [
     ("translations", "translations"),
     ("Content", "Content"),
     ("qml", "qml"),
+    ("admin", "admin"),
 ]
 
 DATA_FILES = [
