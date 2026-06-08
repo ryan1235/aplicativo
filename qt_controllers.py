@@ -2291,10 +2291,10 @@ class ChatController(QObject):
         self._online_rows: list[dict[str, Any]] = []
         self.rooms = DictListModel(["slug", "label", "unread"], self)
         self.messages = DictListModel(
-            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId"],
+            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId", "regiment"],
             self,
         )
-        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
+        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt"], self)
         self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
         self.resultFromWorker.connect(self._apply_result)
         self._refresh_timer = QTimer(self)
@@ -3365,7 +3365,31 @@ class ChatController(QObject):
             self._all_user_rows = rows
         elif kind == "online" and isinstance(payload, dict):
             users = payload.get("onlineUsers") or payload.get("users") or []
-            online_rows = [self._user_to_row(user) for user in users]
+            import time
+            from datetime import datetime
+            
+            if not hasattr(self, '_user_online_since'):
+                self._user_online_since = {}
+            current_time = time.time()
+            
+            online_rows = []
+            for u in users:
+                row = self._user_to_row(u)
+                
+                iso_time = u.get("lastLoginAt")
+                if iso_time and isinstance(iso_time, str):
+                    try:
+                        dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
+                        row["connectedAt"] = float(dt.timestamp())
+                    except Exception:
+                        row["connectedAt"] = current_time
+                else:
+                    uid = str(row.get("discordId") or row.get("mention") or row.get("name") or "")
+                    if uid and uid not in self._user_online_since:
+                        self._user_online_since[uid] = current_time
+                    row["connectedAt"] = float(self._user_online_since.get(uid, current_time))
+                
+                online_rows.append(row)
             self._online_rows = online_rows
             self.onlineUsers.set_items(online_rows)
         elif kind == "messages" and isinstance(payload, dict):
@@ -3477,6 +3501,7 @@ class ChatController(QObject):
             "avatar": str(user.get("avatarUrl") or user.get("avatar") or user.get("avatarfull") or user.get("avatarmedium") or ""),
             "mention": mention,
             "discordId": str(user.get("discordId") or ""),
+            "connectedAt": float(user.get("_connectedAt") or 0.0),
         }
 
     @Slot(str, result=bool)
@@ -6440,6 +6465,7 @@ def normalize_messages(
                 "replyToAuthor": str((message.get("replyToMessage") or {}).get("authorName") or ""),
                 "replyToBody": str((message.get("replyToMessage") or {}).get("content") or ""),
                 "authorDiscordId": author_discord,
+                "regiment": str(author.get("regiment") or message.get("regiment") or ""),
             }
         )
     return sorted(

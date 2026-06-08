@@ -327,6 +327,7 @@ Rectangle {
                         property string rowAvatar: String(avatar || "")
                         property string rowMention: String(mention || "")
                         property string rowDiscordId: String(discordId || "")
+                        property real rowConnectedAt: Number(connectedAt || 0)
 
                         width: onlineList.width
                         height: 44
@@ -366,7 +367,42 @@ Rectangle {
                                 Layout.fillWidth: true
                                 spacing: 0
                                 Text { text: rowName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: rowDetail || ("@" + rowMention); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text {
+                                    id: onlineTimeText
+                                    Timer {
+                                        interval: 15000
+                                        running: true
+                                        repeat: true
+                                        onTriggered: onlineTimeText.updateText()
+                                    }
+                                    function updateText() {
+                                        if (rowConnectedAt > 0) {
+                                            var diff = Math.floor((Date.now() / 1000) - rowConnectedAt);
+                                            if (diff < 60) {
+                                                onlineTimeText.text = tr("user.online_now");
+                                            } else {
+                                                var minutes = Math.floor(diff / 60);
+                                                if (minutes < 60) onlineTimeText.text = tr("user.online_minutes").replace("{m}", minutes);
+                                                else {
+                                                    var hours = Math.floor(minutes / 60);
+                                                    if (hours < 24) onlineTimeText.text = tr("user.online_hours").replace("{h}", hours);
+                                                    else {
+                                                        var days = Math.floor(hours / 24);
+                                                        onlineTimeText.text = tr("user.online_days").replace("{d}", days);
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            onlineTimeText.text = rowDetail || ("@" + rowMention);
+                                        }
+                                    }
+                                    Component.onCompleted: updateText()
+                                    color: "#99abc4"
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight 
+                                }
                             }
                         }
                     }
@@ -489,6 +525,7 @@ Rectangle {
                             property string rowReplyToAuthor: String(replyToAuthor || "")
                             property string rowReplyToBody: String(replyToBody || "")
                             property string rowAuthorDiscordId: String(authorDiscordId || "")
+                            property string rowRegiment: String(regiment || "")
                             property bool rowIsGif: Boolean(isGif)
                             property bool rowMentioned: Boolean(mentioned)
                             property bool rowMine: Boolean(mine)
@@ -561,8 +598,13 @@ Rectangle {
                                             visible: rowAvatar === ""
                                         }
                                     }
-                                    Text { text: rowAuthor; color: "#5eead4"; font.bold: true; font.family: "Segoe UI"; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11 }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+                                        Text { text: rowAuthor; color: "#5eead4"; font.bold: true; font.family: "Segoe UI"; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Text { text: rowRegiment; color: "#5eead4"; opacity: 0.7; font.family: "Segoe UI"; font.pixelSize: 10; visible: rowRegiment !== ""; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    }
+                                    Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; Layout.alignment: Qt.AlignTop }
                                 }
 
                                 Flow {
