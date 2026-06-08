@@ -1916,6 +1916,118 @@ ApplicationWindow {
     }
 
     Window {
+        id: mentionHoverWindow
+        x: chatController.mentionHoverX
+        y: chatController.mentionHoverY
+        width: 320
+        height: Math.max(76, mentionHoverPanel.implicitHeight + 20)
+        visible: chatController.mentionHoverVisible
+        color: "transparent"
+        transientParent: null
+        flags: Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowTransparentForInput | Qt.WindowStaysOnTopHint
+
+        function clampToScreen() {
+            var screenWidth = Screen.width > 0 ? Screen.width : 1920
+            var screenHeight = Screen.height > 0 ? Screen.height : 1080
+            var desiredX = chatController.mentionHoverX
+            var desiredY = chatController.mentionHoverY
+            
+            if (desiredX + width > screenWidth - 12) {
+                desiredX = screenWidth - width - 12
+            }
+            if (desiredY + height > screenHeight - 12) {
+                desiredY = chatController.mentionHoverY - height - 32
+            }
+            
+            x = desiredX
+            y = desiredY
+        }
+
+        onVisibleChanged: if (visible) clampToScreen()
+        onWidthChanged: if (visible) clampToScreen()
+        onHeightChanged: if (visible) clampToScreen()
+
+        Rectangle {
+            id: mentionHoverPanel
+            anchors.fill: parent
+            anchors.margins: 10
+            implicitHeight: hoverLayout.implicitHeight + 16
+            radius: 12
+            color: "#0a1321"
+            border.color: "#3b82f6"
+            border.width: 1
+            opacity: 0.98
+            layer.enabled: true
+            layer.effect: DropShadow { color: Qt.rgba(0,0,0,0.8); radius: 18; samples: 25; verticalOffset: 6 }
+
+            RowLayout {
+                id: hoverLayout
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 12
+                spacing: 14
+
+                Rectangle {
+                    Layout.preferredWidth: 52
+                    Layout.preferredHeight: 52
+                    radius: 26
+                    color: "#1d3353"
+                    clip: true
+                    Image {
+                        anchors.fill: parent
+                        source: chatController.mentionHoverAvatar || ""
+                        fillMode: Image.PreserveAspectCrop
+                        visible: chatController.mentionHoverAvatar !== ""
+                        asynchronous: true
+                        cache: false
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        visible: chatController.mentionHoverAvatar === ""
+                        text: (chatController.mentionHoverName || "?").substring(0,2).toUpperCase()
+                        color: "#60a5fa"
+                        font.bold: true
+                        font.pixelSize: 18
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    Text {
+                        text: chatController.mentionHoverName
+                        color: "#ffffff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 16
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Rectangle {
+                            Layout.preferredWidth: 10
+                            Layout.preferredHeight: 10
+                            radius: 5
+                            color: chatController.mentionHoverOnline ? "#22c55e" : "#64748b"
+                        }
+                        Text {
+                            text: (chatController.mentionHoverOnline ? "Online" : "Offline") + (chatController.mentionHoverRegiment ? (" • " + chatController.mentionHoverRegiment) : "")
+                            color: "#94a3b8"
+                            font.pixelSize: 13
+                            font.family: "Segoe UI"
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Window {
         id: stockpileUploadWindow
         width: 380
         height: Math.max(116, stockpileUploadPanel.implicitHeight + 18)

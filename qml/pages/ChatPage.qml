@@ -585,14 +585,57 @@ Rectangle {
                                     Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11 }
                                 }
 
-                                Text {
-                                    text: rowMediaUrl !== "" ? rowBody.replace(rowMediaUrl, "").trim() : rowBody
-                                    visible: text.length > 0
-                                    color: "#edf6ff"
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 13
-                                    wrapMode: Text.WordWrap
+                                Flow {
                                     Layout.fillWidth: true
+                                    width: Math.max(160, messageList.width - 96)
+                                    Repeater {
+                                        model: chatController.parseMessageSegments(rowMediaUrl !== "" ? rowBody.replace(rowMediaUrl, "").trim() : rowBody)
+                                        delegate: Item {
+                                            property var seg: modelData
+                                            implicitWidth: content.implicitWidth
+                                            implicitHeight: content.implicitHeight
+                                            Text {
+                                                id: content
+                                                text: seg.mention && seg.mention.length > 0 ? ("@" + seg.mention) : seg.text
+                                                color: seg.mention && seg.mention.length > 0 ? "#ffd166" : "#edf6ff"
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 13
+                                                wrapMode: Text.WordWrap
+                                                elide: Text.ElideRight
+                                            }
+                                            MouseArea {
+                                                anchors.fill: content
+                                                hoverEnabled: true
+                                                visible: seg.mention && seg.mention.length > 0
+                                                onEntered: {
+                                                    var targetWindow = root.window || Qt.application.activeWindow
+                                                    var p
+                                                    var winX = 0
+                                                    var winY = 0
+                                                    if (targetWindow) {
+                                                        try {
+                                                            p = content.mapToItem(targetWindow.contentItem || targetWindow, 0, content.height)
+                                                            winX = (typeof targetWindow.x !== 'undefined') ? targetWindow.x : 0
+                                                            winY = (typeof targetWindow.y !== 'undefined') ? targetWindow.y : 0
+                                                        } catch (e) {
+                                                            p = content.mapToItem(null, 0, content.height)
+                                                        }
+                                                    } else {
+                                                        p = content.mapToItem(null, 0, content.height)
+                                                    }
+                                                    var globalX = (p && p.x ? p.x : 0) + winX
+                                                    var globalY = (p && p.y ? p.y : 0) + winY + 4
+                                                    var avatar = (seg.user && seg.user.avatar) ? seg.user.avatar : ""
+                                                    var online = false
+                                                    try {
+                                                        online = chatController.userIsOnline ? chatController.userIsOnline(seg.mention) : false
+                                                    } catch (e) { online = false }
+                                                    chatController.showMentionHover(seg.mention, (seg.user && seg.user.regiment) ? seg.user.regiment : "", avatar, online, globalX, globalY)
+                                                }
+                                                onExited: chatController.dismissMentionHover()
+                                            }
+                                        }
+                                    }
                                 }
 
                                 AnimatedImage {

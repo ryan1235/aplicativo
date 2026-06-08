@@ -2265,6 +2265,14 @@ class ChatController(QObject):
         self._mention_overlay_visible = False
         self._mention_overlay_title = ""
         self._mention_overlay_body = ""
+        # Hover card state for per-mention mouseover
+        self._mention_hover_visible = False
+        self._mention_hover_name = ""
+        self._mention_hover_regiment = ""
+        self._mention_hover_x = 0.0
+        self._mention_hover_y = 0.0
+        self._mention_hover_avatar = ""
+        self._mention_hover_online = False
         self._started = False
         self._ws = None
         app_settings = self.settings.setdefault("app", {})
@@ -2554,6 +2562,34 @@ class ChatController(QObject):
     @Property(str, notify=changed)
     def mentionOverlayBody(self) -> str:
         return self._mention_overlay_body
+
+    @Property(bool, notify=changed)
+    def mentionHoverVisible(self) -> bool:
+        return getattr(self, "_mention_hover_visible", False)
+
+    @Property(str, notify=changed)
+    def mentionHoverName(self) -> str:
+        return getattr(self, "_mention_hover_name", "")
+
+    @Property(str, notify=changed)
+    def mentionHoverRegiment(self) -> str:
+        return getattr(self, "_mention_hover_regiment", "")
+
+    @Property(str, notify=changed)
+    def mentionHoverAvatar(self) -> str:
+        return getattr(self, "_mention_hover_avatar", "")
+
+    @Property(bool, notify=changed)
+    def mentionHoverOnline(self) -> bool:
+        return bool(getattr(self, "_mention_hover_online", False))
+
+    @Property(float, notify=changed)
+    def mentionHoverX(self) -> float:
+        return float(getattr(self, "_mention_hover_x", 0.0))
+
+    @Property(float, notify=changed)
+    def mentionHoverY(self) -> float:
+        return float(getattr(self, "_mention_hover_y", 0.0))
 
     @Property("QStringList", constant=True)
     def quickEmojis(self) -> list[str]:
@@ -3153,6 +3189,105 @@ class ChatController(QObject):
         spacer = "" if not text or text.endswith(" ") else " "
         return f"{text}{spacer}@{mention} "
 
+    @Slot(str, result="QVariantList")
+    def parseMessageSegments(self, text: str) -> list[dict]:
+        """Split a message into segments: plain text and mention segments.
+
+        Uses the combined user list (online + all users) and prioritizes longer
+        user names first to avoid partial matches (e.g. 'Ryan Luca' before 'Ryan').
+        Returns a list of dicts: {"text": str, "mention": str, "user": dict}
+        """
+        if not text:
+            return []
+        source = str(text)
+        lower = source.casefold()
+        debug_mentions = bool(os.environ.get("FELB_DEBUG_MENTIONS"))
+
+        # build candidate map: mention/name -> user row
+        user_rows = self._merge_user_rows(self._online_rows, self._all_user_rows)
+        candidate_map: dict[str, dict] = {}
+        for row in user_rows:
+            raw = str(row.get("mention") or row.get("name") or "").strip()
+            if not raw:
+                continue
+            key = raw.lstrip("@").strip()
+            if not key:
+                continue
+            candidate_map[key.casefold()] = row
+
+        # sort candidates by length desc to prefer longest match
+        candidates = sorted(candidate_map.keys(), key=lambda s: len(s), reverse=True)
+
+        occupied = [False] * len(source)
+        matches: list[tuple[int, int, str]] = []
+
+        for cand in candidates:
+            token = "@" + cand
+            start = lower.find(token)
+            while start != -1:
+                end = start + len(token)
+                # boundary check before '@'
+                if start == 0 or not lower[start - 1].isalnum():
+                    # avoid overlaps
+                    if not any(occupied[i] for i in range(start, end)):
+                        matches.append((start, end, cand))
+                        for i in range(start, end):
+                            occupied[i] = True
+                start = lower.find(token, start + 1)
+
+        if not matches:
+            if debug_mentions:
+                print(f"[mentions] no matches for: {source}", flush=True)
+            return [{"text": source, "mention": "", "user": {}}]
+
+        matches.sort()
+        segments: list[dict] = []
+        pos = 0
+        for start, end, cand in matches:
+            if pos < start:
+                segments.append({"text": source[pos:start], "mention": "", "user": {}})
+            # use original-cased text for display
+            mention_text = source[start + 1 : end]
+            user = candidate_map.get(cand)
+            segments.append({"text": source[start:end], "mention": mention_text, "user": user or {}})
+            pos = end
+        if pos < len(source):
+            segments.append({"text": source[pos:], "mention": "", "user": {}})
+        if debug_mentions:
+            try:
+                found = [source[s:e] for s, e, _ in matches]
+            except Exception:
+                found = matches
+            print(f"[mentions] parsed segments for: {source} -> mentions={found}", flush=True)
+        return segments
+
+    @Slot(str, str, str, bool, float, float)
+    def showMentionHover(self, name: str, regiment: str, avatar: str, online: bool, x: float, y: float) -> None:
+        self._mention_hover_name = str(name or "")
+        self._mention_hover_regiment = str(regiment or "")
+        self._mention_hover_avatar = str(avatar or "")
+        self._mention_hover_online = bool(online)
+        try:
+            self._mention_hover_x = float(x)
+            self._mention_hover_y = float(y)
+        except Exception:
+            self._mention_hover_x = 0.0
+            self._mention_hover_y = 0.0
+        self._mention_hover_visible = True
+        if os.environ.get("FELB_DEBUG_MENTIONS"):
+            print(
+                f"[mentions] showMentionHover name={self._mention_hover_name!r} regiment={self._mention_hover_regiment!r} avatar={self._mention_hover_avatar!r} online={self._mention_hover_online} x={self._mention_hover_x} y={self._mention_hover_y}",
+                flush=True,
+            )
+        self.changed.emit()
+
+    @Slot()
+    def dismissMentionHover(self) -> None:
+        self._mention_hover_visible = False
+        if os.environ.get("FELB_DEBUG_MENTIONS"):
+            print("[mentions] dismissMentionHover", flush=True)
+        self.changed.emit()
+
     @Slot()
     def dismissMentionOverlay(self) -> None:
         self._mention_overlay_visible = False
@@ -3235,11 +3370,10 @@ class ChatController(QObject):
             users = payload.get("users") or []
             rows = [self._user_to_row(user) for user in users]
             self._all_user_rows = rows
-            self._online_rows = self._merge_user_rows(self._online_rows, rows)
         elif kind == "online" and isinstance(payload, dict):
             users = payload.get("onlineUsers") or payload.get("users") or []
             online_rows = [self._user_to_row(user) for user in users]
-            self._online_rows = self._merge_user_rows(online_rows, self._all_user_rows)
+            self._online_rows = online_rows
             self.onlineUsers.set_items(online_rows)
         elif kind == "messages" and isinstance(payload, dict):
             slug = str(payload.get("slug") or self._selected_room)
@@ -3351,6 +3485,24 @@ class ChatController(QObject):
             "mention": mention,
             "discordId": str(user.get("discordId") or ""),
         }
+
+    @Slot(str, result=bool)
+    def userIsOnline(self, mentionOrId: str) -> bool:
+        if not mentionOrId:
+            return False
+        key = str(mentionOrId).strip().lstrip("@").casefold()
+        for row in self._online_rows:
+            if not isinstance(row, dict):
+                continue
+            m = str(row.get("mention") or "").strip().lstrip("@").casefold()
+            if m and m == key:
+                return True
+            # check by discordId / name
+            if str(row.get("discordId") or "").strip() == mentionOrId:
+                return True
+            if str(row.get("name") or "").strip().casefold() == key:
+                return True
+        return False
 
     @staticmethod
     def _mention_token(text: str) -> str | None:
