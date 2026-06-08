@@ -14,6 +14,17 @@ Flickable {
         return i18nController.t(key)
     }
 
+    function trReplaceWZ(key) {
+        var text = tr(key)
+        var letter = autoClickerController.wHoldLetter || "W"
+        // replace standalone W or Z tokens (word boundaries)
+        try {
+            return text.replace(/\b[WZ]\b/g, letter)
+        } catch (e) {
+            return text
+        }
+    }
+
     function comboIndex(model, value) {
         var index = model.indexOf(value)
         return index >= 0 ? index : 0
@@ -180,18 +191,25 @@ Flickable {
                                 onKeySelected: function(key) { autoClickerController.setPilotHotkey(key) }
                             }
                             
-                            Text { text: tr("clicker.hold_w_hint"); color: "#99abc4"; font.pixelSize: 12 }
+                            Text { text: trReplaceWZ("clicker.hold_w_hint"); color: "#99abc4"; font.pixelSize: 12 }
                             Item { Layout.fillWidth: true }
                             
                             ToggleSwitch {
                                 checked: autoClickerController.wDoubleTapEnabled
                                 onClicked: autoClickerController.setWDoubleTapEnabled(checked)
                             }
-                            Text { text: tr("clicker.w_double_tap_enable"); color: "#c7d7ed"; font.pixelSize: 12 }
+                            Text { text: trReplaceWZ("clicker.w_double_tap_enable"); color: "#c7d7ed"; font.pixelSize: 12 }
+                            // Toggle para forçar W mesmo quando o idioma for FR
+                            ToggleSwitch {
+                                visible: autoClickerController.frWOverrideAvailable
+                                checked: autoClickerController.frWOverride
+                                onClicked: autoClickerController.setFrWOverride(checked)
+                            }
+                            Text { visible: autoClickerController.frWOverrideAvailable; text: tr("clicker.force_w_in_fr"); color: "#c7d7ed"; font.pixelSize: 12 }
                         }
                         
                         Text {
-                            text: tr("clicker.w_hold_help")
+                            text: trReplaceWZ("clicker.w_hold_help")
                             color: "#5d7a99"
                             font.pixelSize: 11
                             Layout.fillWidth: true

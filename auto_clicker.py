@@ -126,6 +126,8 @@ class AutoClicker:
         self.w_hold_worker_running = False
         self.shift_pressed = False
 
+        # Override para forcar W mesmo quando idioma for FR (toggle na UI)
+        self.force_w_in_fr = False
         # tecla usada para W-hold (pode ser VK_W ou VK_Z dependendo do idioma/layout)
         self._w_hold_vk = VK_W
 
@@ -218,7 +220,11 @@ class AutoClicker:
             code = normalize_language(language)
         except Exception:
             code = "pt"
-        self._w_hold_vk = VK_Z if code == "fr" else VK_W
+        # Se o usuário ativou o override para manter W no FR, respeitamos isso
+        if code == "fr" and not getattr(self, "force_w_in_fr", False):
+            self._w_hold_vk = VK_Z
+        else:
+            self._w_hold_vk = VK_W
 
     def w_hold_label(self) -> str:
         """Retorna o rótulo visível da tecla usada para W-hold ("W" ou "Z")."""

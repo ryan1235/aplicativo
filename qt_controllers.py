@@ -1105,6 +1105,8 @@ class AutoClickerController(QObject):
             # Propaga idioma atual do I18nController para o AutoClicker
             try:
                 parent_i18n = parent.i18nController if parent is not None and hasattr(parent, "i18nController") else None
+                # guarda referência para expor disponibilidade do toggle FR
+                self._parent_i18n = parent_i18n
                 if parent_i18n is not None:
                     # set initial language and subscribe to changes
                     self.clicker.set_language(parent_i18n.language)
@@ -1177,6 +1179,11 @@ class AutoClickerController(QObject):
             }
         )
         self._status = self.clicker.status_text()
+        # Aplica override para manter W mesmo em FR (toggle disponível apenas para idioma FR)
+        try:
+            self.clicker.force_w_in_fr = bool(data.get("force_w_in_fr", False))
+        except Exception:
+            pass
 
     @Slot(str)
     def _set_status(self, text: str) -> None:
@@ -1328,7 +1335,9 @@ class AutoClickerController(QObject):
         if getattr(self.clicker, "enabled", False):
             shift = " + Shift" if getattr(self.clicker, "shift_pressed", False) else ""
             return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.1f}s{shift}"
-        return f"{self.hotkey} auto | {self.pilotHotkey} W | {self.rightHoldHotkey} direito"
+        # Use dynamic W/Z label (respecting FR override)
+        wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+        return f"{self.hotkey} auto | {self.pilotHotkey} {wlabel} | {self.rightHoldHotkey} direito"
 
     @Property(str, notify=changed)
     def wHoldLabel(self) -> str:
@@ -1337,6 +1346,54 @@ class AutoClickerController(QObject):
             return "W Hold:"
         wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
         return f"{wlabel} Hold:"
+
+    @Property(str, notify=changed)
+    def wHoldLetter(self) -> str:
+        """Retorna apenas a letra usada para W-hold ('W' ou 'Z')."""
+        if not self.clicker:
+            return "W"
+        try:
+            return getattr(self.clicker, "w_hold_label", lambda: "W")()
+        except Exception:
+            return "W"
+
+    @Property(bool, notify=changed)
+    def frWOverrideAvailable(self) -> bool:
+        """Disponibilidade do toggle: somente quando o idioma normalizado for 'fr'."""
+        try:
+            if getattr(self, "_parent_i18n", None) is None:
+                return False
+            code = normalize_language(self._parent_i18n.language)
+            return code == "fr"
+        except Exception:
+            return False
+
+    @Property(bool, notify=changed)
+    def frWOverride(self) -> bool:
+        """Estado atual do override (forcar W mesmo em FR)."""
+        if not self.clicker:
+            return False
+        return bool(getattr(self.clicker, "force_w_in_fr", False))
+
+    @Slot(bool)
+    def setFrWOverride(self, value: bool) -> None:
+        """Ativa/desativa o override e persiste a configuração; re-aplica idioma."""
+        if not self.clicker:
+            return
+        self.clicker.force_w_in_fr = bool(value)
+        # persiste a config
+        try:
+            self._clicker_settings()["force_w_in_fr"] = bool(value)
+            save_settings(self.settings)
+        except Exception:
+            pass
+        # re-aplica idioma atual para forçar recalculo da tecla usada
+        try:
+            if getattr(self, "_parent_i18n", None) is not None:
+                self.clicker.set_language(self._parent_i18n.language)
+        except Exception:
+            pass
+        self.changed.emit()
 
     @Property(str, notify=changed)
     def overlayHintText(self) -> str:
