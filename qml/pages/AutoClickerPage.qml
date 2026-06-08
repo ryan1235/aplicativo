@@ -200,6 +200,51 @@ Flickable {
                 }
 
 
+                // Right Hold section
+                Rectangle {
+                    Layout.fillWidth: true
+                    radius: 6
+                    color: "#0e1a2d"
+                    border.color: "#1e3554"
+                    implicitHeight: rightHoldRow.implicitHeight + 16
+
+                    ColumnLayout {
+                        id: rightHoldRow
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+                            Text { text: tr("clicker.right_hold_label"); color: "#edf6ff"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
+
+                            HotkeyPicker {
+                                Layout.preferredWidth: 80
+                                currentKey: autoClickerController.rightHoldHotkey
+                                onKeySelected: function(key) { autoClickerController.setRightHoldHotkey(key) }
+                            }
+
+                            Text { text: tr("clicker.hold_right_hint"); color: "#99abc4"; font.pixelSize: 12 }
+                            Item { Layout.fillWidth: true }
+
+                            ToggleSwitch {
+                                checked: autoClickerController.rightDoubleTapEnabled
+                                onClicked: autoClickerController.setRightDoubleTapEnabled(checked)
+                            }
+                            Text { text: tr("clicker.right_double_tap_enable"); color: "#c7d7ed"; font.pixelSize: 12 }
+                        }
+
+                        Text {
+                            text: tr("clicker.right_hold_help")
+                            color: "#5d7a99"
+                            font.pixelSize: 11
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353"; opacity: 0.5 }
 
                 RowLayout {
@@ -257,10 +302,10 @@ Flickable {
 
                     ColumnLayout {
                         spacing: 4
-                        Text { text: tr("clicker.auto_pilot"); color: "#99abc4"; font.pixelSize: 12 }
+                        Text { text: tr("clicker.right_hold_short"); color: "#99abc4"; font.pixelSize: 12 }
                         HotkeyPicker {
-                            currentKey: autoClickerController.pilotHotkey
-                            onKeySelected: function(key) { autoClickerController.setPilotHotkey(key) }
+                            currentKey: autoClickerController.rightHoldHotkey
+                            onKeySelected: function(key) { autoClickerController.setRightHoldHotkey(key) }
                         }
                     }
                     

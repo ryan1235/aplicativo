@@ -60,12 +60,38 @@ Rectangle {
 
             // Mode Selection
             RowLayout {
-                spacing: 8
-                RadioButton {
-                    text: tr("production.mode_factory")
-                    checked: productionController.mode === "factory"
-                    onClicked: productionController.setMode("factory")
-                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
+                spacing: 6
+                Repeater {
+                    model: [
+                        { "label": tr("production.mode_factory"), "value": "factory", "fill": "#23334f" },
+                        { "label": tr("production.mode_mpf"), "value": "mpf", "fill": "#263f73" }
+                    ]
+                    delegate: Button {
+                        id: modeButton
+                        text: modelData.label
+                        checkable: true
+                        checked: productionController.mode === modelData.value
+                        Layout.preferredWidth: Math.max(118, modeLabel.implicitWidth + 30)
+                        Layout.preferredHeight: 32
+                        onClicked: productionController.setMode(modelData.value)
+                        contentItem: Text {
+                            id: modeLabel
+                            text: modeButton.text
+                            color: modeButton.checked ? "#031014" : "#e2f0ff"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        background: Rectangle {
+                            radius: 7
+                            color: modeButton.checked ? "#5eead4" : modelData.fill
+                            border.color: modeButton.checked ? "#b8fff6" : "#4b6f9e"
+                            border.width: modeButton.checked ? 2 : 1
+                        }
+                    }
                 }
                 RowLayout {
                     visible: productionController.mode === "factory"
@@ -87,52 +113,49 @@ Rectangle {
                         onClicked: productionController.setFactoryMultiplier(productionController.factoryMultiplier + 1)
                     }
                 }
-                RadioButton {
-                    text: tr("production.mode_mpf")
-                    checked: productionController.mode === "mpf"
-                    onClicked: productionController.setMode("mpf")
-                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
-                }
             }
 
             Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: "#24486d" }
 
             // Faction Selection
             RowLayout {
-                spacing: 8
-                RadioButton {
-                    text: tr("production.faction_neutral")
-                    checked: productionController.faction === "Neutral"
-                    onClicked: productionController.setFaction("Neutral")
-                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
-                }
-                RadioButton {
-                    text: tr("production.faction_colonial")
-                    checked: productionController.faction === "Colonial"
-                    onClicked: productionController.setFaction("Colonial")
-                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
-                }
-                RadioButton {
-                    text: tr("production.faction_warden")
-                    checked: productionController.faction === "Warden"
-                    onClicked: productionController.setFaction("Warden")
-                    contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
+                spacing: 6
+                Repeater {
+                    model: [
+                        { "label": tr("production.faction_neutral"), "value": "Neutral", "fill": "#20314d" },
+                        { "label": tr("production.faction_warden"), "value": "Warden", "fill": "#263f73" },
+                        { "label": tr("production.faction_colonial"), "value": "Colonial", "fill": "#244f44" }
+                    ]
+                    delegate: Button {
+                        id: factionButton
+                        text: modelData.label
+                        checkable: true
+                        checked: productionController.faction === modelData.value
+                        Layout.preferredWidth: Math.max(92, factionLabel.implicitWidth + 30)
+                        Layout.preferredHeight: 32
+                        onClicked: productionController.setFaction(modelData.value)
+                        contentItem: Text {
+                            id: factionLabel
+                            text: factionButton.text
+                            color: factionButton.checked ? "#031014" : "#e2f0ff"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        background: Rectangle {
+                            radius: 7
+                            color: factionButton.checked ? "#5eead4" : modelData.fill
+                            border.color: factionButton.checked ? "#b8fff6" : "#4b6f9e"
+                            border.width: factionButton.checked ? 2 : 1
+                        }
+                    }
                 }
             }
 
             Item { Layout.fillWidth: true } // Spacer
-
-            ColumnLayout {
-                spacing: 2
-                Text { text: tr("production.shift_hint"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.alignment: Qt.AlignRight }
-                TextField {
-                    Layout.preferredWidth: 260
-                    placeholderText: tr("production.search_placeholder") || "Buscar item..."
-                    color: "#edf6ff"
-                    onTextChanged: productionController.search(text)
-                    background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
-                }
-            }
         }
 
         ScrollView {
@@ -199,12 +222,25 @@ Rectangle {
                     anchors.margins: 12
                     spacing: 8
 
-                    Text {
-                        text: tr("production.items")
-                        color: "#edf6ff"
-                        font.family: "Segoe UI"
-                        font.pixelSize: 17
-                        font.bold: true
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        Text {
+                            text: tr("production.items")
+                            color: "#edf6ff"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 17
+                            font.bold: true
+                        }
+                        TextField {
+                            Layout.fillWidth: true
+                            Layout.maximumWidth: 280
+                            Layout.preferredHeight: 32
+                            placeholderText: tr("production.search_placeholder") || "Buscar item..."
+                            color: "#edf6ff"
+                            onTextChanged: productionController.search(text)
+                            background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#3b628f" }
+                        }
                     }
 
                     GridView {
@@ -599,14 +635,26 @@ Rectangle {
                                                         
                                                         // Left side: Trip info
                                                         ColumnLayout {
-                                                            Layout.preferredWidth: 84
+                                                            Layout.preferredWidth: 98
                                                             spacing: 6
                                                             Rectangle {
                                                                 Layout.fillWidth: true
                                                                 Layout.preferredHeight: 22
                                                                 radius: 4
                                                                 color: "#132b43"
-                                                                Text { anchors.centerIn: parent; text: row.title || ""; color: "#5eead4"; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 12 }
+                                                                Text {
+                                                                    anchors.fill: parent
+                                                                    anchors.leftMargin: 4
+                                                                    anchors.rightMargin: 4
+                                                                    text: row.title || ""
+                                                                    color: "#5eead4"
+                                                                    font.family: "Segoe UI"
+                                                                    font.bold: true
+                                                                    font.pixelSize: 11
+                                                                    horizontalAlignment: Text.AlignHCenter
+                                                                    verticalAlignment: Text.AlignVCenter
+                                                                    elide: Text.ElideRight
+                                                                }
                                                             }
                                                             RowLayout {
                                                                 spacing: 4

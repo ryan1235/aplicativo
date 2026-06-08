@@ -1439,7 +1439,7 @@ ApplicationWindow {
                     }
 
                     Rectangle {
-                        visible: discordLoginOverlay.waitingForProfile || discordLoginOverlay.accessDenied
+                        visible: discordLoginOverlay.waitingForProfile
                         Layout.fillWidth: true
                         Layout.preferredHeight: 76
                         radius: 10
@@ -1493,7 +1493,7 @@ ApplicationWindow {
                     }
 
                     Rectangle {
-                        visible: discordLoginOverlay.waitingForProfile
+                        visible: discordLoginOverlay.waitingForProfile || discordLoginOverlay.accessDenied
                         Layout.fillWidth: true
                         Layout.preferredHeight: Math.max(86, loginHelpText.implicitHeight + 28)
                         radius: 10

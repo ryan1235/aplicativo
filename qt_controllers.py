@@ -130,6 +130,133 @@ OVERLAY_COLOR_LABEL_KEYS = {
     "Vermelho": "overlay.color_red",
 }
 
+PANEL_REQUIRED_ACCESS_LEVEL = 2
+
+PANEL_ACCESS_ROLE_BY_LEVEL = {
+    2: "MEMBER",
+    3: "MEMBER",
+    4: "ADMIN",
+    5: "WINNER",
+}
+
+REGIMENT_CANONICAL = {
+    "STORM": "STORM",
+    "WRG": "WRG",
+    "LIDA": "LIDA",
+    "7CMD": "7CMD",
+    "FELB": "FELB",
+    "GDO": "GDO",
+    "DOGZ": "DOGZ",
+    "DOG'Z": "DOGZ",
+    "DOG Z": "DOGZ",
+    "REQ": "REQ",
+}
+
+
+def int_or_none(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_panel_role(current_role: object, access_level: int | None) -> str:
+    role = str(current_role or "").strip().upper()
+    if role == "DEV":
+        return "DEV"
+    if access_level is None:
+        return role
+    return PANEL_ACCESS_ROLE_BY_LEVEL.get(access_level, role or "MEMBER")
+
+
+def normalize_regiment(value: object) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    key = re.sub(r"[^A-Z0-9]+", " ", raw.upper()).strip()
+    compact = key.replace(" ", "")
+    for candidate in (raw.upper(), key, compact):
+        if candidate in REGIMENT_CANONICAL:
+            return REGIMENT_CANONICAL[candidate]
+    return raw
+
+
+def normalize_panel_access(access: object, user: dict[str, Any] | None = None) -> dict[str, Any]:
+    user = user or {}
+    access_data = access if isinstance(access, dict) else {}
+    access_level = int_or_none(
+        access_data.get("accessLevel")
+        or access_data.get("panelAccessLevel")
+        or user.get("panelAccessLevel")
+        or user.get("accessLevel")
+    )
+    api_allows_panel = bool(access_data.get("canLoginPanel")) if "canLoginPanel" in access_data else True
+    can_login_panel = bool(api_allows_panel and access_level is not None and access_level >= PANEL_REQUIRED_ACCESS_LEVEL)
+    return {
+        "accessLevel": access_level if access_level is not None else 0,
+        "canLoginPanel": can_login_panel,
+        "verified": access_level is not None,
+        "requiredAccessLevel": int_or_none(access_data.get("requiredAccessLevel")) or PANEL_REQUIRED_ACCESS_LEVEL,
+        "requiredRolesForAdminControls": access_data.get("requiredRolesForAdminControls") or ["WINNER", "DEV"],
+        "canLoginChat": access_data.get("canLoginChat", True),
+        "message": access_data.get("message") or access_data.get("reason") or "",
+    }
+
+
+def merge_panel_profile(user: dict[str, Any], access: object | None = None) -> dict[str, Any]:
+    merged = dict(user)
+    panel_access = normalize_panel_access(access or merged.get("panelAccess"), merged)
+    access_level = int_or_none(panel_access.get("accessLevel"))
+    role = normalize_panel_role(merged.get("role"), access_level)
+    if role:
+        merged["role"] = role
+    regiment = normalize_regiment(merged.get("regiment"))
+    if regiment:
+        merged["regiment"] = regiment
+    merged["panelAccess"] = panel_access
+    merged["panelAccessLevel"] = access_level if access_level is not None else 0
+    if access and isinstance(access, dict) and access.get("panelAccessSyncedAt"):
+        merged["panelAccessSyncedAt"] = access.get("panelAccessSyncedAt")
+    return merged
+
+
+def panel_access_allows_app_login(profile: dict[str, Any]) -> bool:
+    access = profile.get("panelAccess") if isinstance(profile.get("panelAccess"), dict) else {}
+    access_level = int_or_none(access.get("accessLevel") or profile.get("panelAccessLevel") or profile.get("accessLevel"))
+    if access_level is None:
+        return False
+    if access_level in (0, 1):
+        return False
+    if access.get("canLoginChat") is False:
+        return False
+    if "canLoginPanel" in access and access.get("canLoginPanel") is False:
+        return False
+    return access_level >= PANEL_REQUIRED_ACCESS_LEVEL
+
+
+def redact_login_debug(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if key_text in {"token", "accesstoken", "access_token", "refresh_token", "authorization", "client_secret"}:
+                text_value = str(item or "")
+                redacted[str(key)] = f"<redacted len={len(text_value)}>"
+            else:
+                redacted[str(key)] = redact_login_debug(item)
+        return redacted
+    if isinstance(value, list):
+        return [redact_login_debug(item) for item in value]
+    return value
+
+
+def debug_login_response(label: str, result: dict[str, Any]) -> None:
+    try:
+        body = json.dumps(redact_login_debug(result), ensure_ascii=False, indent=2)
+    except Exception:
+        body = str(result)
+    print(f"[GG Coalition login] {label} retornou:\n{body}", flush=True)
+
 
 def file_url(path: str | Path) -> str:
     return QUrl.fromLocalFile(str(Path(path).resolve())).toString()
@@ -422,6 +549,8 @@ class AppController(QObject):
         self._tutorial_dialog_visible = False
         self._tutorial_dialog_title = ""
         self._tutorial_dialog_body = ""
+        self._pending_admin_panel_token = ""
+        self._panel_access_check_running = False
         self._tutorial_key_by_page = {
             "home": "inicio",
             "chat": "chat",
@@ -457,8 +586,10 @@ class AppController(QObject):
 
     @Slot(str)
     def openAdminPanel(self, token: str) -> None:
-        """Verifica acesso na API antes de abrir o painel administrativo."""
+        """Verifica o acesso na API antes de abrir o painel administrativo."""
+        token = str(token or "").strip()
         if not token:
+            self._pending_admin_panel_token = ""
             self.showStartupDialog(
                 kind="error",
                 title="Acesso Negado",
@@ -468,41 +599,80 @@ class AppController(QObject):
             )
             return
 
+        # Guarda o token para o botão "Tentar novamente" refazer a mesma checagem na API.
+        self._pending_admin_panel_token = token
+        if self._panel_access_check_running:
+            self.panelAccessResult.emit("checking", "")
+            return
+
         def _check_and_open() -> None:
             try:
-                # Extrai o discordId do token via /chat/profile
                 profile_res = http_json("GET", "/chat/profile", token=token)
                 profile = profile_res.get("profile") or profile_res
-                discord_id = str(profile.get("discordId") or "")
-                if not discord_id:
-                    self.panelAccessResult.emit("error", "Não foi possível obter seu Discord ID. Faça login novamente.")
-                    return
+                if not isinstance(profile, dict):
+                    raise RuntimeError("Perfil inválido retornado pela API.")
 
-                # Verifica acesso via POST /chat/panel/access
-                access_res = http_json("POST", "/chat/panel/access", token=token, body={"discordId": discord_id})
-                can_login = bool(access_res.get("canLoginPanel"))
-                if can_login:
+                profile = merge_panel_profile(profile, profile_res.get("panelAccess") or profile.get("panelAccess"))
+                discord_id = str(profile.get("discordId") or profile.get("discord_id") or "").strip()
+                panel_access = profile.get("panelAccess") if isinstance(profile.get("panelAccess"), dict) else {}
+
+                if discord_id and not bool(panel_access.get("verified")):
+                    access_res = http_json("POST", "/chat/panel/access", token=token, payload={"discordId": discord_id})
+                    profile = merge_panel_profile(
+                        access_res.get("user") if isinstance(access_res.get("user"), dict) else profile,
+                        access_res,
+                    )
+                    panel_access = profile.get("panelAccess") if isinstance(profile.get("panelAccess"), dict) else {}
+
+                access_level = int_or_none(panel_access.get("accessLevel"))
+                if bool(panel_access.get("canLoginPanel")) and access_level is not None and access_level >= PANEL_REQUIRED_ACCESS_LEVEL:
                     self.panelAccessResult.emit("ok", token)
                 else:
-                    reason = str(access_res.get("message") or "Você não tem permissão para acessar o painel.")
+                    reason = "Acesso ao painel negado."
+                    if access_level in (0, 1):
+                        reason = f"Seu nível de acesso ({access_level}) não permite entrar no painel."
+                    elif panel_access:
+                        reason = f"Nível mínimo para o painel: {panel_access.get('requiredAccessLevel', PANEL_REQUIRED_ACCESS_LEVEL)}."
                     self.panelAccessResult.emit("error", reason)
             except Exception as exc:
                 self.panelAccessResult.emit("error", f"Erro ao verificar acesso: {exc}")
+            finally:
+                self._panel_access_check_running = False
 
+        self._panel_access_check_running = True
         self.panelAccessResult.emit("checking", "")
         threading.Thread(target=_check_and_open, daemon=True).start()
+
+    @Slot()
+    def retryAdminPanelAccess(self) -> None:
+        """Refaz a checagem do painel quando o usuário clica em Tentar novamente."""
+        token = str(getattr(self, "_pending_admin_panel_token", "") or "").strip()
+        self._startup_dialog_visible = False
+        self.startupDialogChanged.emit()
+        if token:
+            self.openAdminPanel(token)
+            return
+        self.showStartupDialog(
+            kind="error",
+            title="Acesso Negado",
+            subtitle="Sem autenticação",
+            body="Você precisa estar logado com o Discord para acessar o painel.",
+            image_url="",
+        )
 
     @Slot(str, str)
     def _on_panel_access_result(self, status: str, payload: str) -> None:
         if status == "ok":
             token = payload
+            self._pending_admin_panel_token = ""
             try:
                 import admin_server
                 admin_server.start_admin_server()
             except Exception as e:
                 print(f"Failed to start admin server: {e}")
             import urllib.parse
-            params = urllib.parse.urlencode({"token": token or "", "apiUrl": CHAT_API_BASE})
+            api_hint = base64.urlsafe_b64encode(CHAT_API_BASE.encode("utf-8")).decode("ascii")
+            params = urllib.parse.urlencode({"token": token or "", "api": api_hint})
             url_str = f"http://localhost:3334/?{params}"
             success = QDesktopServices.openUrl(QUrl(url_str))
             if not success:
@@ -694,6 +864,9 @@ class AppController(QObject):
         if kind == "release":
             app_settings["last_release_notes_version"] = APP_VERSION
             save_settings(self.settings)
+        if kind == "error" and getattr(self, "_pending_admin_panel_token", ""):
+            self.retryAdminPanelAccess()
+            return
         self._startup_dialog_visible = False
         self._startup_dialog_kind = ""
         self.startupDialogChanged.emit()
@@ -723,27 +896,6 @@ class SteamController(QObject):
     @Property(str, notify=changed)
     def avatarUrl(self) -> str:
         return file_url(self._profile.avatar_path) if self._profile.avatar_path else ""
-
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -799,27 +951,6 @@ class SettingsController(QObject):
     @Property(str, notify=changed)
     def startupCommand(self) -> str:
         return startup_command(self.settings)
-
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -1014,7 +1145,11 @@ class AutoClickerController(QObject):
             str(data.get("fixed_hotkey", "F6")),
             str(data.get("pilot_hotkey", "F4")),
             str(data.get("artillery_hotkey", "F7")),
+            str(data.get("right_hold_hotkey", "F9")),
         )
+        self.clicker.shift_enabled = bool(data.get("shift_enabled", False))
+        self.clicker.w_doubletap_enabled = bool(data.get("w_doubletap_enabled", True))
+        self.clicker.right_doubletap_enabled = bool(data.get("right_doubletap_enabled", False))
         self.clicker.set_slot_positions(
             {
                 slot: (
@@ -1035,27 +1170,6 @@ class AutoClickerController(QObject):
     def available(self) -> bool:
         return self._available
 
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
-
     @Property(str, notify=changed)
     def status(self) -> str:
         return self._status
@@ -1064,15 +1178,22 @@ class AutoClickerController(QObject):
     def running(self) -> bool:
         return bool(self.clicker and self.clicker.enabled)
 
+    def _pilot_active(self) -> bool:
+        if not self.clicker:
+            return False
+        return bool(getattr(self.clicker, "w_hold_enabled", False))
+
     @Property(bool, notify=changed)
     def active(self) -> bool:
         return bool(
             self.clicker
             and (
-                self.clicker.enabled
-                or self.clicker.fixed_click_enabled
-                or self.clicker.move_click_enabled
-                or time.monotonic() < self.clicker.last_pilot_until
+                bool(getattr(self.clicker, "enabled", False))
+                or bool(getattr(self.clicker, "fixed_click_enabled", False))
+                or bool(getattr(self.clicker, "move_click_enabled", False))
+                or bool(getattr(self.clicker, "artillery_enabled", False))
+                or bool(getattr(self.clicker, "right_hold_enabled", False))
+                or self._pilot_active()
             )
         )
 
@@ -1086,7 +1207,27 @@ class AutoClickerController(QObject):
 
     @Property(bool, notify=changed)
     def pilotRunning(self) -> bool:
-        return bool(self.clicker and time.monotonic() < self.clicker.last_pilot_until)
+        return self._pilot_active()
+
+    @Property(bool, notify=changed)
+    def artilleryRunning(self) -> bool:
+        return bool(self.clicker and getattr(self.clicker, "artillery_enabled", False))
+
+    @Property(bool, notify=changed)
+    def rightHoldRunning(self) -> bool:
+        return bool(self.clicker and getattr(self.clicker, "right_hold_enabled", False))
+
+    @Property(bool, notify=changed)
+    def wHoldRunning(self) -> bool:
+        return self._pilot_active()
+
+    @Property(bool, notify=changed)
+    def wHoldPaused(self) -> bool:
+        return bool(self.clicker and getattr(self.clicker, "pilot_w_paused", False))
+
+    @Property(bool, notify=changed)
+    def shiftPressed(self) -> bool:
+        return bool(self.clicker and getattr(self.clicker, "shift_pressed", False))
 
     @Property(str, notify=changed)
     def hotkey(self) -> str:
@@ -1107,6 +1248,10 @@ class AutoClickerController(QObject):
     @Property(str, notify=changed)
     def artilleryHotkey(self) -> str:
         return str(self._clicker_settings().get("artillery_hotkey", "F7"))
+
+    @Property(str, notify=changed)
+    def rightHoldHotkey(self) -> str:
+        return str(self._clicker_settings().get("right_hold_hotkey", "F9"))
 
     @Property(str, notify=changed)
     def mouseButton(self) -> str:
@@ -1136,9 +1281,53 @@ class AutoClickerController(QObject):
         if self.clicker.fixed_click_enabled:
             items.append(f"FIXED {self.fixedHotkey}")
             items.append("SLOTS 1-4")
-        if time.monotonic() < self.clicker.last_pilot_until:
-            items.append(f"PILOT {self.pilotHotkey}")
+        if self.clicker.artillery_enabled:
+            items.append(f"ART {self.artilleryHotkey}")
+        if self.clicker.right_hold_enabled:
+            items.append(f"RMB HOLD {self.rightHoldHotkey}")
+        if self._pilot_active():
+            suffix = " PAUSADO" if getattr(self.clicker, "pilot_w_paused", False) else ""
+            items.append(f"W HOLD {self.pilotHotkey}{suffix}")
+        if self.clicker.shift_enabled:
+            items.append("SHIFT ON" if self.clicker.shift_pressed else "SHIFT READY")
         return " | ".join(items) if items else "-"
+
+    @Property(str, notify=changed)
+    def overlayPrimaryText(self) -> str:
+        if not self.clicker:
+            return "Auto Clicker indisponivel"
+        if getattr(self.clicker, "w_hold_enabled", False):
+            return f"W Hold {self.pilotHotkey}: {'pausado no S' if getattr(self.clicker, 'pilot_w_paused', False) else 'segurando W'}"
+        if getattr(self.clicker, "right_hold_enabled", False):
+            return f"Right Hold {self.rightHoldHotkey}: segurando direito"
+        if getattr(self.clicker, "artillery_enabled", False):
+            return f"Artilharia {self.artilleryHotkey}: R + clique"
+        if getattr(self.clicker, "move_click_enabled", False):
+            return f"Move-click {self.moveHotkey}: segurando clique"
+        if getattr(self.clicker, "fixed_click_enabled", False):
+            return f"Fixo {self.fixedHotkey}: clique + slots 1-4"
+        if getattr(self.clicker, "enabled", False):
+            shift = " + Shift" if getattr(self.clicker, "shift_pressed", False) else ""
+            return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.1f}s{shift}"
+        return f"{self.hotkey} auto | {self.pilotHotkey} W | {self.rightHoldHotkey} direito"
+
+    @Property(str, notify=changed)
+    def overlayHintText(self) -> str:
+        if not self.clicker:
+            return ""
+        if getattr(self.clicker, "w_hold_enabled", False):
+            return f"S pausa | Esc ou {self.pilotHotkey} para parar"
+        if getattr(self.clicker, "right_hold_enabled", False):
+            return f"Esc ou {self.rightHoldHotkey} para soltar"
+        if getattr(self.clicker, "artillery_enabled", False):
+            return "Esc ou clique direito para parar"
+        if getattr(self.clicker, "move_click_enabled", False):
+            return f"Esc ou {self.moveHotkey} para soltar"
+        if getattr(self.clicker, "fixed_click_enabled", False):
+            return "1-4 clicam slots | mouse/asd cancela"
+        if getattr(self.clicker, "enabled", False) and getattr(self.clicker, "shift_enabled", False):
+            return "Shift entra somente enquanto voce segura"
+        return ""
 
     @Property(QObject, constant=True)
     def slotModel(self) -> QObject:
@@ -1172,6 +1361,7 @@ class AutoClickerController(QObject):
                 f"{self.moveHotkey}: Move-Click hold",
                 f"{self.fixedHotkey}: fixed double-click and slots 1-4",
                 f"{self.pilotHotkey}: pilot sequence",
+                f"{self.rightHoldHotkey}: right mouse hold",
                 f"{self.artilleryHotkey}: artillery sequence",
                 "F5: orders and stock menu",
             ]
@@ -1221,6 +1411,12 @@ class AutoClickerController(QObject):
             self._save_and_apply()
 
     @Slot(str)
+    def setRightHoldHotkey(self, value: str) -> None:
+        if value in ACTION_KEYS:
+            self._clicker_settings()["right_hold_hotkey"] = value
+            self._save_and_apply()
+
+    @Slot(str)
     def setMouseButton(self, value: str) -> None:
         if value in MOUSE_BUTTONS:
             self._clicker_settings()["mouse_button"] = value
@@ -1248,6 +1444,18 @@ class AutoClickerController(QObject):
         save_settings(self.settings)
         if self.clicker:
             self.clicker.w_doubletap_enabled = bool(value)
+        self.changed.emit()
+
+    @Property(bool, notify=changed)
+    def rightDoubleTapEnabled(self) -> bool:
+        return bool(self._clicker_settings().get("right_doubletap_enabled", False))
+
+    @Slot(bool)
+    def setRightDoubleTapEnabled(self, value: bool) -> None:
+        self._clicker_settings()["right_doubletap_enabled"] = bool(value)
+        save_settings(self.settings)
+        if self.clicker:
+            self.clicker.right_doubletap_enabled = bool(value)
         self.changed.emit()
 
     @Slot(float)
@@ -1360,27 +1568,6 @@ class StockpileController(QObject):
     @Property(bool, notify=changed)
     def running(self) -> bool:
         return self._running
-
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -1986,6 +2173,9 @@ class ChatController(QObject):
         self._profile: dict[str, Any] = {}
         self._profile_loading = False
         self._profile_ready = False
+        self._auth_error_visible = False
+        self._auth_denied = False
+        self._discord_oauth_in_flight = False
         self._discord_configuration_checked = False
         self._discord_login_required = False
         self._mention_overlay_visible = False
@@ -2099,7 +2289,11 @@ class ChatController(QObject):
                     res = http_json("GET", f"/chat/users/{user_id}/profile", token=self._token)
                 else:
                     res = http_json("GET", "/chat/profile", token=self._token)
-                self.resultFromWorker.emit("profile-fetched", res.get("profile") or res)
+                profile = res.get("profile") if isinstance(res.get("profile"), dict) else res
+                if isinstance(profile, dict) and isinstance(res.get("panelAccess"), dict):
+                    profile = dict(profile)
+                    profile["panelAccess"] = res.get("panelAccess")
+                self.resultFromWorker.emit("profile-fetched", profile)
             except Exception as e:
                 self.resultFromWorker.emit("profile-error", str(e))
         threading.Thread(target=run, daemon=True).start()
@@ -2108,10 +2302,15 @@ class ChatController(QObject):
     def updateRegiment(self, regiment: str) -> None:
         if not self._token:
             return
+        regiment = normalize_regiment(regiment)
         def run():
             try:
                 res = http_json("PATCH", "/chat/profile", token=self._token, payload={"regiment": regiment})
-                self.resultFromWorker.emit("profile-updated", res.get("profile", {}))
+                profile = res.get("profile") if isinstance(res.get("profile"), dict) else {}
+                if isinstance(profile, dict) and isinstance(res.get("panelAccess"), dict):
+                    profile = dict(profile)
+                    profile["panelAccess"] = res.get("panelAccess")
+                self.resultFromWorker.emit("profile-updated", profile)
             except Exception as e:
                 self.resultFromWorker.emit("profile-error", str(e))
         threading.Thread(target=run, daemon=True).start()
@@ -2140,6 +2339,9 @@ class ChatController(QObject):
         self._profile = {}
         self._profile_loading = False
         self._profile_ready = False
+        self._auth_error_visible = False
+        self._auth_denied = False
+        self._discord_oauth_in_flight = False
         self._status = "Disconnected"
         self.changed.emit()
 
@@ -2236,6 +2438,26 @@ class ChatController(QObject):
     @Property(bool, notify=changed)
     def authInFlight(self) -> bool:
         return self._auth_in_flight
+
+    @Property(bool, notify=changed)
+    def authErrorVisible(self) -> bool:
+        return self._auth_error_visible
+
+    @Property(bool, notify=changed)
+    def authDenied(self) -> bool:
+        return self._auth_denied
+
+    @Property(bool, notify=changed)
+    def discordOAuthInFlight(self) -> bool:
+        return self._discord_oauth_in_flight
+
+    @Property(bool, notify=changed)
+    def canOpenAdminPanel(self) -> bool:
+        profile = getattr(self, "_profile", {})
+        if not isinstance(profile, dict):
+            return False
+        access = normalize_panel_access(profile.get("panelAccess"), profile)
+        return bool(access.get("canLoginPanel"))
 
     @Property(bool, notify=changed)
     def mentionOverlayVisible(self) -> bool:
@@ -2390,6 +2612,7 @@ class ChatController(QObject):
         return payload
 
     def _apply_current_user_profile(self, user: dict[str, Any]) -> None:
+        user = merge_panel_profile(user, user.get("panelAccess"))
         self._current_user_id = str(user.get("id") or self._current_user_id or "")
         self._current_user_provider = str(
             user.get("provider")
@@ -2415,38 +2638,12 @@ class ChatController(QObject):
             self._save_discord_profile(user)
 
     def _auth_with_discord(self, payload: dict[str, str]) -> dict[str, Any]:
-        discord_id = payload.get("discordId")
-        if discord_id:
-            try:
-                # Check if the user is allowed to login
-                access_info = http_json("POST", "/chat/panel/access", payload={"discordId": discord_id}, timeout=10)
-                if access_info.get("exists") and not access_info.get("canLoginChat", True):
-                    reason = access_info.get("message") or access_info.get("reason") or "Conta Bloqueada"
-                    raise ValueError(f"Acesso Negado: {reason}")
-            except ValueError as ve:
-                raise RuntimeError(str(ve))
-            except Exception as e:
-                # Parse HTTP error body if possible
-                err_msg = str(e)
-                try:
-                    # http_json raises RuntimeError("HTTP 403 Forbidden: {"exists": true, "canLoginChat": false...}")
-                    if "HTTP " in err_msg and ":" in err_msg:
-                        body_str = err_msg.split(":", 2)[-1].strip()
-                        if body_str.startswith("{"):
-                            import json
-                            err_data = json.loads(body_str)
-                            if err_data.get("exists") and not err_data.get("canLoginChat", True):
-                                reason = err_data.get("message") or err_data.get("reason") or "Conta Bloqueada"
-                                raise ValueError(f"Acesso Negado: {reason}")
-                except ValueError as ve:
-                    raise RuntimeError(str(ve))
-                except Exception:
-                    pass
-
         last_error: Exception | None = None
         for path in CHAT_DISCORD_AUTH_PATHS:
             try:
-                return http_json("POST", path, payload=payload, timeout=12)
+                result = http_json("POST", path, payload=payload, timeout=12)
+                debug_login_response(path, result)
+                return result
             except Exception as exc:
                 last_error = exc
         raise RuntimeError(str(last_error) if last_error else "chat auth failed")
@@ -2455,10 +2652,42 @@ class ChatController(QObject):
         last_error: Exception | None = None
         for path in CHAT_STEAM_AUTH_PATHS:
             try:
-                return http_json("POST", path, payload=payload, timeout=12)
+                result = http_json("POST", path, payload=payload, timeout=12)
+                debug_login_response(path, result)
+                return result
             except Exception as exc:
                 last_error = exc
         raise RuntimeError(str(last_error) if last_error else "chat auth failed")
+
+    def _verify_discord_app_access(self, result: dict[str, Any]) -> dict[str, Any]:
+        token = str(result.get("token") or result.get("accessToken") or "")
+        user = result.get("user") if isinstance(result.get("user"), dict) else result.get("profile")
+        if not isinstance(user, dict):
+            raise RuntimeError("A API não retornou perfil de usuário no login.")
+
+        access = result.get("panelAccess") or user.get("panelAccess")
+        profile = merge_panel_profile(user, access)
+
+        if not panel_access_allows_app_login(profile):
+            discord_id = str(profile.get("discordId") or profile.get("discord_id") or "").strip()
+            if discord_id:
+                access_result = http_json("POST", "/chat/panel/access", token=token or None, payload={"discordId": discord_id}, timeout=12)
+                debug_login_response("/chat/panel/access", access_result)
+                profile = merge_panel_profile(
+                    access_result.get("user") if isinstance(access_result.get("user"), dict) else profile,
+                    access_result,
+                )
+
+        if not panel_access_allows_app_login(profile):
+            access = profile.get("panelAccess") if isinstance(profile.get("panelAccess"), dict) else {}
+            level = int_or_none(access.get("accessLevel") or profile.get("panelAccessLevel") or profile.get("accessLevel"))
+            reason = str(access.get("message") or access.get("reason") or f"nível {level if level is not None else 0}")
+            raise RuntimeError(f"Acesso negado: {reason}")
+
+        result = dict(result)
+        result["user"] = profile
+        result["panelAccess"] = profile.get("panelAccess")
+        return result
 
     def _request_users(self) -> dict[str, Any]:
         last_error: Exception | None = None
@@ -2504,6 +2733,7 @@ class ChatController(QObject):
     @Slot()
     def connectWithDiscord(self) -> None:
         self.ensureStarted()
+        self._auth_retry_after = 0.0
         self._connect_with_discord(allow_oauth=True)
 
     @Slot()
@@ -2558,6 +2788,7 @@ class ChatController(QObject):
                     profile = self._discord_oauth_profile()
                     self._save_discord_profile(profile)
                     result = self._auth_with_discord(self._discord_auth_payload_from_profile(profile))
+                result = self._verify_discord_app_access(result)
                 self.resultFromWorker.emit("auth", result)
             except Exception as exc:
                 message = str(exc)
@@ -2566,6 +2797,9 @@ class ChatController(QObject):
                 self.resultFromWorker.emit("auth-error", self._t("home.chat.auth_error", message=message))
 
         self._auth_in_flight = True
+        self._auth_error_visible = False
+        self._auth_denied = False
+        self._discord_oauth_in_flight = not bool(discord_id)
         self._status = self._t("home.chat.authenticating_discord") if discord_id else self._t("home.chat.discord_opening")
         # NOTE: Do NOT set _discord_login_required = False here!
         # The overlay will only close once auth actually succeeds in _apply_result("auth").
@@ -2575,6 +2809,7 @@ class ChatController(QObject):
     @Slot()
     def connectWithSteam(self) -> None:
         self.ensureStarted()
+        self._auth_retry_after = 0.0
         if self._auth_in_flight:
             return
         if self._token:
@@ -2604,6 +2839,9 @@ class ChatController(QObject):
                 self.resultFromWorker.emit("auth-error", self._t("home.chat.auth_error", message=str(exc)))
 
         self._auth_in_flight = True
+        self._auth_error_visible = False
+        self._auth_denied = False
+        self._discord_oauth_in_flight = False
         self._status = self._t("home.chat.authenticating")
         self.changed.emit()
         threading.Thread(target=worker, daemon=True).start()
@@ -2840,6 +3078,9 @@ class ChatController(QObject):
     def _apply_result(self, kind: str, payload: object) -> None:
         if kind == "auth" and isinstance(payload, dict):
             self._auth_in_flight = False
+            self._auth_error_visible = False
+            self._auth_denied = False
+            self._discord_oauth_in_flight = False
             self._auth_retry_after = 0.0
             self._discord_configuration_checked = True
             self._discord_login_required = False
@@ -2847,6 +3088,7 @@ class ChatController(QObject):
             self._token = str(payload.get("token") or payload.get("accessToken") or "")
             user = payload.get("user") or payload.get("profile") or {}
             if isinstance(user, dict):
+                user = merge_panel_profile(user, payload.get("panelAccess") or user.get("panelAccess"))
                 self._apply_current_user_profile(user)
             else:
                 self._current_user_id = ""
@@ -2877,10 +3119,23 @@ class ChatController(QObject):
             self.refreshRooms()
         elif kind == "auth-error":
             self._auth_in_flight = False
+            self._discord_oauth_in_flight = False
             self._profile_loading = False
             self._profile_ready = False
             self._discord_configuration_checked = True
             self._discord_login_required = not bool(self._saved_discord_id())
+            self._auth_error_visible = True
+            payload_text = str(payload).lower()
+            denied_markers = (
+                "acesso negado",
+                "access denied",
+                "application access denied",
+                "acceso denegado",
+                "acceso a la aplicacion denegado",
+                "acces refuse",
+                "acces a l'application refuse",
+            )
+            self._auth_denied = any(marker in payload_text for marker in denied_markers)
             self._auth_retry_after = time.monotonic() + 30
             self._status = str(payload)
         elif kind == "rooms" and isinstance(payload, dict):
@@ -3264,27 +3519,6 @@ class ItemSearchController(QObject):
         if not self._loaded and not self._loading:
             self.refresh()
 
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
-
     @Property(str, notify=changed)
     def status(self) -> str:
         if self._status_key == "item_search.loaded":
@@ -3547,27 +3781,6 @@ class IdentifyItemController(QObject):
         self._templates_loaded = True
         self._status = f"{load_status} | {identify_dependencies_status()}"
         self.changed.emit()
-
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -3984,27 +4197,6 @@ class ProductionController(QObject):
         self._category = self._first_available_category()
         self._loaded = True
         self.refresh()
-
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -4471,9 +4663,14 @@ class ProductionController(QObject):
         rows: list[dict[str, Any]] = []
         for index, trip in enumerate(trips, 1):
             vehicle = str(trip.get("vehicle") or self._route_vehicle_mode)
+            title = f"Trip {index}"
+            route_part = int(trip.get("route_part") or 0)
+            route_parts = int(trip.get("route_parts") or 0)
+            if route_part and route_parts:
+                title = f"{title} ({route_part}/{route_parts})"
             rows.append(
                 {
-                    "title": f"Trip {index}",
+                    "title": title,
                     "vehicle": vehicle,
                     "materials": format_route_materials(trip.get("materials", {}), vehicle=vehicle),
                     "orders": format_route_orders(trip.get("orders", [])),
@@ -4571,27 +4768,6 @@ class TimeTaskController(QObject):
     @Property(QObject, constant=True)
     def macros(self) -> DictListModel:
         return self._macros
-
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
 
     @Property(str, notify=changed)
     def status(self) -> str:
@@ -5399,27 +5575,6 @@ class UpdateController(QObject):
     def _t(self, key: str, **kwargs: Any) -> str:
         return self.i18n.translator.t(key, **kwargs)
 
-
-    @Property("QVariantMap", notify=changed)
-    def userProfile(self) -> dict:
-        return getattr(self, "_profile", {})
-
-    @Slot()
-    def logout(self) -> None:
-        self._token = ""
-        self._discord_user_settings.clear()
-        save_settings(self.settings)
-        ws = getattr(self, "_ws", None)
-        if ws is not None:
-            ws.close()
-        self._discord_login_required = True
-        self._current_user_id = ""
-        self._profile = {}
-        self._status = "Disconnected"
-        self.changed.emit()
-
-
-
     @Property(str, notify=changed)
     def status(self) -> str:
         return self._status
@@ -5778,9 +5933,13 @@ class OverlayController(QObject):
         if time.monotonic() <= self._preview_until:
             self._set_visible(True)
             return
-        # Also show overlay when pilot (w_hold) is active
+        # Also show overlay when background hold modes are active.
         clicker = self.auto_clicker.clicker
-        if clicker and getattr(clicker, "w_hold_enabled", False):
+        if clicker and (
+            getattr(clicker, "move_click_enabled", False)
+            or getattr(clicker, "w_hold_enabled", False)
+            or getattr(clicker, "right_hold_enabled", False)
+        ):
             self._set_visible(True)
             return
         self._set_visible(self._is_foxhole_overlay_context())

@@ -18,6 +18,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "move_hotkey": "F2",
         "fixed_hotkey": "F6",
         "pilot_hotkey": "F4",
+        "right_hold_hotkey": "F9",
         "mouse_button": "Esquerdo",
         "interval": 0.05,
         "mode": "Foxhole",
@@ -46,6 +47,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "overlay_panel_y": None,
         "overlay_notification_x": None,
         "overlay_notification_y": None,
+        "right_doubletap_enabled": False,
     },
     "stockpile": {
         "enabled": True,
