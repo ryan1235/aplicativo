@@ -3149,14 +3149,7 @@ class ChatController(QObject):
             "emoji": emoji
         }))
 
-    @Slot(str, str)
-    def sendWhisperToUser(self, targetDiscordId: str, body: str) -> None:
-        if not self._token or not targetDiscordId or not body.strip(): return
-        self._ensure_ws().sendTextMessage(json.dumps({
-            "type": "send_whisper",
-            "targetDiscordId": targetDiscordId,
-            "content": body.strip()
-        }))
+
     @Slot(str)
     def sendGif(self, url: str) -> None:
         self.sendMessage(url)

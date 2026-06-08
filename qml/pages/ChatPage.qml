@@ -10,8 +10,6 @@ Rectangle {
     property int lastMessageCount: 0
     property string replyingTo: ""
     property string replyingToLabel: ""
-    property string whisperingTo: ""
-    property string whisperingToLabel: ""
     property string lastSelectedRoom: ""
     property string highlightMessageId: ""
     property bool preservingOlderMessages: false
@@ -370,24 +368,6 @@ Rectangle {
                                 Text { text: rowName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                 Text { text: rowDetail || ("@" + rowMention); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
-                            Rectangle {
-                                Layout.preferredWidth: 28
-                                Layout.preferredHeight: 28
-                                radius: 14
-                                color: whisperArea.containsMouse ? "#24486d" : "transparent"
-                                visible: rowDiscordId !== "" && rowDiscordId !== chatController.discordId
-                                Text { anchors.centerIn: parent; text: "W"; font.pixelSize: 12; color: "#edf6ff"; font.bold: true }
-                                MouseArea {
-                                    id: whisperArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        root.whisperingTo = rowDiscordId
-                                        root.whisperingToLabel = rowName
-                                        messageInput.forceActiveFocus()
-                                    }
-                                }
-                            }
                         }
                     }
                     ScrollBar.vertical: ScrollBar { active: onlineList.moving }
@@ -687,23 +667,6 @@ Rectangle {
                                         }
                                     }
                                 }
-                                Rectangle {
-                                    Layout.preferredWidth: 30
-                                    Layout.preferredHeight: 30
-                                    radius: 15
-                                    color: hoverWhisper.containsMouse ? "#24486d" : "#1d3353"
-                                    Text { anchors.centerIn: parent; text: "W"; font.pixelSize: 14; color: "#edf6ff"; font.bold: true }
-                                    visible: rowAuthorDiscordId !== "" && !rowMine
-                                    MouseArea {
-                                        id: hoverWhisper
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            root.whisperingTo = rowAuthorDiscordId
-                                            root.whisperingToLabel = rowAuthor
-                                        }
-                                    }
-                                }
                             }
                         }
                         ScrollBar.vertical: ScrollBar { active: messageList.moving }
@@ -750,34 +713,6 @@ Rectangle {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 4
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 30
-                        radius: 6
-                        color: "#2a1636"
-                        visible: root.whisperingTo !== ""
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 6
-                            spacing: 8
-                            Text { text: tr("home.chat.whispering_to") + root.whisperingToLabel; color: "#f3e8ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
-                            Text {
-                                text: "x"
-                                color: "#f87171"
-                                font.pixelSize: 14
-                                font.bold: true
-                                MouseArea {
-                                    anchors.fill: parent
-                                    anchors.margins: -4
-                                    onClicked: {
-                                        root.whisperingTo = ""
-                                        root.whisperingToLabel = ""
-                                    }
-                                }
-                            }
-                        }
-                    }
 
                     Rectangle {
                         Layout.fillWidth: true
@@ -847,9 +782,7 @@ Rectangle {
                             onTextChanged: chatController.updateMentionSuggestions(text)
                             onAccepted: {
                                 if (text.trim().length > 0) {
-                                    if (root.whisperingTo !== "") {
-                                        chatController.sendWhisperToUser(root.whisperingTo, text)
-                                    } else if (root.replyingTo !== "") {
+                                    if (root.replyingTo !== "") {
                                         chatController.sendMessageReply(text, root.replyingTo)
                                         root.replyingTo = ""
                                         root.replyingToLabel = ""
