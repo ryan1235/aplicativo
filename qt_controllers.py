@@ -333,33 +333,111 @@ def play_sound(name: str) -> None:
         pass
 
 
-def startup_target_and_args(settings: dict[str, Any]) -> tuple[Path, str]:
+def is_python_launcher(path: Path) -> bool:
+    return path.name.lower() in {"python.exe", "pythonw.exe", "py.exe"}
+
+
+def current_windows_module_exe() -> Path | None:
+    if os.name != "nt":
+        return None
+
+    import ctypes
+    try:
+        buffer = ctypes.create_unicode_buffer(32768)
+        size = ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, len(buffer))
+        if size:
+            path = Path(buffer.value).resolve()
+            if path.exists():
+                return path
+    except Exception:
+        pass
+
+    return None
+
+
+def built_executable_path() -> Path | None:
+    candidates: list[Path] = []
+
+    module_exe = current_windows_module_exe()
+    if module_exe:
+        candidates.append(module_exe)
+
+    try:
+        if sys.argv and sys.argv[0]:
+            candidates.append(Path(sys.argv[0]).resolve())
+    except Exception:
+        pass
+
+    try:
+        current_exe = Path(sys.executable).resolve()
+        candidates.append(current_exe)
+        candidates.append(current_exe.parent / f"{APP_TITLE}.exe")
+    except Exception:
+        pass
+
+    candidates.append(BASE_DIR / f"{APP_TITLE}.exe")
+
+    for candidate in candidates:
+        try:
+            candidate = candidate.resolve()
+            if (
+                candidate.exists()
+                and candidate.suffix.lower() == ".exe"
+                and not is_python_launcher(candidate)
+            ):
+                return candidate
+        except Exception:
+            pass
+
+    return None
+
+
+def is_built_app() -> bool:
+    return bool(
+        getattr(sys, "frozen", False)
+        or "__compiled__" in globals()
+        or hasattr(sys, "_MEIPASS")
+    )
+
+
+def startup_target_and_args(settings: dict[str, Any]) -> tuple[Path, list[str]]:
     app_settings = settings.get("app", {})
-    background_arg = " --background" if app_settings.get("start_in_background", False) else ""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve(), background_arg.strip()
+    args: list[str] = []
+
+    if app_settings.get("start_in_background", False):
+        args.append("--background")
+
+    if is_built_app():
+        exe = built_executable_path()
+        if exe:
+            return exe, args
+        raise RuntimeError("Executável do aplicativo buildado não encontrado.")
 
     python_exe = Path(sys.executable).resolve()
     pythonw = python_exe.with_name("pythonw.exe")
     if pythonw.exists():
         python_exe = pythonw
-    return python_exe, f'"{(BASE_DIR / "felb_app.py").resolve()}"{background_arg}'
+
+    script_path = (BASE_DIR / "felb_app.py").resolve()
+    return python_exe, [str(script_path), *args]
 
 
 def startup_command(settings: dict[str, Any]) -> str:
-    target, arguments = startup_target_and_args(settings)
-    return f'"{target}" {arguments}'.strip() if arguments else f'"{target}"'
+    target, args = startup_target_and_args(settings)
+    return subprocess.list2cmdline([str(target), *args])
 
 
 def launch_target() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve()
+    exe = built_executable_path()
+    if exe:
+        return exe
     return BASE_DIR / "felb_app.py"
 
 
 def runtime_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return launch_target().parent
+    exe = built_executable_path()
+    if exe:
+        return exe.parent
     return BASE_DIR
 
 
@@ -408,6 +486,32 @@ def remove_startup_shortcuts() -> None:
             pass
 
 
+def read_startup_command() -> str:
+    if os.name != "nt":
+        return ""
+
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_READ) as key:
+            value, _kind = winreg.QueryValueEx(key, APP_TITLE)
+            return str(value or "")
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        return ""
+
+
+def startup_registry_matches(settings: dict[str, Any]) -> bool:
+    try:
+        expected = startup_command(settings).strip()
+    except Exception:
+        return False
+
+    current = read_startup_command().strip()
+    return current.lower() == expected.lower()
+
+
 def set_start_with_windows(enabled: bool, settings: dict[str, Any]) -> None:
     if os.name != "nt":
         raise RuntimeError("Windows startup is only available on Windows.")
@@ -416,10 +520,21 @@ def set_start_with_windows(enabled: bool, settings: dict[str, Any]) -> None:
 
     remove_startup_task()
     remove_startup_shortcuts()
+
     if enabled:
         command = startup_command(settings)
-        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+
+        with winreg.CreateKeyEx(
+            winreg.HKEY_CURRENT_USER,
+            STARTUP_RUN_KEY,
+            0,
+            winreg.KEY_SET_VALUE,
+        ) as key:
             winreg.SetValueEx(key, APP_TITLE, 0, winreg.REG_SZ, command)
+
+        if not startup_registry_matches(settings):
+            raise RuntimeError("Falha ao confirmar o comando de inicialização no Registro do Windows.")
+
         return
 
     try:
@@ -427,6 +542,42 @@ def set_start_with_windows(enabled: bool, settings: dict[str, Any]) -> None:
             winreg.DeleteValue(key, APP_TITLE)
     except FileNotFoundError:
         pass
+
+
+def ensure_startup_enabled_by_default(settings: dict[str, Any]) -> None:
+    app_settings = settings.setdefault("app", {})
+
+    if os.name != "nt" or not is_built_app():
+        return
+
+    # Se o usuário/app já queria iniciar com Windows, mas o caminho mudou após update,
+    # corrige o Registro para o EXE atual.
+    if app_settings.get("start_with_windows", False) and not startup_registry_matches(settings):
+        try:
+            set_start_with_windows(True, settings)
+            app_settings["start_with_windows"] = startup_registry_matches(settings)
+            app_settings.pop("startup_default_error", None)
+            save_settings(settings)
+        except Exception as exc:
+            app_settings["startup_default_error"] = str(exc)
+            save_settings(settings)
+        return
+
+    if app_settings.get("startup_default_applied", False):
+        return
+
+    try:
+        set_start_with_windows(True, settings)
+        app_settings["start_with_windows"] = startup_registry_matches(settings)
+        app_settings["startup_prompted"] = True
+        app_settings["startup_default_applied"] = True
+        app_settings.pop("startup_default_error", None)
+    except Exception as exc:
+        app_settings["start_with_windows"] = False
+        app_settings["startup_default_applied"] = True
+        app_settings["startup_default_error"] = str(exc)
+
+    save_settings(settings)
 
 
 class DictListModel(QAbstractListModel):
@@ -921,6 +1072,8 @@ class SettingsController(QObject):
         self._revision = 0
         self._status = ""
 
+        ensure_startup_enabled_by_default(self.settings)
+
     def _app_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("app", {})
 
@@ -946,7 +1099,9 @@ class SettingsController(QObject):
 
     @Property(bool, notify=changed)
     def startWithWindows(self) -> bool:
-        return bool(self._app_settings().get("start_with_windows", False))
+        if os.name == "nt":
+            return startup_registry_matches(self.settings)
+        return False
 
     @Property(str, notify=changed)
     def startupCommand(self) -> str:
@@ -1005,17 +1160,19 @@ class SettingsController(QObject):
     def setStartWithWindows(self, enabled: bool) -> None:
         enabled = bool(enabled)
         app_settings = self._app_settings()
+        app_settings["startup_user_changed"] = True
+
         try:
             set_start_with_windows(enabled, self.settings)
         except Exception as exc:
-            if enabled:
-                app_settings["start_with_windows"] = False
+            app_settings["start_with_windows"] = False
             self._status = str(exc)
             self._save()
             return
 
-        app_settings["start_with_windows"] = enabled
+        app_settings["start_with_windows"] = startup_registry_matches(self.settings) if enabled else False
         app_settings["startup_prompted"] = True
+        app_settings["startup_default_applied"] = True
         self._status = ""
         self._save()
 
