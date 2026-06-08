@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 import tempfile
@@ -92,8 +92,10 @@ def check_latest_release(repo: str, current_version: str, timeout: int = 8) -> U
             for item in zip_assets
             if "gg-coalition" in str(item.get("name") or "").lower()
         ),
-        zip_assets[0],
+        None,
     )
+    if asset is None:
+        return None
     return UpdateInfo(
         version=tag,
         name=str(release.get("name") or tag),
@@ -165,13 +167,13 @@ def download_update(
                 if progress_callback:
                     progress_callback(downloaded, total)
 
-    validate_update_zip(target, require_updater=False, translator=translator)
+    validate_update_zip(target, require_updater=True, translator=translator)
     return target
 
 
 def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path, *, language: str | None = None, translator: Any | None = None) -> None:
     validate_update_zip(zip_path, require_updater=True, translator=translator)
-    temp_update_dir = extract_update_package(zip_path)
+    temp_update_dir = extract_update_package(zip_path, translator=translator)
     updater_exe = temp_update_dir / UPDATER_EXE_NAME
     updater_py = Path(__file__).resolve().with_name("updater.py")
     args = [
@@ -203,10 +205,10 @@ def launch_updater(zip_path: Path, app_dir: Path, launch_target: Path, *, langua
     subprocess.Popen(command, cwd=str(executable.parent), close_fds=True, env=env)
 
 
-def extract_update_package(zip_path: Path) -> Path:
+def extract_update_package(zip_path: Path, *, translator: Any | None = None) -> Path:
     target = Path(tempfile.mkdtemp(prefix="gg_coalition_update_runner_"))
     with zipfile.ZipFile(zip_path, "r") as archive:
-        archive.extractall(target)
+        safe_extractall(archive, target, translator=translator)
     entries = [item for item in target.iterdir()]
     if len(entries) == 1 and entries[0].is_dir():
         return entries[0]
@@ -223,6 +225,7 @@ def validate_update_zip(zip_path: Path, *, require_updater: bool = True, transla
     if not zipfile.is_zipfile(zip_path):
         raise RuntimeError(_t(translator, "update.error_zip_invalid", path=zip_path))
     with zipfile.ZipFile(zip_path, "r") as archive:
+        validate_zip_member_paths(archive, translator=translator)
         names = {Path(name).name.lower() for name in archive.namelist()}
     required = [APP_EXE_NAME]
     if require_updater:
@@ -232,6 +235,27 @@ def validate_update_zip(zip_path: Path, *, require_updater: bool = True, transla
         raise RuntimeError(
             _t(translator, "update.error_zip_incomplete", missing=", ".join(missing))
         )
+
+
+def validate_zip_member_paths(archive: zipfile.ZipFile, *, translator: Any | None = None) -> None:
+    for member in archive.infolist():
+        normalized = member.filename.replace("\\", "/")
+        path = PurePosixPath(normalized)
+        if not normalized or path.is_absolute() or ".." in path.parts:
+            raise RuntimeError(_t(translator, "update.error_zip_invalid", path=member.filename))
+
+
+def safe_extractall(archive: zipfile.ZipFile, target: Path, *, translator: Any | None = None) -> None:
+    validate_zip_member_paths(archive, translator=translator)
+    target.mkdir(parents=True, exist_ok=True)
+    target_root = target.resolve()
+    for member in archive.infolist():
+        destination = (target / member.filename).resolve()
+        try:
+            destination.relative_to(target_root)
+        except ValueError as exc:
+            raise RuntimeError(_t(translator, "update.error_zip_invalid", path=member.filename)) from exc
+        archive.extract(member, target)
 
 
 def safe_asset_name(name: str) -> str:

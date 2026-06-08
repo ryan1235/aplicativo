@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import gc
+import hashlib
+import heapq
 import json
 import os
 import sqlite3
@@ -34,15 +37,20 @@ def foxhole_savegames_dir() -> Path:
 
 
 def discover_map_data_file() -> Path | None:
+    files = discover_map_data_files()
+    return files[0] if files else None
+
+
+def discover_map_data_files() -> list[Path]:
     savegames = foxhole_savegames_dir()
     if not savegames.exists():
-        return None
+        return []
     try:
         candidates = [path for path in savegames.glob("*_MapData.sav") if path.is_file()]
     except OSError:
-        return None
+        return []
     if not candidates:
-        return None
+        return []
     dated_candidates: list[tuple[float, Path]] = []
     for path in candidates:
         try:
@@ -50,8 +58,8 @@ def discover_map_data_file() -> Path | None:
         except OSError:
             continue
     if not dated_candidates:
-        return None
-    return max(dated_candidates, key=lambda item: item[0])[1]
+        return []
+    return [path for _mtime, path in sorted(dated_candidates, key=lambda item: item[0], reverse=True)]
 
 
 def default_watch_file() -> Path:
@@ -62,7 +70,20 @@ def default_watch_file() -> Path:
 
 
 DEFAULT_WATCH_FILE = default_watch_file()
-DEFAULT_API_URL = "https://felblogi.discloud.app/data"
+
+
+def _hidden_text(values: tuple[int, ...], *, mask: int = 71) -> str:
+    return "".join(chr(value ^ mask) for value in values)
+
+
+DEFAULT_API_URL = os.getenv(
+    "STOCKPILER_API_URL",
+    _hidden_text((47, 51, 51, 55, 52, 125, 104, 104, 33, 34, 43, 37, 43, 40, 32, 46, 105, 35, 46, 52, 36, 43, 40, 50, 35, 105, 38, 55, 55, 104, 35, 38, 51, 38)),
+)
+DEFAULT_API_KEY = os.getenv(
+    "FELB_API_KEY",
+    _hidden_text((6, 14, 61, 38, 112, 42, 116, 106, 46, 4, 15, 20, 43, 19, 37, 11, 3, 38, 49, 29, 44, 6, 10, 106, 113, 0, 49, 119, 61, 21, 4, 43, 11, 116, 119, 31, 37, 21, 20)),
+)
 STOCKPILE_DEBUG_LOG = extracted_dir() / "stockpile_debug.log"
 PINNED_TOOLTIPS_KEY = "PinnedMapToolTipsW"
 EXCLUDED_FIELD = "InitalMapItemDetails"
@@ -92,13 +113,25 @@ ICON_TABLES = (
     "aircraft",
 )
 UE_TICKS_AT_UNIX_EPOCH = 621_355_968_000_000_000
+MAX_LOG_MESSAGE_CHARS = 4000
+VERBOSE_STOCKPILE_DEBUG = os.environ.get("FELB_STOCKPILE_VERBOSE_DEBUG", "").lower() in {"1", "true", "yes", "on"}
+PRETTY_STOCKPILE_JSON = os.environ.get("FELB_STOCKPILE_PRETTY_JSON", "").lower() in {"1", "true", "yes", "on"}
 
 
 class ExtractError(RuntimeError):
     pass
 
 
+def _compact_log_message(message: object) -> str:
+    text = str(message)
+    if len(text) <= MAX_LOG_MESSAGE_CHARS:
+        return text
+    omitted = len(text) - MAX_LOG_MESSAGE_CHARS
+    return f"{text[:MAX_LOG_MESSAGE_CHARS]}... <truncated {omitted} chars>"
+
+
 def _debug_log(message: str) -> None:
+    message = _compact_log_message(message)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {message}"
     print(line, flush=True)
@@ -111,6 +144,7 @@ def _debug_log(message: str) -> None:
 
 
 def _runtime_log(message: str) -> None:
+    message = _compact_log_message(message)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}", flush=True)
 
@@ -299,14 +333,61 @@ def convert_to_api_payload(entries: list[Any], source_file: Path) -> dict[str, A
     }
 
 
-def write_json(data: Any, output: Path | None) -> None:
-    text = json.dumps(data, ensure_ascii=False, indent=2)
+def _stable_hash_update(hasher: "hashlib._Hash", value: Any) -> None:
+    if isinstance(value, dict):
+        hasher.update(b"{")
+        first = True
+        for key in sorted((item for item in value.keys() if str(item) != "extracted_at"), key=str):
+            if not first:
+                hasher.update(b",")
+            first = False
+            hasher.update(json.dumps(str(key), ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+            hasher.update(b":")
+            _stable_hash_update(hasher, value[key])
+        hasher.update(b"}")
+        return
+    if isinstance(value, list):
+        hasher.update(b"[")
+        for index, item in enumerate(value):
+            if index:
+                hasher.update(b",")
+            _stable_hash_update(hasher, item)
+        hasher.update(b"]")
+        return
+    hasher.update(json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+
+
+def stable_payload_hash(value: Any) -> str:
+    hasher = hashlib.sha256()
+    _stable_hash_update(hasher, value)
+    return hasher.hexdigest()
+
+
+def payload_hash_path(output: Path) -> Path:
+    return output.with_suffix(output.suffix + ".sha256")
+
+
+def write_payload_hash(payload: Any, output: Path, payload_hash: str | None = None) -> None:
+    digest = payload_hash or stable_payload_hash(payload)
+    try:
+        payload_hash_path(output).write_text(digest + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def write_json(data: Any, output: Path | None, payload_hash: str | None = None) -> None:
     if output is None:
-        print(text, flush=True)
+        print(json.dumps(data, ensure_ascii=False, indent=2), flush=True)
         return
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(text + "\n", encoding="utf-8")
+        with output.open("w", encoding="utf-8") as handle:
+            if PRETTY_STOCKPILE_JSON:
+                json.dump(data, handle, ensure_ascii=False, indent=2)
+            else:
+                json.dump(data, handle, ensure_ascii=False, separators=(",", ":"))
+            handle.write("\n")
+        write_payload_hash(data, output, payload_hash)
         _runtime_log(f"[Stockpile] JSON written to {output}")
     except OSError as exc:
         raise ExtractError(f"Nao foi possivel criar o JSON em {output}: {exc}") from exc
@@ -320,7 +401,7 @@ def parse_api_response(status: int, response_body: str) -> dict[str, Any]:
     return {
         "status_text": f"HTTP {status}",
         "body": parsed,
-        "raw_body": response_body,
+        "raw_body": "" if parsed is not None else response_body,
     }
 
 
@@ -544,21 +625,28 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
                 "warehouse_last_update": str(item.get("WarehouseLastUpdate") or "-"),
             }
         )
-    return sorted(rows, key=lambda item: (item["warehouse"], item["display_name"]))
+    rows.sort(key=lambda item: (item["warehouse"], item["display_name"]))
+    return rows
 
 
 def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST") -> dict[str, Any]:
-    body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     log_upload = purpose == "upload" and method.upper() == "POST"
     log = _debug_log if log_upload else _runtime_log
-    log(f"[Stockpile API] request start purpose={purpose} method={method} url={api_url}")
+    log(f"[Stockpile API] request start purpose={purpose} method={method} endpoint=stockpile")
     if log_upload:
         _debug_log(f"[Stockpile API] request payload bytes={len(body)}")
-        _debug_log(f"[Stockpile API] request payload body={body.decode('utf-8', errors='replace')}")
+        if VERBOSE_STOCKPILE_DEBUG:
+            _debug_log(f"[Stockpile API] request payload body={body.decode('utf-8', errors='replace')}")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-API-Key": DEFAULT_API_KEY,
+    }
     request = urllib.request.Request(
         api_url,
         data=body,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers=headers,
         method=method,
     )
     try:
@@ -566,7 +654,7 @@ def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST")
             response_body = response.read().decode("utf-8", errors="replace")
             result = parse_api_response(response.status, response_body)
             log(f"[Stockpile API] response status={response.status}")
-            if log_upload:
+            if log_upload and VERBOSE_STOCKPILE_DEBUG:
                 _debug_log(f"[Stockpile API] response body={response_body}")
             log(f"[Stockpile API] {purpose}: {result['status_text']}")
             return result
@@ -595,26 +683,28 @@ def last_sent_output_path(sav_path: Path, out_dir: Path) -> Path:
     return out_dir / f"{sav_path.stem}_last_sent.json"
 
 
-def stable_payload_for_compare(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {
-            key: stable_payload_for_compare(item)
-            for key, item in value.items()
-            if key not in {"extracted_at"}
-        }
-    if isinstance(value, list):
-        return [stable_payload_for_compare(item) for item in value]
-    return value
-
-
-def payload_changed_since_json(payload: dict[str, Any], output: Path) -> bool:
+def payload_changed_since_json(payload: dict[str, Any], output: Path, payload_hash: str | None = None) -> bool:
+    current_hash = payload_hash or stable_payload_hash(payload)
+    hash_path = payload_hash_path(output)
+    try:
+        previous_hash = hash_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        previous_hash = ""
+    if previous_hash:
+        return previous_hash != current_hash
     if not output.exists():
         return True
     try:
-        previous = json.loads(output.read_text(encoding="utf-8"))
+        with output.open("r", encoding="utf-8") as handle:
+            previous = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return True
-    return stable_payload_for_compare(previous) != stable_payload_for_compare(payload)
+    previous_hash = stable_payload_hash(previous)
+    del previous
+    changed = previous_hash != current_hash
+    if not changed:
+        write_payload_hash(payload, output, current_hash)
+    return changed
 
 
 def summarize_payload(payload: dict[str, Any], api_response: dict[str, Any]) -> dict[str, Any]:
@@ -695,19 +785,21 @@ def log_stockpile_debug_details(
         inventory_type = header.get("inventory_type", "-")
         map_id = header.get("map_id") or metadata.get("map_id") or "-"
         _debug_log(f"[Stockpile Reload] #{index} {name} type={inventory_type} map={map_id} items={len(items)}")
-        sorted_items = sorted(
-            [item for item in items if isinstance(item, dict)],
+        valid_count = sum(1 for item in items if isinstance(item, dict))
+        sample_items = heapq.nsmallest(
+            20,
+            (item for item in items if isinstance(item, dict)),
             key=lambda item: (str(item.get("display_name") or item.get("asset_name") or ""), int(item.get("quantity") or 0)),
         )
-        for item in sorted_items[:20]:
+        for item in sample_items:
             display = item.get("display_name") or item.get("asset_name") or "-"
             asset = item.get("asset_name") or "-"
             quantity = item.get("quantity") or 0
             crate_quantity = item.get("crate_quantity") or 0
             crate_text = f", crates={crate_quantity}" if crate_quantity else ""
             _debug_log(f"[Stockpile Reload]    - {display} ({asset}) qty={quantity}{crate_text}")
-        if len(sorted_items) > 20:
-            _debug_log(f"[Stockpile Reload]    ... +{len(sorted_items) - 20} itens")
+        if valid_count > 20:
+            _debug_log(f"[Stockpile Reload]    ... +{valid_count - 20} itens")
 
 
 def extract_and_post(
@@ -719,26 +811,28 @@ def extract_and_post(
     force_api_refresh: bool = False,
     upload_reason: str = "file_changed",
 ) -> dict[str, Any] | None:
-    _runtime_log(f"[Stockpile] extract_and_post start file={path} out_dir={out_dir} api_url={api_url}")
+    _runtime_log(f"[Stockpile] extract_and_post start file={path} out_dir={out_dir} endpoint=stockpile")
     data = extract_pinned_tooltips(path, strip_enum_prefixes=not keep_enum_prefixes)
     extracted_entries = len(data) if isinstance(data, list) else 0
     _runtime_log(f"[Stockpile] extracted entries={extracted_entries}")
     payload = convert_to_api_payload(data, path)
+    del data
+    current_hash = stable_payload_hash(payload)
     output = default_output_path(path, out_dir)
     sent_output = last_sent_output_path(path, out_dir)
-    capture_changed = payload_changed_since_json(payload, output)
-    api_payload_changed = payload_changed_since_json(payload, sent_output)
+    capture_changed = payload_changed_since_json(payload, output, current_hash)
+    api_payload_changed = payload_changed_since_json(payload, sent_output, current_hash)
     _runtime_log(
         "[Stockpile] "
         f"capture_changed={capture_changed} api_payload_changed={api_payload_changed} "
-        f"force_api_refresh_ignored={force_api_refresh} output={output} last_sent={sent_output}"
+        f"force_api_refresh={force_api_refresh} output={output} last_sent={sent_output}"
     )
     if capture_changed:
-        write_json(payload, output)
+        write_json(payload, output, current_hash)
     else:
         _runtime_log("[Stockpile] captured JSON unchanged")
 
-    if not api_payload_changed:
+    if not api_payload_changed and not force_api_refresh:
         log_stockpile_debug_details(
             payload,
             source_file=path,
@@ -751,6 +845,8 @@ def extract_and_post(
             action="skip: same as last sent JSON",
         )
         _runtime_log("[Stockpile] unchanged; API skipped")
+        del payload
+        gc.collect()
         return None
 
     report_count = len(payload.get("reports", []))
@@ -763,15 +859,18 @@ def extract_and_post(
         capture_changed=capture_changed,
         api_payload_changed=api_payload_changed,
         extracted_entries=extracted_entries,
-        action="POST to API",
+        action="POST to API" if api_payload_changed else "POST to API (forced refresh)",
     )
     _debug_log(f"[Stockpile] posting {report_count} private API reports")
     api_message = post_json(payload, api_url)
-    _debug_log(f"[Stockpile] API parsed message={json.dumps(api_message, ensure_ascii=False)}")
-    write_json(payload, sent_output)
+    _debug_log(f"[Stockpile] API parsed status={api_message.get('status_text', '-')}")
+    write_json(payload, sent_output, current_hash)
     summary = summarize_payload(payload, api_message)
+    del api_message
     summary["payload_changed"] = api_payload_changed
     summary["upload_reason"] = upload_reason
+    del payload
+    gc.collect()
     return summary
 
 
@@ -786,6 +885,7 @@ class StockpileWatcher:
         debounce: float = 3.0,
         interval: float = 0.5,
         sync_interval: float | None = None,
+        discovery_interval: float = 5.0,
         status_callback: Callable[[str | dict[str, Any]], None] | None = None,
     ) -> None:
         self.file_path = file_path
@@ -795,10 +895,13 @@ class StockpileWatcher:
         self.debounce = debounce
         self.interval = interval
         self.sync_interval = sync_interval
+        self.discovery_interval = max(interval, discovery_interval)
         self.status_callback = status_callback
         self.stop_event = threading.Event()
         self.thread: threading.Thread | None = None
         self.send_count = 0
+        self._cached_candidate_file: Path | None = None
+        self._last_discovery_at = 0.0
 
     def start(self) -> None:
         if self.thread and self.thread.is_alive():
@@ -823,91 +926,124 @@ class StockpileWatcher:
             self.status_callback(message)
 
     def _run(self) -> None:
-        path = self.file_path.resolve()
+        configured_path = self.file_path.resolve()
         self._status("running")
-        initial_stat = path.stat() if path.exists() else None
-        last_mtime_ns = initial_stat.st_mtime_ns if initial_stat else 0
-        last_size = initial_stat.st_size if initial_stat else -1
+        watched_path: Path | None = None
+        watched_stat: tuple[int, int] | None = None
+        pending_path: Path | None = None
+        pending_at: float | None = None
+        pending_upload_reason = ""
         _debug_log(
             "[Stockpile Watcher] started "
-            f"file={path} exists={initial_stat is not None} "
-            f"size={last_size} mtime_ns={last_mtime_ns} extract_initial={self.extract_initial}"
+            f"configured_file={configured_path} extract_initial={self.extract_initial}"
         )
-        pending_at = time.monotonic() if self.extract_initial else None
-        pending_upload_reason = "startup" if self.extract_initial else "file_changed"
-        if not path.exists():
-            _debug_log(f"[Stockpile Watcher] waiting for Foxhole save file={path}")
-            self._status(f"waiting for Foxhole save file: {path}")
+        initial_scan_done = False
+        if not self._candidate_file():
+            _debug_log(f"[Stockpile Watcher] waiting for Foxhole save files in {foxhole_savegames_dir()}")
+            self._status(f"waiting for Foxhole save files in: {foxhole_savegames_dir()}")
 
         while not self.stop_event.is_set():
-            try:
-                stat = path.stat()
-            except FileNotFoundError:
-                discovered = discover_map_data_file()
-                if discovered and discovered.resolve() != path:
-                    path = discovered.resolve()
-                    self.file_path = path
-                    stat = path.stat()
-                    last_mtime_ns = stat.st_mtime_ns
-                    last_size = stat.st_size
-                    pending_at = time.monotonic()
-                    _debug_log(
-                        "[Stockpile Watcher] discovered new save "
-                        f"file={path} size={last_size} mtime_ns={last_mtime_ns}"
-                    )
-                    self._status(f"found Foxhole save file: {path}")
-                    time.sleep(self.interval)
-                    continue
-                time.sleep(self.interval)
-                continue
-            except OSError as exc:
-                _debug_log(f"[Stockpile Watcher] cannot read file={path} error={exc}")
-                self._status(f"cannot read Foxhole save file: {path}: {exc}")
-                time.sleep(self.interval)
+            now = time.monotonic()
+            candidate = self._candidate_file()
+            if candidate is None:
+                initial_scan_done = True
+                if self.stop_event.wait(self.interval):
+                    break
                 continue
 
-            now = time.monotonic()
-            file_size = stat.st_size
-            mtime_ns = stat.st_mtime_ns
-            if mtime_ns != last_mtime_ns or file_size != last_size:
-                last_mtime_ns = mtime_ns
-                last_size = file_size
+            try:
+                resolved = candidate.resolve()
+                stat = resolved.stat()
+            except FileNotFoundError:
+                initial_scan_done = True
+                if self.stop_event.wait(self.interval):
+                    break
+                continue
+            except OSError as exc:
+                _debug_log(f"[Stockpile Watcher] cannot read file={candidate} error={exc}")
+                self._status(f"cannot read Foxhole save file: {candidate}: {exc}")
+                initial_scan_done = True
+                if self.stop_event.wait(self.interval):
+                    break
+                continue
+
+            current_stat = (stat.st_mtime_ns, stat.st_size)
+            is_new_active_file = watched_path is None or resolved != watched_path
+            if is_new_active_file:
+                watched_path = resolved
+                watched_stat = current_stat
+                self.file_path = resolved
+                if self.extract_initial or initial_scan_done:
+                    pending_path = resolved
+                    pending_at = now
+                    pending_upload_reason = "startup" if not initial_scan_done else "file_changed"
+                _debug_log(
+                    "[Stockpile Watcher] tracking latest save "
+                    f"file={resolved} size={stat.st_size} mtime_ns={stat.st_mtime_ns}"
+                )
+                status_prefix = "found newer Foxhole save file" if initial_scan_done else "found Foxhole save file"
+                self._status(f"{status_prefix}: {resolved}")
+            elif current_stat != watched_stat:
+                watched_stat = current_stat
+                pending_path = resolved
                 pending_at = now
                 pending_upload_reason = "file_changed"
                 _debug_log(
                     "[Stockpile Watcher] reload detected "
-                    f"file={path} size={file_size} mtime_ns={mtime_ns}"
+                    f"file={resolved} size={stat.st_size} mtime_ns={stat.st_mtime_ns}"
                 )
-                self._status("reload detected")
+                self._status(f"reload detected: {resolved.name}")
+            initial_scan_done = True
 
-            if pending_at is not None and now - pending_at >= self.debounce:
+            if pending_path is not None and pending_at is not None and now - pending_at >= self.debounce:
+                path = pending_path
+                upload_reason = pending_upload_reason
+                pending_path = None
                 pending_at = None
+                pending_upload_reason = ""
                 try:
-                    _debug_log(f"[Stockpile Watcher] processing reload reason={pending_upload_reason} file={path}")
-                    self._status("processing reload")
+                    _debug_log(f"[Stockpile Watcher] processing reload reason={upload_reason} file={path}")
+                    self._status(f"processing reload: {path.name}")
                     result = extract_and_post(
                         path,
                         self.out_dir,
                         self.api_url,
-                        upload_reason=pending_upload_reason,
+                        upload_reason=upload_reason,
                     )
-                    pending_upload_reason = "file_changed"
                     if result is None:
-                        self._status("stockpile unchanged")
+                        self._status(f"stockpile unchanged: {path.name}")
                     else:
                         self.send_count += 1
                         result["send_count"] = self.send_count
                         self._status(result)
                 except Exception as exc:
-                    self._status(f"error: {exc}")
+                    self._status(f"error processing {path.name}: {exc}")
 
-            time.sleep(self.interval)
+            if self.stop_event.wait(self.interval):
+                break
+
+    def _candidate_file(self) -> Path | None:
+        now = time.monotonic()
+        if self._cached_candidate_file is not None and now - self._last_discovery_at < self.discovery_interval:
+            return self._cached_candidate_file
+        discovered = discover_map_data_file()
+        if discovered:
+            self._cached_candidate_file = discovered
+            self._last_discovery_at = now
+            return discovered
+        if self.file_path.exists():
+            self._cached_candidate_file = self.file_path
+            self._last_discovery_at = now
+            return self.file_path
+        self._cached_candidate_file = None
+        self._last_discovery_at = now
+        return None
 
 
 def stockpile_settings_from_env() -> dict[str, Any]:
     return {
         "watch_file": os.getenv("STOCKPILER_WATCH_FILE", str(DEFAULT_WATCH_FILE)),
-        "api_url": os.getenv("STOCKPILER_API_URL", DEFAULT_API_URL),
+        "api_url": DEFAULT_API_URL,
         "out_dir": os.getenv("STOCKPILER_OUT_DIR", str(extracted_dir())),
         "enabled": True,
         "extract_initial": True,

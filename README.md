@@ -5,7 +5,7 @@ Primeira interface em Python para um painel inspirado em Foxhole.
 ## Rodar
 
 ```powershell
-py -m pip install --target vendor -r requirements-python.txt
+py -m pip install -r requirements-python.txt
 py felb_app.py
 ```
 
@@ -77,7 +77,7 @@ Ou, se preferir pelo PowerShell:
 py build_exe.py --install --clean --zip
 ```
 
-O script usa Nuitka, que compila o app para C/C++ e gera executavel `onefile`. Ele instala/atualiza `nuitka`, `customtkinter`, `pillow` e `pystray`, gera o executavel em:
+O script usa Nuitka, que compila o app para C/C++ e gera executavel `onefile`. Ele instala/atualiza `nuitka`, `PySide6` e `pillow`, gera o executavel em:
 
 ```text
 dist/GG Coalition.exe
@@ -132,12 +132,12 @@ Quando voce clica em `Capturar Foxhole`, se o cursor estiver em cima da janela d
 
 ## Organizacao
 
-- `felb_app.py`: janela principal e layout base.
+- `felb_app.py`: entrada PySide6, `QApplication` e carregamento de `qml/Main.qml`.
+- `qt_controllers.py`: controladores e modelos expostos para QML.
+- `qml/`: shell, componentes, paginas e overlay em Qt Quick/QML.
 - `steam_profile.py`: leitura local da Steam, nickname e avatar em cache.
-- `functions_category.py`: aba `Funcoes` da interface.
 - `auto_clicker.py`: logica do Auto Clicker, hotkey global e clique automatico.
 - `stockpiler.py`: leitura do arquivo `.sav`, conversao e envio para a API.
-- `stockpile_category.py`: tela de configuracao do envio automatico.
 - `i18n.py` e `translations/`: deteccao de idioma e catalogos de traducao.
 - `settings_store.py`: leitura e salvamento das configuracoes.
 - `app_update.py` e `updater.py`: checagem e instalacao de atualizacoes via GitHub Releases.

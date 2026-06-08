@@ -7,16 +7,19 @@ import filecmp
 import json
 import os
 from pathlib import Path
+from pathlib import PurePosixPath
 import shutil
 import subprocess
 import sys
 import tempfile
 import threading
 import time
-import tkinter as tk
-from tkinter import ttk
 import zipfile
 import traceback
+
+import PySide6
+from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
 
 try:
     from i18n import Translator, normalize_language
@@ -36,6 +39,8 @@ COLORS = {
     "text": "#edf6ff",
     "muted": "#99abc4",
     "accent": "#5eead4",
+    "warning": "#ffd166",
+    "error": "#ff6b6b",
     "line": "#2d496f",
 }
 
@@ -104,55 +109,113 @@ def _t(key: str, **kwargs) -> str:
     return TR.t(key, **kwargs)
 
 
-class UpdateWindow:
+def configure_qt_runtime() -> None:
+    pyside_dir = Path(PySide6.__file__).resolve().parent
+    try:
+        os.add_dll_directory(str(pyside_dir))
+    except (AttributeError, OSError):
+        pass
+    os.environ["PATH"] = str(pyside_dir) + os.pathsep + os.environ.get("PATH", "")
+    os.environ.setdefault("QT_PLUGIN_PATH", str(pyside_dir / "plugins"))
+
+
+class UpdateWindow(QObject):
+    progress_requested = Signal(int, str, str, str)
+
     def __init__(self) -> None:
-        self.root = tk.Tk()
-        self.root.title(_t("update.runner_window_title"))
-        self.root.geometry("460x240")
-        self.root.resizable(False, False)
-        self.root.configure(bg=COLORS["bg"])
-        self.root.protocol("WM_DELETE_WINDOW", lambda: None)
+        super().__init__()
+        self.window = QWidget()
+        self.window.setWindowTitle(_t("update.runner_window_title"))
+        self.window.setFixedSize(500, 268)
+        self.window.setWindowFlags(self.window.windowFlags() | Qt.WindowStaysOnTopHint)
+        self._accent = COLORS["accent"]
+        self._apply_style()
 
-        style = ttk.Style(self.root)
-        style.theme_use("clam")
-        style.configure("TProgressbar", troughcolor=COLORS["bg"], background=COLORS["accent"], bordercolor=COLORS["line"])
+        outer = QVBoxLayout(self.window)
+        outer.setContentsMargins(18, 18, 18, 18)
+        panel = QWidget()
+        panel.setObjectName("panel")
+        outer.addWidget(panel)
 
-        panel = tk.Frame(self.root, bg=COLORS["card"], highlightthickness=1, highlightbackground=COLORS["line"])
-        panel.pack(fill="both", expand=True, padx=18, pady=18)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(22, 22, 22, 22)
+        layout.setSpacing(12)
 
-        tk.Label(panel, text=_t("update.runner_heading"), bg=COLORS["card"], fg=COLORS["text"], font=("Segoe UI", 18, "bold")).pack(
-            anchor="w", padx=22, pady=(22, 4)
-        )
-        self.status_var = tk.StringVar(value=_t("update.runner_prepare"))
-        tk.Label(panel, textvariable=self.status_var, bg=COLORS["card"], fg=COLORS["muted"], font=("Segoe UI", 10)).pack(
-            anchor="w", padx=22, pady=(0, 18)
-        )
-        self.progress = ttk.Progressbar(panel, mode="determinate", maximum=100, value=0)
-        self.progress.pack(fill="x", padx=22, pady=(0, 14))
-        self.detail_var = tk.StringVar(value="")
-        tk.Label(panel, textvariable=self.detail_var, bg=COLORS["card"], fg=COLORS["accent"], font=("Segoe UI", 9, "bold"), wraplength=390, justify="left").pack(
-            anchor="w", padx=22
-        )
+        heading = QLabel(_t("update.runner_heading"))
+        heading.setObjectName("heading")
+        layout.addWidget(heading)
+
+        self.status_label = QLabel(_t("update.runner_prepare"))
+        self.status_label.setObjectName("status")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        layout.addWidget(self.progress)
+
+        progress_row = QHBoxLayout()
+        self.phase_label = QLabel(_t("update.runner_prepare"))
+        self.phase_label.setObjectName("phase")
+        progress_row.addWidget(self.phase_label, stretch=1)
+        self.percent_label = QLabel("0%")
+        self.percent_label.setObjectName("percent")
+        self.percent_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        progress_row.addWidget(self.percent_label)
+        layout.addLayout(progress_row)
+
+        self.detail_label = QLabel("")
+        self.detail_label.setObjectName("detail")
+        self.detail_label.setWordWrap(True)
+        layout.addWidget(self.detail_label, stretch=1)
+
+        self.progress_requested.connect(self._set_progress)
         self.center()
+        self.window.show()
 
     def center(self) -> None:
-        self.root.update_idletasks()
-        width = self.root.winfo_width()
-        height = self.root.winfo_height()
-        x = (self.root.winfo_screenwidth() - width) // 2
-        y = (self.root.winfo_screenheight() - height) // 2
-        self.root.geometry(f"{width}x{height}+{x}+{y}")
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+        rect = screen.availableGeometry()
+        frame = self.window.frameGeometry()
+        frame.moveCenter(rect.center())
+        self.window.move(frame.topLeft())
 
-    def set_progress(self, value: int, status: str, detail: str = "") -> None:
-        self.root.after(0, self._set_progress, value, status, detail)
+    def _apply_style(self) -> None:
+        self.window.setStyleSheet(
+            f"""
+            QWidget {{ background: {COLORS['bg']}; color: {COLORS['text']}; font-family: Segoe UI; }}
+            #panel {{ background: {COLORS['card']}; border: 1px solid {COLORS['line']}; border-radius: 8px; }}
+            QLabel#heading {{ font-size: 24px; font-weight: 700; color: {COLORS['text']}; }}
+            QLabel#status {{ font-size: 13px; color: {COLORS['muted']}; }}
+            QLabel#phase {{ font-size: 11px; font-weight: 700; color: {self._accent}; }}
+            QLabel#percent {{ font-size: 12px; font-weight: 700; color: {self._accent}; }}
+            QLabel#detail {{ font-size: 12px; font-weight: 700; color: {COLORS['muted']}; }}
+            QProgressBar {{ border: 1px solid {COLORS['line']}; border-radius: 6px; background: {COLORS['bg']}; height: 14px; }}
+            QProgressBar::chunk {{ background: {self._accent}; border-radius: 6px; }}
+            """
+        )
 
-    def _set_progress(self, value: int, status: str, detail: str = "") -> None:
-        self.progress.configure(value=value)
-        self.status_var.set(status)
-        self.detail_var.set(detail)
+    def set_progress(self, value: int, status: str, detail: str = "", accent: str | None = None) -> None:
+        self.progress_requested.emit(value, status, detail, accent or COLORS["accent"])
+
+    @Slot(int, str, str, str)
+    def _set_progress(self, value: int, status: str, detail: str = "", accent: str = "") -> None:
+        safe_value = max(0, min(100, int(value)))
+        if accent and accent != self._accent:
+            self._accent = accent
+            self._apply_style()
+        self.progress.setValue(safe_value)
+        self.percent_label.setText(f"{safe_value}%")
+        self.phase_label.setText(status)
+        self.status_label.setText(status)
+        self.detail_label.setText(detail)
 
     def close(self) -> None:
-        self.root.after(650, self.root.destroy)
+        QTimer.singleShot(650, self.window.close)
 
 
 def wait_for_process(pid: int, window: UpdateWindow, timeout: float = 25.0) -> None:
@@ -167,7 +230,7 @@ def wait_for_process(pid: int, window: UpdateWindow, timeout: float = 25.0) -> N
             os.kill(pid, 0)
         except OSError:
             return
-        window.set_progress(15, _t("update.runner_wait_app"), f"PID {pid}")
+        window.set_progress(15, _t("update.runner_wait_app"), f"PID {pid}", COLORS["warning"])
         time.sleep(0.25)
 
 
@@ -181,7 +244,7 @@ def wait_for_process_windows(pid: int, window: UpdateWindow, timeout: float) -> 
     try:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            window.set_progress(15, _t("update.runner_wait_app"), f"PID {pid}")
+            window.set_progress(15, _t("update.runner_wait_app"), f"PID {pid}", COLORS["warning"])
             result = kernel32.WaitForSingleObject(handle, 250)
             if result != wait_timeout:
                 return
@@ -198,7 +261,7 @@ def close_installed_app_processes(target: Path, window: UpdateWindow, timeout: f
     if not matches:
         return
     names = ", ".join(f"{name} (PID {pid})" for pid, name in matches)
-    window.set_progress(18, _t("update.runner_closing_app"), names)
+    window.set_progress(18, _t("update.runner_closing_app"), names, COLORS["warning"])
     for pid, _name in matches:
         subprocess.run(
             ["taskkill", "/PID", str(pid), "/T"],
@@ -212,7 +275,7 @@ def close_installed_app_processes(target: Path, window: UpdateWindow, timeout: f
         if not remaining:
             return
         detail = ", ".join(f"{name} (PID {pid})" for pid, name in remaining)
-        window.set_progress(20, _t("update.runner_wait_app"), detail)
+        window.set_progress(20, _t("update.runner_wait_app"), detail, COLORS["warning"])
         time.sleep(0.5)
     remaining = matching_processes_in_dir(target, {APP_EXE_NAME.lower(), UPDATER_EXE_NAME.lower()}, exclude_pid=current_pid)
     if remaining:
@@ -344,6 +407,7 @@ def copy_with_retry(source: Path, destination: Path, window: UpdateWindow, attem
                 80,
                 _t("update.runner_wait_file"),
                 _t("update.runner_wait_file_detail", file=destination.name, attempt=attempt, attempts=attempts),
+                COLORS["warning"],
             )
             time.sleep(1)
     if last_error:
@@ -361,9 +425,18 @@ def can_stage_locked_file(destination: Path, exc: OSError) -> bool:
 
 
 def save_locked_file_copy(source: Path, destination: Path, window: UpdateWindow) -> None:
-    pending = destination.with_name(f"{destination.name}.new")
-    shutil.copy2(source, pending)
-    window.set_progress(85, _t("update.runner_locked_saved"), pending.name)
+    old_file = destination.with_name(f"{destination.name}.old")
+    if old_file.exists():
+        try:
+            old_file.unlink()
+        except OSError:
+            pass
+    try:
+        destination.rename(old_file)
+    except OSError:
+        pass
+    shutil.copy2(source, destination)
+    window.set_progress(85, _t("update.runner_locked_saved"), destination.name)
 
 
 def extract_zip(zip_path: Path, window: UpdateWindow) -> Path:
@@ -375,7 +448,7 @@ def extract_zip(zip_path: Path, window: UpdateWindow) -> Path:
     temp_dir = Path(tempfile.mkdtemp(prefix="gg_coalition_update_"))
     window.set_progress(25, _t("update.runner_extracting"), zip_path.name)
     with zipfile.ZipFile(zip_path, "r") as archive:
-        archive.extractall(temp_dir)
+        safe_extractall(archive, temp_dir)
 
     entries = [item for item in temp_dir.iterdir()]
     if len(entries) == 1 and entries[0].is_dir():
@@ -389,12 +462,34 @@ def validate_update_zip(zip_path: Path) -> None:
     if not zipfile.is_zipfile(zip_path):
         raise RuntimeError(_t("update.runner_zip_invalid", path=zip_path))
     with zipfile.ZipFile(zip_path, "r") as archive:
+        validate_zip_member_paths(archive)
         names = {Path(name).name.lower() for name in archive.namelist()}
     missing = [name for name in (APP_EXE_NAME,) if name.lower() not in names]
     if missing:
         raise RuntimeError(
             _t("update.runner_zip_incomplete", missing=", ".join(missing))
         )
+
+
+def validate_zip_member_paths(archive: zipfile.ZipFile) -> None:
+    for member in archive.infolist():
+        normalized = member.filename.replace("\\", "/")
+        path = PurePosixPath(normalized)
+        if not normalized or path.is_absolute() or ".." in path.parts:
+            raise RuntimeError(_t("update.runner_zip_invalid", path=member.filename))
+
+
+def safe_extractall(archive: zipfile.ZipFile, target: Path) -> None:
+    validate_zip_member_paths(archive)
+    target.mkdir(parents=True, exist_ok=True)
+    target_root = target.resolve()
+    for member in archive.infolist():
+        destination = (target / member.filename).resolve()
+        try:
+            destination.relative_to(target_root)
+        except ValueError as exc:
+            raise RuntimeError(_t("update.runner_zip_invalid", path=member.filename)) from exc
+        archive.extract(member, target)
 
 
 def resolve_launch_target(launch: Path, target: Path) -> Path:
@@ -471,11 +566,11 @@ def run_update(args, window: UpdateWindow) -> None:
             raise RuntimeError(_t("update.runner_target_invalid", target=target))
         copy_tree(source, target, window)
         launch_app(launch, target, window)
-        window.set_progress(100, _t("update.runner_completed"), _t("update.runner_done"))
+        window.set_progress(100, _t("update.runner_completed"), _t("update.runner_done"), COLORS["accent"])
     except Exception as exc:
         target = Path(getattr(args, "target", tempfile.gettempdir()))
         log_path = write_error_log(target, exc)
-        window.set_progress(100, _t("update.runner_failed"), _t("update.runner_log", message=exc, log=log_path))
+        window.set_progress(100, _t("update.runner_failed"), _t("update.runner_log", message=exc, log=log_path), COLORS["error"])
         time.sleep(10)
     finally:
         window.close()
@@ -489,10 +584,11 @@ def main() -> int:
     parser.add_argument("--pid", type=int, default=0)
     args = parser.parse_args()
 
+    configure_qt_runtime()
+    app = QApplication(sys.argv)
     window = UpdateWindow()
     threading.Thread(target=run_update, args=(args, window), daemon=True).start()
-    window.root.mainloop()
-    return 0
+    return app.exec()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,1317 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GG Coalition - Admin</title>
+    <style>
+      :root {
+        --bg: #060b13;
+        --panel: #0b1423;
+        --panel-2: #101c30;
+        --panel-3: #14243b;
+        --line: #223a5b;
+        --line-soft: rgba(138, 180, 255, 0.16);
+        --text: #edf6ff;
+        --muted: #94a8c4;
+        --muted-2: #6f849f;
+        --accent: #5eead4;
+        --blue: #8ab4ff;
+        --yellow: #ffd166;
+        --danger: #fb7185;
+        --success: #34d399;
+        --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(
+            circle at 10% 18%,
+            rgba(94, 234, 212, 0.1),
+            transparent 24rem
+          ),
+          radial-gradient(
+            circle at 88% 8%,
+            rgba(138, 180, 255, 0.12),
+            transparent 24rem
+          ),
+          var(--bg);
+        font-family: "Segoe UI", Arial, sans-serif;
+        overflow: hidden;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-columns: 256px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--line);
+        background: rgba(8, 16, 30, 0.92);
+        padding: 22px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+
+      .brand-mark {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        color: #06221d;
+        background: linear-gradient(135deg, var(--accent), var(--blue));
+        font-weight: 800;
+      }
+
+      .brand-title {
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+
+      .brand-subtitle {
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .nav {
+        display: grid;
+        gap: 8px;
+      }
+
+      .nav button,
+      .sidebar-card {
+        width: 100%;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        text-align: left;
+      }
+
+      .nav button {
+        padding: 12px 12px;
+        font-weight: 700;
+      }
+
+      .nav button.active {
+        color: var(--accent);
+        border-color: var(--line);
+        background: var(--panel-2);
+      }
+
+      .sidebar-card {
+        margin-top: auto;
+        padding: 14px;
+        background: rgba(16, 28, 48, 0.72);
+        border-color: var(--line-soft);
+      }
+
+      .sidebar-card strong {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 12px;
+        color: var(--text);
+      }
+
+      .sidebar-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .topbar {
+        min-height: 72px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(8, 16, 30, 0.76);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 16px 26px;
+      }
+
+      .page-title {
+        min-width: 0;
+      }
+
+      .page-title h1 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.2;
+      }
+
+      .page-title p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .status-pill {
+        flex: 0 0 auto;
+        max-width: 360px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 12px;
+        color: var(--muted);
+        background: var(--panel);
+        font-size: 12px;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .status-pill.ok {
+        color: var(--accent);
+        border-color: rgba(94, 234, 212, 0.35);
+      }
+
+      .status-pill.warn {
+        color: var(--yellow);
+        border-color: rgba(255, 209, 102, 0.35);
+      }
+
+      .status-pill.error {
+        color: var(--danger);
+        border-color: rgba(251, 113, 133, 0.35);
+      }
+
+      .content {
+        min-height: 0;
+        overflow: auto;
+        padding: 24px 26px;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .metric,
+      .toolbar,
+      .table-shell,
+      .empty-state {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(11, 20, 35, 0.9);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+      }
+
+      .metric {
+        padding: 16px;
+      }
+
+      .metric-label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .metric-value {
+        margin-top: 9px;
+        font-size: 30px;
+        font-weight: 800;
+      }
+
+      .metric-value.accent {
+        color: var(--accent);
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) 150px 150px auto;
+        gap: 10px;
+        padding: 12px;
+        margin-bottom: 18px;
+      }
+
+      .field {
+        position: relative;
+      }
+
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #071020;
+        color: var(--text);
+        padding: 11px 12px;
+        outline: none;
+      }
+
+      .field textarea {
+        min-height: 94px;
+        resize: vertical;
+      }
+
+      .field label {
+        display: block;
+        margin: 0 0 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .btn {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-2);
+        color: var(--text);
+        padding: 10px 12px;
+        font-size: 13px;
+        font-weight: 800;
+        transition:
+          background 0.14s ease,
+          border-color 0.14s ease,
+          color 0.14s ease;
+      }
+
+      .btn:hover {
+        background: var(--panel-3);
+        border-color: var(--blue);
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        color: #04201d;
+        border-color: var(--accent);
+      }
+
+      .btn.danger {
+        color: var(--danger);
+        border-color: rgba(251, 113, 133, 0.35);
+      }
+
+      .btn.success {
+        color: var(--success);
+        border-color: rgba(52, 211, 153, 0.35);
+      }
+
+      .btn:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+
+      .table-shell {
+        min-height: 360px;
+        overflow: hidden;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--line-soft);
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #101c30;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      tbody tr {
+        transition: background 0.12s ease;
+      }
+
+      tbody tr:hover {
+        background: rgba(20, 36, 59, 0.48);
+      }
+
+      .user-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 240px;
+      }
+
+      .avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        object-fit: cover;
+        background: var(--panel-3);
+        border: 1px solid var(--line);
+        flex: 0 0 auto;
+      }
+
+      .avatar-fallback {
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+        font-weight: 800;
+      }
+
+      .user-name {
+        font-weight: 800;
+      }
+
+      .user-meta {
+        margin-top: 3px;
+        color: var(--muted-2);
+        font-size: 12px;
+        max-width: 330px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 12px;
+        font-weight: 800;
+        border: 1px solid transparent;
+      }
+
+      .role-dev {
+        color: var(--accent);
+        background: rgba(94, 234, 212, 0.1);
+        border-color: rgba(94, 234, 212, 0.22);
+      }
+
+      .role-winner {
+        color: var(--yellow);
+        background: rgba(255, 209, 102, 0.1);
+        border-color: rgba(255, 209, 102, 0.22);
+      }
+
+      .role-admin {
+        color: var(--blue);
+        background: rgba(138, 180, 255, 0.1);
+        border-color: rgba(138, 180, 255, 0.22);
+      }
+
+      .role-member {
+        color: var(--muted);
+        background: rgba(148, 168, 196, 0.1);
+        border-color: rgba(148, 168, 196, 0.18);
+      }
+
+      .state-active {
+        color: var(--success);
+      }
+
+      .state-blocked {
+        color: var(--danger);
+      }
+
+      .row-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .empty-state {
+        padding: 34px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      .drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        display: none;
+        background: rgba(2, 6, 12, 0.6);
+        z-index: 20;
+      }
+
+      .drawer-backdrop.open {
+        display: block;
+      }
+
+      .drawer {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: min(460px, 100vw);
+        height: 100%;
+        border-left: 1px solid var(--line);
+        background: #081020;
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .drawer-header {
+        padding: 22px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .drawer-header h2 {
+        margin: 0;
+        font-size: 19px;
+      }
+
+      .drawer-header p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+
+      .drawer-body {
+        min-height: 0;
+        overflow: auto;
+        padding: 22px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .drawer-footer {
+        border-top: 1px solid var(--line);
+        padding: 16px 22px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .notice {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        background: rgba(16, 28, 48, 0.72);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-line;
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%) translateY(20px);
+        min-width: 280px;
+        max-width: min(560px, calc(100vw - 32px));
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px 14px;
+        color: var(--text);
+        background: #0b1423;
+        box-shadow: var(--shadow);
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.16s ease,
+          transform 0.16s ease;
+        z-index: 30;
+        font-size: 13px;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .toast.error {
+        border-color: rgba(251, 113, 133, 0.4);
+        color: var(--danger);
+      }
+
+      @media (max-width: 920px) {
+        body {
+          overflow: auto;
+        }
+
+        .app {
+          min-height: 100%;
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          display: none;
+        }
+
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .status-pill {
+          max-width: 100%;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .toolbar {
+          grid-template-columns: 1fr;
+        }
+
+        .table-shell {
+          overflow: auto;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        th,
+        td {
+          padding: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">GG</div>
+          <div>
+            <div class="brand-title">Painel Administrativo</div>
+          </div>
+        </div>
+        <nav class="nav">
+          <button class="active" type="button">Usuários</button>
+        </nav>
+        <div class="sidebar-card">
+          <strong>Acesso permitido</strong>
+          <span
+            >Contas com nivel minimo de painel podem entrar. A API valida a
+            sessão antes de qualquer edição.</span
+          >
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="page-title">
+            <h1>Gestão de Usuários</h1>
+            <p>
+              Edite cargo, bloqueio e permissões dos usuários conectados ao
+              chat.
+            </p>
+          </div>
+          <div id="connection-status" class="status-pill warn">
+            Inicializando painel...
+          </div>
+        </header>
+
+        <section class="content">
+          <div class="metrics">
+            <div class="metric">
+              <div class="metric-label">Usuários</div>
+              <div id="metric-total" class="metric-value accent">0</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Ativos</div>
+              <div id="metric-active" class="metric-value">0</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Bloqueados</div>
+              <div id="metric-blocked" class="metric-value">0</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Equipe</div>
+              <div id="metric-staff" class="metric-value">0</div>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <div class="field">
+              <input
+                id="search-input"
+                type="search"
+                placeholder="Buscar por nome, Discord ID, Steam ID ou regimento"
+              />
+            </div>
+            <div class="field">
+              <select id="role-filter" aria-label="Filtrar por cargo">
+                <option value="">Todos os cargos</option>
+                <option value="DEV">DEV</option>
+                <option value="WINNER">WINNER</option>
+                <option value="ADMIN">ADMIN</option>
+                <option value="MEMBER">MEMBER</option>
+              </select>
+            </div>
+            <div class="field">
+              <select id="status-filter" aria-label="Filtrar por status">
+                <option value="">Todos os status</option>
+                <option value="ACTIVE">Ativos</option>
+                <option value="BLOCKED">Bloqueados</option>
+              </select>
+            </div>
+            <button id="refresh-button" class="btn primary" type="button">
+              Atualizar
+            </button>
+          </div>
+
+          <div class="table-shell">
+            <table>
+              <thead>
+                <tr>
+                  <th>Usuário</th>
+                  <th>Cargo</th>
+                  <th>Status</th>
+                  <th>Último login</th>
+                  <th style="text-align: right">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="users-body"></tbody>
+            </table>
+            <div id="empty-state" class="empty-state" hidden>
+              Nenhum usuário encontrado.
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="drawer-backdrop" class="drawer-backdrop">
+      <aside
+        class="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="drawer-title"
+      >
+        <div class="drawer-header">
+          <div>
+            <h2 id="drawer-title">Editar usuário</h2>
+            <p id="drawer-subtitle"></p>
+          </div>
+          <button id="close-drawer" class="btn" type="button">Fechar</button>
+        </div>
+        <div class="drawer-body">
+          <div class="field">
+            <label for="edit-role">Cargo</label>
+            <select id="edit-role">
+              <option value="MEMBER">MEMBER</option>
+              <option value="WINNER">WINNER</option>
+              <option value="DEV">DEV</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="block-reason">Motivo do bloqueio</label>
+            <textarea
+              id="block-reason"
+              placeholder="Informe o motivo quando for bloquear o usuário"
+            ></textarea>
+          </div>
+          <div class="notice" id="drawer-details"></div>
+        </div>
+        <div class="drawer-footer">
+          <button id="save-role" class="btn primary" type="button">
+            Salvar cargo
+          </button>
+          <button id="toggle-block" class="btn danger" type="button">
+            Bloquear
+          </button>
+        </div>
+      </aside>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+      const hiddenText = (values, mask = 71) =>
+        String.fromCharCode(...values.map((value) => value ^ mask));
+      const DEFAULT_API = hiddenText([
+        47, 51, 51, 55, 52, 125, 104, 104, 38, 53, 36, 47, 55, 46, 63, 34, 43,
+        105, 52, 54, 50, 38, 53, 34, 48, 34, 37, 105, 38, 55, 55,
+      ]);
+      const ACCESS_ROLES = new Set(["DEV", "WINNER", "ADMIN"]);
+      const ADMIN_CONTROL_ROLES = new Set(["DEV", "WINNER"]);
+      const EDITABLE_ROLES = new Set(["MEMBER", "WINNER", "DEV", "ADMIN"]);
+
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("token") || "";
+      const encodedApi = params.get("api") || "";
+      const legacyApi = params.get("apiUrl") || "";
+      const apiUrl = normalizeUrl(
+        encodedApi ? decodeApi(encodedApi) : legacyApi || DEFAULT_API,
+      );
+
+      const state = {
+        me: null,
+        users: [],
+        selectedUser: null,
+        loading: false,
+      };
+
+      const els = {
+        status: document.getElementById("connection-status"),
+        body: document.getElementById("users-body"),
+        empty: document.getElementById("empty-state"),
+        search: document.getElementById("search-input"),
+        roleFilter: document.getElementById("role-filter"),
+        statusFilter: document.getElementById("status-filter"),
+        refresh: document.getElementById("refresh-button"),
+        total: document.getElementById("metric-total"),
+        active: document.getElementById("metric-active"),
+        blocked: document.getElementById("metric-blocked"),
+        staff: document.getElementById("metric-staff"),
+        drawer: document.getElementById("drawer-backdrop"),
+        drawerTitle: document.getElementById("drawer-title"),
+        drawerSubtitle: document.getElementById("drawer-subtitle"),
+        drawerDetails: document.getElementById("drawer-details"),
+        closeDrawer: document.getElementById("close-drawer"),
+        editRole: document.getElementById("edit-role"),
+        blockReason: document.getElementById("block-reason"),
+        saveRole: document.getElementById("save-role"),
+        toggleBlock: document.getElementById("toggle-block"),
+        toast: document.getElementById("toast"),
+      };
+
+      els.search.addEventListener("input", render);
+      els.roleFilter.addEventListener("change", render);
+      els.statusFilter.addEventListener("change", render);
+      els.refresh.addEventListener("click", loadUsers);
+      els.closeDrawer.addEventListener("click", closeDrawer);
+      els.drawer.addEventListener("click", (event) => {
+        if (event.target === els.drawer) closeDrawer();
+      });
+      els.saveRole.addEventListener("click", saveRole);
+      els.toggleBlock.addEventListener("click", toggleBlock);
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeDrawer();
+      });
+
+      boot();
+
+      async function boot() {
+        if (!token) {
+          setStatus(
+            "Token ausente. Abra o painel pelo aplicativo após login Discord.",
+            "error",
+          );
+          setEmpty(
+            "Abra o painel pelo GG Coalition para receber uma sessão válida.",
+          );
+          return;
+        }
+        if (!apiUrl) {
+          setStatus("API ausente.", "error");
+          setEmpty("Não foi possível resolver a URL da API.");
+          return;
+        }
+
+        try {
+          setStatus("Validando sessão administrativa...", "warn");
+          const profileResponse = await request("/chat/profile");
+          state.me = profileResponse.profile || profileResponse;
+          if (profileResponse.panelAccess && !state.me.panelAccess) {
+            state.me.panelAccess = profileResponse.panelAccess;
+          }
+          const myRole = normalizeRole(state.me.role);
+          if (!canLoginPanel(state.me)) {
+            setStatus(
+              `Acesso negado para cargo ${myRole || "desconhecido"} / nivel ${accessLevel(state.me)}.`,
+              "error",
+            );
+            setEmpty(
+              "Sua conta nao possui nivel minimo para acessar o painel.",
+            );
+            return;
+          }
+          setStatus(
+            `Autenticado como ${displayName(state.me)} (${myRole}).`,
+            "ok",
+          );
+          await loadUsers();
+        } catch (error) {
+          setStatus(`Falha ao validar sessão: ${error.message}`, "error");
+          setEmpty("Não foi possível autenticar sua sessão administrativa.");
+        }
+      }
+
+      async function loadUsers() {
+        if (state.loading) return;
+        state.loading = true;
+        els.refresh.disabled = true;
+        setStatus("Carregando usuários...", "warn");
+        try {
+          const data = await request("/chat/admin/users?take=250");
+          state.users = Array.isArray(data.users) ? data.users : [];
+          updateMetrics(data.total);
+          setStatus(
+            `API conectada. ${state.users.length} usuários carregados.`,
+            "ok",
+          );
+          render();
+        } catch (error) {
+          setStatus(`Erro ao carregar usuários: ${error.message}`, "error");
+          setEmpty("A API recusou ou falhou ao carregar a lista de usuários.");
+        } finally {
+          state.loading = false;
+          els.refresh.disabled = false;
+        }
+      }
+
+      function render() {
+        const rows = filteredUsers();
+        els.body.textContent = "";
+        els.empty.hidden = rows.length > 0;
+        if (rows.length === 0) {
+          els.empty.textContent = state.users.length
+            ? "Nenhum usuário combina com os filtros."
+            : "Nenhum usuário carregado.";
+          return;
+        }
+        const fragment = document.createDocumentFragment();
+        for (const user of rows) {
+          fragment.appendChild(userRow(user));
+        }
+        els.body.appendChild(fragment);
+      }
+
+      function userRow(user) {
+        const tr = document.createElement("tr");
+        tr.appendChild(userCell(user));
+        tr.appendChild(roleCell(user));
+        tr.appendChild(statusCell(user));
+        tr.appendChild(dateCell(user));
+        tr.appendChild(actionsCell(user));
+        return tr;
+      }
+
+      function userCell(user) {
+        const td = document.createElement("td");
+        const wrap = document.createElement("div");
+        wrap.className = "user-cell";
+
+        const avatar = avatarElement(user);
+        const text = document.createElement("div");
+        const name = document.createElement("div");
+        name.className = "user-name";
+        name.textContent = displayName(user);
+        const meta = document.createElement("div");
+        meta.className = "user-meta";
+        meta.textContent = userMeta(user);
+        text.append(name, meta);
+        wrap.append(avatar, text);
+        td.appendChild(wrap);
+        return td;
+      }
+
+      function avatarElement(user) {
+        const src =
+          user.avatar ||
+          user.avatarUrl ||
+          user.avatarfull ||
+          user.avatarmedium ||
+          "";
+        if (src) {
+          const img = document.createElement("img");
+          img.className = "avatar";
+          img.src = src;
+          img.alt = "";
+          img.referrerPolicy = "no-referrer";
+          img.onerror = () => {
+            img.replaceWith(fallbackAvatar(user));
+          };
+          return img;
+        }
+        return fallbackAvatar(user);
+      }
+
+      function fallbackAvatar(user) {
+        const div = document.createElement("div");
+        div.className = "avatar avatar-fallback";
+        div.textContent = initials(displayName(user));
+        return div;
+      }
+
+      function roleCell(user) {
+        const td = document.createElement("td");
+        const role = normalizeRole(user.role) || "MEMBER";
+        const badge = document.createElement("span");
+        badge.className = `badge role-${role.toLowerCase()}`;
+        badge.textContent = role;
+        td.appendChild(badge);
+        return td;
+      }
+
+      function statusCell(user) {
+        const td = document.createElement("td");
+        const status = document.createElement("div");
+        const blocked = isBlocked(user);
+        status.className = blocked ? "state-blocked" : "state-active";
+        status.textContent = blocked ? "Bloqueado" : "Ativo";
+        td.appendChild(status);
+        if (blocked && user.blockedReason) {
+          const reason = document.createElement("div");
+          reason.className = "user-meta";
+          reason.textContent = user.blockedReason;
+          td.appendChild(reason);
+        }
+        return td;
+      }
+
+      function dateCell(user) {
+        const td = document.createElement("td");
+        td.style.color = "var(--muted)";
+        td.textContent = formatDate(
+          user.lastLoginAt || user.updatedAt || user.createdAt,
+        );
+        return td;
+      }
+
+      function actionsCell(user) {
+        const td = document.createElement("td");
+        const wrap = document.createElement("div");
+        wrap.className = "row-actions";
+        const edit = document.createElement("button");
+        edit.className = "btn";
+        edit.type = "button";
+        edit.textContent = "Editar";
+        edit.addEventListener("click", () => openDrawer(user));
+        const block = document.createElement("button");
+        block.className = isBlocked(user) ? "btn success" : "btn danger";
+        block.type = "button";
+        block.textContent = isBlocked(user) ? "Desbloquear" : "Bloquear";
+        block.addEventListener("click", () => openDrawer(user));
+        wrap.append(edit, block);
+        td.appendChild(wrap);
+        return td;
+      }
+
+      function openDrawer(user) {
+        state.selectedUser = user;
+        const blocked = isBlocked(user);
+        els.drawerTitle.textContent = displayName(user);
+        els.drawerSubtitle.textContent = userMeta(user);
+        els.editRole.value = normalizeRole(user.role) || "MEMBER";
+        els.blockReason.value = user.blockedReason || "";
+        els.toggleBlock.textContent = blocked
+          ? "Desbloquear usuário"
+          : "Bloquear usuário";
+        els.toggleBlock.className = blocked ? "btn success" : "btn danger";
+        els.drawerDetails.textContent = detailsText(user);
+        els.drawer.classList.add("open");
+      }
+
+      function closeDrawer() {
+        els.drawer.classList.remove("open");
+        state.selectedUser = null;
+      }
+
+      async function saveRole() {
+        const user = state.selectedUser;
+        if (!user) return;
+        const role = normalizeRole(els.editRole.value);
+        if (!EDITABLE_ROLES.has(role)) {
+          toast("Cargo inválido.", "error");
+          return;
+        }
+        if (role === normalizeRole(user.role)) {
+          toast("Cargo já está atualizado.");
+          return;
+        }
+        await mutateUser(
+          `/chat/admin/users/${encodeURIComponent(user.id)}/role`,
+          "PATCH",
+          { role },
+          "Cargo atualizado.",
+        );
+      }
+
+      async function toggleBlock() {
+        const user = state.selectedUser;
+        if (!user) return;
+        if (isBlocked(user)) {
+          await mutateUser(
+            `/chat/admin/users/${encodeURIComponent(user.id)}/unblock`,
+            "PATCH",
+            null,
+            "Usuário desbloqueado.",
+          );
+          return;
+        }
+        const reason = els.blockReason.value.trim();
+        if (!reason) {
+          toast("Informe um motivo para bloquear.", "error");
+          els.blockReason.focus();
+          return;
+        }
+        await mutateUser(
+          `/chat/admin/users/${encodeURIComponent(user.id)}/block`,
+          "PATCH",
+          { reason },
+          "Usuário bloqueado.",
+        );
+      }
+
+      async function mutateUser(path, method, payload, message) {
+        els.saveRole.disabled = true;
+        els.toggleBlock.disabled = true;
+        try {
+          await request(path, { method, payload });
+          toast(message);
+          closeDrawer();
+          await loadUsers();
+        } catch (error) {
+          toast(error.message, "error");
+        } finally {
+          els.saveRole.disabled = false;
+          els.toggleBlock.disabled = false;
+        }
+      }
+
+      async function request(path, options = {}) {
+        const headers = {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        };
+        let body;
+        if (options.payload !== undefined && options.payload !== null) {
+          headers["Content-Type"] = "application/json";
+          body = JSON.stringify(options.payload);
+        }
+        const response = await fetch(`${apiUrl}${path}`, {
+          method: options.method || "GET",
+          headers,
+          body,
+        });
+        const text = await response.text();
+        const data = parseJson(text);
+        if (!response.ok) {
+          const message =
+            data.message ||
+            data.reason ||
+            data.error ||
+            text ||
+            `HTTP ${response.status}`;
+          throw new Error(message);
+        }
+        return data;
+      }
+
+      function filteredUsers() {
+        const query = els.search.value.trim().toLowerCase();
+        const role = els.roleFilter.value;
+        const status = els.statusFilter.value;
+        return state.users.filter((user) => {
+          if (role && normalizeRole(user.role) !== role) return false;
+          if (status === "BLOCKED" && !isBlocked(user)) return false;
+          if (status === "ACTIVE" && isBlocked(user)) return false;
+          if (!query) return true;
+          return [
+            displayName(user),
+            user.discordUsername,
+            user.discordId,
+            user.steamId,
+            user.regiment,
+            user.id,
+          ]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(query));
+        });
+      }
+
+      function updateMetrics(totalFromApi) {
+        const total = Number.isFinite(Number(totalFromApi))
+          ? Number(totalFromApi)
+          : state.users.length;
+        const blocked = state.users.filter(isBlocked).length;
+        const staff = state.users.filter((user) =>
+          ADMIN_CONTROL_ROLES.has(normalizeRole(user.role)) || normalizeRole(user.role) === "ADMIN",
+        ).length;
+        els.total.textContent = total;
+        els.active.textContent = Math.max(0, state.users.length - blocked);
+        els.blocked.textContent = blocked;
+        els.staff.textContent = staff;
+      }
+
+      function setStatus(message, kind) {
+        els.status.textContent = message;
+        els.status.className = `status-pill ${kind || ""}`;
+      }
+
+      function setEmpty(message) {
+        els.body.textContent = "";
+        els.empty.hidden = false;
+        els.empty.textContent = message;
+      }
+
+      function toast(message, kind = "") {
+        els.toast.textContent = message;
+        els.toast.className = `toast show ${kind}`;
+        clearTimeout(toast.timer);
+        toast.timer = setTimeout(() => {
+          els.toast.className = "toast";
+        }, 2800);
+      }
+
+      function displayName(user) {
+        return String(
+          user.displayName ||
+            user.globalName ||
+            user.name ||
+            user.personaName ||
+            user.personaname ||
+            user.discordUsername ||
+            user.username ||
+            "Sem nome",
+        );
+      }
+
+      function userMeta(user) {
+        const parts = [];
+        if (user.regiment) parts.push(`[${user.regiment}]`);
+        if (user.discordId) parts.push(`Discord ${user.discordId}`);
+        if (user.steamId) parts.push(`Steam ${user.steamId}`);
+        return parts.join(" • ") || user.id || "Sem identificadores";
+      }
+
+      function detailsText(user) {
+        return [
+          `ID: ${user.id || "-"}`,
+          `Discord: ${user.discordId || user.discordUsername || "-"}`,
+          `Steam: ${user.steamId || "-"}`,
+          `Regimento: ${user.regiment || "-"}`,
+          `Status: ${isBlocked(user) ? "Bloqueado" : "Ativo"}`,
+          `Último login: ${formatDate(user.lastLoginAt || user.updatedAt || user.createdAt)}`,
+        ].join("\n");
+      }
+
+      function normalizeRole(role) {
+        return String(role || "MEMBER")
+          .trim()
+          .toUpperCase();
+      }
+
+      function accessLevel(user) {
+        const raw =
+          user?.panelAccess?.accessLevel ??
+          user?.panelAccessLevel ??
+          user?.accessLevel ??
+          0;
+        const number = Number.parseInt(raw, 10);
+        return Number.isFinite(number) ? number : 0;
+      }
+
+      function canLoginPanel(user) {
+        const level = accessLevel(user);
+        if (user?.panelAccess && typeof user.panelAccess.canLoginPanel === "boolean") {
+          return user.panelAccess.canLoginPanel && level >= 2;
+        }
+        if (level === 0 || level === 1) return false;
+        if (level >= 2) return true;
+        return false;
+      }
+
+      function isBlocked(user) {
+        return (
+          String(user.status || "").toUpperCase() === "BLOCKED" ||
+          Boolean(user.blockedAt)
+        );
+      }
+
+      function formatDate(value) {
+        if (!value) return "Nunca";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+
+      function initials(value) {
+        return (
+          String(value || "?")
+            .trim()
+            .split(/\s+/)
+            .slice(0, 2)
+            .map((part) => part[0] || "")
+            .join("")
+            .toUpperCase() || "?"
+        );
+      }
+
+      function decodeApi(value) {
+        try {
+          return atob(value.replace(/-/g, "+").replace(/_/g, "/"));
+        } catch (_error) {
+          return "";
+        }
+      }
+
+      function normalizeUrl(value) {
+        return String(value || "").replace(/\/+$/, "");
+      }
+
+      function parseJson(text) {
+        if (!text) return {};
+        try {
+          return JSON.parse(text);
+        } catch (_error) {
+          return { message: text };
+        }
+      }
+    </script>
+  </body>
+</html>

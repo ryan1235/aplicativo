@@ -5,7 +5,7 @@ from typing import Any
 
 from app_paths import extracted_dir, settings_path
 from i18n import detect_user_language
-from stockpiler import DEFAULT_API_URL, DEFAULT_WATCH_FILE, discover_map_data_file
+from stockpiler import DEFAULT_WATCH_FILE, discover_map_data_file
 
 
 SETTINGS_PATH = settings_path()
@@ -18,6 +18,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "move_hotkey": "F2",
         "fixed_hotkey": "F6",
         "pilot_hotkey": "F4",
+        "right_hold_hotkey": "F9",
         "mouse_button": "Esquerdo",
         "interval": 0.05,
         "mode": "Foxhole",
@@ -46,11 +47,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "overlay_panel_y": None,
         "overlay_notification_x": None,
         "overlay_notification_y": None,
+        "right_doubletap_enabled": False,
     },
     "stockpile": {
         "enabled": True,
         "watch_file": str(DEFAULT_WATCH_FILE),
-        "api_url": DEFAULT_API_URL,
         "out_dir": str(extracted_dir()),
         "extract_initial": True,
     },
@@ -59,12 +60,23 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "squadlock_x": None,
         "squadlock_y": None,
     },
+    "discord": {
+        "id": "",
+        "username": "",
+        "displayName": "",
+        "avatar": "",
+    },
     "app": {
         "close_action": "ask",
         "startup_prompted": False,
         "start_with_windows": False,
         "last_release_notes_version": "",
         "last_tips_version": "",
+        "chat_discord": {
+            "clientId": "",
+            "clientSecret": "",
+            "redirectPort": 53624,
+        },
         "stockpile_sound_enabled": True,
         "squadlock_sound_enabled": True,
         "chat_mention_overlay_enabled": True,
@@ -100,9 +112,14 @@ def load_settings() -> dict[str, Any]:
         **DEFAULT_SETTINGS["stockpile"],
         **loaded.get("stockpile", {}),
     }
+    settings["stockpile"].pop("api_url", None)
     settings["notifications"] = {
         **DEFAULT_SETTINGS["notifications"],
         **loaded.get("notifications", {}),
+    }
+    settings["discord"] = {
+        **DEFAULT_SETTINGS["discord"],
+        **loaded.get("discord", {}),
     }
     watch_file = Path(str(settings["stockpile"].get("watch_file", "")))
     discovered_watch_file = discover_map_data_file()
@@ -115,6 +132,18 @@ def load_settings() -> dict[str, Any]:
         **DEFAULT_SETTINGS["app"],
         **loaded.get("app", {}),
     }
+    settings["app"]["chat_discord"] = {
+        **DEFAULT_SETTINGS["app"]["chat_discord"],
+        **loaded.get("app", {}).get("chat_discord", {}),
+    }
+    legacy_discord = loaded.get("app", {}).get("chat_discord", {})
+    if not settings["discord"].get("id") and legacy_discord.get("discordId"):
+        settings["discord"]["id"] = str(legacy_discord.get("discordId") or "")
+    for new_key, old_key in (("username", "username"), ("displayName", "displayName"), ("avatar", "avatar")):
+        if not settings["discord"].get(new_key) and legacy_discord.get(old_key):
+            settings["discord"][new_key] = str(legacy_discord.get(old_key) or "")
+    for old_key in ("discordId", "username", "displayName", "avatar"):
+        settings["app"]["chat_discord"].pop(old_key, None)
     settings["time_task"] = {
         **DEFAULT_SETTINGS["time_task"],
         **loaded.get("time_task", {}),
