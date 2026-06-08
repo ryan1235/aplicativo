@@ -172,7 +172,7 @@ Flickable {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 12
-                            Text { text: tr("clicker.w_hold_label"); color: "#edf6ff"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
+                            Text { text: autoClickerController.wHoldLabel; color: "#edf6ff"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
                             
                             HotkeyPicker {
                                 Layout.preferredWidth: 80

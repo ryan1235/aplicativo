@@ -51,6 +51,7 @@ VK_W = 0x57
 VK_A = 0x41
 VK_S = 0x53
 VK_D = 0x44
+VK_Z = 0x5A
 VK_1 = 0x31
 VK_2 = 0x32
 VK_3 = 0x33
@@ -124,6 +125,9 @@ class AutoClicker:
         self.w_hold_key_down = False
         self.w_hold_worker_running = False
         self.shift_pressed = False
+
+        # tecla usada para W-hold (pode ser VK_W ou VK_Z dependendo do idioma/layout)
+        self._w_hold_vk = VK_W
 
         # W double-tap to hold W mode
         self.w_hold_enabled = False
@@ -203,6 +207,22 @@ class AutoClicker:
         self.click_thread.start()
         self.keyboard_hook_thread.start()
         self.log("AutoClicker iniciado")
+
+    def set_language(self, language: str) -> None:
+        """Configura a tecla usada para W-Hold com base no código de idioma normalizado.
+        Se o idioma for 'fr', usa `Z` (AZERTY), caso contrário usa `W` (QWERTY/pt/en/es).
+        """
+        try:
+            from i18n import normalize_language
+
+            code = normalize_language(language)
+        except Exception:
+            code = "pt"
+        self._w_hold_vk = VK_Z if code == "fr" else VK_W
+
+    def w_hold_label(self) -> str:
+        """Retorna o rótulo visível da tecla usada para W-hold ("W" ou "Z")."""
+        return "Z" if self._w_hold_vk == VK_Z else "W"
 
     def log(self, message: str) -> None:
         if DEBUG_CONSOLE:
@@ -482,7 +502,7 @@ class AutoClicker:
         lbtn = bool(self.user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
         rbtn = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
         mbtn = bool(self.user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000)
-        wasd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (VK_W, VK_A, VK_S, VK_D))
+        wasd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (self._w_hold_vk, VK_A, VK_S, VK_D))
 
         if self.move_click_enabled and esc:
             self.disable_move_click("cancel: esc")
@@ -829,8 +849,8 @@ class AutoClicker:
             return
         hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
         if hwnd:
-            self._post_key(hwnd, VK_W, down=down)
-        self.user32.keybd_event(VK_W, 0, 0 if down else 0x0002, 0)
+            self._post_key(hwnd, self._w_hold_vk, down=down)
+        self.user32.keybd_event(self._w_hold_vk, 0, 0 if down else 0x0002, 0)
         self.w_hold_key_down = down
 
     def _w_hold_worker(self) -> None:
@@ -858,7 +878,7 @@ class AutoClicker:
                     last_reassert = now
                     hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
                     if hwnd:
-                        self._post_key(hwnd, VK_W, down=True)
+                        self._post_key(hwnd, self._w_hold_vk, down=True)
 
                 prev_s = s_down
                 time.sleep(0.03)
@@ -882,7 +902,7 @@ class AutoClicker:
                 time.sleep(0.05)
                 continue
 
-            w_down = bool(self.user32.GetAsyncKeyState(VK_W) & 0x8000)
+            w_down = bool(self.user32.GetAsyncKeyState(self._w_hold_vk) & 0x8000)
             if w_down and not prev_w:
                 now = time.monotonic()
                 if self.w_doubletap_enabled and (now - last_tap) <= self.w_double_tap_threshold:
@@ -900,7 +920,7 @@ class AutoClicker:
                 if code >= 0 and int(w_param) in (WM_KEYDOWN, WM_SYSKEYDOWN):
                     event = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
                     is_injected = bool(event.flags & LLKHF_INJECTED)
-                    if event.vkCode == VK_W and not is_injected and self.w_hold_enabled:
+                    if event.vkCode == int(self._w_hold_vk) and not is_injected and self.w_hold_enabled:
                         self.disable_w_hold("cancel: W")
             except Exception:
                 pass

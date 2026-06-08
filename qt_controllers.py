@@ -1102,6 +1102,23 @@ class AutoClickerController(QObject):
         try:
             self.clicker = AutoClicker(lambda text: self.statusFromWorker.emit(str(text)))
             self.clicker.set_menu_callback(lambda: self.menuRequested.emit())
+            # Propaga idioma atual do I18nController para o AutoClicker
+            try:
+                parent_i18n = parent.i18nController if parent is not None and hasattr(parent, "i18nController") else None
+                if parent_i18n is not None:
+                    # set initial language and subscribe to changes
+                    self.clicker.set_language(parent_i18n.language)
+                    self.changed.emit()
+
+                    def _on_i18n_changed() -> None:
+                        try:
+                            self.clicker.set_language(parent_i18n.language)
+                        finally:
+                            self.changed.emit()
+
+                    parent_i18n.changed.connect(_on_i18n_changed)
+            except Exception:
+                pass
             self._apply_settings()
         except Exception as exc:
             self.clicker = None
@@ -1287,7 +1304,8 @@ class AutoClickerController(QObject):
             items.append(f"RMB HOLD {self.rightHoldHotkey}")
         if self._pilot_active():
             suffix = " PAUSADO" if getattr(self.clicker, "pilot_w_paused", False) else ""
-            items.append(f"W HOLD {self.pilotHotkey}{suffix}")
+            wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+            items.append(f"{wlabel} HOLD {self.pilotHotkey}{suffix}")
         if self.clicker.shift_enabled:
             items.append("SHIFT ON" if self.clicker.shift_pressed else "SHIFT READY")
         return " | ".join(items) if items else "-"
@@ -1297,7 +1315,8 @@ class AutoClickerController(QObject):
         if not self.clicker:
             return "Auto Clicker indisponivel"
         if getattr(self.clicker, "w_hold_enabled", False):
-            return f"W Hold {self.pilotHotkey}: {'pausado no S' if getattr(self.clicker, 'pilot_w_paused', False) else 'segurando W'}"
+            wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+            return f"{wlabel} Hold {self.pilotHotkey}: {'pausado no S' if getattr(self.clicker, 'pilot_w_paused', False) else f'segurando {wlabel}'}"
         if getattr(self.clicker, "right_hold_enabled", False):
             return f"Right Hold {self.rightHoldHotkey}: segurando direito"
         if getattr(self.clicker, "artillery_enabled", False):
@@ -1310,6 +1329,14 @@ class AutoClickerController(QObject):
             shift = " + Shift" if getattr(self.clicker, "shift_pressed", False) else ""
             return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.1f}s{shift}"
         return f"{self.hotkey} auto | {self.pilotHotkey} W | {self.rightHoldHotkey} direito"
+
+    @Property(str, notify=changed)
+    def wHoldLabel(self) -> str:
+        """Rótulo dinâmico para o W-Hold (ex.: 'W Hold:' ou 'Z Hold:')."""
+        if not self.clicker:
+            return "W Hold:"
+        wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+        return f"{wlabel} Hold:"
 
     @Property(str, notify=changed)
     def overlayHintText(self) -> str:
