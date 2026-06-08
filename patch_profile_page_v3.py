@@ -1,4 +1,6 @@
-import QtQuick
+import os
+
+code = '''import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
@@ -13,16 +15,8 @@ Rectangle {
         return i18nController.t(key)
     }
 
-    function safeImageSource(value, fallback) {
-        var text = String(value || "")
-        if (text.indexOf("http://") === 0 || text.indexOf("https://") === 0 || text.indexOf("file:") === 0 || text.indexOf("qrc:") === 0 || text.indexOf("data:") === 0)
-            return text
-        return fallback || ""
-    }
-
     onVisibleChanged: {
         if (visible) {
-            chatController.ensureStarted()
             chatController.fetchProfile()
         }
     }
@@ -81,7 +75,7 @@ Rectangle {
                     Image {
                         anchors.fill: parent
                         // Fallback pra imagem bonitona da web se não tiver banner
-                        source: safeImageSource(profile.banner, "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=1200&auto=format&fit=crop")
+                        source: profile.banner ? profile.banner : "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=1200&auto=format&fit=crop"
                         fillMode: Image.PreserveAspectCrop
                         visible: true
                     }
@@ -120,7 +114,7 @@ Rectangle {
                     Image {
                         id: imgAvatar
                         anchors.fill: maskAvatar
-                        source: safeImageSource(profile.avatarfull || profile.avatarUrl || profile.avatarmedium || chatController.currentUserAvatar, "")
+                        source: profile.avatarfull ? profile.avatarfull : (chatController.currentUserAvatar || "")
                         fillMode: Image.PreserveAspectCrop
                         visible: false
                     }
@@ -148,7 +142,7 @@ Rectangle {
                     RowLayout {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: tr("profile.logout"); color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 13 }
+                        Text { text: "Sair"; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 13 }
                     }
                     MouseArea {
                         id: logoutHover
@@ -172,7 +166,7 @@ Rectangle {
                     RowLayout {
                         spacing: 12
                         Text {
-                            text: profile.globalName || profile.displayName || chatController.currentUserName || tr("profile.default_user")
+                            text: profile.globalName || profile.displayName || chatController.currentUserName || "Usuário"
                             color: "#ffffff"
                             font.family: "Segoe UI"
                             font.pixelSize: 28
@@ -197,7 +191,7 @@ Rectangle {
                     }
 
                     Text {
-                        text: "@" + (profile.username || chatController.currentUserName || tr("profile.unknown_user"))
+                        text: "@" + (profile.username || chatController.currentUserName || "unknown")
                         color: "#99abc4"
                         font.family: "Segoe UI"
                         font.pixelSize: 15
@@ -225,7 +219,7 @@ Rectangle {
                         spacing: 16
 
                         Text {
-                            text: tr("profile.overview")
+                            text: "Visão Geral"
                             color: "#edf6ff"
                             font.family: "Segoe UI"
                             font.pixelSize: 18
@@ -245,21 +239,21 @@ Rectangle {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: tr("profile.stock_updates"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: "📦 Atualizações de Estoque:"; color: "#99abc4"; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { text: (profile.stockUpdateHelpCount || 0).toString(); color: "#5eead4"; font.bold: true; font.pixelSize: 14 }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: tr("profile.online_time"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: "🕒 Tempo Online:"; color: "#99abc4"; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { text: formatTime(profile.totalOnlineSeconds); color: "#5eead4"; font.bold: true; font.pixelSize: 14 }
                             }
                             
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: tr("profile.last_login"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: "🚪 Último Login:"; color: "#99abc4"; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { 
                                     text: formatDate(profile.lastLoginAt)
@@ -274,7 +268,7 @@ Rectangle {
                             RowLayout {
                                 Layout.fillWidth: true
                                 visible: profile.createdAt !== undefined
-                                Text { text: tr("profile.created_at"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: "📅 Conta Criada:"; color: "#99abc4"; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { 
                                     text: formatDate(profile.createdAt)
@@ -306,7 +300,7 @@ Rectangle {
                         spacing: 16
 
                         Text {
-                            text: tr("profile.regiment")
+                            text: "Regimento"
                             color: "#edf6ff"
                             font.family: "Segoe UI"
                             font.pixelSize: 18
@@ -320,21 +314,21 @@ Rectangle {
                         }
                         
                         Text {
-                            text: tr("profile.regiment_hint")
+                            text: "Selecione o seu esquadrão logístico ou regimento militar atual."
                             color: "#99abc4"
                             font.pixelSize: 13
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
 
-                        PrimaryComboBox {
+                        ComboBox {
                             id: regimentCombo
                             Layout.fillWidth: true
                             Layout.preferredHeight: 44
-                            model: [tr("profile.regiment_none"), "STORM", "WRG", "LIDA", "7CMD", "FELB", "GDO", "DOGZ", "REQ (MeTaL)"]
+                            model: ["Nenhum", "CIB", "STORM", "WRG", "LIDA", "7CMD", "FELB", "GDO", "DOG'Z", "REQ (MeTaL)"]
                             
                             Component.onCompleted: {
-                                var current = profile.regiment || tr("profile.regiment_none");
+                                var current = profile.regiment || "Nenhum";
                                 var idx = find(current);
                                 if (idx === -1) idx = 0;
                                 currentIndex = idx;
@@ -361,57 +355,15 @@ Rectangle {
                         Item { Layout.fillHeight: true }
 
                         PrimaryButton {
-                            id: updateBtn
-                            text: tr("profile.update_regiment")
+                            text: "Atualizar Regimento"
                             Layout.fillWidth: true
                             Layout.preferredHeight: 44
                             onClicked: {
                                 var val = regimentCombo.currentText;
-                                if (val === tr("profile.regiment_none")) val = "";
+                                if (val === "Nenhum") val = "";
                                 chatController.updateRegiment(val)
-                                updateBtn.text = tr("profile.saved_success")
-                                updateTimer.start()
                             }
                         }
-
-                        Timer {
-                            id: updateTimer
-                            interval: 2000
-                            onTriggered: updateBtn.text = tr("profile.update_regiment")
-                        }
-                    }
-                }
-            }
-            
-            // Painel Administrativo
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                radius: 12
-                color: "#1d3353"
-                border.color: "#5eead4"
-                border.width: 1
-                visible: chatController.canOpenAdminPanel
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 16
-                    spacing: 12
-
-                    Text {
-                        text: tr("profile.admin_panel")
-                        color: "#5eead4"
-                        font.family: "Segoe UI"
-                        font.pixelSize: 16
-                        font.bold: true
-                        Layout.fillWidth: true
-                    }
-
-                    PrimaryButton {
-                        text: tr("profile.open_panel")
-                        Layout.preferredWidth: 150
-                        Layout.preferredHeight: 36
-                        onClicked: appController.openAdminPanel(chatController.apiToken)
                     }
                 }
             }
@@ -420,3 +372,9 @@ Rectangle {
         }
     }
 }
+'''
+
+with open(r'c:\Users\ryanl\OneDrive\Desktop\aplicativo\qml\pages\ProfilePage.qml', 'w', encoding='utf-8') as f:
+    f.write(code)
+
+print("ProfilePage.qml updated again")

@@ -5,7 +5,7 @@ from typing import Any
 
 from app_paths import extracted_dir, settings_path
 from i18n import detect_user_language
-from stockpiler import DEFAULT_API_URL, DEFAULT_WATCH_FILE, discover_map_data_file
+from stockpiler import DEFAULT_WATCH_FILE, discover_map_data_file
 
 
 SETTINGS_PATH = settings_path()
@@ -50,7 +50,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stockpile": {
         "enabled": True,
         "watch_file": str(DEFAULT_WATCH_FILE),
-        "api_url": DEFAULT_API_URL,
         "out_dir": str(extracted_dir()),
         "extract_initial": True,
     },
@@ -111,6 +110,7 @@ def load_settings() -> dict[str, Any]:
         **DEFAULT_SETTINGS["stockpile"],
         **loaded.get("stockpile", {}),
     }
+    settings["stockpile"].pop("api_url", None)
     settings["notifications"] = {
         **DEFAULT_SETTINGS["notifications"],
         **loaded.get("notifications", {}),

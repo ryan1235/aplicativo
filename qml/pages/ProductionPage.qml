@@ -62,7 +62,7 @@ Rectangle {
             RowLayout {
                 spacing: 8
                 RadioButton {
-                    text: "Fábrica comum"
+                    text: tr("production.mode_factory")
                     checked: productionController.mode === "factory"
                     onClicked: productionController.setMode("factory")
                     contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
@@ -88,7 +88,7 @@ Rectangle {
                     }
                 }
                 RadioButton {
-                    text: "MPF"
+                    text: tr("production.mode_mpf")
                     checked: productionController.mode === "mpf"
                     onClicked: productionController.setMode("mpf")
                     contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
@@ -101,19 +101,19 @@ Rectangle {
             RowLayout {
                 spacing: 8
                 RadioButton {
-                    text: "Neutro"
+                    text: tr("production.faction_neutral")
                     checked: productionController.faction === "Neutral"
                     onClicked: productionController.setFaction("Neutral")
                     contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
                 }
                 RadioButton {
-                    text: "Colonial"
+                    text: tr("production.faction_colonial")
                     checked: productionController.faction === "Colonial"
                     onClicked: productionController.setFaction("Colonial")
                     contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
                 }
                 RadioButton {
-                    text: "Warden"
+                    text: tr("production.faction_warden")
                     checked: productionController.faction === "Warden"
                     onClicked: productionController.setFaction("Warden")
                     contentItem: Text { text: parent.text; color: parent.checked ? "#edf6ff" : "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 13; leftPadding: parent.indicator.width + parent.spacing; verticalAlignment: Text.AlignVCenter }
@@ -124,7 +124,7 @@ Rectangle {
 
             ColumnLayout {
                 spacing: 2
-                Text { text: "SHIFT-CLIQUE PREENCHE A CATEGORIA"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.alignment: Qt.AlignRight }
+                Text { text: tr("production.shift_hint"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.alignment: Qt.AlignRight }
                 TextField {
                     Layout.preferredWidth: 260
                     placeholderText: tr("production.search_placeholder") || "Buscar item..."
@@ -316,7 +316,7 @@ Rectangle {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 4
-                                    Text { text: "Resultado"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                    Text { text: tr("production.summary"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
                                     Text { text: productionController.summary; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
                                     Text { text: productionController.orders; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
                                 }
@@ -330,7 +330,7 @@ Rectangle {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 4
-                                    Text { text: "Materiais"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                    Text { text: tr("production.materials"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
                                     Text { text: productionController.materialDetail; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true; wrapMode: Text.WordWrap; maximumLineCount: 2 }
                                 }
                             }

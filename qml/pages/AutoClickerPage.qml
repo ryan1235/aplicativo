@@ -28,7 +28,7 @@ Flickable {
         spacing: 16
 
         Text {
-            text: "Automações e Overlay"
+            text: tr("clicker.automation_overlay")
             color: "#edf6ff"
             font.family: "Segoe UI"
             font.pixelSize: 26
@@ -89,12 +89,12 @@ Flickable {
                     spacing: 8
 
                     PrimaryButton {
-                        text: autoClickerController.running ? "Pausar Tudo" : "Retomar"
+                        text: autoClickerController.running ? tr("clicker.pause_all") : tr("clicker.resume")
                         enabled: autoClickerController.available
                         onClicked: autoClickerController.toggle()
                     }
                     PrimaryButton {
-                        text: "Capturar Foxhole"
+                        text: tr("clicker.capture")
                         fill: "#1d3353"
                         hoverFill: "#2d496f"
                         textFill: "#edf6ff"
@@ -119,14 +119,14 @@ Flickable {
                 anchors.margins: 16
                 spacing: 16
 
-                Text { text: "Controles Principais"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
+                Text { text: tr("clicker.main_controls"); color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353" }
 
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    Text { text: "Auto Clicker:"; color: "#99abc4"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
+                    Text { text: tr("clicker.auto_clicker_label"); color: "#99abc4"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
                     
                     HotkeyPicker {
                         Layout.preferredWidth: 80
@@ -152,7 +152,7 @@ Flickable {
                         checked: autoClickerController.shiftEnabled
                         onClicked: autoClickerController.setShiftEnabled(checked)
                     }
-                    Text { text: "Segurar Shift"; color: "#c7d7ed"; font.pixelSize: 12 }
+                    Text { text: tr("clicker.hold_shift"); color: "#c7d7ed"; font.pixelSize: 12 }
                 }
 
                 // W Hold section
@@ -172,7 +172,7 @@ Flickable {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 12
-                            Text { text: "W Hold:"; color: "#edf6ff"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
+                            Text { text: tr("clicker.w_hold_label"); color: "#edf6ff"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
                             
                             HotkeyPicker {
                                 Layout.preferredWidth: 80
@@ -180,18 +180,18 @@ Flickable {
                                 onKeySelected: function(key) { autoClickerController.setPilotHotkey(key) }
                             }
                             
-                            Text { text: "= segurar W"; color: "#99abc4"; font.pixelSize: 12 }
+                            Text { text: tr("clicker.hold_w_hint"); color: "#99abc4"; font.pixelSize: 12 }
                             Item { Layout.fillWidth: true }
                             
                             ToggleSwitch {
                                 checked: autoClickerController.wDoubleTapEnabled
                                 onClicked: autoClickerController.setWDoubleTapEnabled(checked)
                             }
-                            Text { text: "W duplo-toque ativa"; color: "#c7d7ed"; font.pixelSize: 12 }
+                            Text { text: tr("clicker.w_double_tap_enable"); color: "#c7d7ed"; font.pixelSize: 12 }
                         }
                         
                         Text {
-                            text: "S pausa W enquanto pressionado  •  W simples ou Esc desativa"
+                            text: tr("clicker.w_hold_help")
                             color: "#5d7a99"
                             font.pixelSize: 11
                             Layout.fillWidth: true
@@ -206,7 +206,7 @@ Flickable {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    Text { text: "Artilharia:"; color: "#5eead4"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
+                    Text { text: tr("clicker.artillery_label"); color: "#5eead4"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
                     
                     HotkeyPicker {
                         Layout.preferredWidth: 80
@@ -215,7 +215,7 @@ Flickable {
                     }
                     
                     Text { 
-                        text: "Fica pressionando 'R' e 'Clique Esquerdo'." 
+                        text: tr("clicker.artillery_hint")
                         color: "#99abc4"
                         font.pixelSize: 12
                         Layout.fillWidth: true 
@@ -239,7 +239,7 @@ Flickable {
                 anchors.margins: 16
                 spacing: 16
 
-                Text { text: "Modos Extras"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
+                Text { text: tr("clicker.extra_modes"); color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353" }
 
                 RowLayout {
@@ -248,7 +248,7 @@ Flickable {
 
                     ColumnLayout {
                         spacing: 4
-                        Text { text: "Move-Click (Segura Esq.)"; color: "#99abc4"; font.pixelSize: 12 }
+                        Text { text: tr("clicker.move_click_hold"); color: "#99abc4"; font.pixelSize: 12 }
                         HotkeyPicker {
                             currentKey: autoClickerController.moveHotkey
                             onKeySelected: function(key) { autoClickerController.setMoveHotkey(key) }
@@ -257,7 +257,7 @@ Flickable {
 
                     ColumnLayout {
                         spacing: 4
-                        Text { text: "Piloto Automático"; color: "#99abc4"; font.pixelSize: 12 }
+                        Text { text: tr("clicker.auto_pilot"); color: "#99abc4"; font.pixelSize: 12 }
                         HotkeyPicker {
                             currentKey: autoClickerController.pilotHotkey
                             onKeySelected: function(key) { autoClickerController.setPilotHotkey(key) }
@@ -283,40 +283,104 @@ Flickable {
                 anchors.margins: 16
                 spacing: 16
 
-                Text { text: "Overlay no Jogo"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
+                Text { text: tr("overlay.in_game_title"); color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353" }
 
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
+
                     ToggleSwitch {
                         checked: overlayController.enabled
                         onClicked: overlayController.setEnabled(checked)
                     }
-                    Text { text: "Ativar painel flutuante de informações dentro do jogo"; color: "#edf6ff"; font.pixelSize: 13; Layout.fillWidth: true }
-                    
-                    Text { text: "Atalho p/ Ocultar"; color: "#99abc4"; font.pixelSize: 12; font.bold: true }
-                    HotkeyPicker {
-                        Layout.preferredWidth: 80
-                        currentKey: overlayController.hotkey
-                        onKeySelected: function(key) { overlayController.setHotkey(key) }
-                    }
-                }
-                
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
+                    Text { text: tr("overlay.enable_floating_panel"); color: "#edf6ff"; font.pixelSize: 13; Layout.fillWidth: true }
+
                     PrimaryButton {
-                        text: "Testar Overlay (Preview de 8s)"
+                        text: tr("overlay.preview_8s")
+                        Layout.preferredWidth: 160
                         fill: "#1d3353"
                         hoverFill: "#2d496f"
                         textFill: "#edf6ff"
                         onClicked: overlayController.preview()
                     }
-                    
-                    Item { Layout.fillWidth: true }
+                }
 
-                    Text { text: "Cor:"; color: "#99abc4"; font.pixelSize: 12; font.bold: true }
+                Rectangle {
+                    Layout.fillWidth: true
+                    radius: 8
+                    color: "#0e1a2d"
+                    border.color: "#1e3554"
+                    implicitHeight: overlayContentOptions.implicitHeight + 18
+
+                    ColumnLayout {
+                        id: overlayContentOptions
+                        anchors.fill: parent
+                        anchors.margins: 9
+                        spacing: 10
+
+                        Text {
+                            text: tr("overlay.panel_content")
+                            color: "#8ab4ff"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: 2
+                            columnSpacing: 22
+                            rowSpacing: 10
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                ToggleSwitch {
+                                    checked: overlayController.showClicker
+                                    onClicked: overlayController.setShowClicker(checked)
+                                }
+                                Text { text: tr("overlay.clicker_title"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                ToggleSwitch {
+                                    checked: overlayController.showProfile
+                                    onClicked: overlayController.setShowProfile(checked)
+                                }
+                                Text { text: tr("overlay.profile"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                ToggleSwitch {
+                                    checked: overlayController.showTarget
+                                    onClicked: overlayController.setShowTarget(checked)
+                                }
+                                Text { text: tr("overlay.target"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                ToggleSwitch {
+                                    checked: overlayController.notificationEnabled
+                                    onClicked: overlayController.setNotificationEnabled(checked)
+                                }
+                                Text { text: tr("overlay.upload_notification"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Text { text: tr("overlay.color_label"); color: "#99abc4"; font.pixelSize: 12; font.bold: true }
                     PrimaryComboBox {
                         id: colorCombo
                         Layout.preferredWidth: 120
@@ -326,6 +390,23 @@ Flickable {
                         onActivated: overlayController.setColorName(currentText)
                         contentItem: Text { text: tr(overlayController.colorLabelKey(colorCombo.currentText)); color: "#edf6ff"; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 10 }
                     }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text { text: tr("overlay.hide_hotkey"); color: "#99abc4"; font.pixelSize: 12; font.bold: true }
+                    HotkeyPicker {
+                        Layout.preferredWidth: 80
+                        currentKey: overlayController.hotkey
+                        onKeySelected: function(key) { overlayController.setHotkey(key) }
+                    }
+                }
+
+                Text {
+                    text: tr("overlay.compact_hint")
+                    color: "#5d7a99"
+                    font.pixelSize: 11
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
                 }
             }
         }

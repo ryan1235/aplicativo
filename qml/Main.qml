@@ -307,37 +307,87 @@ ApplicationWindow {
         id: startupDialog
         modal: true
         visible: appController.startupDialogVisible
-        width: Math.min(560, window.width - 48)
-        height: Math.min(appController.startupDialogImageUrl !== "" ? 640 : 430, window.height - 48)
+        width: Math.min(620, window.width - 48)
+        height: Math.min(appController.startupDialogImageUrl !== "" ? 600 : 460, window.height - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
         closePolicy: Popup.NoAutoClose
-        title: appController.startupDialogTitle
+        title: ""
 
         background: Rectangle {
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            radius: 16
+            color: Qt.rgba(0.04, 0.08, 0.15, 0.97)
+            border.color: appController.startupDialogKind === "error" ? "#ff6b6b" : "#2d6f8f"
+            border.width: 1
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.62)
+                radius: 30
+                samples: 61
+            }
         }
 
         contentItem: ColumnLayout {
-            spacing: 12
-            Image {
-                source: appController.startupDialogImageUrl
-                visible: source !== ""
+            spacing: 14
+            anchors.margins: 8
+
+            RowLayout {
                 Layout.fillWidth: true
-                Layout.preferredHeight: visible ? 190 : 0
-                fillMode: Image.PreserveAspectFit
+                spacing: 14
+
+                Rectangle {
+                    Layout.preferredWidth: appController.startupDialogImageUrl !== "" ? 86 : 0
+                    Layout.preferredHeight: appController.startupDialogImageUrl !== "" ? 86 : 0
+                    visible: appController.startupDialogImageUrl !== ""
+                    radius: 18
+                    color: "#071426"
+                    border.color: "#24486d"
+                    border.width: 1
+                    clip: true
+
+                    AnimatedImage {
+                        id: startupDialogGif
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        source: appController.startupDialogImageUrl
+                        fillMode: Image.PreserveAspectCrop
+                        layer.enabled: true
+                        layer.effect: OpacityMask {
+                            maskSource: Rectangle {
+                                width: startupDialogGif.width
+                                height: startupDialogGif.height
+                                radius: 14
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    Text {
+                        text: appController.startupDialogTitle
+                        color: appController.startupDialogKind === "error" ? "#ff6b6b" : "#5eead4"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 24
+                        font.bold: true
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    Text {
+                        text: appController.startupDialogSubtitle
+                        visible: text !== ""
+                        color: "#8ab4ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        font.bold: true
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
-            Text {
-                text: appController.startupDialogSubtitle
-                visible: text !== ""
-                color: "#99abc4"
-                font.family: "Segoe UI"
-                font.pixelSize: 12
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-            }
+
             TextArea {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -347,27 +397,32 @@ ApplicationWindow {
                 selectByMouse: true
                 color: "#edf6ff"
                 font.family: "Segoe UI"
-                font.pixelSize: 12
+                font.pixelSize: 13
                 wrapMode: TextArea.Wrap
                 background: Rectangle {
-                    radius: 7
+                    radius: 8
                     color: "#07111f"
-                    border.color: "#24486d"
+                    border.color: "#27587d"
+                    border.width: 1
                 }
             }
         }
 
         footer: Item {
-            implicitHeight: 58
+            implicitHeight: 66
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
-                anchors.bottomMargin: 18
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.bottomMargin: 22
                 Item { Layout.fillWidth: true }
                 PrimaryButton {
                     text: tr("release.ok")
-                    Layout.preferredWidth: 128
+                    Layout.preferredWidth: 140
+                    Layout.preferredHeight: 38
+                    fill: "#5eead4"
+                    hoverFill: "#2dd4bf"
+                    textFill: "#022c22"
                     onClicked: appController.acceptStartupDialog()
                 }
             }
@@ -378,8 +433,8 @@ ApplicationWindow {
         id: updateOfferDialog
         modal: true
         visible: updateController.offerVisible
-        width: Math.min(560, window.width - 48)
-        height: Math.min(460, window.height - 48)
+        width: Math.min(620, window.width - 48)
+        height: Math.min(520, window.height - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
         closePolicy: Popup.NoAutoClose
@@ -404,20 +459,41 @@ ApplicationWindow {
 
             RowLayout {
                 spacing: 14
-                AnimatedImage {
-                    Layout.preferredWidth: 48
-                    Layout.preferredHeight: 48
-                    source: appController.assetUrl("img/ggimege.gif")
-                    fillMode: Image.PreserveAspectCrop
+                Rectangle {
+                    Layout.preferredWidth: 58
+                    Layout.preferredHeight: 58
+                    radius: 12
+                    color: "#071426"
+                    border.color: "#24486d"
+                    clip: true
+                    AnimatedImage {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        source: appController.assetUrl("img/ggimege.gif")
+                        fillMode: Image.PreserveAspectCrop
+                    }
                 }
-                Text {
-                    text: tr("update.available_title")
-                    color: "#5eead4"
-                    font.family: "Segoe UI"
-                    font.pixelSize: 22
-                    font.bold: true
+                ColumnLayout {
+                    spacing: 4
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    Text {
+                        text: tr("update.available_title")
+                        color: "#5eead4"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 22
+                        font.bold: true
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    Text {
+                        text: updateController.updateName + " - " + updateController.updateAssetName
+                        color: "#8ab4ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
                 }
             }
 
@@ -428,6 +504,27 @@ ApplicationWindow {
                 font.pixelSize: 14
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: updateNoticeText.implicitHeight + 24
+                radius: 10
+                color: Qt.rgba(0.035, 0.075, 0.13, 0.92)
+                border.color: "#1d3353"
+                border.width: 1
+
+                Text {
+                    id: updateNoticeText
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    text: tr("update.offer_notice")
+                    color: "#93a9c4"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 12
+                    lineHeight: 1.35
+                    wrapMode: Text.WordWrap
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
             TextArea {
                 Layout.fillWidth: true
@@ -482,7 +579,7 @@ ApplicationWindow {
         id: updateProgressDialog
         modal: true
         visible: updateController.progressVisible
-        width: Math.min(480, window.width - 48)
+        width: Math.min(540, window.width - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
         closePolicy: Popup.NoAutoClose
@@ -490,7 +587,7 @@ ApplicationWindow {
         background: Rectangle {
             radius: 16
             color: Qt.rgba(0.04, 0.08, 0.15, 0.96)
-            border.color: "#1e3554"
+            border.color: updateController.progressAccent
             border.width: 1
             layer.enabled: true
             layer.effect: DropShadow {
@@ -507,11 +604,34 @@ ApplicationWindow {
 
             RowLayout {
                 spacing: 14
-                AnimatedImage {
-                    Layout.preferredWidth: 40
-                    Layout.preferredHeight: 40
-                    source: appController.assetUrl("img/ggimege.gif")
-                    fillMode: Image.PreserveAspectCrop
+                Item {
+                    Layout.preferredWidth: 58
+                    Layout.preferredHeight: 58
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 58
+                        height: 58
+                        radius: 29
+                        color: "#071426"
+                        border.color: updateController.progressAccent
+                        border.width: 1
+                    }
+
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: 10
+                        height: 10
+                        radius: 5
+                        color: updateController.progressAccent
+
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            running: updateController.progressVisible
+                            NumberAnimation { from: 0.35; to: 1; duration: 620; easing.type: Easing.InOutSine }
+                            NumberAnimation { from: 1; to: 0.35; duration: 620; easing.type: Easing.InOutSine }
+                        }
+                    }
                 }
                 ColumnLayout {
                     spacing: 4
@@ -533,6 +653,58 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                     }
+                    Rectangle {
+                        Layout.preferredHeight: 24
+                        Layout.preferredWidth: updatePhaseText.implicitWidth + 22
+                        radius: 12
+                        color: Qt.rgba(1, 1, 1, 0.04)
+                        border.color: updateController.progressAccent
+                        border.width: 1
+                        Text {
+                            id: updatePhaseText
+                            anchors.centerIn: parent
+                            text: tr(updateController.progressPhaseKey)
+                            color: updateController.progressAccent
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: updateController.restarting
+                Layout.fillWidth: true
+                Layout.preferredHeight: 92
+                radius: 12
+                color: Qt.rgba(0.12, 0.09, 0.035, 0.9)
+                border.color: updateController.progressAccent
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 16
+                    spacing: 16
+                    Text {
+                        text: updateController.restartCountdown
+                        color: updateController.progressAccent
+                        font.family: "Segoe UI"
+                        font.pixelSize: 42
+                        font.bold: true
+                        Layout.preferredWidth: 52
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                    Text {
+                        text: tr("update.restart_notice")
+                        color: "#edf6ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 14
+                        font.bold: true
+                        lineHeight: 1.35
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
                 }
             }
 
@@ -552,9 +724,28 @@ ApplicationWindow {
                         width: parent.width * (updateController.progressValue / 100)
                         height: parent.height
                         radius: 7
-                        color: "#5eead4"
+                        color: updateController.progressAccent
                         Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
                     }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: updateController.progressDetail
+                    color: "#7f93ad"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 12
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: updateController.progressValue + "%"
+                    color: updateController.progressAccent
+                    font.family: "Segoe UI"
+                    font.pixelSize: 13
+                    font.bold: true
                 }
             }
         }
@@ -597,13 +788,24 @@ ApplicationWindow {
                 Layout.fillWidth: true
             }
 
-            Text {
+            TextArea {
+                id: updateErrorText
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(180, Math.max(96, contentHeight + 24))
                 text: updateController.errorText
+                textFormat: TextEdit.PlainText
+                readOnly: true
+                selectByMouse: true
                 color: "#edf6ff"
                 font.family: "Segoe UI"
-                font.pixelSize: 14
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
+                font.pixelSize: 13
+                wrapMode: TextArea.Wrap
+                background: Rectangle {
+                    radius: 8
+                    color: "#07111f"
+                    border.color: "#4b1d31"
+                    border.width: 1
+                }
             }
         }
 
@@ -1051,8 +1253,12 @@ ApplicationWindow {
             anchors.fill: parent
             z: 9999
             visible: chatController.profileGateVisible
-            property bool waitingForProfile: chatController.authInFlight || chatController.profileLoading
-            property bool profileNeedsRetry: chatController.connected && !chatController.profileReady && !waitingForProfile
+            property bool awaitingDiscordLogin: chatController.discordOAuthInFlight
+            property bool validatingProfile: !awaitingDiscordLogin && (chatController.authInFlight || chatController.profileLoading)
+            property bool waitingForProfile: awaitingDiscordLogin || validatingProfile
+            property bool loginHasError: chatController.authErrorVisible
+            property bool accessDenied: chatController.authDenied
+            property bool profileNeedsRetry: (loginHasError || (chatController.connected && !chatController.profileReady)) && !waitingForProfile
 
             MouseArea {
                 anchors.fill: parent
@@ -1075,11 +1281,11 @@ ApplicationWindow {
 
             Rectangle {
                 anchors.centerIn: parent
-                width: 440
-                height: 390
-                radius: 16
-                color: Qt.rgba(0.05, 0.1, 0.18, 0.85) // More transparent card
-                border.color: "#1e3554"
+                width: Math.min(500, parent.width - 48)
+                height: Math.min(520, parent.height - 64)
+                radius: 18
+                color: Qt.rgba(0.045, 0.08, 0.14, 0.94)
+                border.color: discordLoginOverlay.accessDenied ? "#ff3366" : (discordLoginOverlay.awaitingDiscordLogin ? "#5865F2" : "#1e3554")
                 border.width: 1
 
                 layer.enabled: true
@@ -1091,35 +1297,91 @@ ApplicationWindow {
                     verticalOffset: 6
                 }
 
+                Behavior on border.color { ColorAnimation { duration: 220 } }
+
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 36
-                    spacing: 24
+                    anchors.margins: 34
+                    spacing: 18
 
                     Item {
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.preferredWidth: 100
-                        Layout.preferredHeight: 100
-                        
+                        Layout.preferredWidth: 132
+                        Layout.preferredHeight: 132
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 126
+                            height: 126
+                            radius: 63
+                            color: "transparent"
+                            border.color: discordLoginOverlay.accessDenied ? "#ff3366" : (discordLoginOverlay.awaitingDiscordLogin ? "#5865F2" : "#2d496f")
+                            border.width: 2
+                            opacity: 0.85
+                        }
+
+                        Item {
+                            id: orbitRing
+                            anchors.centerIn: parent
+                            width: 126
+                            height: 126
+                            visible: discordLoginOverlay.waitingForProfile
+
+                            RotationAnimation on rotation {
+                                loops: Animation.Infinite
+                                running: orbitRing.visible
+                                from: 0
+                                to: 360
+                                duration: 2400
+                                easing.type: Easing.Linear
+                            }
+
+                            Rectangle {
+                                x: parent.width - 10
+                                y: parent.height / 2 - 5
+                                width: 10
+                                height: 10
+                                radius: 5
+                                color: "#8ab4ff"
+                            }
+
+                            Rectangle {
+                                x: -5
+                                y: parent.height / 2 - 5
+                                width: 10
+                                height: 10
+                                radius: 5
+                                color: "#edf6ff"
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 94
+                            height: 94
+                            radius: 47
+                            color: "#071426"
+                            opacity: 0.55
+                            layer.enabled: true
+                            layer.effect: DropShadow {
+                                transparentBorder: true
+                                color: discordLoginOverlay.accessDenied ? Qt.rgba(1, 0.2, 0.4, 0.55) : Qt.rgba(0.368, 0.917, 0.831, 0.5)
+                                radius: 20
+                                samples: 41
+                                spread: 0.12
+                            }
+                        }
+
                         Rectangle {
                             id: floatingLogo
                             anchors.centerIn: parent
-                            width: 90
-                            height: 90
-                            radius: 45
+                            width: 92
+                            height: 92
+                            radius: 46
                             color: "#040810"
                             border.color: "#2d496f"
                             border.width: 1
                             clip: true
-                            
-                            layer.enabled: true
-                            layer.effect: DropShadow {
-                                transparentBorder: true
-                                color: Qt.rgba(0.368, 0.917, 0.831, 0.5) // Glow
-                                radius: 18
-                                samples: 31
-                                spread: 0.1
-                            }
 
                             SequentialAnimation on anchors.verticalCenterOffset {
                                 loops: Animation.Infinite
@@ -1129,46 +1391,140 @@ ApplicationWindow {
                             }
 
                             AnimatedImage {
+                                id: floatingLogoGif
                                 anchors.fill: parent
+                                anchors.margins: 6
                                 source: appController.assetUrl("img/ggimege.gif")
                                 fillMode: Image.PreserveAspectCrop
                                 playing: discordLoginOverlay.visible
+                                layer.enabled: true
+                                layer.effect: OpacityMask {
+                                    maskSource: Rectangle {
+                                        width: floatingLogoGif.width
+                                        height: floatingLogoGif.height
+                                        radius: 38
+                                    }
+                                }
                             }
                         }
                     }
 
                     ColumnLayout {
-                        spacing: 10
+                        spacing: 9
                         Layout.alignment: Qt.AlignHCenter
-                        
+                        Layout.fillWidth: true
+
                         Text {
-                            text: discordLoginOverlay.waitingForProfile ? "Carregando perfil..." : (discordLoginOverlay.profileNeedsRetry ? "Perfil indisponivel" : "Acesso Restrito")
-                            color: "#edf6ff"
+                            text: discordLoginOverlay.accessDenied ? tr("loading.access_denied_title") : (discordLoginOverlay.awaitingDiscordLogin ? tr("loading.discord_wait_title") : (discordLoginOverlay.validatingProfile ? tr("loading.profile_title") : (discordLoginOverlay.profileNeedsRetry ? tr("loading.profile_retry_title") : tr("loading.discord_title"))))
+                            color: discordLoginOverlay.accessDenied ? "#ff6b8a" : "#edf6ff"
                             font.family: "Segoe UI"
-                            font.pixelSize: 28
+                            font.pixelSize: 27
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            Layout.preferredWidth: parent.width
                             Layout.fillWidth: true
                         }
                         Text {
-                            text: discordLoginOverlay.waitingForProfile ? (chatController.status || "Buscando dados do usuario...") : (discordLoginOverlay.profileNeedsRetry ? (chatController.status || "Nao foi possivel carregar seu perfil.") : "Para garantir uma experiencia completa, faca\no login com a sua conta do Discord.")
-                            color: "#99abc4"
+                            text: discordLoginOverlay.accessDenied ? tr("loading.access_denied_body") : (discordLoginOverlay.awaitingDiscordLogin ? tr("loading.discord_wait_body") : (discordLoginOverlay.validatingProfile ? (chatController.status || tr("loading.profile_body")) : (discordLoginOverlay.profileNeedsRetry ? (chatController.status || tr("loading.profile_retry_body")) : tr("loading.discord_body"))))
+                            color: discordLoginOverlay.accessDenied ? "#ffc0cb" : "#99abc4"
                             font.family: "Segoe UI"
                             font.pixelSize: 15
                             lineHeight: 1.4
                             horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            Layout.preferredWidth: parent.width
                             Layout.fillWidth: true
+                        }
+                    }
+
+                    Rectangle {
+                        visible: discordLoginOverlay.waitingForProfile || discordLoginOverlay.accessDenied
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 76
+                        radius: 10
+                        color: Qt.rgba(0.06, 0.11, 0.19, 0.88)
+                        border.color: "#223b5d"
+                        border.width: 1
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            spacing: 12
+
+                            Repeater {
+                                model: [
+                                    { "label": tr("loading.step_browser"), "active": discordLoginOverlay.awaitingDiscordLogin, "done": discordLoginOverlay.validatingProfile },
+                                    { "label": tr("loading.step_verify"), "active": discordLoginOverlay.validatingProfile, "done": false },
+                                    { "label": tr("loading.step_unlock"), "active": false, "done": false }
+                                ]
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 7
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 9
+                                        Layout.preferredHeight: 9
+                                        radius: 5
+                                        color: modelData.active ? "#5eead4" : (modelData.done ? "#8ab4ff" : "#334761")
+                                        opacity: modelData.active ? 1 : 0.68
+
+                                        SequentialAnimation on opacity {
+                                            loops: Animation.Infinite
+                                            running: modelData.active
+                                            NumberAnimation { from: 0.45; to: 1; duration: 560; easing.type: Easing.InOutSine }
+                                            NumberAnimation { from: 1; to: 0.45; duration: 560; easing.type: Easing.InOutSine }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: modelData.label
+                                        color: modelData.active ? "#edf6ff" : "#7f93ad"
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 11
+                                        font.bold: modelData.active
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        visible: discordLoginOverlay.waitingForProfile
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(86, loginHelpText.implicitHeight + 28)
+                        radius: 10
+                        color: discordLoginOverlay.accessDenied ? Qt.rgba(0.20, 0.05, 0.10, 0.92) : Qt.rgba(0.035, 0.075, 0.13, 0.9)
+                        border.color: discordLoginOverlay.accessDenied ? "#ff3366" : "#1d3353"
+                        border.width: 1
+
+                        Text {
+                            id: loginHelpText
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            text: discordLoginOverlay.accessDenied ? tr("loading.access_denied_help") : (discordLoginOverlay.awaitingDiscordLogin ? tr("loading.discord_wait_help") : tr("loading.profile_verify_help"))
+                            color: discordLoginOverlay.accessDenied ? "#ffd6df" : "#93a9c4"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            lineHeight: 1.32
+                            horizontalAlignment: Text.AlignLeft
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.WordWrap
                         }
                     }
 
                     Item { Layout.fillHeight: true }
 
                     PrimaryButton {
-                        text: discordLoginOverlay.waitingForProfile ? "Aguarde..." : (discordLoginOverlay.profileNeedsRetry ? "Tentar novamente" : "Login com Discord")
-                        fill: discordLoginOverlay.waitingForProfile ? "#4752C4" : "#5865F2"
-                        hoverFill: "#4752C4"
+                        visible: !discordLoginOverlay.waitingForProfile
+                        text: discordLoginOverlay.profileNeedsRetry ? tr("loading.retry") : tr("loading.login_discord")
+                        fill: discordLoginOverlay.accessDenied ? "#ff3366" : "#5865F2"
+                        hoverFill: discordLoginOverlay.accessDenied ? "#e62e5c" : "#4752C4"
                         textFill: "#ffffff"
-                        enabled: !discordLoginOverlay.waitingForProfile
+                        enabled: visible
                         Layout.preferredHeight: 52
                         Layout.fillWidth: true
                         font.pixelSize: 16
@@ -1182,8 +1538,8 @@ ApplicationWindow {
 
     Window {
         id: overlayWindow
-        width: 330
-        height: Math.max(96, overlayContent.implicitHeight + 24)
+        width: 260
+        height: Math.max(78, overlayContent.implicitHeight + 20)
         visible: overlayController.visible
         color: "transparent"
         transientParent: null
@@ -1192,14 +1548,6 @@ ApplicationWindow {
         property real dragStartY: 0
         property bool dragging: false
         property bool systemMoving: false
-
-        function shortcutText() {
-            return tr("overlay.shortcuts_hint")
-                .replace("{move_hotkey}", autoClickerController.moveHotkey)
-                .replace("{auto_hotkey}", autoClickerController.hotkey)
-                .replace("{fixed_hotkey}", autoClickerController.fixedHotkey)
-                .replace("{pilot_hotkey}", autoClickerController.pilotHotkey)
-        }
 
         function clampToScreen() {
             var screenWidth = Screen.width > 0 ? Screen.width : 1920
@@ -1259,31 +1607,31 @@ ApplicationWindow {
             ColumnLayout {
                 id: overlayContent
                 anchors.fill: parent
-                anchors.margins: 12
-                spacing: 6
+                anchors.margins: 10
+                spacing: 5
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 6
                     Text {
                         text: autoClickerController.active ? tr("overlay.clicker_active") : tr("overlay.clicker_paused")
                         color: autoClickerController.active ? "#62d7a4" : "#ffd166"
                         font.family: "Segoe UI"
-                        font.pixelSize: 12
+                        font.pixelSize: 11
                         font.bold: true
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
                     Button {
-                        Layout.preferredWidth: 26
-                        Layout.preferredHeight: 24
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 22
                         text: "X"
                         onClicked: overlayController.setEnabled(false)
                         contentItem: Text {
                             text: parent.text
                             color: "#edf6ff"
                             font.family: "Segoe UI"
-                            font.pixelSize: 11
+                            font.pixelSize: 10
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
@@ -1300,26 +1648,25 @@ ApplicationWindow {
                     text: steamController.personaName !== "" ? steamController.personaName : tr("user.unknown")
                     color: "#edf6ff"
                     font.family: "Segoe UI"
-                    font.pixelSize: 12
+                    font.pixelSize: 11
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
 
                 Text {
                     visible: overlayController.showClicker
-                    text: autoClickerController.active
-                        ? autoClickerController.modeSummary
-                        : tr("overlay.hotkey_to_start").replace("{hotkey}", autoClickerController.hotkey)
+                    text: autoClickerController.overlayPrimaryText
                     color: "#c7d7ed"
                     font.family: "Segoe UI"
-                    font.pixelSize: 12
+                    font.pixelSize: 11
+                    font.bold: autoClickerController.active
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                 }
 
                 Text {
-                    visible: overlayController.showClicker
-                    text: overlayWindow.shortcutText()
+                    visible: overlayController.showClicker && autoClickerController.overlayHintText !== ""
+                    text: autoClickerController.overlayHintText
                     color: "#7f93ad"
                     font.family: "Segoe UI"
                     font.pixelSize: 10
@@ -1332,7 +1679,7 @@ ApplicationWindow {
                     text: autoClickerController.targetTitle !== "" ? autoClickerController.targetTitle : tr("overlay.target_default")
                     color: overlayController.accentColor
                     font.family: "Segoe UI"
-                    font.pixelSize: 11
+                    font.pixelSize: 10
                     font.bold: true
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -1570,8 +1917,8 @@ ApplicationWindow {
 
     Window {
         id: stockpileUploadWindow
-        width: 340
-        height: Math.max(88, stockpileUploadPanel.implicitHeight + 18)
+        width: 380
+        height: Math.max(116, stockpileUploadPanel.implicitHeight + 18)
         visible: stockpileController.uploadOverlayVisible
         color: "transparent"
         transientParent: null
@@ -1594,7 +1941,7 @@ ApplicationWindow {
             implicitHeight: stockpileUploadLayout.implicitHeight + 24
             radius: 8
             color: "#0d1828"
-            border.color: "#5eead4"
+            border.color: stockpileController.uploadOverlayAccent
             border.width: 1
             opacity: 0.97
 
@@ -1604,24 +1951,68 @@ ApplicationWindow {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 12
-                spacing: 4
+                spacing: 7
 
-                Text {
-                    text: window.tr("stockpile.upload_success").replace("{count}", stockpileController.reportCount)
-                    color: "#5eead4"
-                    font.family: "Segoe UI"
-                    font.pixelSize: 13
-                    font.bold: true
+                RowLayout {
                     Layout.fillWidth: true
-                    elide: Text.ElideRight
+                    spacing: 8
+
+                    Rectangle {
+                        Layout.preferredWidth: 9
+                        Layout.preferredHeight: 9
+                        radius: 5
+                        color: stockpileController.uploadOverlayAccent
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+
+                    Text {
+                        text: window.tr(stockpileController.uploadOverlayTitleKey)
+                        color: stockpileController.uploadOverlayAccent
+                        font.family: "Segoe UI"
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
                 }
+
                 Text {
                     text: stockpileController.uploadOverlayBody
                     color: "#edf6ff"
                     font.family: "Segoe UI"
                     font.pixelSize: 12
+                    font.bold: true
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
+                }
+
+                Text {
+                    text: stockpileController.uploadOverlayDetail
+                    color: "#99abc4"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 5
+                    radius: 3
+                    color: "#172943"
+                    clip: true
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        width: Math.max(8, parent.width * Math.max(0, Math.min(100, stockpileController.uploadOverlayProgress)) / 100)
+                        radius: 3
+                        color: stockpileController.uploadOverlayAccent
+                        Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                    }
                 }
             }
 
@@ -1945,7 +2336,7 @@ ApplicationWindow {
                 }
 
                 Text {
-                    text: "⚠️ Macro em execução!\nPressione ESC para cancelar."
+                    text: tr("timetask.macro_running_warning")
                     color: "#ffd166"
                     font.family: "Segoe UI"
                     font.pixelSize: 13

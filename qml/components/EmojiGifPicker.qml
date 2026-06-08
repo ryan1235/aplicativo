@@ -16,6 +16,11 @@ Popup {
     property int currentTab: 0 
     property var gifsModel: ListModel {}
     property var emojiModel: ListModel {}
+
+    function tr(key) {
+        i18nController.revision
+        return i18nController.t(key)
+    }
     
     property var allEmojis: [
         {char: "😀", name: "smile feliz"}, {char: "😁", name: "smile feliz"}, {char: "😂", name: "laugh rir chorando"},
@@ -99,7 +104,7 @@ Popup {
                     radius: 6
                 }
                 contentItem: Text {
-                    text: "Emojis"
+                    text: tr("home.chat.emoji")
                     color: root.currentTab === 0 ? "#5eead4" : "#99abc4"
                     font.bold: root.currentTab === 0
                     font.pixelSize: 13
@@ -116,7 +121,7 @@ Popup {
                     radius: 6
                 }
                 contentItem: Text {
-                    text: "GIFs"
+                    text: tr("home.chat.gifs")
                     color: root.currentTab === 1 ? "#5eead4" : "#99abc4"
                     font.bold: root.currentTab === 1
                     font.pixelSize: 13
@@ -139,7 +144,7 @@ Popup {
             TextField {
                 id: emojiSearch
                 Layout.fillWidth: true
-                placeholderText: "Pesquisar emojis..."
+                placeholderText: tr("home.chat.search_emojis")
                 color: "#edf6ff"
                 background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
                 onTextChanged: root.filterEmojis(text)
@@ -184,7 +189,7 @@ Popup {
             TextField {
                 id: gifSearch
                 Layout.fillWidth: true
-                placeholderText: "Pesquisar GIFs no Tenor..."
+                placeholderText: tr("home.chat.search_gifs_tenor")
                 color: "#edf6ff"
                 background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
                 onAccepted: root.searchGifs(text)

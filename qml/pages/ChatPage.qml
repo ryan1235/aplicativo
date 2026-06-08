@@ -718,7 +718,7 @@ Rectangle {
                             anchors.fill: parent
                             anchors.margins: 6
                             spacing: 8
-                            Text { text: "Sussurrando para: " + root.whisperingToLabel; color: "#f3e8ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Text { text: tr("home.chat.whispering_to") + root.whisperingToLabel; color: "#f3e8ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                             Text {
                                 text: "x"
                                 color: "#f87171"
@@ -746,7 +746,7 @@ Rectangle {
                             anchors.fill: parent
                             anchors.margins: 6
                             spacing: 8
-                            Text { text: "Resposta para: " + root.replyingToLabel; color: "#edf6ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Text { text: tr("home.chat.reply_to") + root.replyingToLabel; color: "#edf6ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                             Text {
                                 text: "x"
                                 color: "#f87171"
@@ -777,7 +777,7 @@ Rectangle {
                             font.bold: true
                             background: Rectangle {
                                 radius: 22
-                                color: hovered ? "#1d3353" : "#0e1a2d"
+                                color: pickerButton.hovered ? "#1d3353" : "#0e1a2d"
                                 border.color: "#24486d"
                             }
                             onClicked: {
