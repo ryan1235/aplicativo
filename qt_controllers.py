@@ -89,7 +89,7 @@ from stockpiler import (
 
 
 APP_TITLE = "GG Coalition"
-APP_VERSION = "1.8.8"
+APP_VERSION = "2.0.0"
 UPDATE_REPO = "ryan1235/aplicativo"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
