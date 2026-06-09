@@ -328,6 +328,8 @@ Rectangle {
                         property string rowMention: String(mention || "")
                         property string rowDiscordId: String(discordId || "")
                         property real rowConnectedAt: Number(connectedAt || 0)
+                        property string rowRegiment: String(regiment || "")
+                        property string rowRole: String(role || "")
 
                         width: onlineList.width
                         height: 44
@@ -366,7 +368,29 @@ Rectangle {
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 0
-                                Text { text: rowName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Text { text: rowName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.maximumWidth: 120; elide: Text.ElideRight }
+                                    Text { text: "[" + rowRegiment + "]"; color: "#5eead4"; opacity: 0.8; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 11; visible: rowRegiment !== "" }
+                                    Rectangle {
+                                        visible: rowRole !== ""
+                                        color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#eab308" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
+                                        radius: 4
+                                        Layout.preferredWidth: roleText.implicitWidth + 8
+                                        Layout.preferredHeight: 14
+                                        Text {
+                                            id: roleText
+                                            anchors.centerIn: parent
+                                            text: rowRole
+                                            color: "#ffffff"
+                                            font.pixelSize: 9
+                                            font.bold: true
+                                            font.family: "Segoe UI"
+                                        }
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                }
                                 Text {
                                     id: onlineTimeText
                                     Timer {
@@ -526,6 +550,7 @@ Rectangle {
                             property string rowReplyToBody: String(replyToBody || "")
                             property string rowAuthorDiscordId: String(authorDiscordId || "")
                             property string rowRegiment: String(regiment || "")
+                            property string rowRole: String(role || "")
                             property bool rowIsGif: Boolean(isGif)
                             property bool rowMentioned: Boolean(mentioned)
                             property bool rowMine: Boolean(mine)
@@ -601,7 +626,28 @@ Rectangle {
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 2
-                                        Text { text: rowAuthor; color: "#5eead4"; font.bold: true; font.family: "Segoe UI"; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 6
+                                            Text { text: rowAuthor; color: "#5eead4"; font.bold: true; font.family: "Segoe UI"; elide: Text.ElideRight; Layout.maximumWidth: 200 }
+                                            Rectangle {
+                                                visible: rowRole !== ""
+                                                color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#eab308" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
+                                                radius: 4
+                                                Layout.preferredWidth: messageRoleText.implicitWidth + 8
+                                                Layout.preferredHeight: 14
+                                                Text {
+                                                    id: messageRoleText
+                                                    anchors.centerIn: parent
+                                                    text: rowRole
+                                                    color: "#ffffff"
+                                                    font.pixelSize: 9
+                                                    font.bold: true
+                                                    font.family: "Segoe UI"
+                                                }
+                                            }
+                                            Item { Layout.fillWidth: true }
+                                        }
                                         Text { text: rowRegiment; color: "#5eead4"; opacity: 0.7; font.family: "Segoe UI"; font.pixelSize: 10; visible: rowRegiment !== ""; Layout.fillWidth: true; elide: Text.ElideRight }
                                     }
                                     Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; Layout.alignment: Qt.AlignTop }

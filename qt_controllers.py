@@ -1788,16 +1788,25 @@ class StockpileController(QObject):
         self._upload_overlay_timer = QTimer(self)
         self._upload_overlay_timer.setSingleShot(True)
         self._upload_overlay_timer.timeout.connect(self.dismissUploadOverlay)
-        self._api_refresh_timer = QTimer(self)
-        self._api_refresh_timer.setInterval(30_000)
-        self._api_refresh_timer.timeout.connect(self.refreshApiSnapshot)
         self.logs = DictListModel(["time", "message"], self)
         self.items = DictListModel(["name", "quantity", "category", "icon"], self)
         self.warehouses = DictListModel(["name", "region", "count", "updatedAt"], self)
         self.statusFromWorker.connect(self._handle_status)
         self.refreshDebugSnapshot()
-        self._api_refresh_timer.start()
-        QTimer.singleShot(0, self.refreshApiSnapshot)
+
+    @Property(bool, notify=changed)
+    def apiLoading(self) -> bool:
+        return getattr(self, "_api_loading", False)
+
+    @Property(float, notify=changed)
+    def hudScale(self) -> float:
+        return float(self.settings.get("stockpile", {}).get("hud_scale", 1.0))
+
+    @Slot(float)
+    def setHudScale(self, value: float) -> None:
+        self.settings.setdefault("stockpile", {})["hud_scale"] = value
+        save_settings(self.settings)
+        self.changed.emit()
 
     @Property(bool, notify=changed)
     def running(self) -> bool:
@@ -1891,9 +1900,27 @@ class StockpileController(QObject):
     def logRows(self) -> list[dict[str, Any]]:
         return self.logs.items()
 
-    @Property("QStringList", notify=changed)
-    def visualWarehouseOptions(self) -> list[str]:
-        return [str(item.get("name") or "-") for item in self._visual_warehouses if item.get("name")]
+    @Property("QVariantList", notify=changed)
+    def visualWarehouseOptions(self) -> list[dict[str, Any]]:
+        options = []
+        groups = {}
+        for item in self._visual_warehouses:
+            name = str(item.get("name") or "")
+            if not name:
+                continue
+            parts = name.split("/", 1)
+            if len(parts) == 2:
+                hex_name = parts[0]
+                if hex_name.endswith("Hex"):
+                    hex_name = hex_name[:-3]
+                groups.setdefault(hex_name, []).append({"text": parts[1], "id": name, "type": "item"})
+            else:
+                groups.setdefault("Outros", []).append({"text": name, "id": name, "type": "item"})
+                
+        for h, items in groups.items():
+            options.append({"text": h, "type": "header"})
+            options.extend(items)
+        return options
 
     @Property(str, notify=changed)
     def visualWarehouse(self) -> str:
@@ -2038,8 +2065,6 @@ class StockpileController(QObject):
                 self.statusFromWorker.emit(result)
             except Exception as exc:
                 self.statusFromWorker.emit({"kind": "ui_error", "text": f"Stockpile API error: {exc}"})
-            finally:
-                self._api_loading = False
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -2075,6 +2100,7 @@ class StockpileController(QObject):
     def _handle_status(self, message: object) -> None:
         if isinstance(message, dict):
             if message.get("kind") == "ui_error":
+                self._api_loading = False
                 self._status = str(message.get("text") or "-")
                 self._append_log(self._status)
                 self.refreshDebugSnapshot(emit_changed=False)
@@ -2139,6 +2165,7 @@ class StockpileController(QObject):
             self._maybe_update_watch_file_from_status(text)
             self._status = text
             self._append_log(text)
+        self._api_loading = False
         self.refreshDebugSnapshot(emit_changed=False)
         self.changed.emit()
 
@@ -2401,7 +2428,6 @@ class StockpileController(QObject):
 
     @Slot()
     def shutdown(self) -> None:
-        self._api_refresh_timer.stop()
         self._stop(persist_enabled=False)
 
 
@@ -2473,10 +2499,10 @@ class ChatController(QObject):
         self._online_rows: list[dict[str, Any]] = []
         self.rooms = DictListModel(["slug", "label", "unread"], self)
         self.messages = DictListModel(
-            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId", "regiment"],
+            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId", "regiment", "role"],
             self,
         )
-        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt"], self)
+        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt", "regiment", "role"], self)
         self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
         self.resultFromWorker.connect(self._apply_result)
         self._refresh_timer = QTimer(self)
@@ -3572,6 +3598,8 @@ class ChatController(QObject):
                     row["connectedAt"] = float(self._user_online_since.get(uid, current_time))
                 
                 online_rows.append(row)
+            
+            online_rows.sort(key=lambda r: float(r.get("connectedAt", 0.0)), reverse=True)
             self._online_rows = online_rows
             self.onlineUsers.set_items(online_rows)
         elif kind == "messages" and isinstance(payload, dict):
@@ -3677,6 +3705,11 @@ class ChatController(QObject):
             detail = f"@{mention}" if mention else str(user.get("discordId") or "")
         if not detail:
             detail = str(user.get("steamId") or user.get("discordId") or "")
+        
+        access = user.get("panelAccess") if isinstance(user.get("panelAccess"), dict) else {}
+        access_level = int_or_none(access.get("accessLevel") or user.get("panelAccessLevel") or user.get("accessLevel"))
+        role = normalize_panel_role(user.get("role"), access_level)
+        
         return {
             "name": name,
             "detail": detail,
@@ -3684,6 +3717,8 @@ class ChatController(QObject):
             "mention": mention,
             "discordId": str(user.get("discordId") or ""),
             "connectedAt": float(user.get("_connectedAt") or 0.0),
+            "regiment": normalize_regiment(user.get("regiment")),
+            "role": role,
         }
 
     @Slot(str, result=bool)
@@ -6648,6 +6683,14 @@ def normalize_messages(
                 "replyToBody": str((message.get("replyToMessage") or {}).get("content") or ""),
                 "authorDiscordId": author_discord,
                 "regiment": str(author.get("regiment") or message.get("regiment") or ""),
+                "role": normalize_panel_role(
+                    author.get("role") or message.get("role"),
+                    int_or_none(
+                        (author.get("panelAccess") or {}).get("accessLevel")
+                        if isinstance(author.get("panelAccess"), dict)
+                        else author.get("panelAccessLevel") or author.get("accessLevel")
+                    )
+                ),
             }
         )
     return sorted(

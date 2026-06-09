@@ -239,7 +239,7 @@ Flickable {
                         }
 
                         ToolTip.visible: hoverArea.containsMouse
-                        ToolTip.text: String(model.name || "") + (String(model.detail || "") !== "" ? "\n" + String(model.detail || "") : "")
+                        ToolTip.text: String(model.name || "") + (String(model.regiment || "") ? " [" + String(model.regiment) + "]" : "") + (String(model.role || "") ? " • " + String(model.role) : "") + (String(model.detail || "") !== "" ? "\n" + String(model.detail || "") : "")
                         ToolTip.delay: 150
                     }
 
