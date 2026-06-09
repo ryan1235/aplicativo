@@ -89,7 +89,7 @@ from stockpiler import (
 
 
 APP_TITLE = "GG Coalition"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 UPDATE_REPO = "ryan1235/aplicativo"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
@@ -973,17 +973,6 @@ class AppController(QObject):
     @Slot()
     def runStartupPrompts(self) -> None:
         if self._startup_dialog_visible:
-            return
-        app_settings = self._app_settings()
-        if app_settings.get("last_tips_version") != APP_VERSION:
-            tips_image = BASE_DIR / "img" / "dicas.png"
-            self._set_startup_dialog(
-                kind="tips",
-                title=self._t("startup.tips.title"),
-                subtitle="",
-                body=self._t("startup.tips.content"),
-                image_url=file_url(tips_image) if tips_image.exists() else "",
-            )
             return
         self.showReleaseNotesIfNeeded()
 
