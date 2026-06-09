@@ -10,8 +10,6 @@ Rectangle {
     property int lastMessageCount: 0
     property string replyingTo: ""
     property string replyingToLabel: ""
-    property string whisperingTo: ""
-    property string whisperingToLabel: ""
     property string lastSelectedRoom: ""
     property string highlightMessageId: ""
     property bool preservingOlderMessages: false
@@ -329,6 +327,7 @@ Rectangle {
                         property string rowAvatar: String(avatar || "")
                         property string rowMention: String(mention || "")
                         property string rowDiscordId: String(discordId || "")
+                        property real rowConnectedAt: Number(connectedAt || 0)
 
                         width: onlineList.width
                         height: 44
@@ -368,24 +367,41 @@ Rectangle {
                                 Layout.fillWidth: true
                                 spacing: 0
                                 Text { text: rowName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: rowDetail || ("@" + rowMention); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
-                            }
-                            Rectangle {
-                                Layout.preferredWidth: 28
-                                Layout.preferredHeight: 28
-                                radius: 14
-                                color: whisperArea.containsMouse ? "#24486d" : "transparent"
-                                visible: rowDiscordId !== "" && rowDiscordId !== chatController.discordId
-                                Text { anchors.centerIn: parent; text: "W"; font.pixelSize: 12; color: "#edf6ff"; font.bold: true }
-                                MouseArea {
-                                    id: whisperArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        root.whisperingTo = rowDiscordId
-                                        root.whisperingToLabel = rowName
-                                        messageInput.forceActiveFocus()
+                                Text {
+                                    id: onlineTimeText
+                                    Timer {
+                                        interval: 15000
+                                        running: true
+                                        repeat: true
+                                        onTriggered: onlineTimeText.updateText()
                                     }
+                                    function updateText() {
+                                        if (rowConnectedAt > 0) {
+                                            var diff = Math.floor((Date.now() / 1000) - rowConnectedAt);
+                                            if (diff < 60) {
+                                                onlineTimeText.text = tr("user.online_now");
+                                            } else {
+                                                var minutes = Math.floor(diff / 60);
+                                                if (minutes < 60) onlineTimeText.text = tr("user.online_minutes").replace("{m}", minutes);
+                                                else {
+                                                    var hours = Math.floor(minutes / 60);
+                                                    if (hours < 24) onlineTimeText.text = tr("user.online_hours").replace("{h}", hours);
+                                                    else {
+                                                        var days = Math.floor(hours / 24);
+                                                        onlineTimeText.text = tr("user.online_days").replace("{d}", days);
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            onlineTimeText.text = rowDetail || ("@" + rowMention);
+                                        }
+                                    }
+                                    Component.onCompleted: updateText()
+                                    color: "#99abc4"
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight 
                                 }
                             }
                         }
@@ -509,6 +525,7 @@ Rectangle {
                             property string rowReplyToAuthor: String(replyToAuthor || "")
                             property string rowReplyToBody: String(replyToBody || "")
                             property string rowAuthorDiscordId: String(authorDiscordId || "")
+                            property string rowRegiment: String(regiment || "")
                             property bool rowIsGif: Boolean(isGif)
                             property bool rowMentioned: Boolean(mentioned)
                             property bool rowMine: Boolean(mine)
@@ -581,18 +598,66 @@ Rectangle {
                                             visible: rowAvatar === ""
                                         }
                                     }
-                                    Text { text: rowAuthor; color: "#5eead4"; font.bold: true; font.family: "Segoe UI"; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11 }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+                                        Text { text: rowAuthor; color: "#5eead4"; font.bold: true; font.family: "Segoe UI"; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Text { text: rowRegiment; color: "#5eead4"; opacity: 0.7; font.family: "Segoe UI"; font.pixelSize: 10; visible: rowRegiment !== ""; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    }
+                                    Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; Layout.alignment: Qt.AlignTop }
                                 }
 
-                                Text {
-                                    text: rowMediaUrl !== "" ? rowBody.replace(rowMediaUrl, "").trim() : rowBody
-                                    visible: text.length > 0
-                                    color: "#edf6ff"
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 13
-                                    wrapMode: Text.WordWrap
+                                Flow {
                                     Layout.fillWidth: true
+                                    width: Math.max(160, messageList.width - 96)
+                                    Repeater {
+                                        model: chatController.parseMessageSegments(rowMediaUrl !== "" ? rowBody.replace(rowMediaUrl, "").trim() : rowBody)
+                                        delegate: Item {
+                                            property var seg: modelData
+                                            implicitWidth: content.implicitWidth
+                                            implicitHeight: content.implicitHeight
+                                            Text {
+                                                id: content
+                                                text: seg.mention && seg.mention.length > 0 ? ("@" + seg.mention) : seg.text
+                                                color: seg.mention && seg.mention.length > 0 ? "#ffd166" : "#edf6ff"
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 13
+                                                wrapMode: Text.WordWrap
+                                                elide: Text.ElideRight
+                                            }
+                                            MouseArea {
+                                                anchors.fill: content
+                                                hoverEnabled: true
+                                                visible: seg.mention && seg.mention.length > 0
+                                                onEntered: {
+                                                    var targetWindow = root.window || Qt.application.activeWindow
+                                                    var p
+                                                    var winX = 0
+                                                    var winY = 0
+                                                    if (targetWindow) {
+                                                        try {
+                                                            p = content.mapToItem(targetWindow.contentItem || targetWindow, 0, content.height)
+                                                            winX = (typeof targetWindow.x !== 'undefined') ? targetWindow.x : 0
+                                                            winY = (typeof targetWindow.y !== 'undefined') ? targetWindow.y : 0
+                                                        } catch (e) {
+                                                            p = content.mapToItem(null, 0, content.height)
+                                                        }
+                                                    } else {
+                                                        p = content.mapToItem(null, 0, content.height)
+                                                    }
+                                                    var globalX = (p && p.x ? p.x : 0) + winX
+                                                    var globalY = (p && p.y ? p.y : 0) + winY + 4
+                                                    var avatar = (seg.user && seg.user.avatar) ? seg.user.avatar : ""
+                                                    var online = false
+                                                    try {
+                                                        online = chatController.userIsOnline ? chatController.userIsOnline(seg.mention) : false
+                                                    } catch (e) { online = false }
+                                                    chatController.showMentionHover(seg.mention, (seg.user && seg.user.regiment) ? seg.user.regiment : "", avatar, online, globalX, globalY)
+                                                }
+                                                onExited: chatController.dismissMentionHover()
+                                            }
+                                        }
+                                    }
                                 }
 
                                 AnimatedImage {
@@ -644,23 +709,6 @@ Rectangle {
                                         }
                                     }
                                 }
-                                Rectangle {
-                                    Layout.preferredWidth: 30
-                                    Layout.preferredHeight: 30
-                                    radius: 15
-                                    color: hoverWhisper.containsMouse ? "#24486d" : "#1d3353"
-                                    Text { anchors.centerIn: parent; text: "W"; font.pixelSize: 14; color: "#edf6ff"; font.bold: true }
-                                    visible: rowAuthorDiscordId !== "" && !rowMine
-                                    MouseArea {
-                                        id: hoverWhisper
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            root.whisperingTo = rowAuthorDiscordId
-                                            root.whisperingToLabel = rowAuthor
-                                        }
-                                    }
-                                }
                             }
                         }
                         ScrollBar.vertical: ScrollBar { active: messageList.moving }
@@ -707,34 +755,6 @@ Rectangle {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 4
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 30
-                        radius: 6
-                        color: "#2a1636"
-                        visible: root.whisperingTo !== ""
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 6
-                            spacing: 8
-                            Text { text: tr("home.chat.whispering_to") + root.whisperingToLabel; color: "#f3e8ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
-                            Text {
-                                text: "x"
-                                color: "#f87171"
-                                font.pixelSize: 14
-                                font.bold: true
-                                MouseArea {
-                                    anchors.fill: parent
-                                    anchors.margins: -4
-                                    onClicked: {
-                                        root.whisperingTo = ""
-                                        root.whisperingToLabel = ""
-                                    }
-                                }
-                            }
-                        }
-                    }
 
                     Rectangle {
                         Layout.fillWidth: true
@@ -804,9 +824,7 @@ Rectangle {
                             onTextChanged: chatController.updateMentionSuggestions(text)
                             onAccepted: {
                                 if (text.trim().length > 0) {
-                                    if (root.whisperingTo !== "") {
-                                        chatController.sendWhisperToUser(root.whisperingTo, text)
-                                    } else if (root.replyingTo !== "") {
+                                    if (root.replyingTo !== "") {
                                         chatController.sendMessageReply(text, root.replyingTo)
                                         root.replyingTo = ""
                                         root.replyingToLabel = ""

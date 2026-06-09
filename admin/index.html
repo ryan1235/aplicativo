@@ -157,6 +157,7 @@
 
       .main {
         min-width: 0;
+        min-height: 0;
         display: flex;
         flex-direction: column;
       }
@@ -222,6 +223,8 @@
         min-height: 0;
         overflow: auto;
         padding: 24px 26px;
+        display: flex;
+        flex-direction: column;
       }
 
       .metrics {
@@ -340,8 +343,29 @@
       }
 
       .table-shell {
-        min-height: 360px;
-        overflow: hidden;
+        min-height: 200px;
+        flex: 1;
+        overflow: auto;
+      }
+
+      .pagination {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 12px 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(11, 20, 35, 0.9);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+        margin-top: 12px;
+      }
+
+      .pagination span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 800;
       }
 
       table {
@@ -722,6 +746,12 @@
               Nenhum usuário encontrado.
             </div>
           </div>
+
+          <div class="pagination" id="pagination-controls" style="display: none;">
+            <button id="prev-page" class="btn" type="button">Anterior</button>
+            <span id="page-info">Página 1 de 1</span>
+            <button id="next-page" class="btn" type="button">Próximo</button>
+          </div>
         </section>
       </main>
     </div>
@@ -796,12 +826,18 @@
         users: [],
         selectedUser: null,
         loading: false,
+        currentPage: 1,
+        itemsPerPage: 50,
       };
 
       const els = {
         status: document.getElementById("connection-status"),
         body: document.getElementById("users-body"),
         empty: document.getElementById("empty-state"),
+        prevPage: document.getElementById("prev-page"),
+        nextPage: document.getElementById("next-page"),
+        pageInfo: document.getElementById("page-info"),
+        paginationControls: document.getElementById("pagination-controls"),
         search: document.getElementById("search-input"),
         roleFilter: document.getElementById("role-filter"),
         statusFilter: document.getElementById("status-filter"),
@@ -822,10 +858,23 @@
         toast: document.getElementById("toast"),
       };
 
-      els.search.addEventListener("input", render);
-      els.roleFilter.addEventListener("change", render);
-      els.statusFilter.addEventListener("change", render);
+      els.search.addEventListener("input", () => { state.currentPage = 1; render(); });
+      els.roleFilter.addEventListener("change", () => { state.currentPage = 1; render(); });
+      els.statusFilter.addEventListener("change", () => { state.currentPage = 1; render(); });
       els.refresh.addEventListener("click", loadUsers);
+      els.prevPage.addEventListener("click", () => {
+        if (state.currentPage > 1) {
+          state.currentPage--;
+          render();
+        }
+      });
+      els.nextPage.addEventListener("click", () => {
+        const totalPages = Math.ceil(filteredUsers().length / state.itemsPerPage);
+        if (state.currentPage < totalPages) {
+          state.currentPage++;
+          render();
+        }
+      });
       els.closeDrawer.addEventListener("click", closeDrawer);
       els.drawer.addEventListener("click", (event) => {
         if (event.target === els.drawer) closeDrawer();
@@ -892,6 +941,7 @@
         try {
           const data = await request("/chat/admin/users?take=250");
           state.users = Array.isArray(data.users) ? data.users : [];
+          state.currentPage = 1;
           updateMetrics(data.total);
           setStatus(
             `API conectada. ${state.users.length} usuários carregados.`,
@@ -911,14 +961,29 @@
         const rows = filteredUsers();
         els.body.textContent = "";
         els.empty.hidden = rows.length > 0;
+        
         if (rows.length === 0) {
           els.empty.textContent = state.users.length
             ? "Nenhum usuário combina com os filtros."
             : "Nenhum usuário carregado.";
+          els.paginationControls.style.display = "none";
           return;
         }
+
+        const totalPages = Math.ceil(rows.length / state.itemsPerPage);
+        if (state.currentPage > totalPages) state.currentPage = totalPages;
+        if (state.currentPage < 1) state.currentPage = 1;
+
+        els.pageInfo.textContent = `Página ${state.currentPage} de ${totalPages}`;
+        els.prevPage.disabled = state.currentPage === 1;
+        els.nextPage.disabled = state.currentPage === totalPages;
+        els.paginationControls.style.display = totalPages > 1 ? "flex" : "none";
+
+        const startIndex = (state.currentPage - 1) * state.itemsPerPage;
+        const pageRows = rows.slice(startIndex, startIndex + state.itemsPerPage);
+
         const fragment = document.createDocumentFragment();
-        for (const user of rows) {
+        for (const user of pageRows) {
           fragment.appendChild(userRow(user));
         }
         els.body.appendChild(fragment);

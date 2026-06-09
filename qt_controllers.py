@@ -89,7 +89,7 @@ from stockpiler import (
 
 
 APP_TITLE = "GG Coalition"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 UPDATE_REPO = "ryan1235/aplicativo"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
@@ -333,33 +333,111 @@ def play_sound(name: str) -> None:
         pass
 
 
-def startup_target_and_args(settings: dict[str, Any]) -> tuple[Path, str]:
+def is_python_launcher(path: Path) -> bool:
+    return path.name.lower() in {"python.exe", "pythonw.exe", "py.exe"}
+
+
+def current_windows_module_exe() -> Path | None:
+    if os.name != "nt":
+        return None
+
+    import ctypes
+    try:
+        buffer = ctypes.create_unicode_buffer(32768)
+        size = ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, len(buffer))
+        if size:
+            path = Path(buffer.value).resolve()
+            if path.exists():
+                return path
+    except Exception:
+        pass
+
+    return None
+
+
+def built_executable_path() -> Path | None:
+    candidates: list[Path] = []
+
+    module_exe = current_windows_module_exe()
+    if module_exe:
+        candidates.append(module_exe)
+
+    try:
+        if sys.argv and sys.argv[0]:
+            candidates.append(Path(sys.argv[0]).resolve())
+    except Exception:
+        pass
+
+    try:
+        current_exe = Path(sys.executable).resolve()
+        candidates.append(current_exe)
+        candidates.append(current_exe.parent / f"{APP_TITLE}.exe")
+    except Exception:
+        pass
+
+    candidates.append(BASE_DIR / f"{APP_TITLE}.exe")
+
+    for candidate in candidates:
+        try:
+            candidate = candidate.resolve()
+            if (
+                candidate.exists()
+                and candidate.suffix.lower() == ".exe"
+                and not is_python_launcher(candidate)
+            ):
+                return candidate
+        except Exception:
+            pass
+
+    return None
+
+
+def is_built_app() -> bool:
+    return bool(
+        getattr(sys, "frozen", False)
+        or "__compiled__" in globals()
+        or hasattr(sys, "_MEIPASS")
+    )
+
+
+def startup_target_and_args(settings: dict[str, Any]) -> tuple[Path, list[str]]:
     app_settings = settings.get("app", {})
-    background_arg = " --background" if app_settings.get("start_in_background", False) else ""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve(), background_arg.strip()
+    args: list[str] = []
+
+    if app_settings.get("start_in_background", False):
+        args.append("--background")
+
+    if is_built_app():
+        exe = built_executable_path()
+        if exe:
+            return exe, args
+        raise RuntimeError("Executável do aplicativo buildado não encontrado.")
 
     python_exe = Path(sys.executable).resolve()
     pythonw = python_exe.with_name("pythonw.exe")
     if pythonw.exists():
         python_exe = pythonw
-    return python_exe, f'"{(BASE_DIR / "felb_app.py").resolve()}"{background_arg}'
+
+    script_path = (BASE_DIR / "felb_app.py").resolve()
+    return python_exe, [str(script_path), *args]
 
 
 def startup_command(settings: dict[str, Any]) -> str:
-    target, arguments = startup_target_and_args(settings)
-    return f'"{target}" {arguments}'.strip() if arguments else f'"{target}"'
+    target, args = startup_target_and_args(settings)
+    return subprocess.list2cmdline([str(target), *args])
 
 
 def launch_target() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve()
+    exe = built_executable_path()
+    if exe:
+        return exe
     return BASE_DIR / "felb_app.py"
 
 
 def runtime_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return launch_target().parent
+    exe = built_executable_path()
+    if exe:
+        return exe.parent
     return BASE_DIR
 
 
@@ -408,6 +486,32 @@ def remove_startup_shortcuts() -> None:
             pass
 
 
+def read_startup_command() -> str:
+    if os.name != "nt":
+        return ""
+
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_READ) as key:
+            value, _kind = winreg.QueryValueEx(key, APP_TITLE)
+            return str(value or "")
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        return ""
+
+
+def startup_registry_matches(settings: dict[str, Any]) -> bool:
+    try:
+        expected = startup_command(settings).strip()
+    except Exception:
+        return False
+
+    current = read_startup_command().strip()
+    return current.lower() == expected.lower()
+
+
 def set_start_with_windows(enabled: bool, settings: dict[str, Any]) -> None:
     if os.name != "nt":
         raise RuntimeError("Windows startup is only available on Windows.")
@@ -416,10 +520,21 @@ def set_start_with_windows(enabled: bool, settings: dict[str, Any]) -> None:
 
     remove_startup_task()
     remove_startup_shortcuts()
+
     if enabled:
         command = startup_command(settings)
-        with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+
+        with winreg.CreateKeyEx(
+            winreg.HKEY_CURRENT_USER,
+            STARTUP_RUN_KEY,
+            0,
+            winreg.KEY_SET_VALUE,
+        ) as key:
             winreg.SetValueEx(key, APP_TITLE, 0, winreg.REG_SZ, command)
+
+        if not startup_registry_matches(settings):
+            raise RuntimeError("Falha ao confirmar o comando de inicialização no Registro do Windows.")
+
         return
 
     try:
@@ -427,6 +542,42 @@ def set_start_with_windows(enabled: bool, settings: dict[str, Any]) -> None:
             winreg.DeleteValue(key, APP_TITLE)
     except FileNotFoundError:
         pass
+
+
+def ensure_startup_enabled_by_default(settings: dict[str, Any]) -> None:
+    app_settings = settings.setdefault("app", {})
+
+    if os.name != "nt" or not is_built_app():
+        return
+
+    # Se o usuário/app já queria iniciar com Windows, mas o caminho mudou após update,
+    # corrige o Registro para o EXE atual.
+    if app_settings.get("start_with_windows", False) and not startup_registry_matches(settings):
+        try:
+            set_start_with_windows(True, settings)
+            app_settings["start_with_windows"] = startup_registry_matches(settings)
+            app_settings.pop("startup_default_error", None)
+            save_settings(settings)
+        except Exception as exc:
+            app_settings["startup_default_error"] = str(exc)
+            save_settings(settings)
+        return
+
+    if app_settings.get("startup_default_applied", False):
+        return
+
+    try:
+        set_start_with_windows(True, settings)
+        app_settings["start_with_windows"] = startup_registry_matches(settings)
+        app_settings["startup_prompted"] = True
+        app_settings["startup_default_applied"] = True
+        app_settings.pop("startup_default_error", None)
+    except Exception as exc:
+        app_settings["start_with_windows"] = False
+        app_settings["startup_default_applied"] = True
+        app_settings["startup_default_error"] = str(exc)
+
+    save_settings(settings)
 
 
 class DictListModel(QAbstractListModel):
@@ -823,17 +974,6 @@ class AppController(QObject):
     def runStartupPrompts(self) -> None:
         if self._startup_dialog_visible:
             return
-        app_settings = self._app_settings()
-        if app_settings.get("last_tips_version") != APP_VERSION:
-            tips_image = BASE_DIR / "img" / "dicas.png"
-            self._set_startup_dialog(
-                kind="tips",
-                title=self._t("startup.tips.title"),
-                subtitle="",
-                body=self._t("startup.tips.content"),
-                image_url=file_url(tips_image) if tips_image.exists() else "",
-            )
-            return
         self.showReleaseNotesIfNeeded()
 
     @Slot()
@@ -921,6 +1061,8 @@ class SettingsController(QObject):
         self._revision = 0
         self._status = ""
 
+        ensure_startup_enabled_by_default(self.settings)
+
     def _app_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("app", {})
 
@@ -946,7 +1088,9 @@ class SettingsController(QObject):
 
     @Property(bool, notify=changed)
     def startWithWindows(self) -> bool:
-        return bool(self._app_settings().get("start_with_windows", False))
+        if os.name == "nt":
+            return startup_registry_matches(self.settings)
+        return False
 
     @Property(str, notify=changed)
     def startupCommand(self) -> str:
@@ -1005,17 +1149,19 @@ class SettingsController(QObject):
     def setStartWithWindows(self, enabled: bool) -> None:
         enabled = bool(enabled)
         app_settings = self._app_settings()
+        app_settings["startup_user_changed"] = True
+
         try:
             set_start_with_windows(enabled, self.settings)
         except Exception as exc:
-            if enabled:
-                app_settings["start_with_windows"] = False
+            app_settings["start_with_windows"] = False
             self._status = str(exc)
             self._save()
             return
 
-        app_settings["start_with_windows"] = enabled
+        app_settings["start_with_windows"] = startup_registry_matches(self.settings) if enabled else False
         app_settings["startup_prompted"] = True
+        app_settings["startup_default_applied"] = True
         self._status = ""
         self._save()
 
@@ -1102,6 +1248,25 @@ class AutoClickerController(QObject):
         try:
             self.clicker = AutoClicker(lambda text: self.statusFromWorker.emit(str(text)))
             self.clicker.set_menu_callback(lambda: self.menuRequested.emit())
+            # Propaga idioma atual do I18nController para o AutoClicker
+            try:
+                parent_i18n = parent.i18nController if parent is not None and hasattr(parent, "i18nController") else None
+                # guarda referência para expor disponibilidade do toggle FR
+                self._parent_i18n = parent_i18n
+                if parent_i18n is not None:
+                    # set initial language and subscribe to changes
+                    self.clicker.set_language(parent_i18n.language)
+                    self.changed.emit()
+
+                    def _on_i18n_changed() -> None:
+                        try:
+                            self.clicker.set_language(parent_i18n.language)
+                        finally:
+                            self.changed.emit()
+
+                    parent_i18n.changed.connect(_on_i18n_changed)
+            except Exception:
+                pass
             self._apply_settings()
         except Exception as exc:
             self.clicker = None
@@ -1160,6 +1325,11 @@ class AutoClickerController(QObject):
             }
         )
         self._status = self.clicker.status_text()
+        # Aplica override para manter W mesmo em FR (toggle disponível apenas para idioma FR)
+        try:
+            self.clicker.force_w_in_fr = bool(data.get("force_w_in_fr", False))
+        except Exception:
+            pass
 
     @Slot(str)
     def _set_status(self, text: str) -> None:
@@ -1287,7 +1457,8 @@ class AutoClickerController(QObject):
             items.append(f"RMB HOLD {self.rightHoldHotkey}")
         if self._pilot_active():
             suffix = " PAUSADO" if getattr(self.clicker, "pilot_w_paused", False) else ""
-            items.append(f"W HOLD {self.pilotHotkey}{suffix}")
+            wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+            items.append(f"{wlabel} HOLD {self.pilotHotkey}{suffix}")
         if self.clicker.shift_enabled:
             items.append("SHIFT ON" if self.clicker.shift_pressed else "SHIFT READY")
         return " | ".join(items) if items else "-"
@@ -1297,7 +1468,8 @@ class AutoClickerController(QObject):
         if not self.clicker:
             return "Auto Clicker indisponivel"
         if getattr(self.clicker, "w_hold_enabled", False):
-            return f"W Hold {self.pilotHotkey}: {'pausado no S' if getattr(self.clicker, 'pilot_w_paused', False) else 'segurando W'}"
+            wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+            return f"{wlabel} Hold {self.pilotHotkey}: {'pausado no S' if getattr(self.clicker, 'pilot_w_paused', False) else f'segurando {wlabel}'}"
         if getattr(self.clicker, "right_hold_enabled", False):
             return f"Right Hold {self.rightHoldHotkey}: segurando direito"
         if getattr(self.clicker, "artillery_enabled", False):
@@ -1309,7 +1481,65 @@ class AutoClickerController(QObject):
         if getattr(self.clicker, "enabled", False):
             shift = " + Shift" if getattr(self.clicker, "shift_pressed", False) else ""
             return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.1f}s{shift}"
-        return f"{self.hotkey} auto | {self.pilotHotkey} W | {self.rightHoldHotkey} direito"
+        # Use dynamic W/Z label (respecting FR override)
+        wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+        return f"{self.hotkey} auto | {self.pilotHotkey} {wlabel} | {self.rightHoldHotkey} direito"
+
+    @Property(str, notify=changed)
+    def wHoldLabel(self) -> str:
+        """Rótulo dinâmico para o W-Hold (ex.: 'W Hold:' ou 'Z Hold:')."""
+        if not self.clicker:
+            return "W Hold:"
+        wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
+        return f"{wlabel} Hold:"
+
+    @Property(str, notify=changed)
+    def wHoldLetter(self) -> str:
+        """Retorna apenas a letra usada para W-hold ('W' ou 'Z')."""
+        if not self.clicker:
+            return "W"
+        try:
+            return getattr(self.clicker, "w_hold_label", lambda: "W")()
+        except Exception:
+            return "W"
+
+    @Property(bool, notify=changed)
+    def frWOverrideAvailable(self) -> bool:
+        """Disponibilidade do toggle: somente quando o idioma normalizado for 'fr'."""
+        try:
+            if getattr(self, "_parent_i18n", None) is None:
+                return False
+            code = normalize_language(self._parent_i18n.language)
+            return code == "fr"
+        except Exception:
+            return False
+
+    @Property(bool, notify=changed)
+    def frWOverride(self) -> bool:
+        """Estado atual do override (forcar W mesmo em FR)."""
+        if not self.clicker:
+            return False
+        return bool(getattr(self.clicker, "force_w_in_fr", False))
+
+    @Slot(bool)
+    def setFrWOverride(self, value: bool) -> None:
+        """Ativa/desativa o override e persiste a configuração; re-aplica idioma."""
+        if not self.clicker:
+            return
+        self.clicker.force_w_in_fr = bool(value)
+        # persiste a config
+        try:
+            self._clicker_settings()["force_w_in_fr"] = bool(value)
+            save_settings(self.settings)
+        except Exception:
+            pass
+        # re-aplica idioma atual para forçar recalculo da tecla usada
+        try:
+            if getattr(self, "_parent_i18n", None) is not None:
+                self.clicker.set_language(self._parent_i18n.language)
+        except Exception:
+            pass
+        self.changed.emit()
 
     @Property(str, notify=changed)
     def overlayHintText(self) -> str:
@@ -1545,6 +1775,10 @@ class StockpileController(QObject):
         self._debug_text = ""
         self._upload_overlay_visible = False
         self._upload_overlay_body = ""
+        self._upload_overlay_detail = ""
+        self._upload_overlay_accent = "#ffd166"
+        self._upload_overlay_title_key = "stockpile.overlay_processing_title"
+        self._upload_overlay_progress = 100
         self._visual_items: list[dict[str, Any]] = []
         self._visual_warehouses: list[dict[str, Any]] = []
         self._visual_warehouse = ""
@@ -1628,6 +1862,22 @@ class StockpileController(QObject):
     @Property(str, notify=changed)
     def uploadOverlayBody(self) -> str:
         return self._upload_overlay_body
+
+    @Property(str, notify=changed)
+    def uploadOverlayDetail(self) -> str:
+        return getattr(self, "_upload_overlay_detail", "")
+
+    @Property(str, notify=changed)
+    def uploadOverlayAccent(self) -> str:
+        return getattr(self, "_upload_overlay_accent", "#3b82f6")
+
+    @Property(str, notify=changed)
+    def uploadOverlayTitleKey(self) -> str:
+        return getattr(self, "_upload_overlay_title_key", "stockpile.overlay_processing_title")
+
+    @Property(int, notify=changed)
+    def uploadOverlayProgress(self) -> int:
+        return getattr(self, "_upload_overlay_progress", 100)
 
     @Property("QVariantList", notify=changed)
     def warehouseRows(self) -> list[dict[str, Any]]:
@@ -1912,12 +2162,28 @@ class StockpileController(QObject):
             play_sound("estoque")
         if not bool(clicker_settings.get("overlay_notification_enabled", True)):
             return
+            
         response = str(message.get("api_response") or message.get("message") or "OK")
-        names = self._stockpile_list if self._stockpile_list and self._stockpile_list != "-" else self._last_stockpile
-        if names and names != "-":
-            self._upload_overlay_body = f"{names} | {response}"
+        is_success = response in ("HTTP 200", "OK", "HTTP 201") or response.startswith("HTTP 2")
+        count = int(message.get("report_count", self._report_count))
+        
+        if is_success:
+            self._upload_overlay_accent = "#4ef7b2"
+            self._upload_overlay_title_key = "stockpile.overlay_processing_title"
+            self._upload_overlay_body = f"{count} estoques atualizados com sucesso" if count != 1 else "1 estoque atualizado com sucesso"
+            names = self._stockpile_list if self._stockpile_list and self._stockpile_list != "-" else self._last_stockpile
+            if names and names != "-":
+                self._upload_overlay_detail = f"Atualizados: {names}"
+            else:
+                self._upload_overlay_detail = "Dados enviados para a nuvem."
+            self._upload_overlay_progress = 100
         else:
-            self._upload_overlay_body = response
+            self._upload_overlay_accent = "#ff7a90"
+            self._upload_overlay_title_key = "update.error_title"
+            self._upload_overlay_body = "Falha ao atualizar estoques"
+            self._upload_overlay_detail = response
+            self._upload_overlay_progress = 0
+
         self._upload_overlay_visible = True
         self._upload_overlay_timer.start(4500)
 
@@ -2181,6 +2447,14 @@ class ChatController(QObject):
         self._mention_overlay_visible = False
         self._mention_overlay_title = ""
         self._mention_overlay_body = ""
+        # Hover card state for per-mention mouseover
+        self._mention_hover_visible = False
+        self._mention_hover_name = ""
+        self._mention_hover_regiment = ""
+        self._mention_hover_x = 0.0
+        self._mention_hover_y = 0.0
+        self._mention_hover_avatar = ""
+        self._mention_hover_online = False
         self._started = False
         self._ws = None
         app_settings = self.settings.setdefault("app", {})
@@ -2199,10 +2473,10 @@ class ChatController(QObject):
         self._online_rows: list[dict[str, Any]] = []
         self.rooms = DictListModel(["slug", "label", "unread"], self)
         self.messages = DictListModel(
-            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId"],
+            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId", "regiment"],
             self,
         )
-        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
+        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt"], self)
         self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
         self.resultFromWorker.connect(self._apply_result)
         self._refresh_timer = QTimer(self)
@@ -2470,6 +2744,34 @@ class ChatController(QObject):
     @Property(str, notify=changed)
     def mentionOverlayBody(self) -> str:
         return self._mention_overlay_body
+
+    @Property(bool, notify=changed)
+    def mentionHoverVisible(self) -> bool:
+        return getattr(self, "_mention_hover_visible", False)
+
+    @Property(str, notify=changed)
+    def mentionHoverName(self) -> str:
+        return getattr(self, "_mention_hover_name", "")
+
+    @Property(str, notify=changed)
+    def mentionHoverRegiment(self) -> str:
+        return getattr(self, "_mention_hover_regiment", "")
+
+    @Property(str, notify=changed)
+    def mentionHoverAvatar(self) -> str:
+        return getattr(self, "_mention_hover_avatar", "")
+
+    @Property(bool, notify=changed)
+    def mentionHoverOnline(self) -> bool:
+        return bool(getattr(self, "_mention_hover_online", False))
+
+    @Property(float, notify=changed)
+    def mentionHoverX(self) -> float:
+        return float(getattr(self, "_mention_hover_x", 0.0))
+
+    @Property(float, notify=changed)
+    def mentionHoverY(self) -> float:
+        return float(getattr(self, "_mention_hover_y", 0.0))
 
     @Property("QStringList", constant=True)
     def quickEmojis(self) -> list[str]:
@@ -3029,14 +3331,7 @@ class ChatController(QObject):
             "emoji": emoji
         }))
 
-    @Slot(str, str)
-    def sendWhisperToUser(self, targetDiscordId: str, body: str) -> None:
-        if not self._token or not targetDiscordId or not body.strip(): return
-        self._ensure_ws().sendTextMessage(json.dumps({
-            "type": "send_whisper",
-            "targetDiscordId": targetDiscordId,
-            "content": body.strip()
-        }))
+
     @Slot(str)
     def sendGif(self, url: str) -> None:
         self.sendMessage(url)
@@ -3068,6 +3363,105 @@ class ChatController(QObject):
             return f"{prefix}@{mention} {suffix}"
         spacer = "" if not text or text.endswith(" ") else " "
         return f"{text}{spacer}@{mention} "
+
+    @Slot(str, result="QVariantList")
+    def parseMessageSegments(self, text: str) -> list[dict]:
+        """Split a message into segments: plain text and mention segments.
+
+        Uses the combined user list (online + all users) and prioritizes longer
+        user names first to avoid partial matches (e.g. 'Ryan Luca' before 'Ryan').
+        Returns a list of dicts: {"text": str, "mention": str, "user": dict}
+        """
+        if not text:
+            return []
+        source = str(text)
+        lower = source.casefold()
+        debug_mentions = bool(os.environ.get("FELB_DEBUG_MENTIONS"))
+
+        # build candidate map: mention/name -> user row
+        user_rows = self._merge_user_rows(self._online_rows, self._all_user_rows)
+        candidate_map: dict[str, dict] = {}
+        for row in user_rows:
+            raw = str(row.get("mention") or row.get("name") or "").strip()
+            if not raw:
+                continue
+            key = raw.lstrip("@").strip()
+            if not key:
+                continue
+            candidate_map[key.casefold()] = row
+
+        # sort candidates by length desc to prefer longest match
+        candidates = sorted(candidate_map.keys(), key=lambda s: len(s), reverse=True)
+
+        occupied = [False] * len(source)
+        matches: list[tuple[int, int, str]] = []
+
+        for cand in candidates:
+            token = "@" + cand
+            start = lower.find(token)
+            while start != -1:
+                end = start + len(token)
+                # boundary check before '@'
+                if start == 0 or not lower[start - 1].isalnum():
+                    # avoid overlaps
+                    if not any(occupied[i] for i in range(start, end)):
+                        matches.append((start, end, cand))
+                        for i in range(start, end):
+                            occupied[i] = True
+                start = lower.find(token, start + 1)
+
+        if not matches:
+            if debug_mentions:
+                print(f"[mentions] no matches for: {source}", flush=True)
+            return [{"text": source, "mention": "", "user": {}}]
+
+        matches.sort()
+        segments: list[dict] = []
+        pos = 0
+        for start, end, cand in matches:
+            if pos < start:
+                segments.append({"text": source[pos:start], "mention": "", "user": {}})
+            # use original-cased text for display
+            mention_text = source[start + 1 : end]
+            user = candidate_map.get(cand)
+            segments.append({"text": source[start:end], "mention": mention_text, "user": user or {}})
+            pos = end
+        if pos < len(source):
+            segments.append({"text": source[pos:], "mention": "", "user": {}})
+        if debug_mentions:
+            try:
+                found = [source[s:e] for s, e, _ in matches]
+            except Exception:
+                found = matches
+            print(f"[mentions] parsed segments for: {source} -> mentions={found}", flush=True)
+        return segments
+
+    @Slot(str, str, str, bool, float, float)
+    def showMentionHover(self, name: str, regiment: str, avatar: str, online: bool, x: float, y: float) -> None:
+        self._mention_hover_name = str(name or "")
+        self._mention_hover_regiment = str(regiment or "")
+        self._mention_hover_avatar = str(avatar or "")
+        self._mention_hover_online = bool(online)
+        try:
+            self._mention_hover_x = float(x)
+            self._mention_hover_y = float(y)
+        except Exception:
+            self._mention_hover_x = 0.0
+            self._mention_hover_y = 0.0
+        self._mention_hover_visible = True
+        if os.environ.get("FELB_DEBUG_MENTIONS"):
+            print(
+                f"[mentions] showMentionHover name={self._mention_hover_name!r} regiment={self._mention_hover_regiment!r} avatar={self._mention_hover_avatar!r} online={self._mention_hover_online} x={self._mention_hover_x} y={self._mention_hover_y}",
+                flush=True,
+            )
+        self.changed.emit()
+
+    @Slot()
+    def dismissMentionHover(self) -> None:
+        self._mention_hover_visible = False
+        if os.environ.get("FELB_DEBUG_MENTIONS"):
+            print("[mentions] dismissMentionHover", flush=True)
+        self.changed.emit()
 
     @Slot()
     def dismissMentionOverlay(self) -> None:
@@ -3151,11 +3545,34 @@ class ChatController(QObject):
             users = payload.get("users") or []
             rows = [self._user_to_row(user) for user in users]
             self._all_user_rows = rows
-            self._online_rows = self._merge_user_rows(self._online_rows, rows)
         elif kind == "online" and isinstance(payload, dict):
             users = payload.get("onlineUsers") or payload.get("users") or []
-            online_rows = [self._user_to_row(user) for user in users]
-            self._online_rows = self._merge_user_rows(online_rows, self._all_user_rows)
+            import time
+            from datetime import datetime
+            
+            if not hasattr(self, '_user_online_since'):
+                self._user_online_since = {}
+            current_time = time.time()
+            
+            online_rows = []
+            for u in users:
+                row = self._user_to_row(u)
+                
+                iso_time = u.get("lastLoginAt")
+                if iso_time and isinstance(iso_time, str):
+                    try:
+                        dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
+                        row["connectedAt"] = float(dt.timestamp())
+                    except Exception:
+                        row["connectedAt"] = current_time
+                else:
+                    uid = str(row.get("discordId") or row.get("mention") or row.get("name") or "")
+                    if uid and uid not in self._user_online_since:
+                        self._user_online_since[uid] = current_time
+                    row["connectedAt"] = float(self._user_online_since.get(uid, current_time))
+                
+                online_rows.append(row)
+            self._online_rows = online_rows
             self.onlineUsers.set_items(online_rows)
         elif kind == "messages" and isinstance(payload, dict):
             slug = str(payload.get("slug") or self._selected_room)
@@ -3266,7 +3683,26 @@ class ChatController(QObject):
             "avatar": str(user.get("avatarUrl") or user.get("avatar") or user.get("avatarfull") or user.get("avatarmedium") or ""),
             "mention": mention,
             "discordId": str(user.get("discordId") or ""),
+            "connectedAt": float(user.get("_connectedAt") or 0.0),
         }
+
+    @Slot(str, result=bool)
+    def userIsOnline(self, mentionOrId: str) -> bool:
+        if not mentionOrId:
+            return False
+        key = str(mentionOrId).strip().lstrip("@").casefold()
+        for row in self._online_rows:
+            if not isinstance(row, dict):
+                continue
+            m = str(row.get("mention") or "").strip().lstrip("@").casefold()
+            if m and m == key:
+                return True
+            # check by discordId / name
+            if str(row.get("discordId") or "").strip() == mentionOrId:
+                return True
+            if str(row.get("name") or "").strip().casefold() == key:
+                return True
+        return False
 
     @staticmethod
     def _mention_token(text: str) -> str | None:
@@ -5637,7 +6073,7 @@ class UpdateController(QObject):
 
     @Property(bool, notify=changed)
     def sourceMode(self) -> bool:
-        return not bool(getattr(sys, "frozen", False))
+        return not is_built_app()
 
     @Slot()
     def check(self) -> None:
@@ -6211,6 +6647,7 @@ def normalize_messages(
                 "replyToAuthor": str((message.get("replyToMessage") or {}).get("authorName") or ""),
                 "replyToBody": str((message.get("replyToMessage") or {}).get("content") or ""),
                 "authorDiscordId": author_discord,
+                "regiment": str(author.get("regiment") or message.get("regiment") or ""),
             }
         )
     return sorted(
@@ -6561,6 +6998,8 @@ class ControllerRegistry(QObject):
         self.autoClickerController.orderRequested.connect(lambda _order: self.notificationsController.startSquadlock())
         if self.settings_data.get("stockpile", {}).get("enabled", True):
             QTimer.singleShot(0, self.stockpileController.start)
+        
+        QTimer.singleShot(2000, self.updateController.check)
         debug_memory("registry init ready")
 
     def expose(self, engine) -> None:

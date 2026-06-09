@@ -433,8 +433,8 @@ ApplicationWindow {
         id: updateOfferDialog
         modal: true
         visible: updateController.offerVisible
-        width: Math.min(620, window.width - 48)
-        height: Math.min(520, window.height - 48)
+        width: Math.min(680, window.width - 48)
+        height: Math.min(600, window.height - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
         closePolicy: Popup.NoAutoClose
@@ -509,8 +509,8 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: updateNoticeText.implicitHeight + 24
                 radius: 10
-                color: Qt.rgba(0.035, 0.075, 0.13, 0.92)
-                border.color: "#1d3353"
+                color: Qt.rgba(0.06, 0.12, 0.20, 0.6)
+                border.color: "#24486d"
                 border.width: 1
 
                 Text {
@@ -518,29 +518,41 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: 12
                     text: tr("update.offer_notice")
-                    color: "#93a9c4"
+                    color: "#a4b9d6"
                     font.family: "Segoe UI"
-                    font.pixelSize: 12
-                    lineHeight: 1.35
+                    font.pixelSize: 13
+                    lineHeight: 1.4
                     wrapMode: Text.WordWrap
                     verticalAlignment: Text.AlignVCenter
                 }
             }
-            TextArea {
+            ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                text: updateController.updateBody
-                textFormat: TextEdit.MarkdownText
-                readOnly: true
-                selectByMouse: true
-                color: "#edf6ff"
-                font.family: "Segoe UI"
-                font.pixelSize: 13
-                wrapMode: TextArea.Wrap
+                clip: true
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                
                 background: Rectangle {
-                    radius: 8
-                    color: "#070b16"
+                    radius: 10
+                    color: Qt.rgba(0.04, 0.06, 0.1, 0.8)
                     border.color: "#1e3554"
+                    border.width: 1
+                }
+
+                TextArea {
+                    text: updateController.updateBody
+                    textFormat: TextEdit.MarkdownText
+                    readOnly: true
+                    selectByMouse: true
+                    color: "#edf6ff"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 14
+                    wrapMode: TextArea.Wrap
+                    topPadding: 16
+                    bottomPadding: 16
+                    leftPadding: 16
+                    rightPadding: 16
+                    background: Item {}
                 }
             }
         }
@@ -579,7 +591,7 @@ ApplicationWindow {
         id: updateProgressDialog
         modal: true
         visible: updateController.progressVisible
-        width: Math.min(540, window.width - 48)
+        width: Math.min(580, window.width - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
         closePolicy: Popup.NoAutoClose
@@ -620,16 +632,16 @@ ApplicationWindow {
 
                     Rectangle {
                         anchors.centerIn: parent
-                        width: 10
-                        height: 10
-                        radius: 5
+                        width: 14
+                        height: 14
+                        radius: 7
                         color: updateController.progressAccent
 
                         SequentialAnimation on opacity {
                             loops: Animation.Infinite
                             running: updateController.progressVisible
-                            NumberAnimation { from: 0.35; to: 1; duration: 620; easing.type: Easing.InOutSine }
-                            NumberAnimation { from: 1; to: 0.35; duration: 620; easing.type: Easing.InOutSine }
+                            NumberAnimation { from: 0.25; to: 1; duration: 700; easing.type: Easing.InOutSine }
+                            NumberAnimation { from: 1; to: 0.25; duration: 700; easing.type: Easing.InOutSine }
                         }
                     }
                 }
@@ -647,9 +659,9 @@ ApplicationWindow {
                     }
                     Text {
                         text: updateController.progressText
-                        color: "#99abc4"
+                        color: "#a4b9d6"
                         font.family: "Segoe UI"
-                        font.pixelSize: 13
+                        font.pixelSize: 14
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                     }
@@ -676,19 +688,20 @@ ApplicationWindow {
             Rectangle {
                 visible: updateController.restarting
                 Layout.fillWidth: true
-                Layout.preferredHeight: 92
+                Layout.preferredHeight: restartNoticeLayout.implicitHeight + 32
                 radius: 12
-                color: Qt.rgba(0.12, 0.09, 0.035, 0.9)
-                border.color: updateController.progressAccent
+                color: Qt.rgba(0.18, 0.12, 0.04, 0.4)
+                border.color: Qt.rgba(1.0, 0.75, 0.2, 0.3)
                 border.width: 1
 
                 RowLayout {
+                    id: restartNoticeLayout
                     anchors.fill: parent
                     anchors.margins: 16
                     spacing: 16
                     Text {
                         text: updateController.restartCountdown
-                        color: updateController.progressAccent
+                        color: "#ffd166"
                         font.family: "Segoe UI"
                         font.pixelSize: 42
                         font.bold: true
@@ -697,13 +710,13 @@ ApplicationWindow {
                     }
                     Text {
                         text: tr("update.restart_notice")
-                        color: "#edf6ff"
+                        color: "#fef3c7"
                         font.family: "Segoe UI"
-                        font.pixelSize: 14
-                        font.bold: true
-                        lineHeight: 1.35
+                        font.pixelSize: 15
+                        lineHeight: 1.4
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }
@@ -712,18 +725,18 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 value: updateController.progressValue / 100
                 background: Rectangle {
-                    implicitHeight: 14
-                    radius: 7
+                    implicitHeight: 18
+                    radius: 9
                     color: "#070b16"
                     border.color: "#1e3554"
                     border.width: 1
                 }
                 contentItem: Item {
-                    implicitHeight: 14
+                    implicitHeight: 18
                     Rectangle {
                         width: parent.width * (updateController.progressValue / 100)
                         height: parent.height
-                        radius: 7
+                        radius: 9
                         color: updateController.progressAccent
                         Behavior on width { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
                     }
@@ -734,9 +747,9 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Text {
                     text: updateController.progressDetail
-                    color: "#7f93ad"
+                    color: "#8ab4ff"
                     font.family: "Segoe UI"
-                    font.pixelSize: 12
+                    font.pixelSize: 13
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
@@ -744,7 +757,7 @@ ApplicationWindow {
                     text: updateController.progressValue + "%"
                     color: updateController.progressAccent
                     font.family: "Segoe UI"
-                    font.pixelSize: 13
+                    font.pixelSize: 16
                     font.bold: true
                 }
             }
@@ -1911,6 +1924,118 @@ ApplicationWindow {
             MouseArea {
                 anchors.fill: parent
                 onClicked: chatController.dismissMentionOverlay()
+            }
+        }
+    }
+
+    Window {
+        id: mentionHoverWindow
+        x: chatController.mentionHoverX
+        y: chatController.mentionHoverY
+        width: 320
+        height: Math.max(76, mentionHoverPanel.implicitHeight + 20)
+        visible: chatController.mentionHoverVisible
+        color: "transparent"
+        transientParent: null
+        flags: Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowTransparentForInput | Qt.WindowStaysOnTopHint
+
+        function clampToScreen() {
+            var screenWidth = Screen.width > 0 ? Screen.width : 1920
+            var screenHeight = Screen.height > 0 ? Screen.height : 1080
+            var desiredX = chatController.mentionHoverX
+            var desiredY = chatController.mentionHoverY
+            
+            if (desiredX + width > screenWidth - 12) {
+                desiredX = screenWidth - width - 12
+            }
+            if (desiredY + height > screenHeight - 12) {
+                desiredY = chatController.mentionHoverY - height - 32
+            }
+            
+            x = desiredX
+            y = desiredY
+        }
+
+        onVisibleChanged: if (visible) clampToScreen()
+        onWidthChanged: if (visible) clampToScreen()
+        onHeightChanged: if (visible) clampToScreen()
+
+        Rectangle {
+            id: mentionHoverPanel
+            anchors.fill: parent
+            anchors.margins: 10
+            implicitHeight: hoverLayout.implicitHeight + 16
+            radius: 12
+            color: "#0a1321"
+            border.color: "#3b82f6"
+            border.width: 1
+            opacity: 0.98
+            layer.enabled: true
+            layer.effect: DropShadow { color: Qt.rgba(0,0,0,0.8); radius: 18; samples: 25; verticalOffset: 6 }
+
+            RowLayout {
+                id: hoverLayout
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 12
+                spacing: 14
+
+                Rectangle {
+                    Layout.preferredWidth: 52
+                    Layout.preferredHeight: 52
+                    radius: 26
+                    color: "#1d3353"
+                    clip: true
+                    Image {
+                        anchors.fill: parent
+                        source: chatController.mentionHoverAvatar || ""
+                        fillMode: Image.PreserveAspectCrop
+                        visible: chatController.mentionHoverAvatar !== ""
+                        asynchronous: true
+                        cache: false
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        visible: chatController.mentionHoverAvatar === ""
+                        text: (chatController.mentionHoverName || "?").substring(0,2).toUpperCase()
+                        color: "#60a5fa"
+                        font.bold: true
+                        font.pixelSize: 18
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 5
+                    Text {
+                        text: chatController.mentionHoverName
+                        color: "#ffffff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 16
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Rectangle {
+                            Layout.preferredWidth: 10
+                            Layout.preferredHeight: 10
+                            radius: 5
+                            color: chatController.mentionHoverOnline ? "#22c55e" : "#64748b"
+                        }
+                        Text {
+                            text: (chatController.mentionHoverOnline ? "Online" : "Offline") + (chatController.mentionHoverRegiment ? (" • " + chatController.mentionHoverRegiment) : "")
+                            color: "#94a3b8"
+                            font.pixelSize: 13
+                            font.family: "Segoe UI"
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
             }
         }
     }

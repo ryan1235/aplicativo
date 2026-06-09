@@ -19,7 +19,8 @@ import traceback
 
 import PySide6
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget, QGraphicsDropShadowEffect
 
 try:
     from i18n import Translator, normalize_language
@@ -126,20 +127,27 @@ class UpdateWindow(QObject):
         super().__init__()
         self.window = QWidget()
         self.window.setWindowTitle(_t("update.runner_window_title"))
-        self.window.setFixedSize(500, 268)
-        self.window.setWindowFlags(self.window.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.window.setFixedSize(540, 280)
+        self.window.setWindowFlags(self.window.windowFlags() | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.window.setAttribute(Qt.WA_TranslucentBackground)
         self._accent = COLORS["accent"]
-        self._apply_style()
 
         outer = QVBoxLayout(self.window)
-        outer.setContentsMargins(18, 18, 18, 18)
+        outer.setContentsMargins(20, 20, 20, 20)
         panel = QWidget()
         panel.setObjectName("panel")
+        
+        shadow = QGraphicsDropShadowEffect(self.window)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 180))
+        shadow.setOffset(0, 0)
+        panel.setGraphicsEffect(shadow)
+        
         outer.addWidget(panel)
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(12)
+        layout.setContentsMargins(28, 28, 28, 28)
+        layout.setSpacing(14)
 
         heading = QLabel(_t("update.runner_heading"))
         heading.setObjectName("heading")
@@ -159,10 +167,11 @@ class UpdateWindow(QObject):
         progress_row = QHBoxLayout()
         self.phase_label = QLabel(_t("update.runner_prepare"))
         self.phase_label.setObjectName("phase")
-        progress_row.addWidget(self.phase_label, stretch=1)
+        progress_row.addWidget(self.phase_label)
+        progress_row.addStretch(1)
         self.percent_label = QLabel("0%")
         self.percent_label.setObjectName("percent")
-        self.percent_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.percent_label.setAlignment(Qt.AlignRight | Qt.AlignBottom)
         progress_row.addWidget(self.percent_label)
         layout.addLayout(progress_row)
 
@@ -170,6 +179,8 @@ class UpdateWindow(QObject):
         self.detail_label.setObjectName("detail")
         self.detail_label.setWordWrap(True)
         layout.addWidget(self.detail_label, stretch=1)
+
+        self._apply_style()
 
         self.progress_requested.connect(self._set_progress)
         self.center()
@@ -187,15 +198,15 @@ class UpdateWindow(QObject):
     def _apply_style(self) -> None:
         self.window.setStyleSheet(
             f"""
-            QWidget {{ background: {COLORS['bg']}; color: {COLORS['text']}; font-family: Segoe UI; }}
-            #panel {{ background: {COLORS['card']}; border: 1px solid {COLORS['line']}; border-radius: 8px; }}
-            QLabel#heading {{ font-size: 24px; font-weight: 700; color: {COLORS['text']}; }}
-            QLabel#status {{ font-size: 13px; color: {COLORS['muted']}; }}
-            QLabel#phase {{ font-size: 11px; font-weight: 700; color: {self._accent}; }}
-            QLabel#percent {{ font-size: 12px; font-weight: 700; color: {self._accent}; }}
-            QLabel#detail {{ font-size: 12px; font-weight: 700; color: {COLORS['muted']}; }}
-            QProgressBar {{ border: 1px solid {COLORS['line']}; border-radius: 6px; background: {COLORS['bg']}; height: 14px; }}
-            QProgressBar::chunk {{ background: {self._accent}; border-radius: 6px; }}
+            QWidget {{ font-family: "Segoe UI", sans-serif; }}
+            #panel {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #111c31, stop:1 #070b16); border: 1px solid {self._accent}; border-radius: 14px; }}
+            QLabel#heading {{ font-size: 24px; font-weight: bold; color: #edf6ff; }}
+            QLabel#status {{ font-size: 14px; color: #a4b9d6; }}
+            QLabel#phase {{ font-size: 12px; font-weight: bold; color: {self._accent}; background: rgba(255, 255, 255, 0.08); padding: 5px 12px; border-radius: 6px; }}
+            QLabel#percent {{ font-size: 32px; font-weight: bold; color: {self._accent}; margin-top: -10px; }}
+            QLabel#detail {{ font-size: 12px; color: #7f93ad; }}
+            QProgressBar {{ border: 1px solid #1e3554; border-radius: 8px; background: #070b16; height: 16px; }}
+            QProgressBar::chunk {{ background: {self._accent}; border-radius: 7px; }}
             """
         )
 
