@@ -4907,6 +4907,13 @@ class ProductionController(QObject):
     def removeQueueSlot(self, category: str, index: int) -> None:
         self.removeQueueRow(category, index)
 
+    @Slot(str)
+    def clearCategory(self, category: str) -> None:
+        self.ensureLoaded()
+        if category in self._queue:
+            self._queue[category] = []
+        self.refresh()
+
     @Slot()
     def clear(self) -> None:
         self._queue = {category: [] for category in CATEGORY_ORDER}
@@ -5061,6 +5068,14 @@ class ProductionController(QObject):
                 if index < len(queued):
                     item = queued[index]
                     discount = int((1 - discount_multiplier(index + 1)) * 100) if self._mode == "mpf" else 0
+                    price_parts = []
+                    multiplier = discount_multiplier(index + 1) if self._mode == "mpf" else 1.0
+                    for key, label in MATERIALS:
+                        val = getattr(item, key, 0.0)
+                        if val > 0:
+                            price_parts.append(f"{int(math.ceil(val * multiplier - 1e-9))} {label}")
+                    price_tooltip = " | ".join(price_parts)
+
                     slots.append(
                         {
                             "filled": True,
@@ -5068,10 +5083,11 @@ class ProductionController(QObject):
                             "name": item.name,
                             "icon": file_url(item.icon_path) if item.icon_path and Path(item.icon_path).exists() else "",
                             "discount": discount,
+                            "priceTooltip": price_tooltip,
                         }
                     )
                 else:
-                    slots.append({"filled": False, "line": index, "name": "", "icon": "", "discount": 0})
+                    slots.append({"filled": False, "line": index, "name": "", "icon": "", "discount": 0, "priceTooltip": ""})
             rows.append(
                 {
                     "name": category,
@@ -5129,6 +5145,21 @@ class ProductionController(QObject):
                 return key
         return key
 
+    def _route_order_rows(self, orders: list[tuple[str, list[ProductionItem]]]) -> list[dict[str, Any]]:
+        rows = []
+        for _category, chunk in orders:
+            if not chunk:
+                continue
+            counts = {}
+            icons = {}
+            for item in chunk:
+                counts[item.name] = counts.get(item.name, 0) + 1
+                if item.name not in icons:
+                    icons[item.name] = file_url(item.icon_path) if item.icon_path and Path(item.icon_path).exists() else ""
+            for name, count in counts.items():
+                rows.append({"name": name, "count": count, "icon": icons[name]})
+        return rows
+
     def _route_rows(self) -> list[dict[str, Any]]:
         trips = plan_transport_routes(self._queue, mode=self._mode, vehicle=self._route_vehicle_mode)
         rows: list[dict[str, Any]] = []
@@ -5145,6 +5176,8 @@ class ProductionController(QObject):
                     "vehicle": vehicle,
                     "materials": format_route_materials(trip.get("materials", {}), vehicle=vehicle),
                     "orders": format_route_orders(trip.get("orders", [])),
+                    "materialsList": self._material_rows(trip.get("materials", {})),
+                    "ordersList": self._route_order_rows(trip.get("orders", [])),
                     "inputSlots": int(trip.get("input_slots") or 0),
                     "outputCrates": int(trip.get("output_crates") or 0),
                     "capacity": int(trip.get("max_slots") or 15),

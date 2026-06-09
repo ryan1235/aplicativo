@@ -370,8 +370,8 @@ def _flatbed_split_oversized_order(category: str, chunk: list[ProductionItem], m
     return trips
 
 
-def _trip_fill_score(trip: dict[str, Any]) -> int:
-    return max(int(trip.get("input_slots") or 0), int(trip.get("output_crates") or 0))
+def _trip_fill_score(trip: dict[str, Any]) -> tuple[int, int]:
+    return (int(trip.get("input_slots") or 0), int(trip.get("output_crates") or 0))
 
 
 def _plan_flatbed_routes(queue: dict[str, list[ProductionItem]], *, mode: str) -> list[dict[str, Any]]:
@@ -389,13 +389,13 @@ def _plan_flatbed_routes(queue: dict[str, list[ProductionItem]], *, mode: str) -
             "input_slots": input_slots(materials, is_flatbed=True),
             "output_crates": len(chunk),
         }
-        if order["input_slots"] > 60 or order["output_crates"] > 60:
+        if order["input_slots"] > 60:
             grouped_trips.append(_flatbed_split_oversized_order(category, list(chunk), materials))
         else:
             pending.append(order)
 
     # Bigger queues first makes the remaining bins naturally stay close to 60.
-    pending.sort(key=lambda order: max(int(order["input_slots"]), int(order["output_crates"])), reverse=True)
+    pending.sort(key=lambda order: (int(order["input_slots"]), int(order["output_crates"])), reverse=True)
 
     bins: list[dict[str, Any]] = []
     for order in pending:
@@ -405,9 +405,9 @@ def _plan_flatbed_routes(queue: dict[str, list[ProductionItem]], *, mode: str) -
             combined_materials = _add_materials(bin_data["materials"], order["materials"])
             combined_input = input_slots(combined_materials, is_flatbed=True)
             combined_output = int(bin_data["output_crates"]) + int(order["output_crates"])
-            if combined_input > 60 or combined_output > 60:
+            if combined_input > 60:
                 continue
-            score = max(combined_input, combined_output)
+            score = combined_input
             if score > best_score:
                 best_index = index
                 best_score = score
@@ -429,7 +429,7 @@ def _plan_flatbed_routes(queue: dict[str, list[ProductionItem]], *, mode: str) -
         [_flatbed_trip(orders=bin_data["orders"], materials=bin_data["materials"])]
         for bin_data in bins
     )
-    grouped_trips.sort(key=lambda group: max((_trip_fill_score(trip) for trip in group), default=0), reverse=True)
+    grouped_trips.sort(key=lambda group: max((_trip_fill_score(trip) for trip in group), default=(0, 0)), reverse=True)
     return [trip for group in grouped_trips for trip in group]
 
 
@@ -443,55 +443,102 @@ def plan_transport_routes(
     if is_flatbed:
         return _plan_flatbed_routes(queue, mode=mode)
 
-    max_slots = 60 if is_flatbed else 15
-    trips: list[dict[str, Any]] = []
+    max_slots = 15
+    pending: list[dict[str, Any]] = []
+    grouped_trips: list[list[dict[str, Any]]] = []
 
     for category, chunk in route_orders(queue, mode=mode):
         if not chunk:
             continue
             
         total_materials = order_materials(chunk, mode=mode)
-        
         input_units = []
         for key, _label in MATERIALS:
             val = total_materials.get(key, 0.0)
             if val > 0:
-                if is_flatbed:
-                    count = math.ceil(max(0.0, val) / MATERIAL_CRATE_SIZES[key])
-                else:
-                    count = math.ceil(max(0.0, val) / 100.0)
+                count = math.ceil(max(0.0, val) / 100.0)
                 input_units.extend([key] * count)
                 
-        output_items = list(chunk)
+        order = {
+            "category": category,
+            "chunk": list(chunk),
+            "materials": total_materials,
+            "input_slots": len(input_units),
+            "output_crates": len(chunk),
+            "input_units": input_units,
+        }
         
-        needs_warning = is_flatbed and (len(input_units) > 60 or len(output_items) > 60)
-        warning_msg = "Essa fila é mais de 60 caixas então tome cuidado para não ser roubado" if needs_warning else ""
-        
-        while input_units or output_items:
-            trip_in_keys = input_units[:max_slots]
-            input_units = input_units[max_slots:]
-            
-            trip_out_items = output_items[:max_slots]
-            output_items = output_items[max_slots:]
-            
-            trip_materials = {key: 0.0 for key, _label in MATERIALS}
-            for key in trip_in_keys:
-                if is_flatbed:
-                    trip_materials[key] += MATERIAL_CRATE_SIZES[key]
-                else:
-                    trip_materials[key] += 100.0
-                    
-            trips.append({
-                "orders": [(category, trip_out_items)] if trip_out_items else [],
-                "materials": trip_materials,
-                "input_slots": len(trip_in_keys),
-                "output_crates": len(trip_out_items),
-                "vehicle": "Flatbed" if is_flatbed else "Dunne",
-                "max_slots": max_slots,
-                "warning": warning_msg,
-            })
-            
-    return trips
+        if order["input_slots"] > max_slots:
+            output_items = list(chunk)
+            in_keys = list(input_units)
+            trips: list[dict[str, Any]] = []
+            warning_msg = f"Essa fila é mais de {max_slots} caixas então tome cuidado para não ser roubado"
+            while in_keys or output_items:
+                trip_in = in_keys[:max_slots]
+                in_keys = in_keys[max_slots:]
+                trip_out = output_items[:max_slots]
+                output_items = output_items[max_slots:]
+                trip_mats = {key: 0.0 for key, _label in MATERIALS}
+                for key in trip_in:
+                    trip_mats[key] += 100.0
+                trips.append({
+                    "orders": [(category, trip_out)] if trip_out else [],
+                    "materials": trip_mats,
+                    "input_slots": len(trip_in),
+                    "output_crates": len(trip_out),
+                    "vehicle": "Dunne",
+                    "max_slots": max_slots,
+                    "warning": warning_msg,
+                })
+            grouped_trips.append(trips)
+        else:
+            pending.append(order)
+
+    pending.sort(key=lambda order: (int(order["input_slots"]), int(order["output_crates"])), reverse=True)
+
+    bins: list[dict[str, Any]] = []
+    for order in pending:
+        best_index = -1
+        best_score = -1
+        for index, bin_data in enumerate(bins):
+            combined_input = int(bin_data["input_slots"]) + int(order["input_slots"])
+            combined_output = int(bin_data["output_crates"]) + int(order["output_crates"])
+            if combined_input > max_slots:
+                continue
+            score = combined_input
+            if score > best_score:
+                best_index = index
+                best_score = score
+        if best_index >= 0:
+            target = bins[best_index]
+            target["materials"] = _add_materials(target["materials"], order["materials"])
+            target["orders"].append((order["category"], order["chunk"]))
+            target["input_slots"] += int(order["input_slots"])
+            target["output_crates"] += int(order["output_crates"])
+        else:
+            bins.append(
+                {
+                    "materials": dict(order["materials"]),
+                    "orders": [(order["category"], order["chunk"])],
+                    "input_slots": int(order["input_slots"]),
+                    "output_crates": int(order["output_crates"]),
+                }
+            )
+
+    grouped_trips.extend(
+        [{
+            "orders": bin_data["orders"],
+            "materials": bin_data["materials"],
+            "input_slots": bin_data["input_slots"],
+            "output_crates": bin_data["output_crates"],
+            "vehicle": "Dunne",
+            "max_slots": max_slots,
+            "warning": "",
+        }]
+        for bin_data in bins
+    )
+    grouped_trips.sort(key=lambda group: max((_trip_fill_score(trip) for trip in group), default=(0, 0)), reverse=True)
+    return [trip for group in grouped_trips for trip in group]
 
 
 def format_route_materials(materials: dict[str, float], *, vehicle: str) -> str:
@@ -504,9 +551,9 @@ def format_route_materials(materials: dict[str, float], *, vehicle: str) -> str:
         rounded = math.ceil(value - 1e-9)
         crate_size = MATERIAL_CRATE_SIZES[key]
         if is_flatbed:
-            lines.append(f"{math.ceil(rounded / crate_size)}x {label} crates")
+            lines.append(f"{math.ceil(rounded / crate_size)}x\xa0{label}\xa0crates")
         else:
-            lines.append(f"{rounded} {label}")
+            lines.append(f"{rounded}\xa0{label}")
     return "\n".join(lines) if lines else "-"
 
 
@@ -519,5 +566,5 @@ def format_route_orders(orders: list[tuple[str, list[ProductionItem]]]) -> str:
         for item in chunk:
             counts[item.name] = counts.get(item.name, 0) + 1
         for name, count in counts.items():
-            lines.append(f"{count}x {name} ({count} caixas)")
+            lines.append(f"{count}x\xa0{name}\xa0({count}\xa0caixas)")
     return "\n".join(lines) if lines else "-"
