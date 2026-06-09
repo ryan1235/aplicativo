@@ -1786,6 +1786,10 @@ class StockpileController(QObject):
         self._debug_text = ""
         self._upload_overlay_visible = False
         self._upload_overlay_body = ""
+        self._upload_overlay_detail = ""
+        self._upload_overlay_accent = "#ffd166"
+        self._upload_overlay_title_key = "stockpile.overlay_processing_title"
+        self._upload_overlay_progress = 100
         self._visual_items: list[dict[str, Any]] = []
         self._visual_warehouses: list[dict[str, Any]] = []
         self._visual_warehouse = ""
@@ -1869,6 +1873,22 @@ class StockpileController(QObject):
     @Property(str, notify=changed)
     def uploadOverlayBody(self) -> str:
         return self._upload_overlay_body
+
+    @Property(str, notify=changed)
+    def uploadOverlayDetail(self) -> str:
+        return getattr(self, "_upload_overlay_detail", "")
+
+    @Property(str, notify=changed)
+    def uploadOverlayAccent(self) -> str:
+        return getattr(self, "_upload_overlay_accent", "#3b82f6")
+
+    @Property(str, notify=changed)
+    def uploadOverlayTitleKey(self) -> str:
+        return getattr(self, "_upload_overlay_title_key", "stockpile.overlay_processing_title")
+
+    @Property(int, notify=changed)
+    def uploadOverlayProgress(self) -> int:
+        return getattr(self, "_upload_overlay_progress", 100)
 
     @Property("QVariantList", notify=changed)
     def warehouseRows(self) -> list[dict[str, Any]]:
@@ -2153,12 +2173,28 @@ class StockpileController(QObject):
             play_sound("estoque")
         if not bool(clicker_settings.get("overlay_notification_enabled", True)):
             return
+            
         response = str(message.get("api_response") or message.get("message") or "OK")
-        names = self._stockpile_list if self._stockpile_list and self._stockpile_list != "-" else self._last_stockpile
-        if names and names != "-":
-            self._upload_overlay_body = f"{names} | {response}"
+        is_success = response in ("HTTP 200", "OK", "HTTP 201") or response.startswith("HTTP 2")
+        count = int(message.get("report_count", self._report_count))
+        
+        if is_success:
+            self._upload_overlay_accent = "#4ef7b2"
+            self._upload_overlay_title_key = "stockpile.overlay_processing_title"
+            self._upload_overlay_body = f"{count} estoques atualizados com sucesso" if count != 1 else "1 estoque atualizado com sucesso"
+            names = self._stockpile_list if self._stockpile_list and self._stockpile_list != "-" else self._last_stockpile
+            if names and names != "-":
+                self._upload_overlay_detail = f"Atualizados: {names}"
+            else:
+                self._upload_overlay_detail = "Dados enviados para a nuvem."
+            self._upload_overlay_progress = 100
         else:
-            self._upload_overlay_body = response
+            self._upload_overlay_accent = "#ff7a90"
+            self._upload_overlay_title_key = "update.error_title"
+            self._upload_overlay_body = "Falha ao atualizar estoques"
+            self._upload_overlay_detail = response
+            self._upload_overlay_progress = 0
+
         self._upload_overlay_visible = True
         self._upload_overlay_timer.start(4500)
 
@@ -6048,7 +6084,7 @@ class UpdateController(QObject):
 
     @Property(bool, notify=changed)
     def sourceMode(self) -> bool:
-        return not bool(getattr(sys, "frozen", False))
+        return not is_built_app()
 
     @Slot()
     def check(self) -> None:
@@ -6973,6 +7009,8 @@ class ControllerRegistry(QObject):
         self.autoClickerController.orderRequested.connect(lambda _order: self.notificationsController.startSquadlock())
         if self.settings_data.get("stockpile", {}).get("enabled", True):
             QTimer.singleShot(0, self.stockpileController.start)
+        
+        QTimer.singleShot(2000, self.updateController.check)
         debug_memory("registry init ready")
 
     def expose(self, engine) -> None:
