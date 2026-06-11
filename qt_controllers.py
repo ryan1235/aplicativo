@@ -1788,16 +1788,25 @@ class StockpileController(QObject):
         self._upload_overlay_timer = QTimer(self)
         self._upload_overlay_timer.setSingleShot(True)
         self._upload_overlay_timer.timeout.connect(self.dismissUploadOverlay)
-        self._api_refresh_timer = QTimer(self)
-        self._api_refresh_timer.setInterval(30_000)
-        self._api_refresh_timer.timeout.connect(self.refreshApiSnapshot)
         self.logs = DictListModel(["time", "message"], self)
         self.items = DictListModel(["name", "quantity", "category", "icon"], self)
         self.warehouses = DictListModel(["name", "region", "count", "updatedAt"], self)
         self.statusFromWorker.connect(self._handle_status)
         self.refreshDebugSnapshot()
-        self._api_refresh_timer.start()
-        QTimer.singleShot(0, self.refreshApiSnapshot)
+
+    @Property(bool, notify=changed)
+    def apiLoading(self) -> bool:
+        return getattr(self, "_api_loading", False)
+
+    @Property(float, notify=changed)
+    def hudScale(self) -> float:
+        return float(self.settings.get("stockpile", {}).get("hud_scale", 1.0))
+
+    @Slot(float)
+    def setHudScale(self, value: float) -> None:
+        self.settings.setdefault("stockpile", {})["hud_scale"] = value
+        save_settings(self.settings)
+        self.changed.emit()
 
     @Property(bool, notify=changed)
     def running(self) -> bool:
@@ -1891,9 +1900,27 @@ class StockpileController(QObject):
     def logRows(self) -> list[dict[str, Any]]:
         return self.logs.items()
 
-    @Property("QStringList", notify=changed)
-    def visualWarehouseOptions(self) -> list[str]:
-        return [str(item.get("name") or "-") for item in self._visual_warehouses if item.get("name")]
+    @Property("QVariantList", notify=changed)
+    def visualWarehouseOptions(self) -> list[dict[str, Any]]:
+        options = []
+        groups = {}
+        for item in self._visual_warehouses:
+            name = str(item.get("name") or "")
+            if not name:
+                continue
+            parts = name.split("/", 1)
+            if len(parts) == 2:
+                hex_name = parts[0]
+                if hex_name.endswith("Hex"):
+                    hex_name = hex_name[:-3]
+                groups.setdefault(hex_name, []).append({"text": parts[1], "id": name, "type": "item"})
+            else:
+                groups.setdefault("Outros", []).append({"text": name, "id": name, "type": "item"})
+                
+        for h, items in groups.items():
+            options.append({"text": h, "type": "header"})
+            options.extend(items)
+        return options
 
     @Property(str, notify=changed)
     def visualWarehouse(self) -> str:
@@ -2038,8 +2065,6 @@ class StockpileController(QObject):
                 self.statusFromWorker.emit(result)
             except Exception as exc:
                 self.statusFromWorker.emit({"kind": "ui_error", "text": f"Stockpile API error: {exc}"})
-            finally:
-                self._api_loading = False
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -2075,6 +2100,7 @@ class StockpileController(QObject):
     def _handle_status(self, message: object) -> None:
         if isinstance(message, dict):
             if message.get("kind") == "ui_error":
+                self._api_loading = False
                 self._status = str(message.get("text") or "-")
                 self._append_log(self._status)
                 self.refreshDebugSnapshot(emit_changed=False)
@@ -2139,6 +2165,7 @@ class StockpileController(QObject):
             self._maybe_update_watch_file_from_status(text)
             self._status = text
             self._append_log(text)
+        self._api_loading = False
         self.refreshDebugSnapshot(emit_changed=False)
         self.changed.emit()
 
@@ -2401,7 +2428,6 @@ class StockpileController(QObject):
 
     @Slot()
     def shutdown(self) -> None:
-        self._api_refresh_timer.stop()
         self._stop(persist_enabled=False)
 
 
@@ -2473,10 +2499,10 @@ class ChatController(QObject):
         self._online_rows: list[dict[str, Any]] = []
         self.rooms = DictListModel(["slug", "label", "unread"], self)
         self.messages = DictListModel(
-            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId", "regiment"],
+            ["id", "author", "body", "meta", "rawTime", "sortKey", "mine", "avatar", "mediaUrl", "isGif", "mentioned", "reactions", "replyToMessageId", "replyToAuthor", "replyToBody", "authorDiscordId", "regiment", "role"],
             self,
         )
-        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt"], self)
+        self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt", "regiment", "role"], self)
         self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
         self.resultFromWorker.connect(self._apply_result)
         self._refresh_timer = QTimer(self)
@@ -3572,6 +3598,8 @@ class ChatController(QObject):
                     row["connectedAt"] = float(self._user_online_since.get(uid, current_time))
                 
                 online_rows.append(row)
+            
+            online_rows.sort(key=lambda r: float(r.get("connectedAt", 0.0)), reverse=True)
             self._online_rows = online_rows
             self.onlineUsers.set_items(online_rows)
         elif kind == "messages" and isinstance(payload, dict):
@@ -3677,6 +3705,11 @@ class ChatController(QObject):
             detail = f"@{mention}" if mention else str(user.get("discordId") or "")
         if not detail:
             detail = str(user.get("steamId") or user.get("discordId") or "")
+        
+        access = user.get("panelAccess") if isinstance(user.get("panelAccess"), dict) else {}
+        access_level = int_or_none(access.get("accessLevel") or user.get("panelAccessLevel") or user.get("accessLevel"))
+        role = normalize_panel_role(user.get("role"), access_level)
+        
         return {
             "name": name,
             "detail": detail,
@@ -3684,6 +3717,8 @@ class ChatController(QObject):
             "mention": mention,
             "discordId": str(user.get("discordId") or ""),
             "connectedAt": float(user.get("_connectedAt") or 0.0),
+            "regiment": normalize_regiment(user.get("regiment")),
+            "role": role,
         }
 
     @Slot(str, result=bool)
@@ -4872,6 +4907,13 @@ class ProductionController(QObject):
     def removeQueueSlot(self, category: str, index: int) -> None:
         self.removeQueueRow(category, index)
 
+    @Slot(str)
+    def clearCategory(self, category: str) -> None:
+        self.ensureLoaded()
+        if category in self._queue:
+            self._queue[category] = []
+        self.refresh()
+
     @Slot()
     def clear(self) -> None:
         self._queue = {category: [] for category in CATEGORY_ORDER}
@@ -5026,6 +5068,14 @@ class ProductionController(QObject):
                 if index < len(queued):
                     item = queued[index]
                     discount = int((1 - discount_multiplier(index + 1)) * 100) if self._mode == "mpf" else 0
+                    price_parts = []
+                    multiplier = discount_multiplier(index + 1) if self._mode == "mpf" else 1.0
+                    for key, label in MATERIALS:
+                        val = getattr(item, key, 0.0)
+                        if val > 0:
+                            price_parts.append(f"{int(math.ceil(val * multiplier - 1e-9))} {label}")
+                    price_tooltip = " | ".join(price_parts)
+
                     slots.append(
                         {
                             "filled": True,
@@ -5033,10 +5083,11 @@ class ProductionController(QObject):
                             "name": item.name,
                             "icon": file_url(item.icon_path) if item.icon_path and Path(item.icon_path).exists() else "",
                             "discount": discount,
+                            "priceTooltip": price_tooltip,
                         }
                     )
                 else:
-                    slots.append({"filled": False, "line": index, "name": "", "icon": "", "discount": 0})
+                    slots.append({"filled": False, "line": index, "name": "", "icon": "", "discount": 0, "priceTooltip": ""})
             rows.append(
                 {
                     "name": category,
@@ -5094,6 +5145,21 @@ class ProductionController(QObject):
                 return key
         return key
 
+    def _route_order_rows(self, orders: list[tuple[str, list[ProductionItem]]]) -> list[dict[str, Any]]:
+        rows = []
+        for _category, chunk in orders:
+            if not chunk:
+                continue
+            counts = {}
+            icons = {}
+            for item in chunk:
+                counts[item.name] = counts.get(item.name, 0) + 1
+                if item.name not in icons:
+                    icons[item.name] = file_url(item.icon_path) if item.icon_path and Path(item.icon_path).exists() else ""
+            for name, count in counts.items():
+                rows.append({"name": name, "count": count, "icon": icons[name]})
+        return rows
+
     def _route_rows(self) -> list[dict[str, Any]]:
         trips = plan_transport_routes(self._queue, mode=self._mode, vehicle=self._route_vehicle_mode)
         rows: list[dict[str, Any]] = []
@@ -5110,6 +5176,8 @@ class ProductionController(QObject):
                     "vehicle": vehicle,
                     "materials": format_route_materials(trip.get("materials", {}), vehicle=vehicle),
                     "orders": format_route_orders(trip.get("orders", [])),
+                    "materialsList": self._material_rows(trip.get("materials", {})),
+                    "ordersList": self._route_order_rows(trip.get("orders", [])),
                     "inputSlots": int(trip.get("input_slots") or 0),
                     "outputCrates": int(trip.get("output_crates") or 0),
                     "capacity": int(trip.get("max_slots") or 15),
@@ -6648,6 +6716,14 @@ def normalize_messages(
                 "replyToBody": str((message.get("replyToMessage") or {}).get("content") or ""),
                 "authorDiscordId": author_discord,
                 "regiment": str(author.get("regiment") or message.get("regiment") or ""),
+                "role": normalize_panel_role(
+                    author.get("role") or message.get("role"),
+                    int_or_none(
+                        (author.get("panelAccess") or {}).get("accessLevel")
+                        if isinstance(author.get("panelAccess"), dict)
+                        else author.get("panelAccessLevel") or author.get("accessLevel")
+                    )
+                ),
             }
         )
     return sorted(

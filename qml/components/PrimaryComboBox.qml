@@ -21,20 +21,23 @@ ComboBox {
     delegate: ItemDelegate {
         id: delegateItem
         width: control.popup.width
-        height: 36
+        height: typeof modelData === "object" && modelData.type === "header" ? 28 : 36
+        enabled: typeof modelData === "object" ? modelData.type !== "header" : true
         
-        text: typeof modelData !== "undefined" ? modelData : ""
+        text: typeof modelData === "object" ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
         
         contentItem: Text {
             text: delegateItem.text
-            color: control.highlightedIndex === index ? control.borderFocus : control.textNormal
+            color: (typeof modelData === "object" && modelData.type === "header") ? "#5eead4" : (control.highlightedIndex === index ? control.borderFocus : control.textNormal)
             font.family: "Segoe UI"
-            font.pixelSize: 13
+            font.pixelSize: (typeof modelData === "object" && modelData.type === "header") ? 11 : 13
+            font.bold: typeof modelData === "object" && modelData.type === "header"
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
+            leftPadding: (typeof modelData === "object" && modelData.type === "item") ? 12 : 0
         }
         background: Rectangle {
-            color: delegateItem.hovered ? control.itemHover : "transparent"
+            color: delegateItem.hovered && delegateItem.enabled ? control.itemHover : "transparent"
             radius: 4
             anchors.fill: parent
             anchors.margins: 2
