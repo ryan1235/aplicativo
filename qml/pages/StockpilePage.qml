@@ -47,8 +47,8 @@ Flickable {
             }
             PrimaryButton {
                 text: "Atualizar"
-                fill: "#5eead4"
-                hoverFill: "#2dd4bf"
+                fill: settingsController.accentColor
+                hoverFill: settingsController.accentHoverColor
                 textFill: "#022c22"
                 onClicked: stockpileController.refreshApiSnapshot()
             }
@@ -91,7 +91,7 @@ Flickable {
 
                 Text {
                     text: Math.round(stockpileController.hudScale * 100) + "%"
-                    color: "#5eead4"
+                    color: settingsController.accentColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     font.bold: true
@@ -158,7 +158,7 @@ Flickable {
 
                             ctx.beginPath();
                             ctx.arc(width / 2, height / 2, width / 2 - 4, -Math.PI / 2, Math.PI * 0.7);
-                            ctx.strokeStyle = "#5eead4";
+                            ctx.strokeStyle = settingsController.accentColor;
                             ctx.lineWidth = 4;
                             ctx.lineCap = "round";
                             ctx.stroke();
@@ -176,7 +176,7 @@ Flickable {
 
                 Text {
                     text: "Puxando estoques..."
-                    color: "#5eead4"
+                    color: settingsController.accentColor
                     font.family: "Segoe UI"
                     font.pixelSize: 16
                     font.bold: true
@@ -217,7 +217,7 @@ Flickable {
                     }
                     PrimaryComboBox {
                         id: visualWarehouseBox
-                        Layout.preferredWidth: Math.min(300, Math.max(210, root.width * 0.25))
+                        Layout.preferredWidth: Math.min(380, Math.max(240, root.width * 0.34))
                         Layout.preferredHeight: 32
                         enabled: stockpileController.visualWarehouseOptions.length > 0
                         textRole: "text"
@@ -248,7 +248,7 @@ Flickable {
                         background: Rectangle {
                             radius: 6
                             color: "#0e1a2d"
-                            border.color: visualWarehouseBox.activeFocus ? "#5eead4" : "#2d496f"
+                            border.color: visualWarehouseBox.activeFocus ? settingsController.accentColor : "#2d496f"
                         }
                     }
                 }
@@ -356,3 +356,5 @@ Flickable {
         }
     }
 }
+
+

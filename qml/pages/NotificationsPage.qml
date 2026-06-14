@@ -80,13 +80,13 @@ Flickable {
                         Layout.preferredWidth: 150
                         Layout.preferredHeight: 42
                         radius: 8
-                        color: notificationsController.overlayVisible ? "#173c35" : "#0e1a2d"
-                        border.color: notificationsController.overlayVisible ? "#5eead4" : "#2d496f"
+                        color: notificationsController.overlayVisible ? settingsController.accentPanelColor : "#0e1a2d"
+                        border.color: notificationsController.overlayVisible ? settingsController.accentColor : "#2d496f"
                         Behavior on color { ColorAnimation { duration: 140 } }
                         Text {
                             anchors.centerIn: parent
                             text: notificationsController.overlayVisible ? tr("notifications.overlay_live") : tr("notifications.overlay_idle")
-                            color: notificationsController.overlayVisible ? "#5eead4" : "#99abc4"
+                            color: notificationsController.overlayVisible ? settingsController.accentColor : "#99abc4"
                             font.family: "Segoe UI"
                             font.pixelSize: 12
                             font.bold: true
@@ -100,7 +100,7 @@ Flickable {
 
                     Text {
                         text: notificationsController.timeText
-                        color: notificationsController.squadlockFinished ? "#62d7a4" : "#ffd166"
+                        color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.warningColor
                         font.family: "Segoe UI"
                         font.pixelSize: 54
                         font.bold: true
@@ -133,7 +133,7 @@ Flickable {
                                     width: parent.width * notificationsController.progress
                                     height: parent.height
                                     radius: 5
-                                    color: notificationsController.squadlockFinished ? "#62d7a4" : "#5eead4"
+                                    color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.accentColor
                                     Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                                 }
                             }
@@ -253,3 +253,5 @@ Flickable {
         }
     }
 }
+
+

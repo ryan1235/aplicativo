@@ -91,7 +91,15 @@ class AutoClicker:
         self.hotkey_name = "F3"
         self.hotkey_vk = HOTKEYS[self.hotkey_name]
         self.mouse_button = "Esquerdo"
-        self.interval = 0.1
+        self.interval = 0.2
+        self.modes_enabled: dict[str, bool] = {
+            "auto": True,
+            "move": True,
+            "pilot": True,
+            "right_hold": True,
+            "fixed": True,
+            "artillery": True,
+        }
 
         self.target_hwnd = 0
         self.click_hwnd = 0
@@ -135,7 +143,7 @@ class AutoClicker:
         self.w_hold_enabled = False
         self.w_hold_hwnd = 0
         self.w_last_tap = 0.0
-        self.w_double_tap_threshold = 0.35  # seconds between taps
+        self.w_double_tap_threshold = 0.20  # seconds between taps
         self.w_doubletap_enabled = True  # can be toggled from UI
 
         # Right mouse hold: background RMB hold for Foxhole.
@@ -144,7 +152,7 @@ class AutoClicker:
         self.right_hold_lparam = 0
         self.right_hold_worker_running = False
         self.right_hold_button_down = False
-        self.right_double_tap_threshold = 0.35
+        self.right_double_tap_threshold = 0.20
         self.right_doubletap_enabled = False
 
         # Shift hold with autoclick
@@ -258,6 +266,34 @@ class AutoClicker:
         self.interval = max(0.03, interval)
         self.log(f"Config: hotkey={self.hotkey_name} botao={self.mouse_button} intervalo={self.interval:.2f}s")
         self.status_callback(self.status_text())
+
+    def configure_modes_enabled(self, modes: dict[str, bool]) -> None:
+        defaults = {
+            "auto": True,
+            "move": True,
+            "pilot": True,
+            "right_hold": True,
+            "fixed": True,
+            "artillery": True,
+        }
+        defaults.update({key: bool(value) for key, value in modes.items() if key in defaults})
+        self.modes_enabled = defaults
+        if not self.mode_is_enabled("auto"):
+            self.pause()
+        if not self.mode_is_enabled("move"):
+            self.disable_move_click("modo desativado")
+        if not self.mode_is_enabled("pilot"):
+            self.disable_w_hold("modo desativado")
+        if not self.mode_is_enabled("right_hold"):
+            self.disable_right_hold("modo desativado")
+        if not self.mode_is_enabled("fixed"):
+            self.disable_fixed_click("modo desativado")
+        if not self.mode_is_enabled("artillery"):
+            self.disable_artillery("modo desativado")
+        self.status_callback(self.status_text())
+
+    def mode_is_enabled(self, mode: str) -> bool:
+        return bool(self.modes_enabled.get(mode, True))
 
     def configure_action_hotkeys(
         self,
@@ -390,6 +426,10 @@ class AutoClicker:
             self.start()
 
     def start(self) -> None:
+        if not self.mode_is_enabled("auto"):
+            self.log("Auto Clicker ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.disable_fixed_click("auto on")
         self.use_foxhole_window()
         self.enabled = True
@@ -491,7 +531,7 @@ class AutoClicker:
 
             self.check_cancel_shortcuts()
             self.refresh_shift_state()
-            time.sleep(0.03)
+            time.sleep(0.015)
 
     def handle_key_press(self, vk: int, callback) -> None:
         is_down = bool(self.user32.GetAsyncKeyState(vk) & 0x8000)
@@ -599,6 +639,10 @@ class AutoClicker:
             self.enable_fixed_click()
 
     def enable_fixed_click(self) -> None:
+        if not self.mode_is_enabled("fixed"):
+            self.log(f"{self.fixed_hotkey_name} ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.use_foxhole_window()
         self.fixed_click_enabled = True
@@ -621,6 +665,10 @@ class AutoClicker:
             self.enable_move_click()
 
     def enable_move_click(self) -> None:
+        if not self.mode_is_enabled("move"):
+            self.log(f"{self.move_hotkey_name} ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("move click on")
         self.disable_artillery("move click on")
@@ -673,13 +721,13 @@ class AutoClicker:
                     self.disable_move_click("janela perdida")
                     break
                 now = time.monotonic()
-                if now - last_reassert >= 0.35:
+                if now - last_reassert >= 0.20:
                     last_reassert = now
                     button = MOUSE_BUTTONS["Esquerdo"]
                     lparam = self.move_click_lparam or self.make_lparam(self.click_x, self.click_y)
                     self.user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
                     self.user32.PostMessageW(hwnd, button["down"], button["mk"], lparam)
-                time.sleep(0.04)
+                time.sleep(0.025)
         finally:
             self.move_click_worker_running = False
             if not self.move_click_enabled:
@@ -694,9 +742,12 @@ class AutoClicker:
             self.enable_artillery()
 
     def enable_artillery(self) -> None:
+        if not self.mode_is_enabled("artillery"):
+            self.log(f"{self.artillery_hotkey_name} ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("artillery on")
-        self.disable_move_click("artillery on")
         self.disable_w_hold("artillery on")
         self.disable_right_hold("artillery on")
         self.use_foxhole_window()
@@ -732,9 +783,12 @@ class AutoClicker:
     def enable_right_hold(self) -> None:
         if self.right_hold_enabled:
             return
+        if not self.mode_is_enabled("right_hold"):
+            self.log("Right Hold ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("right hold on")
-        self.disable_move_click("right hold on")
         self.disable_artillery("right hold on")
         self.disable_w_hold("right hold on")
         self.use_foxhole_window(quiet=True)
@@ -783,7 +837,7 @@ class AutoClicker:
                     self.disable_right_hold("janela perdida")
                     break
                 now = time.monotonic()
-                if now - last_reassert >= 0.35:
+                if now - last_reassert >= 0.20:
                     last_reassert = now
                     self.right_hold_button_down = False
                     self._set_right_hold_button(True)
@@ -825,9 +879,12 @@ class AutoClicker:
     def enable_w_hold(self) -> None:
         if self.w_hold_enabled:
             return
+        if not self.mode_is_enabled("pilot"):
+            self.log("W-Hold ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("pilot on")
-        self.disable_move_click("pilot on")
         self.disable_artillery("pilot on")
         self.disable_right_hold("pilot on")
         self.use_foxhole_window(quiet=True)
@@ -880,7 +937,7 @@ class AutoClicker:
                     self.status_callback(self.status_text())
 
                 now = time.monotonic()
-                if self.w_hold_enabled and not self.pilot_w_paused and now - last_reassert >= 0.35:
+                if self.w_hold_enabled and not self.pilot_w_paused and now - last_reassert >= 0.20:
                     last_reassert = now
                     hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
                     if hwnd:
@@ -905,17 +962,17 @@ class AutoClicker:
             if self.w_hold_enabled:
                 # While holding W via keybd_event, skip detection to avoid false triggers
                 prev_w = True  # treat as "held" so we don't see a false rising edge after disable
-                time.sleep(0.05)
+                time.sleep(0.02)
                 continue
 
             w_down = bool(self.user32.GetAsyncKeyState(self._w_hold_vk) & 0x8000)
             if w_down and not prev_w:
                 now = time.monotonic()
-                if self.w_doubletap_enabled and (now - last_tap) <= self.w_double_tap_threshold:
+                if self.mode_is_enabled("pilot") and self.w_doubletap_enabled and (now - last_tap) <= self.w_double_tap_threshold:
                     self.enable_w_hold()
                 last_tap = now
             prev_w = w_down
-            time.sleep(0.03)
+            time.sleep(0.015)
 
     def _keyboard_hook_loop(self) -> None:
         self.keyboard_hook_thread_id = int(self.kernel32.GetCurrentThreadId() or 0)
@@ -957,13 +1014,13 @@ class AutoClicker:
                 if self.right_hold_enabled:
                     self.disable_right_hold("cancel: right click")
                     last_tap = 0.0
-                elif self.right_doubletap_enabled and (now - last_tap) <= self.right_double_tap_threshold:
+                elif self.mode_is_enabled("right_hold") and self.right_doubletap_enabled and (now - last_tap) <= self.right_double_tap_threshold:
                     self.enable_right_hold()
                     last_tap = 0.0
                 else:
                     last_tap = now
             prev_down = is_down
-            time.sleep(0.03)
+            time.sleep(0.015)
 
 
     # -----------------------------------------------------------------------

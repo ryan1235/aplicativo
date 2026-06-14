@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 import "../components"
 
 Flickable {
@@ -17,7 +18,6 @@ Flickable {
     function trReplaceWZ(key) {
         var text = tr(key)
         var letter = autoClickerController.wHoldLetter || "W"
-        // replace standalone W or Z tokens (word boundaries)
         try {
             return text.replace(/\b[WZ]\b/g, letter)
         } catch (e) {
@@ -30,82 +30,304 @@ Flickable {
         return index >= 0 ? index : 0
     }
 
+    function actionLabel(active) {
+        return active ? "Soltar" : "Ativar"
+    }
+
+    component ModeCard: Rectangle {
+        id: card
+        property string title: ""
+        property string detail: ""
+        property string hotkey: ""
+        property bool active: false
+        property bool modeEnabled: true
+        property color accent: settingsController.accentColor
+        property string buttonText: root.actionLabel(active)
+        default property alias extraContent: extraBox.data
+        signal action()
+        signal hotkeySelected(string key)
+        signal modeToggled(bool value)
+
+        Layout.fillWidth: true
+        implicitHeight: cardContent.implicitHeight + 28
+        Layout.minimumHeight: 168
+        radius: 8
+        opacity: modeEnabled ? 1.0 : 0.68
+        color: active ? Qt.rgba(0.03, 0.12, 0.15, 0.92) : Qt.rgba(0.03, 0.07, 0.13, 0.92)
+        border.color: !modeEnabled ? "#31425c" : (active ? accent : "#1d3353")
+        border.width: active ? 1.5 : 1
+        layer.enabled: true
+        layer.effect: DropShadow {
+            transparentBorder: true
+            color: Qt.rgba(0, 0, 0, card.active ? 0.34 : 0.18)
+            radius: card.active ? 18 : 10
+            samples: card.active ? 37 : 21
+            verticalOffset: card.active ? 6 : 3
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: card.accent
+            opacity: !card.modeEnabled ? 0.015 : (card.active ? 0.10 : 0.035)
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 4
+            radius: 2
+            color: card.accent
+            opacity: !card.modeEnabled ? 0.22 : (card.active ? 1 : 0.45)
+        }
+
+        ColumnLayout {
+            id: cardContent
+            anchors.fill: parent
+            anchors.leftMargin: 16
+            anchors.rightMargin: 14
+            anchors.topMargin: 14
+            anchors.bottomMargin: 14
+            spacing: 10
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                Rectangle {
+                    Layout.preferredWidth: 9
+                    Layout.preferredHeight: 9
+                    radius: 5
+                    color: !card.modeEnabled ? "#3f5878" : (card.active ? card.accent : "#2d496f")
+                }
+
+                Text {
+                    text: card.title
+                    color: "#edf6ff"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 15
+                    font.bold: true
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: statusText.implicitWidth + 16
+                    Layout.preferredHeight: 24
+                    radius: 7
+                    color: card.active ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(1, 1, 1, 0.04)
+                    border.color: card.active ? card.accent : "#2d496f"
+                    border.width: 1
+
+                    Text {
+                        id: statusText
+                        anchors.centerIn: parent
+                        text: !card.modeEnabled ? tr("clicker.mode_disabled") : (card.active ? "ATIVO" : "PRONTO")
+                        color: !card.modeEnabled ? "#7f93ad" : (card.active ? card.accent : "#7f93ad")
+                        font.family: "Segoe UI"
+                        font.pixelSize: 10
+                        font.bold: true
+                    }
+                }
+
+                ToggleSwitch {
+                    checked: card.modeEnabled
+                    onClicked: card.modeToggled(checked)
+                }
+            }
+
+            Text {
+                text: card.detail
+                color: "#99abc4"
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+                Layout.preferredHeight: 34
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                HotkeyPicker {
+                    Layout.preferredWidth: 82
+                    enabled: card.modeEnabled
+                    currentKey: card.hotkey
+                    onKeySelected: function(key) { card.hotkeySelected(key) }
+                }
+
+                PrimaryButton {
+                    text: card.buttonText
+                    Layout.preferredWidth: 92
+                    fill: card.active ? "#24324a" : card.accent
+                    hoverFill: card.active ? "#31405f" : "#8ab4ff"
+                    textFill: card.active ? "#edf6ff" : "#041014"
+                    enabled: autoClickerController.available && card.modeEnabled
+                    onClicked: card.action()
+                }
+
+                Item { Layout.fillWidth: true }
+            }
+
+            ColumnLayout {
+                id: extraBox
+                Layout.fillWidth: true
+                spacing: 8
+            }
+        }
+    }
+
+    component SettingLine: RowLayout {
+        property string label: ""
+        property bool checked: false
+        property bool showLine: true
+        signal changed(bool value)
+
+        visible: showLine
+        Layout.fillWidth: true
+        spacing: 10
+
+        ToggleSwitch {
+            checked: parent.checked
+            onClicked: parent.changed(checked)
+        }
+
+        Text {
+            text: parent.label
+            color: "#c7d7ed"
+            font.family: "Segoe UI"
+            font.pixelSize: 12
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+        }
+    }
+
     ColumnLayout {
         id: content
-        width: parent.width - 40
+        width: Math.max(320, parent.width - 40)
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         anchors.topMargin: 20
-        spacing: 16
+        spacing: 18
 
-        Text {
-            text: tr("clicker.automation_overlay")
-            color: "#edf6ff"
-            font.family: "Segoe UI"
-            font.pixelSize: 26
-            font.bold: true
+        RowLayout {
             Layout.fillWidth: true
-        }
-
-        // Status Card
-        Rectangle {
-            Layout.fillWidth: true
-            radius: 12
-            color: "#0a1321"
-            border.color: autoClickerController.active ? "#5eead4" : "#1d3353"
-            implicitHeight: statusContent.implicitHeight + 32
-            Behavior on border.color { ColorAnimation { duration: 160 } }
+            spacing: 12
 
             ColumnLayout {
-                id: statusContent
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 16
-                spacing: 16
+                Layout.fillWidth: true
+                spacing: 4
+
+                Text {
+                    text: tr("clicker.automation_overlay")
+                    color: "#edf6ff"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 25
+                    font.bold: true
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+
+                Text {
+                    text: autoClickerController.overlayPrimaryText
+                    color: "#99abc4"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 13
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 92
+                Layout.preferredHeight: 30
+                radius: 8
+                color: autoClickerController.active ? settingsController.accentPanelStrongColor : "#13233a"
+                border.color: autoClickerController.active ? settingsController.accentColor : "#2d496f"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: autoClickerController.active ? tr("clicker.on_badge") : tr("clicker.paused_badge")
+                    color: autoClickerController.active ? settingsController.accentColor : "#c7d7ed"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            radius: 8
+            color: Qt.rgba(0.03, 0.06, 0.11, 0.88)
+            border.color: autoClickerController.available ? "#1d3353" : "#743047"
+            implicitHeight: statusRows.implicitHeight + 28
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.22)
+                radius: 18
+                samples: 37
+                verticalOffset: 5
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: autoClickerController.active ? settingsController.accentColor : "#8ab4ff"
+                opacity: autoClickerController.active ? 0.07 : 0.035
+            }
+
+            ColumnLayout {
+                id: statusRows
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: 12
 
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    Rectangle {
-                        Layout.preferredWidth: 84
-                        Layout.preferredHeight: 28
-                        radius: 7
-                        color: autoClickerController.active ? "#123c35" : "#263a55"
-                        border.color: autoClickerController.active ? "#5eead4" : "#3d5878"
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+
                         Text {
-                            anchors.centerIn: parent
-                            text: autoClickerController.active ? tr("clicker.on_badge") : tr("clicker.paused_badge")
-                            color: autoClickerController.active ? "#5eead4" : "#c7d7ed"
+                            text: autoClickerController.targetTitle
+                            color: "#edf6ff"
                             font.family: "Segoe UI"
-                            font.pixelSize: 11
+                            font.pixelSize: 15
                             font.bold: true
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: autoClickerController.status
+                            color: autoClickerController.available ? "#99abc4" : "#ff7a90"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
                         }
                     }
 
-                    Text {
-                        text: autoClickerController.status
-                        color: autoClickerController.available ? "#edf6ff" : "#ff7a90"
-                        font.family: "Segoe UI"
-                        font.pixelSize: 13
-                        font.bold: true
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-
                     PrimaryButton {
                         text: autoClickerController.running ? tr("clicker.pause_all") : tr("clicker.resume")
+                        Layout.preferredWidth: 120
                         enabled: autoClickerController.available
                         onClicked: autoClickerController.toggle()
                     }
+
                     PrimaryButton {
                         text: tr("clicker.capture")
+                        Layout.preferredWidth: 154
                         fill: "#1d3353"
                         hoverFill: "#2d496f"
                         textFill: "#edf6ff"
@@ -113,251 +335,199 @@ Flickable {
                         onClicked: autoClickerController.captureFoxhole()
                     }
                 }
-            }
-        }
-
-        // Clicker Principal e Artilharia
-        Rectangle {
-            Layout.fillWidth: true
-            radius: 12
-            color: "#0a1321"
-            border.color: "#1d3353"
-            implicitHeight: mainClicker.implicitHeight + 32
-
-            ColumnLayout {
-                id: mainClicker
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 16
-
-                Text { text: tr("clicker.main_controls"); color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
-                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353" }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: 10
 
-                    Text { text: tr("clicker.auto_clicker_label"); color: "#99abc4"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
-                    
-                    HotkeyPicker {
-                        Layout.preferredWidth: 80
-                        currentKey: autoClickerController.hotkey
-                        onKeySelected: function(key) { autoClickerController.setHotkey(key) }
+                    Text {
+                        text: "Modo: " + autoClickerController.modeSummary
+                        color: settingsController.accentColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        font.bold: true
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
                     }
+
+                    Text {
+                        text: "Resposta " + autoClickerController.interval.toFixed(1) + "s"
+                        color: "#8ab4ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+                }
+            }
+        }
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: root.width >= 1080 ? 3 : (root.width >= 720 ? 2 : 1)
+            columnSpacing: 12
+            rowSpacing: 12
+
+            ModeCard {
+                title: tr("clicker.auto_clicker_label").replace(":", "")
+                detail: tr("clicker.button") + " " + tr(autoClickerController.mouseButtonLabel(autoClickerController.mouseButton)) + " | " + autoClickerController.interval.toFixed(1) + "s"
+                hotkey: autoClickerController.hotkey
+                active: autoClickerController.running
+                modeEnabled: autoClickerController.autoModeEnabled
+                accent: settingsController.accentColor
+                buttonText: active ? tr("clicker.pause") : tr("clicker.resume")
+                onAction: autoClickerController.toggle()
+                onHotkeySelected: function(key) { autoClickerController.setHotkey(key) }
+                onModeToggled: function(value) { autoClickerController.setModeEnabled("auto", value) }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
 
                     PrimaryComboBox {
                         id: mouseCombo
-                        Layout.preferredWidth: 110
+                        Layout.preferredWidth: 122
                         Layout.preferredHeight: 32
                         model: autoClickerController.mouseButtons
                         currentIndex: comboIndex(autoClickerController.mouseButtons, autoClickerController.mouseButton)
                         onActivated: autoClickerController.setMouseButton(currentText)
-                        contentItem: Text { text: tr(autoClickerController.mouseButtonLabel(mouseCombo.currentText)); color: "#edf6ff"; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 10; elide: Text.ElideRight }
+                        contentItem: Text {
+                            text: tr(autoClickerController.mouseButtonLabel(mouseCombo.currentText))
+                            color: "#edf6ff"
+                            font.pixelSize: 12
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 10
+                            elide: Text.ElideRight
+                        }
                     }
 
-                    Text { text: "(0.3s)"; color: "#5eead4"; font.pixelSize: 12; Layout.leftMargin: 4; font.bold: true }
-                    Item { Layout.fillWidth: true }
-                    
-                    ToggleSwitch {
-                        id: shiftSwitch
+                    SettingLine {
+                        label: tr("clicker.hold_shift")
                         checked: autoClickerController.shiftEnabled
-                        onClicked: autoClickerController.setShiftEnabled(checked)
-                    }
-                    Text { text: tr("clicker.hold_shift"); color: "#c7d7ed"; font.pixelSize: 12 }
-                }
-
-                // W Hold section
-                Rectangle {
-                    Layout.fillWidth: true
-                    radius: 6
-                    color: "#0e1a2d"
-                    border.color: "#1e3554"
-                    implicitHeight: wHoldRow.implicitHeight + 16
-
-                    ColumnLayout {
-                        id: wHoldRow
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 8
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 12
-                            Text { text: autoClickerController.wHoldLabel; color: "#edf6ff"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
-                            
-                            HotkeyPicker {
-                                Layout.preferredWidth: 80
-                                currentKey: autoClickerController.pilotHotkey
-                                onKeySelected: function(key) { autoClickerController.setPilotHotkey(key) }
-                            }
-                            
-                            Text { text: trReplaceWZ("clicker.hold_w_hint"); color: "#99abc4"; font.pixelSize: 12 }
-                            Item { Layout.fillWidth: true }
-                            
-                            ToggleSwitch {
-                                checked: autoClickerController.wDoubleTapEnabled
-                                onClicked: autoClickerController.setWDoubleTapEnabled(checked)
-                            }
-                            Text { text: trReplaceWZ("clicker.w_double_tap_enable"); color: "#c7d7ed"; font.pixelSize: 12 }
-                            // Toggle para forçar W mesmo quando o idioma for FR
-                            ToggleSwitch {
-                                visible: autoClickerController.frWOverrideAvailable
-                                checked: autoClickerController.frWOverride
-                                onClicked: autoClickerController.setFrWOverride(checked)
-                            }
-                            Text { visible: autoClickerController.frWOverrideAvailable; text: tr("clicker.force_w_in_fr"); color: "#c7d7ed"; font.pixelSize: 12 }
-                        }
-                        
-                        Text {
-                            text: trReplaceWZ("clicker.w_hold_help")
-                            color: "#5d7a99"
-                            font.pixelSize: 11
-                            Layout.fillWidth: true
-                        }
-                    }
-                }
-
-
-                // Right Hold section
-                Rectangle {
-                    Layout.fillWidth: true
-                    radius: 6
-                    color: "#0e1a2d"
-                    border.color: "#1e3554"
-                    implicitHeight: rightHoldRow.implicitHeight + 16
-
-                    ColumnLayout {
-                        id: rightHoldRow
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 8
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 12
-                            Text { text: tr("clicker.right_hold_label"); color: "#edf6ff"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
-
-                            HotkeyPicker {
-                                Layout.preferredWidth: 80
-                                currentKey: autoClickerController.rightHoldHotkey
-                                onKeySelected: function(key) { autoClickerController.setRightHoldHotkey(key) }
-                            }
-
-                            Text { text: tr("clicker.hold_right_hint"); color: "#99abc4"; font.pixelSize: 12 }
-                            Item { Layout.fillWidth: true }
-
-                            ToggleSwitch {
-                                checked: autoClickerController.rightDoubleTapEnabled
-                                onClicked: autoClickerController.setRightDoubleTapEnabled(checked)
-                            }
-                            Text { text: tr("clicker.right_double_tap_enable"); color: "#c7d7ed"; font.pixelSize: 12 }
-                        }
-
-                        Text {
-                            text: tr("clicker.right_hold_help")
-                            color: "#5d7a99"
-                            font.pixelSize: 11
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-
-                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353"; opacity: 0.5 }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-
-                    Text { text: tr("clicker.artillery_label"); color: "#5eead4"; font.bold: true; font.pixelSize: 13; Layout.preferredWidth: 100 }
-                    
-                    HotkeyPicker {
-                        Layout.preferredWidth: 80
-                        currentKey: autoClickerController.artilleryHotkey
-                        onKeySelected: function(key) { autoClickerController.setArtilleryHotkey(key) }
-                    }
-                    
-                    Text { 
-                        text: tr("clicker.artillery_hint")
-                        color: "#99abc4"
-                        font.pixelSize: 12
-                        Layout.fillWidth: true 
-                        wrapMode: Text.WordWrap
+                        onChanged: function(value) { autoClickerController.setShiftEnabled(value) }
                     }
                 }
             }
-        }
 
-        // Modos Secundários
-        Rectangle {
-            Layout.fillWidth: true
-            radius: 12
-            color: "#0a1321"
-            border.color: "#1d3353"
-            implicitHeight: extraModes.implicitHeight + 32
+            ModeCard {
+                title: tr("clicker.move_click_hold")
+                detail: "Esc ou " + autoClickerController.moveHotkey + " solta"
+                hotkey: autoClickerController.moveHotkey
+                active: autoClickerController.moveRunning
+                modeEnabled: autoClickerController.moveModeEnabled
+                accent: "#8ab4ff"
+                onAction: autoClickerController.toggleMoveClick()
+                onHotkeySelected: function(key) { autoClickerController.setMoveHotkey(key) }
+                onModeToggled: function(value) { autoClickerController.setModeEnabled("move", value) }
+            }
 
-            ColumnLayout {
-                id: extraModes
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 16
+            ModeCard {
+                title: autoClickerController.wHoldLabel.replace(":", "")
+                detail: trReplaceWZ("clicker.hold_w_hint") + " | S pausa"
+                hotkey: autoClickerController.pilotHotkey
+                active: autoClickerController.pilotRunning
+                modeEnabled: autoClickerController.pilotModeEnabled
+                accent: settingsController.accentColor
+                onAction: autoClickerController.togglePilot()
+                onHotkeySelected: function(key) { autoClickerController.setPilotHotkey(key) }
+                onModeToggled: function(value) { autoClickerController.setModeEnabled("pilot", value) }
 
-                Text { text: tr("clicker.extra_modes"); color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
-                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353" }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 16
-
-                    ColumnLayout {
-                        spacing: 4
-                        Text { text: tr("clicker.move_click_hold"); color: "#99abc4"; font.pixelSize: 12 }
-                        HotkeyPicker {
-                            currentKey: autoClickerController.moveHotkey
-                            onKeySelected: function(key) { autoClickerController.setMoveHotkey(key) }
-                        }
-                    }
-
-                    ColumnLayout {
-                        spacing: 4
-                        Text { text: tr("clicker.right_hold_short"); color: "#99abc4"; font.pixelSize: 12 }
-                        HotkeyPicker {
-                            currentKey: autoClickerController.rightHoldHotkey
-                            onKeySelected: function(key) { autoClickerController.setRightHoldHotkey(key) }
-                        }
-                    }
-                    
-                    Item { Layout.fillWidth: true }
+                SettingLine {
+                    label: trReplaceWZ("clicker.w_double_tap_enable")
+                    checked: autoClickerController.wDoubleTapEnabled
+                    onChanged: function(value) { autoClickerController.setWDoubleTapEnabled(value) }
                 }
+
+                SettingLine {
+                    showLine: autoClickerController.frWOverrideAvailable
+                    label: tr("clicker.force_w_in_fr")
+                    checked: autoClickerController.frWOverride
+                    onChanged: function(value) { autoClickerController.setFrWOverride(value) }
+                }
+            }
+
+            ModeCard {
+                title: tr("clicker.right_hold_short")
+                detail: tr("clicker.hold_right_hint")
+                hotkey: autoClickerController.rightHoldHotkey
+                active: autoClickerController.rightHoldRunning
+                modeEnabled: autoClickerController.rightHoldModeEnabled
+                accent: "#8ab4ff"
+                onAction: autoClickerController.toggleRightHold()
+                onHotkeySelected: function(key) { autoClickerController.setRightHoldHotkey(key) }
+                onModeToggled: function(value) { autoClickerController.setModeEnabled("right_hold", value) }
+
+                SettingLine {
+                    label: tr("clicker.right_double_tap_enable")
+                    checked: autoClickerController.rightDoubleTapEnabled
+                    onChanged: function(value) { autoClickerController.setRightDoubleTapEnabled(value) }
+                }
+            }
+
+            ModeCard {
+                title: tr("clicker.key_fixed").replace("Tecla ", "").replace("Key ", "")
+                detail: tr("clicker.shortcuts_slots").replace("{hotkey}", autoClickerController.fixedHotkey)
+                hotkey: autoClickerController.fixedHotkey
+                active: autoClickerController.fixedRunning
+                modeEnabled: autoClickerController.fixedModeEnabled
+                accent: "#f8c15d"
+                onAction: autoClickerController.toggleFixedClick()
+                onHotkeySelected: function(key) { autoClickerController.setFixedHotkey(key) }
+                onModeToggled: function(value) { autoClickerController.setModeEnabled("fixed", value) }
+            }
+
+            ModeCard {
+                title: tr("clicker.artillery_label").replace(":", "")
+                detail: tr("clicker.artillery_hint")
+                hotkey: autoClickerController.artilleryHotkey
+                active: autoClickerController.artilleryRunning
+                modeEnabled: autoClickerController.artilleryModeEnabled
+                accent: "#ff7a90"
+                onAction: autoClickerController.toggleArtillery()
+                onHotkeySelected: function(key) { autoClickerController.setArtilleryHotkey(key) }
+                onModeToggled: function(value) { autoClickerController.setModeEnabled("artillery", value) }
             }
         }
 
-        // Overlay Minimalista
         Rectangle {
             Layout.fillWidth: true
-            radius: 12
-            color: "#0a1321"
+            radius: 8
+            color: Qt.rgba(0.03, 0.06, 0.11, 0.88)
             border.color: "#1d3353"
-            implicitHeight: overlayColumn.implicitHeight + 32
+            implicitHeight: overlayColumn.implicitHeight + 28
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.18)
+                radius: 14
+                samples: 29
+                verticalOffset: 4
+            }
 
             ColumnLayout {
                 id: overlayColumn
                 anchors.fill: parent
-                anchors.margins: 16
-                spacing: 16
-
-                Text { text: tr("overlay.in_game_title"); color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
-                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: "#1d3353" }
+                anchors.margins: 14
+                spacing: 14
 
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    ToggleSwitch {
-                        checked: overlayController.enabled
-                        onClicked: overlayController.setEnabled(checked)
+                    Text {
+                        text: tr("overlay.in_game_title")
+                        color: "#edf6ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 16
+                        font.bold: true
+                        Layout.fillWidth: true
                     }
-                    Text { text: tr("overlay.enable_floating_panel"); color: "#edf6ff"; font.pixelSize: 13; Layout.fillWidth: true }
+
+                    SettingLine {
+                        Layout.preferredWidth: 230
+                        label: tr("overlay.show")
+                        checked: overlayController.enabled
+                        onChanged: function(value) { overlayController.setEnabled(value) }
+                    }
 
                     PrimaryButton {
                         text: tr("overlay.preview_8s")
@@ -369,71 +539,90 @@ Flickable {
                     }
                 }
 
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: root.width >= 760 ? 4 : 2
+                    columnSpacing: 16
+                    rowSpacing: 10
+
+                    SettingLine {
+                        label: tr("overlay.clicker_title")
+                        checked: overlayController.showClicker
+                        onChanged: function(value) { overlayController.setShowClicker(value) }
+                    }
+
+                    SettingLine {
+                        label: tr("overlay.profile")
+                        checked: overlayController.showProfile
+                        onChanged: function(value) { overlayController.setShowProfile(value) }
+                    }
+
+                    SettingLine {
+                        label: tr("overlay.target")
+                        checked: overlayController.showTarget
+                        onChanged: function(value) { overlayController.setShowTarget(value) }
+                    }
+
+                    SettingLine {
+                        label: tr("overlay.upload_notification")
+                        checked: overlayController.notificationEnabled
+                        onChanged: function(value) { overlayController.setNotificationEnabled(value) }
+                    }
+                }
+
                 Rectangle {
                     Layout.fillWidth: true
+                    implicitHeight: overlayPreview.implicitHeight + 24
                     radius: 8
-                    color: "#0e1a2d"
-                    border.color: "#1e3554"
-                    implicitHeight: overlayContentOptions.implicitHeight + 18
+                    color: Qt.rgba(0, 0, 0, 0.16)
+                    border.color: Qt.rgba(1, 1, 1, 0.08)
 
-                    ColumnLayout {
-                        id: overlayContentOptions
+                    RowLayout {
+                        id: overlayPreview
                         anchors.fill: parent
-                        anchors.margins: 9
-                        spacing: 10
+                        anchors.margins: 12
+                        spacing: 12
 
-                        Text {
-                            text: tr("overlay.panel_content")
-                            color: "#8ab4ff"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 12
-                            font.bold: true
+                        Rectangle {
+                            Layout.preferredWidth: 46
+                            Layout.preferredHeight: 46
+                            radius: 8
+                            color: Qt.rgba(1, 1, 1, 0.07)
+                            border.color: settingsController.accentColor
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: autoClickerController.active ? "ON" : "II"
+                                color: autoClickerController.active ? settingsController.accentColor : settingsController.warningColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 12
+                                font.bold: true
+                            }
                         }
 
-                        GridLayout {
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            columns: 2
-                            columnSpacing: 22
-                            rowSpacing: 10
+                            spacing: 3
 
-                            RowLayout {
+                            Text {
+                                text: autoClickerController.overlayPrimaryText
+                                color: "#edf6ff"
+                                font.family: "Segoe UI"
+                                font.pixelSize: 13
+                                font.bold: true
                                 Layout.fillWidth: true
-                                spacing: 8
-                                ToggleSwitch {
-                                    checked: overlayController.showClicker
-                                    onClicked: overlayController.setShowClicker(checked)
-                                }
-                                Text { text: tr("overlay.clicker_title"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
+                                elide: Text.ElideRight
                             }
 
-                            RowLayout {
+                            Text {
+                                text: autoClickerController.overlayHintText !== "" ? autoClickerController.overlayHintText : tr("overlay.compact_hint")
+                                color: "#99abc4"
+                                font.family: "Segoe UI"
+                                font.pixelSize: 11
                                 Layout.fillWidth: true
-                                spacing: 8
-                                ToggleSwitch {
-                                    checked: overlayController.showProfile
-                                    onClicked: overlayController.setShowProfile(checked)
-                                }
-                                Text { text: tr("overlay.profile"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-                                ToggleSwitch {
-                                    checked: overlayController.showTarget
-                                    onClicked: overlayController.setShowTarget(checked)
-                                }
-                                Text { text: tr("overlay.target"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
-                            }
-
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 8
-                                ToggleSwitch {
-                                    checked: overlayController.notificationEnabled
-                                    onClicked: overlayController.setNotificationEnabled(checked)
-                                }
-                                Text { text: tr("overlay.upload_notification"); color: "#c7d7ed"; font.pixelSize: 12; Layout.fillWidth: true }
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
                             }
                         }
                     }
@@ -443,35 +632,48 @@ Flickable {
                     Layout.fillWidth: true
                     spacing: 12
 
-                    Text { text: tr("overlay.color_label"); color: "#99abc4"; font.pixelSize: 12; font.bold: true }
+                    Text {
+                        text: tr("overlay.color_label")
+                        color: "#99abc4"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+
                     PrimaryComboBox {
                         id: colorCombo
-                        Layout.preferredWidth: 120
+                        Layout.preferredWidth: 130
                         Layout.preferredHeight: 32
                         model: overlayController.colors
                         currentIndex: comboIndex(overlayController.colors, overlayController.colorName)
                         onActivated: overlayController.setColorName(currentText)
-                        contentItem: Text { text: tr(overlayController.colorLabelKey(colorCombo.currentText)); color: "#edf6ff"; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; leftPadding: 10 }
+                        contentItem: Text {
+                            text: tr(overlayController.colorLabelKey(colorCombo.currentText))
+                            color: "#edf6ff"
+                            font.pixelSize: 12
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 10
+                            elide: Text.ElideRight
+                        }
                     }
 
                     Item { Layout.fillWidth: true }
 
-                    Text { text: tr("overlay.hide_hotkey"); color: "#99abc4"; font.pixelSize: 12; font.bold: true }
+                    Text {
+                        text: tr("overlay.hide_hotkey")
+                        color: "#99abc4"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+
                     HotkeyPicker {
-                        Layout.preferredWidth: 80
+                        Layout.preferredWidth: 82
                         currentKey: overlayController.hotkey
                         onKeySelected: function(key) { overlayController.setHotkey(key) }
                     }
-                }
-
-                Text {
-                    text: tr("overlay.compact_hint")
-                    color: "#5d7a99"
-                    font.pixelSize: 11
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
                 }
             }
         }
     }
 }
+
+

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import math
 import os
 from pathlib import Path
 import sys
@@ -71,8 +72,49 @@ def release_single_instance_mutex(handle) -> None:
         pass
 
 
+def clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def primary_screen_size() -> tuple[int, int] | None:
+    if not sys.platform.startswith("win"):
+        return None
+    try:
+        user32 = ctypes.windll.user32
+        width = int(user32.GetSystemMetrics(0))
+        height = int(user32.GetSystemMetrics(1))
+        if width > 0 and height > 0:
+            return width, height
+    except Exception:
+        return None
+    return None
+
+
+def responsive_ui_scale(screen_size: tuple[int, int] | None) -> float:
+    if not screen_size:
+        return 1.0
+
+    width, height = screen_size
+    base_diagonal = math.hypot(1920, 1080)
+    screen_diagonal = math.hypot(width, height)
+    resolution_scale = screen_diagonal / base_diagonal
+    moderated_scale = 1.0 + ((resolution_scale - 1.0) * 0.36)
+    return round(clamp(moderated_scale, 0.90, 1.25), 2)
+
+
+def configure_responsive_scaling() -> None:
+    os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
+    os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
+    if "QT_SCALE_FACTOR" in os.environ or "QT_SCREEN_SCALE_FACTORS" in os.environ:
+        return
+
+    scale = responsive_ui_scale(primary_screen_size())
+    os.environ["QT_SCALE_FACTOR"] = f"{scale:.2f}".rstrip("0").rstrip(".")
+
+
 def configure_qt() -> None:
     os.chdir(BASE_DIR)
+    configure_responsive_scaling()
     pyside_dir = Path(PySide6.__file__).resolve().parent
     try:
         os.add_dll_directory(str(pyside_dir))

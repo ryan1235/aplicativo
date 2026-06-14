@@ -6,35 +6,76 @@ ComboBox {
     id: control
 
     // Properties for theming
-    property color bgNormal: "#07111f"
-    property color bgHover: "#0a1526"
-    property color borderNormal: "#24486d"
-    property color borderFocus: "#5eead4"
+    property color bgNormal: "#0d1a2d"
+    property color bgHover: "#122743"
+    property color borderNormal: "#2a4263"
+    property color borderFocus: settingsController.accentColor
     property color textNormal: "#edf6ff"
     property color popupBg: "#0c1524"
     property color popupBorder: "#1d3353"
     property color itemHover: "#1d3353"
 
     implicitWidth: 140
-    implicitHeight: 40
+    implicitHeight: 42
 
     delegate: ItemDelegate {
         id: delegateItem
+        property bool isObjectRow: typeof modelData === "object"
+        property bool isHeaderRow: isObjectRow && modelData.type === "header"
+        property string primaryText: isObjectRow ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
+        property string secondaryText: isObjectRow ? (modelData.subText || "") : ""
+        property string trailingText: isObjectRow ? (modelData.sideText || "") : ""
+
         width: control.popup.width
-        height: typeof modelData === "object" && modelData.type === "header" ? 28 : 36
-        enabled: typeof modelData === "object" ? modelData.type !== "header" : true
+        height: isHeaderRow ? 28 : (secondaryText !== "" || trailingText !== "" ? 44 : 36)
+        enabled: isObjectRow ? modelData.type !== "header" : true
         
-        text: typeof modelData === "object" ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
+        text: primaryText
         
-        contentItem: Text {
-            text: delegateItem.text
-            color: (typeof modelData === "object" && modelData.type === "header") ? "#5eead4" : (control.highlightedIndex === index ? control.borderFocus : control.textNormal)
-            font.family: "Segoe UI"
-            font.pixelSize: (typeof modelData === "object" && modelData.type === "header") ? 11 : 13
-            font.bold: typeof modelData === "object" && modelData.type === "header"
-            elide: Text.ElideRight
-            verticalAlignment: Text.AlignVCenter
-            leftPadding: (typeof modelData === "object" && modelData.type === "item") ? 12 : 0
+        contentItem: Item {
+            Text {
+                id: primaryLabel
+                anchors.left: parent.left
+                anchors.leftMargin: delegateItem.isObjectRow && modelData.type === "item" ? 12 : 0
+                anchors.right: trailingLabel.visible ? trailingLabel.left : parent.right
+                anchors.rightMargin: trailingLabel.visible ? 8 : 0
+                y: delegateItem.secondaryText !== "" ? 5 : Math.round((parent.height - height) / 2)
+                text: delegateItem.primaryText
+                color: delegateItem.isHeaderRow ? settingsController.accentColor : (control.highlightedIndex === index ? control.borderFocus : control.textNormal)
+                font.family: "Segoe UI"
+                font.pixelSize: delegateItem.isHeaderRow ? 11 : 13
+                font.bold: delegateItem.isHeaderRow
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            Text {
+                anchors.left: primaryLabel.left
+                anchors.right: parent.right
+                anchors.rightMargin: 8
+                anchors.top: primaryLabel.bottom
+                anchors.topMargin: 1
+                visible: delegateItem.secondaryText !== ""
+                text: delegateItem.secondaryText
+                color: "#7f93b2"
+                font.family: "Segoe UI"
+                font.pixelSize: 10
+                elide: Text.ElideRight
+            }
+
+            Text {
+                id: trailingLabel
+                anchors.right: parent.right
+                anchors.rightMargin: 4
+                anchors.verticalCenter: parent.verticalCenter
+                visible: delegateItem.trailingText !== ""
+                text: delegateItem.trailingText
+                color: "#8ab4ff"
+                font.family: "Segoe UI"
+                font.pixelSize: 10
+                font.bold: true
+                horizontalAlignment: Text.AlignRight
+            }
         }
         background: Rectangle {
             color: delegateItem.hovered && delegateItem.enabled ? control.itemHover : "transparent"
@@ -51,14 +92,15 @@ ComboBox {
         id: canvas
         x: control.width - width - control.rightPadding
         y: control.topPadding + (control.availableHeight - height) / 2
-        width: 10
-        height: 6
+        width: 12
+        height: 7
         contextType: "2d"
 
         Connections {
             target: control
             function onPressedChanged() { canvas.requestPaint(); }
             function onActiveFocusChanged() { canvas.requestPaint(); }
+            function onHoveredChanged() { canvas.requestPaint(); }
         }
 
         onPaint: {
@@ -66,18 +108,19 @@ ComboBox {
             context.moveTo(0, 0);
             context.lineTo(width / 2, height);
             context.lineTo(width, 0);
-            context.strokeStyle = control.activeFocus || control.pressed ? control.borderFocus : "#99abc4";
-            context.lineWidth = 1.5;
+            context.strokeStyle = control.activeFocus || control.pressed || control.hovered ? control.borderFocus : "#9eb4cf";
+            context.lineWidth = 1.8;
             context.stroke();
         }
     }
 
     contentItem: Text {
-        leftPadding: 12
-        rightPadding: control.indicator.width + control.spacing
+        leftPadding: 14
+        rightPadding: 30
         text: control.displayText
         font.family: "Segoe UI"
-        font.pixelSize: 14
+        font.pixelSize: 13
+        font.bold: true
         color: control.textNormal
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
@@ -87,7 +130,7 @@ ComboBox {
         implicitWidth: control.implicitWidth
         implicitHeight: control.implicitHeight
         color: control.hovered ? control.bgHover : control.bgNormal
-        border.color: control.activeFocus || control.pressed ? control.borderFocus : control.borderNormal
+        border.color: control.activeFocus || control.pressed ? control.borderFocus : (control.hovered ? "#3c5f89" : control.borderNormal)
         border.width: control.activeFocus || control.pressed ? 1.5 : 1
         radius: 8
         
@@ -98,8 +141,8 @@ ComboBox {
     popup: Popup {
         y: control.height + 6
         width: control.width
-        implicitHeight: Math.min(contentItem.implicitHeight + 8, 240)
-        padding: 4
+        implicitHeight: Math.min(contentItem.implicitHeight + 10, 280)
+        padding: 5
 
         enter: Transition {
             NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 150; easing.type: Easing.OutQuad }
@@ -132,7 +175,8 @@ ComboBox {
             color: control.popupBg
             border.color: control.popupBorder
             border.width: 1
-            radius: 8
+            radius: 9
         }
     }
 }
+

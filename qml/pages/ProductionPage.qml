@@ -87,7 +87,7 @@ Rectangle {
                         }
                         background: Rectangle {
                             radius: 7
-                            color: modeButton.checked ? "#5eead4" : modelData.fill
+                            color: modeButton.checked ? settingsController.accentColor : modelData.fill
                             border.color: modeButton.checked ? "#b8fff6" : "#4b6f9e"
                             border.width: modeButton.checked ? 2 : 1
                         }
@@ -147,7 +147,7 @@ Rectangle {
                         }
                         background: Rectangle {
                             radius: 7
-                            color: factionButton.checked ? "#5eead4" : modelData.fill
+                            color: factionButton.checked ? settingsController.accentColor : modelData.fill
                             border.color: factionButton.checked ? "#b8fff6" : "#4b6f9e"
                             border.width: factionButton.checked ? 2 : 1
                         }
@@ -176,8 +176,8 @@ Rectangle {
                         onClicked: productionController.setCategory(String(model.name || ""))
                         background: Rectangle {
                             radius: 4
-                            color: model.active ? "#5eead4" : "#111c31"
-                            border.color: model.active ? "#5eead4" : "#24486d"
+                            color: model.active ? settingsController.accentColor : "#111c31"
+                            border.color: model.active ? settingsController.accentColor : "#24486d"
                             Behavior on color { ColorAnimation { duration: 120 } }
                         }
                         contentItem: ColumnLayout {
@@ -419,14 +419,14 @@ Rectangle {
                         Layout.preferredHeight: visible ? warningText.implicitHeight + 12 : 0
                         radius: 7
                         color: "#201b12"
-                        border.color: "#ffd166"
+                        border.color: settingsController.warningColor
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 6
                             spacing: 7
                             Text {
                                 text: "!"
-                                color: "#ffd166"
+                                color: settingsController.warningColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -436,7 +436,7 @@ Rectangle {
                             Text {
                                 id: warningText
                                 text: productionController.warning
-                                color: "#ffd166"
+                                color: settingsController.warningColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 10
                                 elide: Text.ElideRight
@@ -491,7 +491,7 @@ Rectangle {
                                         height: 35
                                         radius: 7
                                         color: row.active ? "#132b43" : "#0e1a2d"
-                                        border.color: row.active ? "#5eead4" : "#1e3554"
+                                        border.color: row.active ? settingsController.accentColor : "#1e3554"
                                         Behavior on color { ColorAnimation { duration: 120 } }
                                         RowLayout {
                                             anchors.fill: parent
@@ -506,7 +506,7 @@ Rectangle {
                                             ColumnLayout {
                                                 Layout.preferredWidth: 42
                                                 spacing: 0
-                                                Text { text: row.mark || ""; color: row.active ? "#5eead4" : "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                                                Text { text: row.mark || ""; color: row.active ? settingsController.accentColor : "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                                 Text { text: String(row.count || 0) + "/" + String(row.limit || 0); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                             }
 
@@ -551,11 +551,11 @@ Rectangle {
                                                             height: 10
                                                             radius: 3
                                                             color: "#07111f"
-                                                            border.color: "#5eead4"
+                                                            border.color: settingsController.accentColor
                                                             Text {
                                                                 anchors.centerIn: parent
                                                                 text: String(slot.discount || 0)
-                                                                color: "#5eead4"
+                                                                color: settingsController.accentColor
                                                                 font.family: "Segoe UI"
                                                                 font.pixelSize: 7
                                                                 font.bold: true
@@ -576,7 +576,7 @@ Rectangle {
                                             }
 
                                             Button {
-                                                text: "✕"
+                                                text: "âœ•"
                                                 Layout.preferredWidth: 24
                                                 Layout.preferredHeight: 24
                                                 visible: (row.count || 0) > 0
@@ -681,7 +681,7 @@ Rectangle {
                                                                     anchors.leftMargin: 4
                                                                     anchors.rightMargin: 4
                                                                     text: row.title || ""
-                                                                    color: "#5eead4"
+                                                                    color: settingsController.accentColor
                                                                     font.family: "Segoe UI"
                                                                     font.bold: true
                                                                     font.pixelSize: 11
@@ -694,7 +694,7 @@ Rectangle {
                                                                 spacing: 4
                                                                 Text { text: tr("production.route_input") || "Ida:"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.capitalization: Font.Capitalize }
                                                                 Item { Layout.fillWidth: true }
-                                                                Text { text: String(row.inputSlots || 0) + "/" + String(row.capacity || 0); color: "#ffd166"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                                                Text { text: String(row.inputSlots || 0) + "/" + String(row.capacity || 0); color: settingsController.warningColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
                                                             }
                                                         }
                                                         
@@ -788,7 +788,7 @@ Rectangle {
                                                             anchors.fill: parent
                                                             anchors.margins: 4
                                                             spacing: 6
-                                                            Text { text: "⚠️"; font.pixelSize: 12; Layout.alignment: Qt.AlignTop }
+                                                            Text { text: "âš ï¸"; font.pixelSize: 12; Layout.alignment: Qt.AlignTop }
                                                             Text { 
                                                                 text: row.warning || ""
                                                                 color: "#ff9999"
@@ -813,3 +813,5 @@ Rectangle {
         }
     }
 }
+
+

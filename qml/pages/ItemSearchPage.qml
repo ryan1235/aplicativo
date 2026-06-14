@@ -102,7 +102,7 @@ Flickable {
                         background: Rectangle {
                             radius: 7
                             color: "#0e1a2d"
-                            border.color: search.activeFocus ? "#5eead4" : "#2d496f"
+                            border.color: search.activeFocus ? settingsController.accentColor : "#2d496f"
                             Behavior on border.color { ColorAnimation { duration: 140 } }
                         }
                     }
@@ -173,7 +173,7 @@ Flickable {
                 title: itemSearchController.selectedName !== "" ? fmt("item_search.result_title", "{item}", itemSearchController.selectedName) : tr("item_search.title")
                 value: itemSearchController.selectedName !== "" ? String(itemSearchController.total) : "-"
                 detail: tr("item_search.total").replace("{total}", String(itemSearchController.total))
-                accent: "#5eead4"
+                accent: settingsController.accentColor
             }
             MetricCard {
                 Layout.fillWidth: true
@@ -187,7 +187,7 @@ Flickable {
                 title: tr("item_search.best_match_empty")
                 value: itemSearchController.bestMatch !== "" ? itemSearchController.bestMatch : "-"
                 detail: tr("item_search.placeholder")
-                accent: "#ffd166"
+                accent: settingsController.warningColor
             }
         }
 
@@ -275,7 +275,7 @@ Flickable {
                             Text {
                                 visible: model.rowType !== "region"
                                 text: String(model.quantity || 0)
-                                color: "#5eead4"
+                                color: settingsController.accentColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 14
                                 font.bold: true
@@ -304,3 +304,5 @@ Flickable {
         }
     }
 }
+
+

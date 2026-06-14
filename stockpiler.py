@@ -535,13 +535,21 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
     for item in body.get("data") or []:
         if not isinstance(item, dict):
             continue
-        name = item.get("WarehouseName")
-        if not name:
+        warehouse_name = item.get("WarehouseName")
+        if not warehouse_name:
             continue
+        map_name = str(item.get("map_name") or item.get("MapName") or item.get("mapName") or "").strip()
+        town = str(item.get("town") or item.get("Town") or "").strip()
+        display_name = str(item.get("name") or item.get("neme") or item.get("Name") or item.get("stockpile_name") or item.get("StockpileName") or "").strip()
+        if not display_name:
+            display_name = str(warehouse_name).split("/")[-1].strip()
         current = warehouses.setdefault(
-            str(name),
+            str(warehouse_name),
             {
-                "name": str(name),
+                "name": str(warehouse_name),
+                "display_name": display_name,
+                "map_name": map_name,
+                "town": town,
                 "item_count": 0,
                 "total_quantity": 0,
                 "zero_count": 0,
@@ -564,17 +572,31 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
         warehouse_last_update = str(item.get("WarehouseLastUpdate") or "")
         if warehouse_last_update:
             current["last_update"] = warehouse_last_update
+        if display_name:
+            current["display_name"] = display_name
+        if map_name:
+            current["map_name"] = map_name
+        if town:
+            current["town"] = town
 
     for change in body.get("changes") or []:
         if not isinstance(change, dict):
             continue
-        name = change.get("warehouse_name")
-        if not name:
+        warehouse_name = change.get("warehouse_name") or change.get("WarehouseName")
+        if not warehouse_name:
             continue
+        map_name = str(change.get("map_name") or change.get("MapName") or change.get("mapName") or "").strip()
+        town = str(change.get("town") or change.get("Town") or "").strip()
+        display_name = str(change.get("name") or change.get("neme") or change.get("Name") or change.get("stockpile_name") or change.get("StockpileName") or "").strip()
+        if not display_name:
+            display_name = str(warehouse_name).split("/")[-1].strip()
         current = warehouses.setdefault(
-            str(name),
+            str(warehouse_name),
             {
-                "name": str(name),
+                "name": str(warehouse_name),
+                "display_name": display_name,
+                "map_name": map_name,
+                "town": town,
                 "item_count": 0,
                 "total_quantity": 0,
                 "zero_count": 0,
@@ -584,6 +606,12 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
             },
         )
         current["change_count"] += 1
+        if display_name:
+            current["display_name"] = display_name
+        if map_name:
+            current["map_name"] = map_name
+        if town:
+            current["town"] = town
 
     summaries = []
     for item in warehouses.values():
@@ -613,6 +641,9 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
         rows.append(
             {
                 "warehouse": str(item.get("WarehouseName") or "-"),
+                "warehouse_name": str(item.get("name") or item.get("neme") or item.get("Name") or item.get("stockpile_name") or item.get("StockpileName") or ""),
+                "map_name": str(item.get("map_name") or item.get("MapName") or item.get("mapName") or ""),
+                "town": str(item.get("town") or item.get("Town") or ""),
                 "display_name": str(item.get("DisplayName") or item.get("asset_name") or "-"),
                 "asset_name": asset_name,
                 "icon_name": str(item.get("icon_name") or ""),

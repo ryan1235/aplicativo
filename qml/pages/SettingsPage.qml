@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -100,7 +100,7 @@ Flickable {
                         background: Rectangle {
                             radius: 8
                             color: active ? "#1d3353" : "#0e1a2d"
-                            border.color: active ? "#5eead4" : "#2d496f"
+                            border.color: active ? settingsController.accentColor : "#2d496f"
                             Behavior on color { ColorAnimation { duration: 140 } }
                         }
                         contentItem: RowLayout {
@@ -164,101 +164,10 @@ Flickable {
                     PrimaryComboBox {
                         id: closeActionCombo
                         Layout.preferredWidth: 190
-                        implicitHeight: 38
+                        Layout.preferredHeight: 42
                         model: [tr("settings.close_ask"), tr("settings.close_tray"), tr("settings.close_exit")]
                         currentIndex: root.closeActionIndex()
                         onActivated: settingsController.setCloseAction(root.closeActionKeys[index])
-                        delegate: ItemDelegate {
-                            width: closeActionCombo.width
-                            height: 38
-                            highlighted: closeActionCombo.highlightedIndex === index
-                            contentItem: Text {
-                                text: modelData
-                                color: parent.highlighted ? "#5eead4" : "#edf6ff"
-                                font.family: "Segoe UI"
-                                font.pixelSize: 12
-                                font.bold: parent.highlighted
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            background: Rectangle {
-                                color: parent.highlighted ? "#173c35" : "#0e1a2d"
-                                border.color: parent.highlighted ? "#5eead4" : "transparent"
-                            }
-                        }
-                        indicator: Canvas {
-                            id: closeActionArrow
-                            x: closeActionCombo.width - width - 12
-                            y: closeActionCombo.topPadding + (closeActionCombo.availableHeight - height) / 2
-                            width: 10
-                            height: 6
-                            contextType: "2d"
-
-                            Connections {
-                                target: closeActionCombo
-                                function onActiveFocusChanged() { closeActionArrow.requestPaint() }
-                                function onPressedChanged() { closeActionArrow.requestPaint() }
-                            }
-
-                            Connections {
-                                target: closeActionCombo.popup
-                                function onVisibleChanged() { closeActionArrow.requestPaint() }
-                            }
-
-                            onPaint: {
-                                context.reset()
-                                context.beginPath()
-                                if (closeActionCombo.popup.visible) {
-                                    context.moveTo(0, height)
-                                    context.lineTo(width / 2, 0)
-                                    context.lineTo(width, height)
-                                } else {
-                                    context.moveTo(0, 0)
-                                    context.lineTo(width / 2, height)
-                                    context.lineTo(width, 0)
-                                }
-                                context.strokeStyle = closeActionCombo.enabled
-                                    ? (closeActionCombo.activeFocus || closeActionCombo.popup.visible ? "#5eead4" : "#8ab4ff")
-                                    : "#52657f"
-                                context.lineWidth = 1.5
-                                context.stroke()
-                            }
-                        }
-                        background: Rectangle {
-                            radius: 7
-                            color: closeActionCombo.down ? "#13213a" : "#0e1a2d"
-                            border.color: closeActionCombo.activeFocus || closeActionCombo.popup.visible ? "#5eead4" : "#2d496f"
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            Behavior on border.color { ColorAnimation { duration: 120 } }
-                        }
-                        contentItem: Text {
-                            text: closeActionCombo.displayText
-                            color: "#edf6ff"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 12
-                            font.bold: true
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 12
-                            rightPadding: 30
-                            elide: Text.ElideRight
-                        }
-                        popup: Popup {
-                            y: closeActionCombo.height + 6
-                            width: closeActionCombo.width
-                            implicitHeight: contentItem.implicitHeight + 2
-                            padding: 1
-                            background: Rectangle {
-                                radius: 7
-                                color: "#0b1424"
-                                border.color: "#2d496f"
-                            }
-                            contentItem: ListView {
-                                clip: true
-                                implicitHeight: contentHeight
-                                model: closeActionCombo.popup.visible ? closeActionCombo.delegateModel : null
-                                currentIndex: closeActionCombo.highlightedIndex
-                            }
-                        }
                     }
                     Connections {
                         target: settingsController
@@ -305,6 +214,36 @@ Flickable {
                         id: startupSwitch
                         checked: settingsController.startWithWindows
                         onClicked: settingsController.setStartWithWindows(checked)
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 14
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+                        Text {
+                            text: tr("settings.colorblind_mode")
+                            color: "#c7d7ed"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: tr("settings.colorblind_mode_detail")
+                            color: "#7f93ad"
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                    ToggleSwitch {
+                        checked: settingsController.colorblindModeEnabled
+                        onClicked: settingsController.setColorblindModeEnabled(checked)
                     }
                 }
             }
@@ -425,3 +364,4 @@ Flickable {
         }
     }
 }
+

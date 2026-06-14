@@ -55,7 +55,7 @@ Rectangle {
         clip: true
 
         ColumnLayout {
-            // Utilizando quase todo o espaço disponível
+            // Utilizando quase todo o espaÃ§o disponÃ­vel
             width: parent.width - 40
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.margins: 20
@@ -80,7 +80,7 @@ Rectangle {
                     
                     Image {
                         anchors.fill: parent
-                        // Fallback pra imagem bonitona da web se não tiver banner
+                        // Fallback pra imagem bonitona da web se nÃ£o tiver banner
                         source: safeImageSource(profile.banner, "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=1200&auto=format&fit=crop")
                         fillMode: Image.PreserveAspectCrop
                         visible: true
@@ -180,7 +180,7 @@ Rectangle {
                         }
                         Rectangle {
                             visible: profile.role !== undefined && profile.role !== null && profile.role !== ""
-                            color: "#5eead4"
+                            color: settingsController.accentColor
                             radius: 6
                             Layout.preferredHeight: 22
                             Layout.preferredWidth: roleText.implicitWidth + 16
@@ -238,7 +238,7 @@ Rectangle {
                             color: "#1d3353"
                         }
 
-                        // Substituído GridLayout por ColumnLayout -> RowLayout para evitar cortes de texto longo
+                        // SubstituÃ­do GridLayout por ColumnLayout -> RowLayout para evitar cortes de texto longo
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 14
@@ -247,14 +247,14 @@ Rectangle {
                                 Layout.fillWidth: true
                                 Text { text: tr("profile.stock_updates"); color: "#99abc4"; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
-                                Text { text: (profile.stockUpdateHelpCount || 0).toString(); color: "#5eead4"; font.bold: true; font.pixelSize: 14 }
+                                Text { text: (profile.stockUpdateHelpCount || 0).toString(); color: settingsController.accentColor; font.bold: true; font.pixelSize: 14 }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
                                 Text { text: tr("profile.online_time"); color: "#99abc4"; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
-                                Text { text: formatTime(profile.totalOnlineSeconds); color: "#5eead4"; font.bold: true; font.pixelSize: 14 }
+                                Text { text: formatTime(profile.totalOnlineSeconds); color: settingsController.accentColor; font.bold: true; font.pixelSize: 14 }
                             }
                             
                             RowLayout {
@@ -263,7 +263,7 @@ Rectangle {
                                 Item { Layout.fillWidth: true }
                                 Text { 
                                     text: formatDate(profile.lastLoginAt)
-                                    color: "#5eead4"
+                                    color: settingsController.accentColor
                                     font.bold: true
                                     font.pixelSize: 14
                                     elide: Text.ElideRight
@@ -278,7 +278,7 @@ Rectangle {
                                 Item { Layout.fillWidth: true }
                                 Text { 
                                     text: formatDate(profile.createdAt)
-                                    color: "#5eead4"
+                                    color: settingsController.accentColor
                                     font.bold: true
                                     font.pixelSize: 14 
                                     elide: Text.ElideRight
@@ -344,7 +344,7 @@ Rectangle {
                             background: Rectangle {
                                 color: "#122036"
                                 radius: 6
-                                border.color: regimentCombo.activeFocus ? "#5eead4" : "#1d3353"
+                                border.color: regimentCombo.activeFocus ? settingsController.accentColor : "#1d3353"
                                 border.width: 1
                             }
                             contentItem: Text {
@@ -389,7 +389,7 @@ Rectangle {
                 Layout.preferredHeight: 60
                 radius: 12
                 color: "#1d3353"
-                border.color: "#5eead4"
+                border.color: settingsController.accentColor
                 border.width: 1
                 visible: chatController.canOpenAdminPanel
 
@@ -400,7 +400,7 @@ Rectangle {
 
                     Text {
                         text: tr("profile.admin_panel")
-                        color: "#5eead4"
+                        color: settingsController.accentColor
                         font.family: "Segoe UI"
                         font.pixelSize: 16
                         font.bold: true
@@ -420,3 +420,5 @@ Rectangle {
         }
     }
 }
+
+

@@ -249,7 +249,7 @@ Rectangle {
                         height: 46
                         radius: 7
                         color: chatController.selectedRoom === rowSlug ? "#1d3353" : roomMouse.containsMouse ? "#172943" : "#0e1a2d"
-                        border.color: chatController.selectedRoom === rowSlug ? "#5eead4" : "transparent"
+                        border.color: chatController.selectedRoom === rowSlug ? settingsController.accentColor : "transparent"
                         Behavior on color { ColorAnimation { duration: 120 } }
                         RowLayout {
                             anchors.fill: parent
@@ -267,7 +267,7 @@ Rectangle {
                                 Layout.preferredWidth: Math.max(24, unreadText.implicitWidth + 12)
                                 Layout.preferredHeight: 22
                                 radius: 8
-                                color: "#5eead4"
+                                color: settingsController.accentColor
                                 Text {
                                     id: unreadText
                                     anchors.centerIn: parent
@@ -359,7 +359,7 @@ Rectangle {
                                 Text {
                                     anchors.centerIn: parent
                                     text: (rowName || "?").substring(0, 2).toUpperCase()
-                                    color: "#5eead4"
+                                    color: settingsController.accentColor
                                     font.bold: true
                                     font.pixelSize: 12
                                     visible: rowAvatar === ""
@@ -372,10 +372,10 @@ Rectangle {
                                     Layout.fillWidth: true
                                     spacing: 6
                                     Text { text: rowName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.maximumWidth: 120; elide: Text.ElideRight }
-                                    Text { text: "[" + rowRegiment + "]"; color: "#5eead4"; opacity: 0.8; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 11; visible: rowRegiment !== "" }
+                                    Text { text: "[" + rowRegiment + "]"; color: settingsController.accentColor; opacity: 0.8; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 11; visible: rowRegiment !== "" }
                                     Rectangle {
                                         visible: rowRole !== ""
-                                        color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#eab308" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
+                                        color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#d97706" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
                                         radius: 4
                                         Layout.preferredWidth: roleText.implicitWidth + 8
                                         Layout.preferredHeight: 14
@@ -560,7 +560,7 @@ Rectangle {
                             height: implicitHeight
                             radius: 8
                             color: rowId === root.highlightMessageId || rowMentioned ? "#2a3b22" : (hoverMsg.hovered ? "#122036" : (rowMine ? "#0a1321" : "transparent"))
-                            border.color: rowMentioned ? "#ffd166" : "transparent"
+                            border.color: rowMentioned ? settingsController.warningColor : "transparent"
                             Behavior on color { ColorAnimation { duration: 120 } }
 
                             HoverHandler { id: hoverMsg }
@@ -617,7 +617,7 @@ Rectangle {
                                         Text {
                                             anchors.centerIn: parent
                                             text: (rowAuthor || "?").substring(0, 2).toUpperCase()
-                                            color: "#5eead4"
+                                            color: settingsController.accentColor
                                             font.bold: true
                                             font.pixelSize: 13
                                             visible: rowAvatar === ""
@@ -629,10 +629,10 @@ Rectangle {
                                         RowLayout {
                                             Layout.fillWidth: true
                                             spacing: 6
-                                            Text { text: rowAuthor; color: "#5eead4"; font.bold: true; font.family: "Segoe UI"; elide: Text.ElideRight; Layout.maximumWidth: 200 }
+                                            Text { text: rowAuthor; color: settingsController.accentColor; font.bold: true; font.family: "Segoe UI"; elide: Text.ElideRight; Layout.maximumWidth: 200 }
                                             Rectangle {
                                                 visible: rowRole !== ""
-                                                color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#eab308" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
+                                                color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#d97706" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
                                                 radius: 4
                                                 Layout.preferredWidth: messageRoleText.implicitWidth + 8
                                                 Layout.preferredHeight: 14
@@ -648,7 +648,7 @@ Rectangle {
                                             }
                                             Item { Layout.fillWidth: true }
                                         }
-                                        Text { text: rowRegiment; color: "#5eead4"; opacity: 0.7; font.family: "Segoe UI"; font.pixelSize: 10; visible: rowRegiment !== ""; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Text { text: rowRegiment; color: settingsController.accentColor; opacity: 0.7; font.family: "Segoe UI"; font.pixelSize: 10; visible: rowRegiment !== ""; Layout.fillWidth: true; elide: Text.ElideRight }
                                     }
                                     Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; Layout.alignment: Qt.AlignTop }
                                 }
@@ -665,7 +665,7 @@ Rectangle {
                                             Text {
                                                 id: content
                                                 text: seg.mention && seg.mention.length > 0 ? ("@" + seg.mention) : seg.text
-                                                color: seg.mention && seg.mention.length > 0 ? "#ffd166" : "#edf6ff"
+                                                color: seg.mention && seg.mention.length > 0 ? settingsController.warningColor : "#edf6ff"
                                                 font.family: "Segoe UI"
                                                 font.pixelSize: 13
                                                 wrapMode: Text.WordWrap

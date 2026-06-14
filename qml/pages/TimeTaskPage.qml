@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 import "../components"
 
 Flickable {
@@ -16,275 +17,425 @@ Flickable {
         return i18nController.t(key)
     }
 
-    ColumnLayout {
-        id: content
-        width: root.width
-        spacing: 16
+    function comboIndex(model, value) {
+        var index = model.indexOf(value)
+        return index >= 0 ? index : 0
+    }
 
-        Text {
-            text: tr("timetask.title")
-            color: "#edf6ff"
-            font.family: "Segoe UI"
-            font.pixelSize: 26
-            font.bold: true
-            Layout.fillWidth: true
-        }
+    function openSaveDialog(defaultName) {
+        saveNameField.text = defaultName || timeTaskController.macroName || "macro"
+        saveNameField.selectAll()
+        saveNameDialog.open()
+        saveNameField.forceActiveFocus()
+    }
 
-        Text {
-            text: tr("timetask.subtitle")
-            color: "#8ab4ff"
-            font.family: "Segoe UI"
-            font.pixelSize: 13
-            font.bold: true
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
+    function openRenameDialog(name) {
+        renameField.text = name || timeTaskController.selectedMacroName
+        renameField.selectAll()
+        renameDialog.open()
+        renameField.forceActiveFocus()
+    }
+
+    function openConfirm(kind, title, body) {
+        confirmDialog.kind = kind
+        confirmTitle.text = title
+        confirmBody.text = body
+        confirmDialog.open()
+    }
+
+    component GlassPanel: Rectangle {
+        id: panel
+        property color accent: "#8ab4ff"
+        default property alias content: panelContent.data
+
+        Layout.fillWidth: true
+        radius: 8
+        color: Qt.rgba(0.03, 0.06, 0.11, 0.88)
+        border.color: Qt.rgba(1, 1, 1, 0.08)
+        border.width: 1
+        implicitHeight: panelContent.implicitHeight + 28
+        layer.enabled: true
+        layer.effect: DropShadow {
+            transparentBorder: true
+            color: Qt.rgba(0, 0, 0, 0.20)
+            radius: 18
+            samples: 37
+            verticalOffset: 5
         }
 
         Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: panel.accent
+            opacity: 0.035
+        }
+
+        ColumnLayout {
+            id: panelContent
+            anchors.fill: parent
+            anchors.margins: 14
+            spacing: 12
+        }
+    }
+
+    component StatPill: Rectangle {
+        property string label: ""
+        property string value: ""
+        property color accent: "#8ab4ff"
+
+        Layout.fillWidth: true
+        implicitHeight: 58
+        radius: 8
+        color: Qt.rgba(1, 1, 1, 0.05)
+        border.color: Qt.rgba(1, 1, 1, 0.08)
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 3
+
+            Text {
+                text: label
+                color: "#7f93ad"
+                font.family: "Segoe UI"
+                font.pixelSize: 10
+                font.bold: true
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: value
+                color: accent
+                font.family: "Segoe UI"
+                font.pixelSize: 14
+                font.bold: true
+                elide: Text.ElideRight
+                Layout.fillWidth: true
+            }
+        }
+    }
+
+    component FieldLabel: Text {
+        color: "#99abc4"
+        font.family: "Segoe UI"
+        font.pixelSize: 11
+        font.bold: true
+    }
+
+    Connections {
+        target: timeTaskController
+        function onSavePromptRequested(defaultName) {
+            openSaveDialog(defaultName)
+        }
+    }
+
+    ColumnLayout {
+        id: content
+        width: Math.max(320, root.width - 40)
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.topMargin: 18
+        spacing: 16
+
+        RowLayout {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
-            implicitHeight: 252
+            spacing: 12
 
             ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 12
+                Layout.fillWidth: true
+                spacing: 3
 
                 Text {
-                    text: tr("timetask.record_title")
+                    text: tr("timetask.title")
                     color: "#edf6ff"
                     font.family: "Segoe UI"
-                    font.pixelSize: 19
+                    font.pixelSize: 26
                     font.bold: true
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                 }
 
                 Text {
-                    text: tr("timetask.warning")
-                    color: "#ffd166"
+                    text: tr("timetask.subtitle")
+                    color: "#8ab4ff"
                     font.family: "Segoe UI"
-                    font.pixelSize: 12
+                    font.pixelSize: 13
                     font.bold: true
+                    Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
                 }
+            }
 
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: root.width > 720 ? 3 : 1
-                    columnSpacing: 12
-                    rowSpacing: 10
+            Rectangle {
+                Layout.preferredWidth: Math.max(104, liveStateText.implicitWidth + 28)
+                Layout.preferredHeight: 34
+                radius: 8
+                color: timeTaskController.recording ? Qt.rgba(0.54, 0.71, 1.0, 0.13) : timeTaskController.replaying ? Qt.rgba(0.37, 0.92, 0.83, 0.12) : Qt.rgba(1, 1, 1, 0.05)
+                border.color: timeTaskController.recording ? "#8ab4ff" : timeTaskController.replaying ? settingsController.accentColor : "#2d496f"
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 5
-                        Text { text: tr("timetask.name"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
-                        TextField {
-                            Layout.fillWidth: true
-                            text: timeTaskController.macroName
-                            enabled: timeTaskController.available && !timeTaskController.recording
-                            onEditingFinished: timeTaskController.setMacroName(text)
-                            color: "#edf6ff"
-                            font.family: "Segoe UI"
-                            background: Rectangle { radius: 7; color: "#07111f"; border.color: "#24486d" }
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 5
-                        Text { text: tr("timetask.status"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
-                        Text {
-                            text: timeTaskController.status
-                            color: timeTaskController.available ? "#edf6ff" : "#ff7a90"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 13
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 5
-                        Text { text: tr("timetask.metric_empty"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
-                        Text {
-                            text: timeTaskController.metric
-                            color: "#8ab4ff"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 13
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                        }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 10
-                    PrimaryButton {
-                        text: tr("timetask.open_record_overlay")
-                        enabled: timeTaskController.available
-                        onClicked: timeTaskController.showRecordOverlay()
-                    }
-                    PrimaryButton {
-                        text: timeTaskController.paused ? tr("timetask.play") : tr("timetask.pause")
-                        enabled: timeTaskController.recording || timeTaskController.replaying
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
-                        onClicked: timeTaskController.pauseResume()
-                    }
-                    PrimaryButton {
-                        text: tr("timetask.save")
-                        enabled: timeTaskController.available
-                        fill: "#62d7a4"
-                        hoverFill: "#5eead4"
-                        textFill: "#041014"
-                        onClicked: timeTaskController.saveCurrent()
-                    }
-                    PrimaryButton {
-                        text: tr("timetask.stop")
-                        enabled: timeTaskController.recording
-                        fill: "#ff7a90"
-                        hoverFill: "#b94a5d"
-                        textFill: "#edf6ff"
-                        onClicked: timeTaskController.stopRecording()
-                    }
+                Text {
+                    id: liveStateText
+                    anchors.centerIn: parent
+                    text: timeTaskController.recording ? tr("timetask.overlay_recording") : timeTaskController.replaying ? tr("timetask.overlay_playing") : tr("timetask.status_idle")
+                    color: timeTaskController.recording ? "#8ab4ff" : timeTaskController.replaying ? settingsController.accentColor : "#99abc4"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 11
+                    font.bold: true
+                    elide: Text.ElideRight
                 }
             }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
-            implicitHeight: 224
+        GlassPanel {
+            accent: timeTaskController.recording ? "#8ab4ff" : settingsController.accentColor
 
-            GridLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                columns: root.width > 900 ? 4 : root.width > 620 ? 2 : 1
-                columnSpacing: 12
-                rowSpacing: 12
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 14
+
+                Rectangle {
+                    Layout.preferredWidth: 6
+                    Layout.preferredHeight: 62
+                    radius: 3
+                    color: timeTaskController.recording ? "#8ab4ff" : settingsController.accentColor
+                    opacity: 0.95
+                }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Text { text: tr("timetask.speed"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
+                    spacing: 6
+
+                    Text {
+                        text: tr("timetask.record_title")
+                        color: "#edf6ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 18
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: tr("timetask.warning")
+                        color: "#8ab4ff"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        text: timeTaskController.status
+                        color: timeTaskController.available ? "#c7d7ed" : "#ff7a90"
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: root.width >= 900 ? 3 : 1
+                columnSpacing: 10
+                rowSpacing: 10
+
+                StatPill {
+                    label: tr("timetask.status")
+                    value: timeTaskController.recording ? tr("timetask.overlay_recording") : timeTaskController.replaying ? tr("timetask.overlay_playing") : tr("timetask.status_idle")
+                    accent: timeTaskController.recording ? "#8ab4ff" : timeTaskController.replaying ? settingsController.accentColor : "#8ab4ff"
+                }
+
+                StatPill {
+                    label: tr("timetask.metric_empty")
+                    value: timeTaskController.captureSummary
+                    accent: "#8ab4ff"
+                }
+
+                StatPill {
+                    label: tr("timetask.replay_title")
+                    value: timeTaskController.selectedMacroName !== "" ? timeTaskController.selectedMacroName : tr("timetask.replay_empty")
+                    accent: settingsController.accentColor
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                PrimaryButton {
+                    text: tr("timetask.start")
+                    enabled: timeTaskController.available && !timeTaskController.recording
+                    Layout.preferredWidth: 148
+                    onClicked: timeTaskController.showRecordOverlay()
+                }
+
+                PrimaryButton {
+                    text: timeTaskController.paused ? tr("timetask.play") : tr("timetask.pause")
+                    enabled: timeTaskController.recording || timeTaskController.replaying
+                    Layout.preferredWidth: 112
+                    fill: "#1d3353"
+                    hoverFill: "#2d496f"
+                    textFill: "#edf6ff"
+                    onClicked: timeTaskController.pauseResume()
+                }
+
+                PrimaryButton {
+                    text: tr("timetask.stop")
+                    enabled: timeTaskController.recording
+                    Layout.preferredWidth: 112
+                    fill: "#ff7a90"
+                    hoverFill: "#b94a5d"
+                    textFill: "#111c31"
+                    onClicked: timeTaskController.stopRecording()
+                }
+
+                PrimaryButton {
+                    text: tr("timetask.save")
+                    enabled: timeTaskController.available && timeTaskController.hasCapturedEvents
+                    Layout.preferredWidth: 112
+                    fill: settingsController.accentColor
+                    hoverFill: "#8ab4ff"
+                    textFill: "#041014"
+                    onClicked: timeTaskController.requestSaveCurrent()
+                }
+
+                Item { Layout.fillWidth: true }
+
+                PrimaryButton {
+                    text: tr("timetask.open_record_overlay")
+                    enabled: timeTaskController.available
+                    Layout.preferredWidth: 176
+                    fill: "#0e1a2d"
+                    hoverFill: "#1d3353"
+                    textFill: "#edf6ff"
+                    onClicked: timeTaskController.showRecordOverlay()
+                }
+            }
+        }
+
+        GlassPanel {
+            accent: "#8ab4ff"
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                Text {
+                    text: tr("timetask.playback_settings")
+                    color: "#edf6ff"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 17
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+
+                PrimaryButton {
+                    text: tr("timetask.play")
+                    enabled: timeTaskController.available
+                    Layout.preferredWidth: 118
+                    fill: settingsController.accentColor
+                    hoverFill: "#8ab4ff"
+                    textFill: "#041014"
+                    onClicked: timeTaskController.playSelected()
+                }
+
+                PrimaryButton {
+                    text: tr("timetask.cancel")
+                    enabled: timeTaskController.replaying
+                    Layout.preferredWidth: 118
+                    fill: "#ff7a90"
+                    hoverFill: "#b94a5d"
+                    textFill: "#edf6ff"
+                    onClicked: timeTaskController.stopReplay()
+                }
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: root.width >= 980 ? 5 : root.width >= 720 ? 3 : 1
+                columnSpacing: 12
+                rowSpacing: 10
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    FieldLabel { text: tr("timetask.speed") }
                     PrimaryComboBox {
                         Layout.fillWidth: true
                         model: timeTaskController.speedOptions
-                        currentIndex: Math.max(0, timeTaskController.speedOptions.indexOf(timeTaskController.speed))
+                        currentIndex: comboIndex(timeTaskController.speedOptions, timeTaskController.speed)
                         onActivated: timeTaskController.setSpeed(currentText)
                     }
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Text { text: tr("timetask.repeat"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
+                    FieldLabel { text: tr("timetask.repeat") }
                     TextField {
                         Layout.fillWidth: true
+                        Layout.preferredHeight: 40
                         text: timeTaskController.repeat
                         onEditingFinished: timeTaskController.setRepeat(text)
                         color: "#edf6ff"
                         font.family: "Segoe UI"
+                        verticalAlignment: Text.AlignVCenter
                         background: Rectangle { radius: 7; color: "#07111f"; border.color: "#24486d" }
                     }
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Text { text: tr("timetask.delay"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
+                    FieldLabel { text: tr("timetask.delay") }
                     PrimaryComboBox {
                         Layout.fillWidth: true
                         model: timeTaskController.delayOptions
-                        currentIndex: Math.max(0, timeTaskController.delayOptions.indexOf(timeTaskController.delay))
+                        currentIndex: comboIndex(timeTaskController.delayOptions, timeTaskController.delay)
                         onActivated: timeTaskController.setDelay(currentText)
                     }
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Text { text: tr("timetask.stock_interval"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
+                    FieldLabel { text: tr("timetask.stock_interval") }
                     TextField {
                         Layout.fillWidth: true
+                        Layout.preferredHeight: 40
                         text: timeTaskController.stockInterval
                         onEditingFinished: timeTaskController.setStockInterval(text)
                         color: "#edf6ff"
                         font.family: "Segoe UI"
+                        verticalAlignment: Text.AlignVCenter
                         background: Rectangle { radius: 7; color: "#07111f"; border.color: "#24486d" }
                     }
                 }
 
                 ColumnLayout {
-                    Layout.columnSpan: root.width > 900 ? 2 : 1
                     Layout.fillWidth: true
-                    Text { text: tr("timetask.stock_macro"); color: "#99abc4"; font.family: "Segoe UI"; font.bold: true }
+                    FieldLabel { text: tr("timetask.stock_macro") }
                     PrimaryComboBox {
                         Layout.fillWidth: true
                         model: timeTaskController.stockMacroOptions
-                        currentIndex: Math.max(0, timeTaskController.stockMacroOptions.indexOf(timeTaskController.stockMacroName))
+                        currentIndex: comboIndex(timeTaskController.stockMacroOptions, timeTaskController.stockMacroName)
                         onActivated: timeTaskController.setStockMacroName(currentText)
-                    }
-                }
-
-                RowLayout {
-                    Layout.columnSpan: root.width > 900 ? 2 : 1
-                    Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignBottom
-                    spacing: 10
-                    PrimaryButton {
-                        text: tr("timetask.play")
-                        enabled: timeTaskController.available
-                        fill: "#62d7a4"
-                        hoverFill: "#5eead4"
-                        textFill: "#041014"
-                        onClicked: timeTaskController.playSelected()
-                    }
-                    PrimaryButton {
-                        text: tr("timetask.cancel")
-                        enabled: timeTaskController.replaying
-                        fill: "#ff7a90"
-                        hoverFill: "#b94a5d"
-                        textFill: "#edf6ff"
-                        onClicked: timeTaskController.stopReplay()
-                    }
-                    PrimaryButton {
-                        text: tr("timetask.delete")
-                        enabled: timeTaskController.selectedMacroName !== ""
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
-                        onClicked: timeTaskController.deleteSelectedMacro()
-                    }
-                    PrimaryButton {
-                        text: tr("timetask.refresh")
-                        fill: "#0e1a2d"
-                        hoverFill: "#1d3353"
-                        textFill: "#edf6ff"
-                        onClicked: timeTaskController.refreshMacros()
                     }
                 }
             }
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
-            implicitHeight: 340
+        GlassPanel {
+            accent: "#8ab4ff"
+            Layout.fillHeight: false
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 16
-                spacing: 10
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
 
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
+                    spacing: 3
+
                     Text {
                         text: tr("timetask.replay_title")
                         color: "#edf6ff"
@@ -293,78 +444,188 @@ Flickable {
                         font.bold: true
                         Layout.fillWidth: true
                     }
+
                     Text {
-                        text: timeTaskController.selectedMacroName || tr("timetask.replay_empty")
+                        text: timeTaskController.selectedMacroName !== "" ? timeTaskController.selectedMacroName : tr("timetask.replay_empty")
                         color: "#99abc4"
                         font.family: "Segoe UI"
                         font.pixelSize: 12
                         elide: Text.ElideRight
-                        Layout.maximumWidth: 260
+                        Layout.fillWidth: true
                     }
                 }
 
-                ListView {
-                    id: macroList
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: timeTaskController.macros
-                    spacing: 8
-                    clip: true
-                    delegate: Rectangle {
-                        width: macroList.width
-                        height: 62
-                        radius: 8
-                        color: selected ? "#1d3353" : mouse.containsMouse ? "#172943" : "#0e1a2d"
-                        border.color: selected ? "#5eead4" : "#24486d"
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                PrimaryButton {
+                    text: tr("timetask.refresh")
+                    Layout.preferredWidth: 112
+                    fill: "#0e1a2d"
+                    hoverFill: "#1d3353"
+                    textFill: "#edf6ff"
+                    onClicked: timeTaskController.refreshMacros()
+                }
+            }
 
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 12
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 1
-                                Text {
-                                    text: name
-                                    color: "#edf6ff"
-                                    font.family: "Segoe UI"
-                                    font.bold: true
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    text: createdAt
-                                    color: "#99abc4"
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 11
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                            }
+            ListView {
+                id: macroList
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(260, Math.min(430, contentHeight + 4))
+                model: timeTaskController.macros
+                spacing: 10
+                clip: true
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: macroList.count === 0
+                    text: tr("timetask.replay_empty")
+                    color: "#60728c"
+                    font.family: "Segoe UI"
+                    font.pixelSize: 13
+                    font.bold: true
+                }
+
+                delegate: Rectangle {
+                    width: macroList.width
+                    height: 118
+                    radius: 8
+                    color: selected ? Qt.rgba(0.09, 0.21, 0.30, 0.92) : macroMouse.containsMouse ? Qt.rgba(0.07, 0.15, 0.25, 0.92) : Qt.rgba(0.03, 0.08, 0.14, 0.92)
+                    border.color: selected ? settingsController.accentColor : "#24486d"
+                    border.width: selected ? 1.5 : 1
+                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 12
+                        z: 1
+
+                        Rectangle {
+                            Layout.preferredWidth: 5
+                            Layout.fillHeight: true
+                            radius: 3
+                            color: selected ? settingsController.accentColor : "#8ab4ff"
+                            opacity: selected ? 1.0 : 0.65
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 5
+
                             Text {
-                                text: duration
+                                text: name
+                                color: "#edf6ff"
+                                font.family: "Segoe UI"
+                                font.pixelSize: 15
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                text: detail
                                 color: "#8ab4ff"
                                 font.family: "Segoe UI"
-                                Layout.preferredWidth: 76
-                                horizontalAlignment: Text.AlignRight
+                                font.pixelSize: 12
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
                             }
+
                             Text {
-                                text: events + " events"
+                                text: tr("timetask.created_at") + " " + createdAt + "    " + tr("timetask.updated_at") + " " + updatedAt
                                 color: "#99abc4"
                                 font.family: "Segoe UI"
-                                Layout.preferredWidth: 100
-                                horizontalAlignment: Text.AlignRight
+                                font.pixelSize: 11
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                text: path
+                                color: "#60728c"
+                                font.family: "Segoe UI"
+                                font.pixelSize: 10
+                                Layout.fillWidth: true
+                                elide: Text.ElideMiddle
                             }
                         }
 
-                        MouseArea {
-                            id: mouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: timeTaskController.selectMacro(index)
+                        ColumnLayout {
+                            Layout.preferredWidth: root.width >= 900 ? 320 : 220
+                            spacing: 8
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                PrimaryButton {
+                                    text: tr("timetask.play")
+                                    Layout.fillWidth: true
+                                    fill: settingsController.accentColor
+                                    hoverFill: "#8ab4ff"
+                                    textFill: "#041014"
+                                    onClicked: {
+                                        timeTaskController.selectMacro(index)
+                                        timeTaskController.playSelected()
+                                    }
+                                }
+
+                                PrimaryButton {
+                                    text: tr("timetask.rename")
+                                    Layout.fillWidth: true
+                                    fill: "#1d3353"
+                                    hoverFill: "#2d496f"
+                                    textFill: "#edf6ff"
+                                    onClicked: {
+                                        timeTaskController.selectMacro(index)
+                                        openRenameDialog(name)
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                PrimaryButton {
+                                    text: tr("timetask.overwrite")
+                                    Layout.fillWidth: true
+                                    enabled: timeTaskController.hasCapturedEvents
+                                    fill: "#1d3353"
+                                    hoverFill: "#2d496f"
+                                    textFill: "#edf6ff"
+                                    onClicked: {
+                                        timeTaskController.selectMacro(index)
+                                        openConfirm("overwrite", tr("timetask.overwrite"), tr("timetask.overwrite_confirm").replace("{name}", name))
+                                    }
+                                }
+
+                                PrimaryButton {
+                                    text: tr("timetask.delete")
+                                    Layout.fillWidth: true
+                                    fill: "#4b1d31"
+                                    hoverFill: "#6b2744"
+                                    textFill: "#edf6ff"
+                                    onClicked: {
+                                        timeTaskController.selectMacro(index)
+                                        openConfirm("delete", tr("timetask.delete"), tr("timetask.delete_confirm").replace("{name}", name))
+                                    }
+                                }
+                            }
                         }
                     }
+
+                    MouseArea {
+                        id: macroMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        z: 0
+                        onClicked: timeTaskController.selectMacro(index)
+                    }
+                }
+
+                ScrollBar.vertical: ScrollBar {
+                    active: true
+                    policy: ScrollBar.AsNeeded
                 }
             }
         }
@@ -378,4 +639,222 @@ Flickable {
             elide: Text.ElideMiddle
         }
     }
+
+    Dialog {
+        id: saveNameDialog
+        modal: true
+        width: Math.min(430, root.width - 48)
+        x: Math.round((root.width - width) / 2)
+        y: 96
+        closePolicy: Popup.CloseOnEscape
+
+        background: Rectangle {
+            radius: 10
+            color: "#0a121e"
+            border.color: settingsController.accentColor
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+
+            Text {
+                text: tr("timetask.save_name_title")
+                color: "#edf6ff"
+                font.family: "Segoe UI"
+                font.pixelSize: 18
+                font.bold: true
+                Layout.fillWidth: true
+            }
+
+            Text {
+                text: timeTaskController.captureSummary
+                color: "#99abc4"
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+
+            TextField {
+                id: saveNameField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                color: "#edf6ff"
+                font.family: "Segoe UI"
+                verticalAlignment: Text.AlignVCenter
+                selectByMouse: true
+                background: Rectangle { radius: 7; color: "#07111f"; border.color: "#24486d" }
+                Keys.onReturnPressed: {
+                    timeTaskController.saveCurrent(text)
+                    saveNameDialog.close()
+                }
+            }
+        }
+
+        footer: Item {
+            implicitHeight: 58
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                anchors.bottomMargin: 18
+                spacing: 10
+                PrimaryButton {
+                    text: tr("timetask.cancel")
+                    Layout.fillWidth: true
+                    fill: "#1d3353"
+                    hoverFill: "#2d496f"
+                    textFill: "#edf6ff"
+                    onClicked: saveNameDialog.close()
+                }
+                PrimaryButton {
+                    text: tr("timetask.save")
+                    Layout.fillWidth: true
+                    onClicked: {
+                        timeTaskController.saveCurrent(saveNameField.text)
+                        saveNameDialog.close()
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: renameDialog
+        modal: true
+        width: Math.min(430, root.width - 48)
+        x: Math.round((root.width - width) / 2)
+        y: 112
+        closePolicy: Popup.CloseOnEscape
+
+        background: Rectangle {
+            radius: 10
+            color: "#0a121e"
+            border.color: "#8ab4ff"
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 12
+            Text {
+                text: tr("timetask.rename_title")
+                color: "#edf6ff"
+                font.family: "Segoe UI"
+                font.pixelSize: 18
+                font.bold: true
+                Layout.fillWidth: true
+            }
+            TextField {
+                id: renameField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                color: "#edf6ff"
+                font.family: "Segoe UI"
+                verticalAlignment: Text.AlignVCenter
+                selectByMouse: true
+                background: Rectangle { radius: 7; color: "#07111f"; border.color: "#24486d" }
+                Keys.onReturnPressed: {
+                    timeTaskController.renameSelectedMacro(text)
+                    renameDialog.close()
+                }
+            }
+        }
+
+        footer: Item {
+            implicitHeight: 58
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                anchors.bottomMargin: 18
+                spacing: 10
+                PrimaryButton {
+                    text: tr("timetask.cancel")
+                    Layout.fillWidth: true
+                    fill: "#1d3353"
+                    hoverFill: "#2d496f"
+                    textFill: "#edf6ff"
+                    onClicked: renameDialog.close()
+                }
+                PrimaryButton {
+                    text: tr("timetask.rename")
+                    Layout.fillWidth: true
+                    onClicked: {
+                        timeTaskController.renameSelectedMacro(renameField.text)
+                        renameDialog.close()
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
+        id: confirmDialog
+        property string kind: ""
+        modal: true
+        width: Math.min(440, root.width - 48)
+        x: Math.round((root.width - width) / 2)
+        y: 126
+        closePolicy: Popup.CloseOnEscape
+
+        background: Rectangle {
+            radius: 10
+            color: "#0a121e"
+            border.color: confirmDialog.kind === "delete" ? "#ff7a90" : "#8ab4ff"
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 10
+            Text {
+                id: confirmTitle
+                color: "#edf6ff"
+                font.family: "Segoe UI"
+                font.pixelSize: 18
+                font.bold: true
+                Layout.fillWidth: true
+            }
+            Text {
+                id: confirmBody
+                color: "#99abc4"
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+        }
+
+        footer: Item {
+            implicitHeight: 58
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 18
+                anchors.bottomMargin: 18
+                spacing: 10
+                PrimaryButton {
+                    text: tr("timetask.cancel")
+                    Layout.fillWidth: true
+                    fill: "#1d3353"
+                    hoverFill: "#2d496f"
+                    textFill: "#edf6ff"
+                    onClicked: confirmDialog.close()
+                }
+                PrimaryButton {
+                    text: confirmDialog.kind === "delete" ? tr("timetask.delete") : tr("timetask.overwrite")
+                    Layout.fillWidth: true
+                    fill: confirmDialog.kind === "delete" ? "#ff7a90" : "#1d3353"
+                    hoverFill: confirmDialog.kind === "delete" ? "#b94a5d" : "#2d496f"
+                    textFill: "#edf6ff"
+                    onClicked: {
+                        if (confirmDialog.kind === "delete")
+                            timeTaskController.deleteSelectedMacro()
+                        else if (confirmDialog.kind === "overwrite")
+                            timeTaskController.overwriteSelectedMacro()
+                        confirmDialog.close()
+                    }
+                }
+            }
+        }
+    }
 }
+
+

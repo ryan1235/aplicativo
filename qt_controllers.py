@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import csv
 import ctypes
 from datetime import datetime, timezone
 import hashlib
@@ -17,6 +18,7 @@ import sys
 import threading
 import time
 from typing import Any
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -261,6 +263,52 @@ def debug_login_response(label: str, result: dict[str, Any]) -> None:
 def file_url(path: str | Path) -> str:
     return QUrl.fromLocalFile(str(Path(path).resolve())).toString()
 
+
+_LOCATION_INDEX: dict[tuple[str, str], dict[str, str]] | None = None
+
+
+def _compact_location_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _strip_hex_suffix(value: str) -> str:
+    text = str(value or "").strip()
+    return text[:-3] if text.lower().endswith("hex") else text
+
+
+def stockpile_map_name(value: str) -> str:
+    return re.sub(r"\s+", "", _strip_hex_suffix(value))
+
+
+def _location_index() -> dict[tuple[str, str], dict[str, str]]:
+    global _LOCATION_INDEX
+    if _LOCATION_INDEX is not None:
+        return _LOCATION_INDEX
+
+    index: dict[tuple[str, str], dict[str, str]] = {}
+    for csv_path in (resource_dir() / "locations.csv", BASE_DIR / "locations.csv"):
+        if not csv_path.exists():
+            continue
+        try:
+            with csv_path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    region = str(row.get("Hex") or "").strip()
+                    town = str(row.get("Loc") or "").strip()
+                    if not region or not town:
+                        continue
+                    index[(_compact_location_key(region), town.lower())] = {
+                        "region": region,
+                        "town": town,
+                        "mapName": stockpile_map_name(region),
+                    }
+        except OSError:
+            continue
+        if index:
+            break
+    _LOCATION_INDEX = index
+    return index
+
+
 def obfuscate_string(text: str) -> str:
     if not text:
         return text
@@ -280,6 +328,58 @@ def now_milliseconds() -> int:
 
 def now_label() -> str:
     return datetime.now().strftime("%H:%M:%S")
+
+
+def parse_stockpile_datetime(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number > 10_000_000_000:
+            number /= 1000.0
+        try:
+            return datetime.fromtimestamp(number, tz=timezone.utc).astimezone()
+        except (OSError, OverflowError, ValueError):
+            return None
+    text = str(value).strip()
+    if not text or text == "-":
+        return None
+    if text.isdigit():
+        return parse_stockpile_datetime(int(text))
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone()
+
+
+def format_relative_time(value: Any) -> str:
+    parsed = parse_stockpile_datetime(value)
+    if parsed is None:
+        return ""
+    seconds = max(0, int((datetime.now().astimezone() - parsed).total_seconds()))
+    if seconds < 60:
+        return "Agora"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"Há {minutes}m"
+    hours = minutes // 60
+    if hours < 24:
+        return f"Há {hours}h"
+    days = hours // 24
+    if days < 30:
+        return f"Há {days}d"
+    return parsed.strftime("%d/%m/%Y")
 
 
 def debug_memory(label: str) -> None:
@@ -683,6 +783,8 @@ class AppController(QObject):
     startupDialogChanged = Signal()
     tutorialDialogChanged = Signal()
     panelAccessResult = Signal(str, str)
+    sidebarChanged = Signal()
+    sidebarSectionsChanged = Signal()
 
     def __init__(self, i18n: I18nController, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -702,6 +804,11 @@ class AppController(QObject):
         self._tutorial_dialog_body = ""
         self._pending_admin_panel_token = ""
         self._panel_access_check_running = False
+        app_settings = self._app_settings()
+        self._sidebar_open = bool(app_settings.get("sidebar_open", True))
+        self._sidebar_sections_revision = 0
+        self._sidebar_sections = self._normalized_sidebar_sections(app_settings.get("sidebar_sections"))
+        save_settings(self.settings)
         self._tutorial_key_by_page = {
             "home": "inicio",
             "chat": "chat",
@@ -714,22 +821,8 @@ class AppController(QObject):
             "notifications": "notificacoes",
             "settings": "configuracoes",
         }
-        self.navItems = DictListModel(["key", "labelKey", "icon", "section"], self)
-        self.navItems.set_items(
-            [
-                {"key": "home", "labelKey": "nav.home", "icon": "home", "section": "core"},
-
-                {"key": "chat", "labelKey": "home.chat.title", "icon": "chat", "section": "core"},
-                {"key": "autoClicker", "labelKey": "nav.auto_clicker", "icon": "bolt", "section": "automation"},
-                {"key": "timeTask", "labelKey": "timetask.nav", "icon": "timer", "section": "automation"},
-                {"key": "stockpile", "labelKey": "stockpile.nav", "icon": "database", "section": "logistics"},
-                {"key": "production", "labelKey": "production.nav", "icon": "factory", "section": "logistics"},
-                {"key": "itemSearch", "labelKey": "item_search.nav", "icon": "search", "section": "tools"},
-                {"key": "identifyItem", "labelKey": "identify.nav", "icon": "target", "section": "tools"},
-                {"key": "notifications", "labelKey": "notifications.nav", "icon": "bell", "section": "tools"},
-                {"key": "settings", "labelKey": "nav.settings", "icon": "settings", "section": "config"},
-            ]
-        )
+        self.navItems = DictListModel(["key", "labelKey", "icon", "section", "searchText"], self)
+        self.navItems.set_items(self._nav_items())
         self._foxhole_timer = QTimer(self)
         self._foxhole_timer.timeout.connect(self.refreshFoxholeStatus)
         self._foxhole_timer.start(5000)
@@ -883,6 +976,14 @@ class AppController(QObject):
     def hasTutorial(self) -> bool:
         return self._tutorial_key_for_page(self._current_page) is not None
 
+    @Property(bool, notify=sidebarChanged)
+    def sidebarOpen(self) -> bool:
+        return self._sidebar_open
+
+    @Property(int, notify=sidebarSectionsChanged)
+    def sidebarSectionsRevision(self) -> int:
+        return self._sidebar_sections_revision
+
     @Property(bool, notify=tutorialDialogChanged)
     def tutorialDialogVisible(self) -> bool:
         return self._tutorial_dialog_visible
@@ -901,6 +1002,36 @@ class AppController(QObject):
             return
         self._current_page = page
         self.currentPageChanged.emit()
+
+    @Slot(bool)
+    def setSidebarOpen(self, open_: bool) -> None:
+        open_ = bool(open_)
+        if open_ == self._sidebar_open:
+            return
+        self._sidebar_open = open_
+        self._app_settings()["sidebar_open"] = open_
+        save_settings(self.settings)
+        self.sidebarChanged.emit()
+
+    @Slot(str, result=bool)
+    def sidebarSectionExpanded(self, section: str) -> bool:
+        return bool(self._sidebar_sections.get(str(section or ""), True))
+
+    @Slot(str, bool)
+    def setSidebarSectionExpanded(self, section: str, expanded: bool) -> None:
+        section = str(section or "").strip()
+        if section not in self._sidebar_sections:
+            return
+        expanded = bool(expanded)
+        if self._sidebar_sections.get(section) == expanded:
+            return
+        if not expanded and sum(1 for value in self._sidebar_sections.values() if value) <= 1:
+            return
+        self._sidebar_sections[section] = expanded
+        self._app_settings()["sidebar_sections"] = dict(self._sidebar_sections)
+        save_settings(self.settings)
+        self._sidebar_sections_revision += 1
+        self.sidebarSectionsChanged.emit()
 
     @Slot(str, result=str)
     def assetUrl(self, relative: str) -> str:
@@ -925,6 +1056,59 @@ class AppController(QObject):
 
     def _app_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("app", {})
+
+    def _nav_items(self) -> list[dict[str, str]]:
+        items = [
+            {"key": "home", "labelKey": "nav.home", "icon": "home", "section": "core"},
+            {"key": "chat", "labelKey": "home.chat.title", "icon": "chat", "section": "core"},
+            {"key": "autoClicker", "labelKey": "nav.auto_clicker", "icon": "bolt", "section": "automation"},
+            {"key": "timeTask", "labelKey": "timetask.nav", "icon": "timer", "section": "automation"},
+            {"key": "stockpile", "labelKey": "stockpile.nav", "icon": "database", "section": "logistics"},
+            {"key": "production", "labelKey": "production.nav", "icon": "factory", "section": "logistics"},
+            {"key": "itemSearch", "labelKey": "item_search.nav", "icon": "search", "section": "tools"},
+            {"key": "identifyItem", "labelKey": "identify.nav", "icon": "target", "section": "tools"},
+            {"key": "notifications", "labelKey": "notifications.nav", "icon": "bell", "section": "tools"},
+            {"key": "settings", "labelKey": "nav.settings", "icon": "settings", "section": "config"},
+        ]
+        catalogs = {language: Translator._load_catalog(language) for language in SUPPORTED_LANGUAGES}
+        fallback = Translator._load_catalog("pt")
+        for item in items:
+            terms = [item["key"], item["labelKey"], item["section"]]
+            for catalog in catalogs.values():
+                terms.append(catalog.get(item["labelKey"], fallback.get(item["labelKey"], "")))
+            item["searchText"] = self._nav_search_text(terms)
+        return items
+
+    @staticmethod
+    def _nav_search_text(values: list[str]) -> str:
+        terms = []
+        for value in values:
+            text = str(value or "").strip().lower()
+            if not text:
+                continue
+            normalized = "".join(
+                char for char in unicodedata.normalize("NFKD", text)
+                if not unicodedata.combining(char)
+            )
+            terms.append(text)
+            terms.append(normalized)
+        return " ".join(dict.fromkeys(terms))
+
+    def _normalized_sidebar_sections(self, value: Any) -> dict[str, bool]:
+        defaults = {
+            "core": True,
+            "automation": True,
+            "logistics": True,
+            "tools": True,
+            "config": True,
+        }
+        if isinstance(value, dict):
+            for key in defaults:
+                defaults[key] = bool(value.get(key, defaults[key]))
+        if not any(defaults.values()):
+            defaults = {key: True for key in defaults}
+        self._app_settings()["sidebar_sections"] = dict(defaults)
+        return defaults
 
     def _tutorial_key_for_page(self, page: str) -> str | None:
         key = self._tutorial_key_by_page.get(page)
@@ -1077,6 +1261,25 @@ class SettingsController(QObject):
     def _app_bool(self, key: str, default: bool = True) -> bool:
         return bool(self._app_settings().get(key, default))
 
+    def _ui_palette(self) -> dict[str, str]:
+        if bool(self._app_settings().get("colorblind_mode_enabled", False)):
+            return {
+                "accent": "#8ab4ff",
+                "accent_hover": "#a9c7ff",
+                "accent_panel": "#13243d",
+                "success": "#8ab4ff",
+                "warning": "#ffd166",
+                "warning_text": "#fef3c7",
+            }
+        return {
+            "accent": "#5eead4",
+            "accent_hover": "#8ab4ff",
+            "accent_panel": "#10342e",
+            "success": "#62d7a4",
+            "warning": "#ffd166",
+            "warning_text": "#fef3c7",
+        }
+
     @Property(int, notify=changed)
     def revision(self) -> int:
         return self._revision
@@ -1099,6 +1302,34 @@ class SettingsController(QObject):
     @Property(str, notify=changed)
     def status(self) -> str:
         return self._status
+
+    @Property(str, notify=changed)
+    def accentColor(self) -> str:
+        return self._ui_palette()["accent"]
+
+    @Property(str, notify=changed)
+    def accentHoverColor(self) -> str:
+        return self._ui_palette()["accent_hover"]
+
+    @Property(str, notify=changed)
+    def accentPanelColor(self) -> str:
+        return self._ui_palette()["accent_panel"]
+
+    @Property(str, notify=changed)
+    def successColor(self) -> str:
+        return self._ui_palette()["success"]
+
+    @Property(str, notify=changed)
+    def warningColor(self) -> str:
+        return self._ui_palette()["warning"]
+
+    @Property(str, notify=changed)
+    def warningTextColor(self) -> str:
+        return self._ui_palette()["warning_text"]
+
+    @Property(bool, notify=changed)
+    def colorblindModeEnabled(self) -> bool:
+        return bool(self._app_settings().get("colorblind_mode_enabled", False))
 
     @Property(bool, notify=changed)
     def stockpileSoundEnabled(self) -> bool:
@@ -1163,6 +1394,14 @@ class SettingsController(QObject):
         app_settings["startup_prompted"] = True
         app_settings["startup_default_applied"] = True
         self._status = ""
+        self._save()
+
+    @Slot(bool)
+    def setColorblindModeEnabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self.colorblindModeEnabled == enabled:
+            return
+        self._app_settings()["colorblind_mode_enabled"] = enabled
         self._save()
 
     @Slot(str, bool)
@@ -1235,6 +1474,8 @@ class AutoClickerController(QObject):
     statusFromWorker = Signal(str)
     menuRequested = Signal()
     orderRequested = Signal(str)
+    DEFAULT_INTERVAL = 0.2
+    MODE_KEYS = ("auto", "move", "pilot", "right_hold", "fixed", "artillery")
 
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -1282,6 +1523,27 @@ class AutoClickerController(QObject):
         orders = [str(item).strip() for item in self._clicker_settings().get("f5_orders", []) if str(item).strip()]
         return orders or ["Diesel", "Cmats", "Bmats", "Emats"]
 
+    def _click_interval(self) -> float:
+        data = self._clicker_settings()
+        try:
+            value = float(data.get("interval", self.DEFAULT_INTERVAL))
+        except (TypeError, ValueError):
+            value = self.DEFAULT_INTERVAL
+        value = round(max(0.03, min(5.0, value)), 2)
+        data["interval"] = value
+        return value
+
+    def _mode_enabled_settings(self) -> dict[str, bool]:
+        data = self._clicker_settings()
+        raw = data.get("modes_enabled", {})
+        raw = raw if isinstance(raw, dict) else {}
+        modes = {key: bool(raw.get(key, True)) for key in self.MODE_KEYS}
+        data["modes_enabled"] = modes
+        return modes
+
+    def _mode_enabled(self, key: str) -> bool:
+        return bool(self._mode_enabled_settings().get(key, True))
+
     def _refresh_models(self) -> None:
         data = self._clicker_settings()
         self.slots.set_items(
@@ -1303,8 +1565,9 @@ class AutoClickerController(QObject):
         self.clicker.configure(
             str(data.get("hotkey", "F3")),
             str(data.get("mouse_button", "Esquerdo")),
-            0.3,
+            self._click_interval(),
         )
+        self.clicker.configure_modes_enabled(self._mode_enabled_settings())
         self.clicker.configure_action_hotkeys(
             str(data.get("move_hotkey", "F2")),
             str(data.get("fixed_hotkey", "F6")),
@@ -1429,7 +1692,31 @@ class AutoClickerController(QObject):
 
     @Property(float, notify=changed)
     def interval(self) -> float:
-        return 0.3
+        return self._click_interval()
+
+    @Property(bool, notify=changed)
+    def autoModeEnabled(self) -> bool:
+        return self._mode_enabled("auto")
+
+    @Property(bool, notify=changed)
+    def moveModeEnabled(self) -> bool:
+        return self._mode_enabled("move")
+
+    @Property(bool, notify=changed)
+    def pilotModeEnabled(self) -> bool:
+        return self._mode_enabled("pilot")
+
+    @Property(bool, notify=changed)
+    def rightHoldModeEnabled(self) -> bool:
+        return self._mode_enabled("right_hold")
+
+    @Property(bool, notify=changed)
+    def fixedModeEnabled(self) -> bool:
+        return self._mode_enabled("fixed")
+
+    @Property(bool, notify=changed)
+    def artilleryModeEnabled(self) -> bool:
+        return self._mode_enabled("artillery")
 
     @Property(str, notify=changed)
     def targetTitle(self) -> str:
@@ -1688,9 +1975,30 @@ class AutoClickerController(QObject):
             self.clicker.right_doubletap_enabled = bool(value)
         self.changed.emit()
 
+    @Slot(str, bool)
+    def setModeEnabled(self, key: str, enabled: bool) -> None:
+        key = str(key or "")
+        if key not in self.MODE_KEYS:
+            return
+        modes = self._mode_enabled_settings()
+        enabled = bool(enabled)
+        if modes.get(key, True) == enabled:
+            return
+        modes[key] = enabled
+        self._clicker_settings()["modes_enabled"] = modes
+        save_settings(self.settings)
+        if self.clicker:
+            self.clicker.configure_modes_enabled(modes)
+            self._status = self.clicker.status_text()
+        self.changed.emit()
+
     @Slot(float)
     def setInterval(self, value: float) -> None:
-        pass
+        try:
+            interval = float(value)
+        except (TypeError, ValueError):
+            interval = self.DEFAULT_INTERVAL
+        self._clicker_settings()["interval"] = round(max(0.03, min(5.0, interval)), 2)
         self._save_and_apply()
 
     @Slot(int, int, int)
@@ -1748,6 +2056,7 @@ class AutoClickerController(QObject):
         save_settings(self.settings)
         self._apply_settings()
         self._refresh_models()
+        self.changed.emit()
     @Slot()
     def shutdown(self) -> None:
         if self.clicker:
@@ -1782,6 +2091,9 @@ class StockpileController(QObject):
         self._visual_items: list[dict[str, Any]] = []
         self._visual_warehouses: list[dict[str, Any]] = []
         self._visual_warehouse = ""
+        self._visual_items_by_warehouse: dict[str, list[dict[str, Any]]] = {}
+        self._visual_warehouse_lookup: dict[str, dict[str, Any]] = {}
+        self._visual_warehouse_options: list[dict[str, Any]] = []
         self._cached_visual_groups: list[dict[str, Any]] = []
         self._watcher: StockpileWatcher | None = None
         self._api_loading = False
@@ -1902,25 +2214,7 @@ class StockpileController(QObject):
 
     @Property("QVariantList", notify=changed)
     def visualWarehouseOptions(self) -> list[dict[str, Any]]:
-        options = []
-        groups = {}
-        for item in self._visual_warehouses:
-            name = str(item.get("name") or "")
-            if not name:
-                continue
-            parts = name.split("/", 1)
-            if len(parts) == 2:
-                hex_name = parts[0]
-                if hex_name.endswith("Hex"):
-                    hex_name = hex_name[:-3]
-                groups.setdefault(hex_name, []).append({"text": parts[1], "id": name, "type": "item"})
-            else:
-                groups.setdefault("Outros", []).append({"text": name, "id": name, "type": "item"})
-                
-        for h, items in groups.items():
-            options.append({"text": h, "type": "header"})
-            options.extend(items)
-        return options
+        return list(self._visual_warehouse_options)
 
     @Property(str, notify=changed)
     def visualWarehouse(self) -> str:
@@ -1928,9 +2222,9 @@ class StockpileController(QObject):
 
     @Property(str, notify=changed)
     def visualWarehouseUpdatedAt(self) -> str:
-        for item in self._visual_warehouses:
-            if str(item.get("name") or "") == self._visual_warehouse:
-                return format_to_local_pc_time(str(item.get("last_update") or item.get("updatedAt") or "-"))
+        item = self._visual_warehouse_lookup.get(self._visual_warehouse)
+        if item:
+            return self._visual_update_label(item)
         return "-"
 
     @Property("QVariantList", notify=visualGroupRowsChanged)
@@ -2096,6 +2390,138 @@ class StockpileController(QObject):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _apply_visual_data(
+        self,
+        rows: list[dict[str, Any]],
+        warehouses: list[dict[str, Any]],
+        stockpiles: list[str],
+    ) -> None:
+        self._visual_items = rows
+        self._visual_items_by_warehouse = {}
+        for item in rows:
+            warehouse = str(item.get("warehouse") or "")
+            if warehouse:
+                self._visual_items_by_warehouse.setdefault(warehouse, []).append(item)
+
+        enriched_warehouses: list[dict[str, Any]] = []
+        self._visual_warehouse_lookup = {}
+        for warehouse in warehouses:
+            name = str(warehouse.get("name") or "")
+            if not name:
+                continue
+            enriched = dict(warehouse)
+            enriched.update(self._warehouse_meta(enriched))
+            enriched_warehouses.append(enriched)
+            self._visual_warehouse_lookup[name] = enriched
+
+        self._visual_warehouses = enriched_warehouses
+        self._visual_warehouse_options = self._build_visual_warehouse_options(enriched_warehouses)
+
+        available = [name for name in stockpiles if name in self._visual_warehouse_lookup] or [
+            str(item.get("name") or "") for item in enriched_warehouses
+        ]
+        available = [name for name in available if name]
+        if available and self._visual_warehouse not in self._visual_warehouse_lookup:
+            self._visual_warehouse = available[0]
+        elif not available:
+            self._visual_warehouse = ""
+
+        self._cached_visual_groups = self._visual_groups()
+        self.visualGroupRowsChanged.emit()
+
+    @staticmethod
+    def _warehouse_parts(name: str) -> tuple[str, str, str]:
+        parts = [part.strip() for part in str(name or "").split("/") if part.strip()]
+        if len(parts) >= 3:
+            return parts[0], parts[-2], parts[-1]
+        if len(parts) == 2:
+            second = parts[1]
+            if re.match(r"^[A-Z]{1,4}[-_]", second, re.IGNORECASE):
+                return parts[0], "", second
+            return parts[0], second, second
+        value = parts[0] if parts else "-"
+        return "", "", value
+
+    @staticmethod
+    def _warehouse_meta(warehouse: dict[str, Any] | str) -> dict[str, str]:
+        if isinstance(warehouse, dict):
+            name = str(warehouse.get("name") or "")
+            explicit_title = str(
+                warehouse.get("display_name")
+                or warehouse.get("warehouse_name")
+                or warehouse.get("stockpile_name")
+                or warehouse.get("neme")
+                or ""
+            ).strip()
+            explicit_map = str(warehouse.get("map_name") or warehouse.get("mapName") or warehouse.get("MapName") or "").strip()
+            explicit_town = str(warehouse.get("town") or warehouse.get("Town") or "").strip()
+        else:
+            name = str(warehouse or "")
+            explicit_title = ""
+            explicit_map = ""
+            explicit_town = ""
+        map_part, town, code = StockpileController._warehouse_parts(name)
+        map_part = explicit_map or map_part
+        town = explicit_town or town
+        map_key = _compact_location_key(_strip_hex_suffix(map_part))
+        matched = _location_index().get((map_key, town.lower())) if map_key and town else None
+
+        region = str((matched or {}).get("region") or _strip_hex_suffix(map_part) or "Outros")
+        display_town = str((matched or {}).get("town") or town)
+        map_name = stockpile_map_name(map_part or str((matched or {}).get("region") or region))
+        place_path = f"{map_name}/{display_town}" if map_name and display_town else map_name or display_town or name
+        title = explicit_title or (code if code and code != display_town else name)
+        return {
+            "region": region,
+            "town": display_town,
+            "code": title,
+            "mapName": map_name,
+            "placePath": place_path,
+            "groupLabel": place_path,
+        }
+
+    @staticmethod
+    def _warehouse_option_sort_key(item: dict[str, Any]) -> tuple[str, str, str]:
+        return (
+            str(item.get("groupLabel") or item.get("region") or "").lower(),
+            str(item.get("town") or "").lower(),
+            str(item.get("code") or item.get("name") or "").lower(),
+        )
+
+    def _build_visual_warehouse_options(self, warehouses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for warehouse in sorted(warehouses, key=self._warehouse_option_sort_key):
+            group_label = str(warehouse.get("groupLabel") or warehouse.get("placePath") or warehouse.get("region") or "Outros")
+            grouped.setdefault(group_label, []).append(warehouse)
+
+        options: list[dict[str, Any]] = []
+        for region in sorted(grouped, key=lambda value: value.lower()):
+            options.append({"text": region, "type": "header"})
+            for warehouse in grouped[region]:
+                updated_raw = str(warehouse.get("last_update") or warehouse.get("updatedAt") or "")
+                options.append(
+                    {
+                        "text": str(warehouse.get("code") or warehouse.get("name") or "-"),
+                        "subText": str(warehouse.get("placePath") or ""),
+                        "sideText": format_relative_time(updated_raw),
+                        "id": str(warehouse.get("name") or ""),
+                        "type": "item",
+                    }
+                )
+        return options
+
+    @staticmethod
+    def _visual_update_label(item: dict[str, Any]) -> str:
+        updated_raw = str(item.get("last_update") or item.get("updatedAt") or "")
+        absolute = format_to_local_pc_time(updated_raw)
+        relative = format_relative_time(updated_raw)
+        place = str(item.get("placePath") or item.get("name") or "-")
+        if absolute and absolute != "-" and relative:
+            return f"{place} - {absolute} ({relative})"
+        if absolute and absolute != "-":
+            return f"{place} - {absolute}"
+        return place
+
     @Slot(object)
     def _handle_status(self, message: object) -> None:
         if isinstance(message, dict):
@@ -2125,16 +2551,7 @@ class StockpileController(QObject):
             self._stockpile_list = ", ".join(stockpiles[:6]) if stockpiles else "-"
             if len(stockpiles) > 6:
                 self._stockpile_list = f"{self._stockpile_list} +{len(stockpiles) - 6}"
-            self._visual_items = rows
-            self._visual_warehouses = warehouses
-            if stockpiles and self._visual_warehouse not in stockpiles:
-                self._visual_warehouse = stockpiles[0]
-            elif not stockpiles:
-                self._visual_warehouse = ""
-            
-            # Update cache since items or warehouse might have changed
-            self._cached_visual_groups = self._visual_groups()
-            self.visualGroupRowsChanged.emit()
+            self._apply_visual_data(rows, warehouses, stockpiles)
             
             self._last_response = str(message.get("api_response") or message.get("message") or "OK")
             self._last_update = str(message.get("api_last_update") or api_last_update(message) or now_label())
@@ -2310,7 +2727,7 @@ class StockpileController(QObject):
 
     def _visual_groups(self) -> list[dict[str, Any]]:
         warehouse = self._visual_warehouse
-        rows = [item for item in self._visual_items if str(item.get("warehouse") or "") == warehouse]
+        rows = list(self._visual_items_by_warehouse.get(warehouse, []))
         positive_rows = [item for item in rows if int(item.get("quantity", 0) or 0) > 0]
         rows = positive_rows or rows
         ordered_keys = [
@@ -4124,7 +4541,7 @@ class ItemSearchController(QObject):
     def _matching_rows(self) -> list[dict[str, Any]]:
         query = self._query.strip().lower()
         if not query:
-            return []
+            return self._all_rows
         exact = [item for item in self._all_rows if str(item.get("display_name") or "").lower() == query]
         if exact:
             return exact
@@ -4151,14 +4568,11 @@ class ItemSearchController(QObject):
 
         rows = self._matching_rows()
         if not self._query.strip():
-            self.items.set_items([])
             self._selected_name = ""
-            self._total = 0
+            self._total = sum(max(0, int(item.get("quantity", 0) or 0)) for item in rows)
             self._status_key = "item_search.loaded" if self._loaded else "item_search.loading"
             self._status_count = len(self._all_rows)
-            return
-
-        if rows:
+        elif rows:
             self._selected_name = str(rows[0].get("display_name") or self._query)
             self._total = sum(max(0, int(item.get("quantity", 0) or 0)) for item in rows)
             self._status_key = "item_search.best_match" if self._best_match else "item_search.loaded"
@@ -7049,6 +7463,122 @@ def wait_for_discord_oauth_code(expected_state: str, port: int, timeout: int = 1
     return code
 
 
+class NewsController(QObject):
+    changed = Signal()
+    fetchResultFromWorker = Signal(object, str)
+    LOCALE_BY_LANGUAGE = {"pt": "pt-BR", "en": "en-US", "es": "es-ES", "fr": "fr-FR"}
+
+    def __init__(self, chat: ChatController, i18n: I18nController, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.chat = chat
+        self.i18n = i18n
+        self._loading = False
+        self._error = ""
+        self._news: list[dict[str, Any]] = []
+        self.fetchResultFromWorker.connect(self._handle_fetch_result)
+        self.i18n.changed.connect(self._handle_language_changed)
+
+    @Property(bool, notify=changed)
+    def loading(self) -> bool:
+        return self._loading
+
+    @Property(str, notify=changed)
+    def error(self) -> str:
+        return self._error
+
+    @Property("QVariantList", notify=changed)
+    def newsModel(self) -> list[dict[str, Any]]:
+        return self._news
+
+    @Slot()
+    def fetchNews(self) -> None:
+        if self._loading:
+            return
+        token = str(getattr(self.chat, "_token", "") or "")
+        if not token:
+            self._news = []
+            self._error = ""
+            self.changed.emit()
+            return
+        self._loading = True
+        self._error = ""
+        self.changed.emit()
+        threading.Thread(target=self._fetch_worker, args=(token,), daemon=True).start()
+
+    def _fetch_worker(self, token: str) -> None:
+        try:
+            locale = self.LOCALE_BY_LANGUAGE.get(normalize_language(self.i18n.language), "pt-BR")
+            query = urllib.parse.urlencode({"locale": locale})
+            result = http_json("GET", f"/news?{query}", token=token, timeout=12)
+            raw_news = result.get("news", []) if isinstance(result, dict) else result
+            if not isinstance(raw_news, list):
+                raw_news = []
+            self.fetchResultFromWorker.emit(self._normalize_news_items(raw_news), "")
+        except Exception as exc:
+            self.fetchResultFromWorker.emit([], str(exc))
+
+    def _normalize_news_items(self, news: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for item in news:
+            if not isinstance(item, dict):
+                continue
+            body = str(item.get("bodyMarkdown") or item.get("body") or item.get("content") or "").strip()
+            title = str(item.get("title") or "").strip()
+            type_value = str(item.get("type") or item.get("category") or "general").strip() or "general"
+            date_value = item.get("publishedAt") or item.get("startsAt") or item.get("createdAt") or ""
+            author = item.get("author") if isinstance(item.get("author"), dict) else {}
+            plain_body = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", body)
+            plain_body = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", plain_body)
+            plain_body = re.sub(r"^[#>*\-\s]+", "", plain_body, flags=re.MULTILINE).strip()
+            items.append(
+                {
+                    **item,
+                    "title": title,
+                    "body": plain_body,
+                    "bodyMarkdown": body,
+                    "bodyMarkdownNoImages": plain_body,
+                    "bodyHtml": html.escape(body).replace("\n", "<br>"),
+                    "contentBlocks": [],
+                    "excerpt": " ".join(plain_body.split())[:220],
+                    "image": item.get("imageUrl") or item.get("image") or "",
+                    "category": type_value.replace("-", " ").replace("_", " ").title(),
+                    "date": str(date_value or ""),
+                    "viewCount": int_or_none(item.get("viewCount")) or 0,
+                    "locale": str(item.get("locale") or ""),
+                    "authorName": str(author.get("name") or author.get("email") or "GG Coalition"),
+                }
+            )
+        return items
+
+    @Slot(object, str)
+    def _handle_fetch_result(self, news: list[dict[str, Any]], error: str) -> None:
+        self._loading = False
+        self._error = error
+        self._news = news
+        self.changed.emit()
+
+    @Slot()
+    def _handle_language_changed(self) -> None:
+        if getattr(self.chat, "_token", ""):
+            self.fetchNews()
+
+    @Slot(str)
+    def registerView(self, news_id: str) -> None:
+        token = str(getattr(self.chat, "_token", "") or "")
+        if not token or not news_id:
+            return
+        threading.Thread(
+            target=lambda: self._register_view_worker(token, news_id),
+            daemon=True,
+        ).start()
+
+    def _register_view_worker(self, token: str, news_id: str) -> None:
+        try:
+            http_json("POST", f"/news/{urllib.parse.quote(news_id)}/view", token=token, timeout=8)
+        except Exception:
+            pass
+
+
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
         super().__init__()
@@ -7063,6 +7593,7 @@ class ControllerRegistry(QObject):
         self.overlayController = OverlayController(self.settings_data, self.autoClickerController, self)
         self.stockpileController = StockpileController(self.settings_data, self)
         self.chatController = ChatController(self.steamController, self.settings_data, self.i18nController, self)
+        self.newsController = NewsController(self.chatController, self.i18nController, self)
         self.itemSearchController = ItemSearchController(self.settings_data, self)
         self.identifyItemController = IdentifyItemController(self.itemSearchController, self)
         self.productionController = ProductionController(self.i18nController, self)
@@ -7090,6 +7621,7 @@ class ControllerRegistry(QObject):
             "overlayController",
             "stockpileController",
             "chatController",
+            "newsController",
             "itemSearchController",
             "identifyItemController",
             "productionController",

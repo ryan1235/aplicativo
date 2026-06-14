@@ -227,6 +227,21 @@
         flex-direction: column;
       }
 
+      .page {
+        min-height: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .page.hidden {
+        display: none;
+      }
+
+      #news-page {
+        overflow: hidden;
+      }
+
       .metrics {
         display: grid;
         grid-template-columns: repeat(4, minmax(150px, 1fr));
@@ -292,6 +307,20 @@
       .field textarea {
         min-height: 94px;
         resize: vertical;
+      }
+
+      textarea.news-body {
+        width: 100%;
+        border: 0;
+        background: #071020;
+        color: var(--text);
+        padding: 12px;
+        outline: none;
+        resize: vertical;
+        min-height: 360px;
+        font-family: "Consolas", "Courier New", monospace;
+        line-height: 1.45;
+        border-radius: 0 0 8px 8px;
       }
 
       .field label {
@@ -493,6 +522,350 @@
         color: var(--muted);
       }
 
+      .news-layout {
+        min-height: 0;
+        flex: 1;
+        display: block;
+        overflow: hidden;
+      }
+
+      .news-mode-switch {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(7, 16, 32, 0.72);
+        padding: 6px;
+      }
+
+      .news-mode-button {
+        min-height: 42px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        font-weight: 900;
+      }
+
+      .news-mode-button.active {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #041611;
+      }
+
+      .section-card {
+        min-height: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(11, 20, 35, 0.9);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+        overflow: hidden;
+      }
+
+      .news-list-card {
+        min-height: 0;
+        height: 100%;
+      }
+
+      .news-editor-card {
+        min-height: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .news-list-card.hidden,
+      .news-editor-card.hidden {
+        display: none;
+      }
+
+      .section-head {
+        padding: 14px;
+        border-bottom: 1px solid var(--line-soft);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .section-head strong {
+        font-size: 13px;
+      }
+
+      .news-list {
+        min-height: 0;
+        height: calc(100% - 50px);
+        max-height: none;
+        overflow: auto;
+        padding: 10px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+        align-content: start;
+        gap: 8px;
+      }
+
+      .news-category-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 16px;
+      }
+
+      .news-category-tabs.hidden {
+        display: none;
+      }
+
+      .category-chip {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(11, 20, 35, 0.9);
+        color: var(--muted);
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .category-chip.active {
+        color: #05201d;
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .news-group-title {
+        margin: 6px 2px 2px;
+        color: var(--blue);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .news-card {
+        width: 100%;
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        background: linear-gradient(180deg, rgba(12, 25, 43, 0.98), rgba(7, 16, 32, 0.98));
+        color: var(--text);
+        padding: 10px;
+        text-align: left;
+      }
+
+      .news-card.active {
+        border-color: var(--accent);
+        background: rgba(94, 234, 212, 0.08);
+      }
+
+      .news-card-title {
+        font-weight: 800;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .news-card-meta {
+        margin-top: 6px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .news-editor {
+        min-height: 0;
+        overflow: auto;
+        padding: 18px;
+        display: grid;
+        gap: 16px;
+        flex: 1;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .form-grid .wide {
+        grid-column: 1 / -1;
+      }
+
+      .editor-actions {
+        position: sticky;
+        bottom: -18px;
+        z-index: 2;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+        border-top: 1px solid var(--line-soft);
+        background: rgba(11, 20, 35, 0.96);
+        padding: 12px 0 0;
+      }
+
+      .editor-summary {
+        border: 1px solid var(--line-soft);
+        border-radius: 8px;
+        padding: 12px;
+        background: linear-gradient(135deg, rgba(94, 234, 212, 0.08), rgba(138, 180, 255, 0.07));
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .markdown-workbench {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+        gap: 12px;
+      }
+
+      .markdown-pane {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #071020;
+        overflow: hidden;
+      }
+
+      .markdown-pane-head {
+        min-height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--line-soft);
+        background: rgba(16, 28, 48, 0.75);
+        padding: 8px 10px;
+      }
+
+      .markdown-pane-head strong {
+        font-size: 12px;
+      }
+
+      .markdown-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .markdown-toolbar button {
+        min-width: 32px;
+        height: 28px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel-2);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .markdown-toolbar button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .preview-box {
+        min-height: 360px;
+        max-height: 520px;
+        overflow: auto;
+        padding: 16px;
+        color: #dcecff;
+        line-height: 1.45;
+      }
+
+      .preview-box strong {
+        color: var(--text);
+      }
+
+      .preview-box em {
+        color: var(--blue);
+      }
+
+      .preview-box a {
+        color: var(--accent);
+        font-weight: 800;
+      }
+
+      .preview-box h1,
+      .preview-box h2,
+      .preview-box h3 {
+        margin: 0 0 10px;
+        color: var(--text);
+      }
+
+      .preview-box p {
+        margin: 0 0 12px;
+      }
+
+      .preview-box ul,
+      .preview-box ol {
+        margin: 0 0 12px 22px;
+        padding: 0;
+      }
+
+      .preview-box code {
+        border: 1px solid var(--line-soft);
+        border-radius: 5px;
+        padding: 2px 5px;
+        background: rgba(94, 234, 212, 0.08);
+        color: var(--accent);
+      }
+
+      .preview-box blockquote {
+        margin: 0 0 12px;
+        border-left: 3px solid var(--accent);
+        padding: 8px 10px;
+        background: rgba(94, 234, 212, 0.06);
+        color: var(--muted);
+      }
+
+      .preview-box hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 16px 0;
+      }
+
+      .preview-media {
+        display: block;
+        width: min(100%, 720px);
+        max-height: 360px;
+        object-fit: contain;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(2, 8, 18, 0.7);
+        margin: 0 0 12px;
+      }
+
+      .preview-box table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 12px;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+
+      .preview-box th,
+      .preview-box td {
+        border-bottom: 1px solid var(--line-soft);
+        padding: 8px 10px;
+        text-align: left;
+      }
+
+      .preview-box th {
+        color: var(--accent);
+        background: rgba(94, 234, 212, 0.08);
+      }
+
+      .news-views {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: pre-line;
+      }
+
       .drawer-backdrop {
         position: fixed;
         inset: 0;
@@ -628,6 +1001,14 @@
           grid-template-columns: 1fr;
         }
 
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .markdown-workbench {
+          grid-template-columns: 1fr;
+        }
+
         .table-shell {
           overflow: auto;
         }
@@ -655,13 +1036,14 @@
           </div>
         </div>
         <nav class="nav">
-          <button class="active" type="button">Usuários</button>
+          <button class="active" type="button" data-page="users">Usuários</button>
+          <button type="button" data-page="news">Notícias</button>
         </nav>
         <div class="sidebar-card">
           <strong>Acesso permitido</strong>
           <span
             >Contas com nivel minimo de painel podem entrar. A API valida a
-            sessão antes de qualquer edição.</span
+            sessÃ£o antes de qualquer ediÃ§Ã£o.</span
           >
         </div>
       </aside>
@@ -669,9 +1051,9 @@
       <main class="main">
         <header class="topbar">
           <div class="page-title">
-            <h1>Gestão de Usuários</h1>
-            <p>
-              Edite cargo, bloqueio e permissões dos usuários conectados ao
+            <h1 id="page-heading">Gestão de Usuários</h1>
+            <p id="page-description">
+              Edite cargo, bloqueio e permissÃµes dos usuÃ¡rios conectados ao
               chat.
             </p>
           </div>
@@ -681,9 +1063,10 @@
         </header>
 
         <section class="content">
+          <div id="users-page" class="page">
           <div class="metrics">
             <div class="metric">
-              <div class="metric-label">Usuários</div>
+              <div class="metric-label">UsuÃ¡rios</div>
               <div id="metric-total" class="metric-value accent">0</div>
             </div>
             <div class="metric">
@@ -733,24 +1116,175 @@
             <table>
               <thead>
                 <tr>
-                  <th>Usuário</th>
+                  <th>UsuÃ¡rio</th>
                   <th>Cargo</th>
                   <th>Status</th>
-                  <th>Último login</th>
-                  <th style="text-align: right">Ações</th>
+                  <th>VersÃ£o</th>
+                  <th>Ãšltimo login</th>
+                  <th style="text-align: right">AÃ§Ãµes</th>
                 </tr>
               </thead>
               <tbody id="users-body"></tbody>
             </table>
             <div id="empty-state" class="empty-state" hidden>
-              Nenhum usuário encontrado.
+              Nenhum usuÃ¡rio encontrado.
             </div>
           </div>
 
           <div class="pagination" id="pagination-controls" style="display: none;">
             <button id="prev-page" class="btn" type="button">Anterior</button>
-            <span id="page-info">Página 1 de 1</span>
-            <button id="next-page" class="btn" type="button">Próximo</button>
+            <span id="page-info">PÃ¡gina 1 de 1</span>
+            <button id="next-page" class="btn" type="button">PrÃ³ximo</button>
+          </div>
+          </div>
+
+          <div id="news-page" class="page hidden">
+            <div class="toolbar">
+              <div class="field">
+                <input
+                  id="news-search"
+                  type="search"
+                  placeholder="Buscar noticias por titulo, tipo ou status"
+                />
+              </div>
+              <div class="field">
+                <select id="news-status-filter" aria-label="Filtrar noticias por status">
+                  <option value="">Todos os status</option>
+                  <option value="draft">Rascunho</option>
+                  <option value="scheduled">Agendada</option>
+                  <option value="published">Publicada</option>
+                  <option value="archived">Arquivada</option>
+                  <option value="translation_pending">Traducao pendente</option>
+                </select>
+              </div>
+              <button id="new-news-button" class="btn primary" type="button">
+                Nova noticia
+              </button>
+              <button id="refresh-news-button" class="btn" type="button">
+                Atualizar
+              </button>
+            </div>
+
+            <div id="news-category-tabs" class="news-category-tabs"></div>
+
+            <div class="news-mode-switch" aria-label="Alternar area de noticias">
+              <button id="news-review-mode" class="news-mode-button active" type="button">
+                Revisar avisos
+              </button>
+              <button id="news-create-mode" class="news-mode-button" type="button">
+                Criar aviso
+              </button>
+            </div>
+
+            <div class="news-layout">
+              <div id="news-list-card" class="section-card news-list-card">
+                <div class="section-head">
+                  <strong>Noticias</strong>
+                  <span id="news-count" class="user-meta">0 itens</span>
+                </div>
+                <div id="news-list" class="news-list">
+                  <div id="news-empty" class="empty-state">Nenhuma noticia carregada.</div>
+                </div>
+              </div>
+
+              <div id="news-editor-card" class="section-card news-editor-card hidden">
+                <div class="section-head">
+                  <strong id="news-editor-title">Nova noticia</strong>
+                  <span id="news-editor-status" class="badge role-member">draft</span>
+                </div>
+                <form id="news-form" class="news-editor">
+                  <input id="news-id" type="hidden" />
+                  <div class="form-grid">
+                    <div class="field wide">
+                      <label for="news-title">Titulo</label>
+                      <input id="news-title" type="text" placeholder="Janela de manutencao" required />
+                    </div>
+                    <div class="field">
+                      <label for="news-type">Tipo</label>
+                      <input id="news-type" type="text" placeholder="update" value="general" />
+                    </div>
+                    <div class="field">
+                      <label for="news-source-locale">Idioma original</label>
+                      <select id="news-source-locale">
+                        <option value="">Detectar automaticamente</option>
+                        <option value="pt-BR">pt-BR</option>
+                        <option value="en-US">en-US</option>
+                        <option value="es-ES">es-ES</option>
+                        <option value="fr-FR">fr-FR</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="news-status">Status</label>
+                      <select id="news-status">
+                        <option value="draft">Rascunho</option>
+                        <option value="published">Publicar agora</option>
+                        <option value="scheduled">Agendar</option>
+                        <option value="archived">Arquivar</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="news-starts-at">Inicia em</label>
+                      <input id="news-starts-at" type="datetime-local" />
+                    </div>
+                    <div class="field wide">
+                      <label for="news-image">Imagem</label>
+                      <input id="news-image" type="file" accept="image/*" />
+                    </div>
+                  </div>
+
+                  <div class="editor-summary">
+                    A noticia sera traduzida pelo backend. Use o preview para conferir a estrutura antes de salvar.
+                  </div>
+
+                  <div class="markdown-workbench">
+                    <div class="markdown-pane">
+                      <div class="markdown-pane-head">
+                        <strong>Editor Markdown</strong>
+                        <div class="markdown-toolbar" aria-label="Ferramentas Markdown">
+                          <button type="button" data-md="heading">H</button>
+                          <button type="button" data-md="bold">B</button>
+                          <button type="button" data-md="italic">I</button>
+                          <button type="button" data-md="link">Link</button>
+                          <button type="button" data-md="image">Imagem</button>
+                          <button type="button" data-md="video">Video</button>
+                          <button type="button" data-md="file">Anexo</button>
+                          <button type="button" data-md="list">Lista</button>
+                          <button type="button" data-md="table">Tabela</button>
+                          <button type="button" data-md="quote">"</button>
+                          <button type="button" data-md="code">Code</button>
+                          <button type="button" data-md="divider">Linha</button>
+                        </div>
+                      </div>
+                      <textarea
+                        id="news-body"
+                        class="news-body"
+                        placeholder="# Titulo do aviso&#10;&#10;Escreva o aviso em **Markdown**..."
+                        required
+                      ></textarea>
+                    </div>
+
+                    <div class="markdown-pane">
+                      <div class="markdown-pane-head">
+                        <strong>Preview</strong>
+                        <span class="user-meta">Atualiza automaticamente</span>
+                      </div>
+                      <div class="preview-box" id="news-preview">
+                        A previa aparece enquanto voce escreve.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="news-views" class="news-views"></div>
+
+                  <div class="editor-actions">
+                    <button id="news-views-button" class="btn" type="button">Visualizacoes</button>
+                    <button id="news-retry-button" class="btn" type="button">Retry traducoes</button>
+                    <button id="news-archive-button" class="btn danger" type="button">Arquivar</button>
+                    <button id="news-save-button" class="btn primary" type="submit">Salvar noticia</button>
+                  </div>
+                </form>
+              </div>
+            </div>
           </div>
         </section>
       </main>
@@ -765,7 +1299,7 @@
       >
         <div class="drawer-header">
           <div>
-            <h2 id="drawer-title">Editar usuário</h2>
+            <h2 id="drawer-title">Editar usuÃ¡rio</h2>
             <p id="drawer-subtitle"></p>
           </div>
           <button id="close-drawer" class="btn" type="button">Fechar</button>
@@ -784,7 +1318,7 @@
             <label for="block-reason">Motivo do bloqueio</label>
             <textarea
               id="block-reason"
-              placeholder="Informe o motivo quando for bloquear o usuário"
+              placeholder="Informe o motivo quando for bloquear o usuÃ¡rio"
             ></textarea>
           </div>
           <div class="notice" id="drawer-details"></div>
@@ -811,6 +1345,7 @@
       ]);
       const ACCESS_ROLES = new Set(["DEV", "WINNER", "ADMIN"]);
       const ADMIN_CONTROL_ROLES = new Set(["DEV", "WINNER"]);
+      const NEWS_STAFF_ROLES = new Set(["DEV", "WINNER", "ADMIN"]);
       const EDITABLE_ROLES = new Set(["MEMBER", "WINNER", "DEV", "ADMIN"]);
 
       const params = new URLSearchParams(window.location.search);
@@ -822,15 +1357,26 @@
       );
 
       const state = {
+        activePage: "users",
         me: null,
         users: [],
+        news: [],
         selectedUser: null,
+        selectedNews: null,
         loading: false,
+        newsLoading: false,
+        newsCategory: "",
+        newsMode: "review",
         currentPage: 1,
         itemsPerPage: 50,
       };
 
       const els = {
+        navButtons: Array.from(document.querySelectorAll(".nav button[data-page]")),
+        pageHeading: document.getElementById("page-heading"),
+        pageDescription: document.getElementById("page-description"),
+        usersPage: document.getElementById("users-page"),
+        newsPage: document.getElementById("news-page"),
         status: document.getElementById("connection-status"),
         body: document.getElementById("users-body"),
         empty: document.getElementById("empty-state"),
@@ -856,6 +1402,35 @@
         saveRole: document.getElementById("save-role"),
         toggleBlock: document.getElementById("toggle-block"),
         toast: document.getElementById("toast"),
+        newsSearch: document.getElementById("news-search"),
+        newsStatusFilter: document.getElementById("news-status-filter"),
+        newsCategoryTabs: document.getElementById("news-category-tabs"),
+        newsReviewMode: document.getElementById("news-review-mode"),
+        newsCreateMode: document.getElementById("news-create-mode"),
+        newsRefresh: document.getElementById("refresh-news-button"),
+        newsNew: document.getElementById("new-news-button"),
+        newsListCard: document.getElementById("news-list-card"),
+        newsEditorCard: document.getElementById("news-editor-card"),
+        newsList: document.getElementById("news-list"),
+        newsEmpty: document.getElementById("news-empty"),
+        newsCount: document.getElementById("news-count"),
+        newsForm: document.getElementById("news-form"),
+        newsId: document.getElementById("news-id"),
+        newsTitle: document.getElementById("news-title"),
+        newsType: document.getElementById("news-type"),
+        newsSourceLocale: document.getElementById("news-source-locale"),
+        newsStatus: document.getElementById("news-status"),
+        newsStartsAt: document.getElementById("news-starts-at"),
+        newsImage: document.getElementById("news-image"),
+        newsBody: document.getElementById("news-body"),
+        newsPreview: document.getElementById("news-preview"),
+        newsViews: document.getElementById("news-views"),
+        newsEditorTitle: document.getElementById("news-editor-title"),
+        newsEditorStatus: document.getElementById("news-editor-status"),
+        newsViewsButton: document.getElementById("news-views-button"),
+        newsRetryButton: document.getElementById("news-retry-button"),
+        newsArchiveButton: document.getElementById("news-archive-button"),
+        newsSaveButton: document.getElementById("news-save-button"),
       };
 
       els.search.addEventListener("input", () => { state.currentPage = 1; render(); });
@@ -881,31 +1456,72 @@
       });
       els.saveRole.addEventListener("click", saveRole);
       els.toggleBlock.addEventListener("click", toggleBlock);
+      els.navButtons.forEach((button) => {
+        button.addEventListener("click", () => switchPage(button.dataset.page));
+      });
+      els.newsSearch.addEventListener("input", renderNews);
+      els.newsStatusFilter.addEventListener("change", renderNews);
+      els.newsReviewMode.addEventListener("click", () => setNewsMode("review"));
+      els.newsCreateMode.addEventListener("click", () => newNews());
+      els.newsRefresh.addEventListener("click", loadNews);
+      els.newsNew.addEventListener("click", newNews);
+      els.newsForm.addEventListener("submit", saveNews);
+      els.newsBody.addEventListener("input", updateNewsPreview);
+      els.newsTitle.addEventListener("input", updateEditorState);
+      els.newsStatus.addEventListener("change", updateEditorState);
+      document.querySelectorAll("[data-md]").forEach((button) => {
+        button.addEventListener("click", () => insertMarkdown(button.dataset.md));
+      });
+      els.newsViewsButton.addEventListener("click", loadNewsViews);
+      els.newsRetryButton.addEventListener("click", retryNewsTranslations);
+      els.newsArchiveButton.addEventListener("click", archiveNews);
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") closeDrawer();
       });
 
       boot();
 
+      function switchPage(page) {
+        const next = page === "news" ? "news" : "users";
+        state.activePage = next;
+        els.navButtons.forEach((button) => {
+          button.classList.toggle("active", button.dataset.page === next);
+        });
+        els.usersPage.classList.toggle("hidden", next !== "users");
+        els.newsPage.classList.toggle("hidden", next !== "news");
+        if (next === "news") {
+          els.pageHeading.textContent = "Gestao de Noticias";
+          els.pageDescription.textContent =
+            "Crie, edite, publique, agende e reprocese traducoes dos avisos do aplicativo.";
+          if (!state.news.length && !state.newsLoading) loadNews();
+          if (!state.selectedNews) newNews(false);
+          setNewsMode(state.newsMode);
+        } else {
+          els.pageHeading.textContent = "Gestao de Usuarios";
+          els.pageDescription.textContent =
+            "Edite cargo, bloqueio e permissoes dos usuarios conectados ao chat.";
+        }
+      }
+
       async function boot() {
         if (!token) {
           setStatus(
-            "Token ausente. Abra o painel pelo aplicativo após login Discord.",
+            "Token ausente. Abra o painel pelo aplicativo apÃ³s login Discord.",
             "error",
           );
           setEmpty(
-            "Abra o painel pelo GG Coalition para receber uma sessão válida.",
+            "Abra o painel pelo GG Coalition para receber uma sessÃ£o vÃ¡lida.",
           );
           return;
         }
         if (!apiUrl) {
           setStatus("API ausente.", "error");
-          setEmpty("Não foi possível resolver a URL da API.");
+          setEmpty("NÃ£o foi possÃ­vel resolver a URL da API.");
           return;
         }
 
         try {
-          setStatus("Validando sessão administrativa...", "warn");
+          setStatus("Validando sessÃ£o administrativa...", "warn");
           const profileResponse = await request("/chat/profile");
           state.me = profileResponse.profile || profileResponse;
           if (profileResponse.panelAccess && !state.me.panelAccess) {
@@ -928,8 +1544,8 @@
           );
           await loadUsers();
         } catch (error) {
-          setStatus(`Falha ao validar sessão: ${error.message}`, "error");
-          setEmpty("Não foi possível autenticar sua sessão administrativa.");
+          setStatus(`Falha ao validar sessÃ£o: ${error.message}`, "error");
+          setEmpty("NÃ£o foi possÃ­vel autenticar sua sessÃ£o administrativa.");
         }
       }
 
@@ -937,20 +1553,20 @@
         if (state.loading) return;
         state.loading = true;
         els.refresh.disabled = true;
-        setStatus("Carregando usuários...", "warn");
+        setStatus("Carregando usuÃ¡rios...", "warn");
         try {
           const data = await request("/chat/admin/users?take=250");
           state.users = Array.isArray(data.users) ? data.users : [];
           state.currentPage = 1;
           updateMetrics(data.total);
           setStatus(
-            `API conectada. ${state.users.length} usuários carregados.`,
+            `API conectada. ${state.users.length} usuÃ¡rios carregados.`,
             "ok",
           );
           render();
         } catch (error) {
-          setStatus(`Erro ao carregar usuários: ${error.message}`, "error");
-          setEmpty("A API recusou ou falhou ao carregar a lista de usuários.");
+          setStatus(`Erro ao carregar usuÃ¡rios: ${error.message}`, "error");
+          setEmpty("A API recusou ou falhou ao carregar a lista de usuÃ¡rios.");
         } finally {
           state.loading = false;
           els.refresh.disabled = false;
@@ -964,8 +1580,8 @@
         
         if (rows.length === 0) {
           els.empty.textContent = state.users.length
-            ? "Nenhum usuário combina com os filtros."
-            : "Nenhum usuário carregado.";
+            ? "Nenhum usuÃ¡rio combina com os filtros."
+            : "Nenhum usuÃ¡rio carregado.";
           els.paginationControls.style.display = "none";
           return;
         }
@@ -974,7 +1590,7 @@
         if (state.currentPage > totalPages) state.currentPage = totalPages;
         if (state.currentPage < 1) state.currentPage = 1;
 
-        els.pageInfo.textContent = `Página ${state.currentPage} de ${totalPages}`;
+        els.pageInfo.textContent = `PÃ¡gina ${state.currentPage} de ${totalPages}`;
         els.prevPage.disabled = state.currentPage === 1;
         els.nextPage.disabled = state.currentPage === totalPages;
         els.paginationControls.style.display = totalPages > 1 ? "flex" : "none";
@@ -994,6 +1610,7 @@
         tr.appendChild(userCell(user));
         tr.appendChild(roleCell(user));
         tr.appendChild(statusCell(user));
+        tr.appendChild(appVersionCell(user));
         tr.appendChild(dateCell(user));
         tr.appendChild(actionsCell(user));
         return tr;
@@ -1081,6 +1698,16 @@
         return td;
       }
 
+      function appVersionCell(user) {
+        const td = document.createElement("td");
+        const version = appVersionOf(user);
+        const badge = document.createElement("span");
+        badge.className = "badge role-member";
+        badge.textContent = version || "-";
+        td.appendChild(badge);
+        return td;
+      }
+
       function actionsCell(user) {
         const td = document.createElement("td");
         const wrap = document.createElement("div");
@@ -1108,8 +1735,8 @@
         els.editRole.value = normalizeRole(user.role) || "MEMBER";
         els.blockReason.value = user.blockedReason || "";
         els.toggleBlock.textContent = blocked
-          ? "Desbloquear usuário"
-          : "Bloquear usuário";
+          ? "Desbloquear usuÃ¡rio"
+          : "Bloquear usuÃ¡rio";
         els.toggleBlock.className = blocked ? "btn success" : "btn danger";
         els.drawerDetails.textContent = detailsText(user);
         els.drawer.classList.add("open");
@@ -1125,11 +1752,11 @@
         if (!user) return;
         const role = normalizeRole(els.editRole.value);
         if (!EDITABLE_ROLES.has(role)) {
-          toast("Cargo inválido.", "error");
+          toast("Cargo invÃ¡lido.", "error");
           return;
         }
         if (role === normalizeRole(user.role)) {
-          toast("Cargo já está atualizado.");
+          toast("Cargo jÃ¡ estÃ¡ atualizado.");
           return;
         }
         await mutateUser(
@@ -1148,7 +1775,7 @@
             `/chat/admin/users/${encodeURIComponent(user.id)}/unblock`,
             "PATCH",
             null,
-            "Usuário desbloqueado.",
+            "UsuÃ¡rio desbloqueado.",
           );
           return;
         }
@@ -1162,7 +1789,7 @@
           `/chat/admin/users/${encodeURIComponent(user.id)}/block`,
           "PATCH",
           { reason },
-          "Usuário bloqueado.",
+          "UsuÃ¡rio bloqueado.",
         );
       }
 
@@ -1182,13 +1809,523 @@
         }
       }
 
+      async function loadNews() {
+        if (state.newsLoading) return;
+        state.newsLoading = true;
+        els.newsRefresh.disabled = true;
+        setStatus("Carregando noticias...", "warn");
+        try {
+          const data = await request("/admin/news?take=100");
+          state.news = Array.isArray(data)
+            ? data
+            : Array.isArray(data.news)
+              ? data.news
+              : Array.isArray(data.items)
+                ? data.items
+                : [];
+          setStatus(`Noticias carregadas: ${state.news.length}.`, "ok");
+          renderNews();
+        } catch (error) {
+          setStatus(`Erro ao carregar noticias: ${error.message}`, "error");
+          els.newsList.textContent = "";
+          els.newsEmpty.hidden = false;
+          els.newsEmpty.textContent =
+            "A API ainda nao retornou a listagem administrativa de noticias.";
+          els.newsList.appendChild(els.newsEmpty);
+        } finally {
+          state.newsLoading = false;
+          els.newsRefresh.disabled = false;
+        }
+      }
+
+      function renderNews() {
+        renderNewsCategories();
+        const rows = filteredNews();
+        els.newsList.textContent = "";
+        els.newsCount.textContent = `${rows.length} item(ns)`;
+        if (!rows.length) {
+          els.newsEmpty.hidden = false;
+          els.newsEmpty.textContent = state.news.length
+            ? "Nenhuma noticia combina com os filtros."
+            : "Nenhuma noticia carregada.";
+          els.newsList.appendChild(els.newsEmpty);
+          return;
+        }
+        els.newsEmpty.hidden = true;
+        const fragment = document.createDocumentFragment();
+        const groups = groupNewsByType(rows);
+        groups.forEach(([type, items]) => {
+          const title = document.createElement("div");
+          title.className = "news-group-title";
+          title.textContent = type || "general";
+          fragment.appendChild(title);
+          items.forEach((item) => fragment.appendChild(newsCard(item)));
+        });
+        els.newsList.appendChild(fragment);
+      }
+
+      function renderNewsCategories() {
+        const available = Array.from(new Set(state.news.map(newsTypeOf))).sort();
+        if (state.newsCategory && !available.includes(state.newsCategory)) {
+          state.newsCategory = "";
+        }
+        const categories = ["", ...available];
+        els.newsCategoryTabs.textContent = "";
+        categories.forEach((category) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `category-chip ${state.newsCategory === category ? "active" : ""}`;
+          const count = category
+            ? state.news.filter((item) => newsTypeOf(item) === category).length
+            : state.news.length;
+          button.textContent = `${category || "Todas"} (${count})`;
+          button.addEventListener("click", () => {
+            state.newsCategory = category;
+            renderNews();
+          });
+          els.newsCategoryTabs.appendChild(button);
+        });
+      }
+
+      function groupNewsByType(rows) {
+        const map = new Map();
+        rows.forEach((item) => {
+          const type = newsTypeOf(item);
+          if (!map.has(type)) map.set(type, []);
+          map.get(type).push(item);
+        });
+        return Array.from(map.entries()).sort(([left], [right]) => left.localeCompare(right));
+      }
+
+      function newsCard(news) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `news-card ${state.selectedNews?.id === news.id ? "active" : ""}`;
+        const title = document.createElement("div");
+        title.className = "news-card-title";
+        title.textContent = newsTitleOf(news);
+        const meta = document.createElement("div");
+        meta.className = "news-card-meta";
+        [
+          news.status || "draft",
+          newsTypeOf(news),
+          formatDate(news.startsAt || news.publishAt || news.updatedAt || news.createdAt),
+          `${news.viewCount || 0} views`,
+        ].forEach((value) => {
+          const span = document.createElement("span");
+          span.textContent = value;
+          meta.appendChild(span);
+        });
+        button.append(title, meta);
+        button.addEventListener("click", () => selectNews(news));
+        return button;
+      }
+
+      function selectNews(news) {
+        state.selectedNews = news;
+        els.newsId.value = news.id || "";
+        els.newsTitle.value = newsTitleOf(news);
+        els.newsType.value = newsTypeOf(news);
+        els.newsSourceLocale.value = news.sourceLocale || news.locale || "";
+        els.newsStatus.value = normalizeNewsStatus(news.status);
+        els.newsStartsAt.value = toDatetimeLocal(news.startsAt || news.publishAt);
+        els.newsBody.value = newsBodyOf(news);
+        els.newsImage.value = "";
+        els.newsViews.textContent = "";
+        updateNewsPreview();
+        updateEditorState();
+        setNewsMode("create");
+        renderNews();
+      }
+
+      function newNews(openEditor = true) {
+        state.selectedNews = null;
+        els.newsForm.reset();
+        els.newsId.value = "";
+        els.newsType.value = "general";
+        els.newsStatus.value = "draft";
+        els.newsSourceLocale.value = "";
+        els.newsViews.textContent = "";
+        updateNewsPreview();
+        updateEditorState();
+        if (openEditor) setNewsMode("create");
+        renderNews();
+      }
+
+      function setNewsMode(mode) {
+        const next = mode === "create" ? "create" : "review";
+        state.newsMode = next;
+        const isReview = next === "review";
+        els.newsReviewMode.classList.toggle("active", isReview);
+        els.newsCreateMode.classList.toggle("active", !isReview);
+        els.newsCategoryTabs.classList.toggle("hidden", !isReview);
+        els.newsListCard.classList.toggle("hidden", !isReview);
+        els.newsEditorCard.classList.toggle("hidden", isReview);
+      }
+
+      async function saveNews(event) {
+        event.preventDefault();
+        const id = els.newsId.value.trim();
+        const method = id ? "PATCH" : "POST";
+        const path = id ? `/admin/news/${encodeURIComponent(id)}` : "/admin/news";
+        const payload = newsPayload();
+        const image = els.newsImage.files && els.newsImage.files[0];
+        els.newsSaveButton.disabled = true;
+        try {
+          if (image) {
+            const form = new FormData();
+            Object.entries(payload).forEach(([key, value]) => {
+              if (value !== undefined && value !== "") form.append(key, value);
+            });
+            form.append("image", image);
+            await request(path, { method, formData: form });
+          } else {
+            await request(path, { method, payload });
+          }
+          toast(id ? "Noticia atualizada." : "Noticia criada.");
+          await loadNews();
+        } catch (error) {
+          toast(error.message, "error");
+        } finally {
+          els.newsSaveButton.disabled = false;
+        }
+      }
+
+      async function archiveNews() {
+        const id = els.newsId.value.trim();
+        if (!id) {
+          toast("Salve a noticia antes de arquivar.", "error");
+          return;
+        }
+        try {
+          await request(`/admin/news/${encodeURIComponent(id)}`, { method: "DELETE" });
+          toast("Noticia arquivada.");
+          newNews(false);
+          setNewsMode("review");
+          await loadNews();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }
+
+      async function retryNewsTranslations() {
+        const id = els.newsId.value.trim();
+        if (!id) {
+          toast("Selecione uma noticia salva.", "error");
+          return;
+        }
+        try {
+          await request(`/admin/news/${encodeURIComponent(id)}/translations/retry`, {
+            method: "POST",
+          });
+          toast("Retry de traducoes enviado.");
+          await loadNews();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }
+
+      async function loadNewsViews() {
+        const id = els.newsId.value.trim();
+        if (!id) {
+          toast("Selecione uma noticia salva.", "error");
+          return;
+        }
+        try {
+          const data = await request(`/admin/news/${encodeURIComponent(id)}/views`);
+          const views = Array.isArray(data)
+            ? data
+            : Array.isArray(data.views)
+              ? data.views
+              : Array.isArray(data.users)
+                ? data.users
+                : [];
+          els.newsViews.textContent = views.length
+            ? views
+                .map((view) => {
+                  const user = view.user || view.profile || view;
+                  return `${displayName(user)} - ${formatDate(view.viewedAt || view.createdAt || user.viewedAt || user.createdAt)}`;
+                })
+                .join("\n")
+            : "Nenhuma visualizacao registrada.";
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }
+
+      function newsPayload() {
+        const startsAt = fromDatetimeLocal(els.newsStartsAt.value);
+        const payload = {
+          title: els.newsTitle.value.trim(),
+          type: normalizeSlug(els.newsType.value || "general"),
+          body: els.newsBody.value,
+          status: els.newsStatus.value || "draft",
+        };
+        if (els.newsSourceLocale.value) payload.sourceLocale = els.newsSourceLocale.value;
+        if (startsAt) payload.startsAt = startsAt;
+        return payload;
+      }
+
+      function updateEditorState() {
+        const status = els.newsStatus.value || "draft";
+        els.newsEditorTitle.textContent = els.newsId.value
+          ? `Editar: ${els.newsTitle.value || "noticia"}`
+          : "Nova noticia";
+        els.newsEditorStatus.textContent = status;
+        els.newsEditorStatus.className = `badge ${newsStatusClass(status)}`;
+        const hasId = Boolean(els.newsId.value.trim());
+        els.newsViewsButton.disabled = !hasId;
+        els.newsRetryButton.disabled = !hasId;
+        els.newsArchiveButton.disabled = !hasId;
+      }
+
+      function updateNewsPreview() {
+        els.newsPreview.innerHTML = markdownPreview(els.newsBody.value);
+      }
+
+      function insertMarkdown(kind) {
+        const field = els.newsBody;
+        const start = field.selectionStart || 0;
+        const end = field.selectionEnd || 0;
+        const selected = field.value.slice(start, end);
+        const snippets = {
+          heading: { before: "## ", after: "", sample: "Subtitulo" },
+          bold: { before: "**", after: "**", sample: "texto em destaque" },
+          italic: { before: "*", after: "*", sample: "texto" },
+          link: { before: "[", after: "](https://)", sample: "link" },
+          image: { before: "![", after: "](https://imagem.png)", sample: "descricao da imagem" },
+          video: { before: "@[video](", after: ")", sample: "https://video.mp4" },
+          file: { before: "[", after: "](https://arquivo)", sample: "Baixar arquivo" },
+          list: { before: "- ", after: "", sample: "item da lista" },
+          table: {
+            before: "",
+            after: "",
+            sample: "| Campo | Valor |\n| --- | --- |\n| Tipo | aviso |\n| Data | hoje |",
+          },
+          quote: { before: "> ", after: "", sample: "observacao importante" },
+          code: { before: "`", after: "`", sample: "codigo" },
+          divider: { before: "\n---\n", after: "", sample: "" },
+        };
+        const snippet = snippets[kind] || snippets.bold;
+        const text = selected || snippet.sample;
+        const replacement = `${snippet.before}${text}${snippet.after}`;
+        field.value = field.value.slice(0, start) + replacement + field.value.slice(end);
+        field.focus();
+        const cursor = start + snippet.before.length + text.length;
+        field.setSelectionRange(cursor, cursor);
+        updateNewsPreview();
+      }
+
+      function filteredNews() {
+        const query = els.newsSearch.value.trim().toLowerCase();
+        const status = els.newsStatusFilter.value;
+        return state.news.filter((item) => {
+          if (status && normalizeNewsStatus(item.status) !== status) return false;
+          if (state.newsCategory && newsTypeOf(item) !== state.newsCategory) return false;
+          if (!query) return true;
+          return [newsTitleOf(item), newsBodyOf(item), item.type, item.tipo, item.status, item.id]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(query));
+        });
+      }
+
+      function newsTypeOf(news) {
+        return normalizeSlug(news.type || news.tipo || "general");
+      }
+
+      function newsTitleOf(news) {
+        const translation = preferredTranslation(news);
+        return String(news.title || translation?.title || news.headline || "Sem titulo");
+      }
+
+      function newsBodyOf(news) {
+        const translation = preferredTranslation(news);
+        return String(news.body || news.markdown || translation?.body || translation?.markdown || "");
+      }
+
+      function preferredTranslation(news) {
+        const translations = Array.isArray(news.translations)
+          ? news.translations
+          : Array.isArray(news.newsTranslations)
+            ? news.newsTranslations
+            : [];
+        return (
+          translations.find((item) => item.locale === news.sourceLocale) ||
+          translations.find((item) => item.locale === "pt-BR") ||
+          translations.find((item) => item.locale === "en-US") ||
+          translations[0]
+        );
+      }
+
+      function normalizeNewsStatus(status) {
+        const value = String(status || "draft").trim().toLowerCase();
+        return [
+          "draft",
+          "scheduled",
+          "published",
+          "archived",
+          "translation_pending",
+        ].includes(value)
+          ? value
+          : "draft";
+      }
+
+      function newsStatusClass(status) {
+        const value = normalizeNewsStatus(status);
+        if (value === "published") return "role-dev";
+        if (value === "scheduled") return "role-winner";
+        if (value === "archived") return "role-member";
+        if (value === "translation_pending") return "role-admin";
+        return "role-member";
+      }
+
+      function normalizeSlug(value) {
+        return String(value || "general")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9_-]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 40) || "general";
+      }
+
+      function toDatetimeLocal(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const pad = (number) => String(number).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function fromDatetimeLocal(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+      }
+
+      function markdownPreview(value) {
+        const text = String(value || "").trim();
+        if (!text) return "<p>A previa aparece enquanto voce escreve.</p>";
+        const lines = text.split(/\r?\n/);
+        const html = [];
+        let list = null;
+        const closeList = () => {
+          if (list) {
+            html.push(`</${list}>`);
+            list = null;
+          }
+        };
+        for (let index = 0; index < lines.length; index += 1) {
+          const raw = lines[index];
+          const line = raw.trimEnd();
+          if (!line.trim()) {
+            closeList();
+            continue;
+          }
+          if (/^(-{3,}|\*{3,})$/.test(line.trim())) {
+            closeList();
+            html.push("<hr />");
+            continue;
+          }
+          if (isTableStart(lines, index)) {
+            closeList();
+            const tableRows = [];
+            while (index < lines.length && /^\s*\|.+\|\s*$/.test(lines[index])) {
+              tableRows.push(lines[index]);
+              index += 1;
+            }
+            index -= 1;
+            html.push(markdownTable(tableRows));
+            continue;
+          }
+          const heading = line.match(/^(#{1,3})\s+(.+)$/);
+          if (heading) {
+            closeList();
+            const level = heading[1].length;
+            html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+            continue;
+          }
+          const unordered = line.match(/^[-*]\s+(.+)$/);
+          const ordered = line.match(/^\d+\.\s+(.+)$/);
+          if (unordered || ordered) {
+            const tag = unordered ? "ul" : "ol";
+            if (list !== tag) {
+              closeList();
+              list = tag;
+              html.push(`<${tag}>`);
+            }
+            html.push(`<li>${inlineMarkdown((unordered || ordered)[1])}</li>`);
+            continue;
+          }
+          if (line.startsWith("> ")) {
+            closeList();
+            html.push(`<blockquote>${inlineMarkdown(line.slice(2))}</blockquote>`);
+            continue;
+          }
+          closeList();
+          html.push(`<p>${inlineMarkdown(line)}</p>`);
+        }
+        closeList();
+        return html.join("");
+      }
+
+      function isTableStart(lines, index) {
+        const current = lines[index] || "";
+        const next = lines[index + 1] || "";
+        return /^\s*\|.+\|\s*$/.test(current) && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(next);
+      }
+
+      function markdownTable(rows) {
+        const parsed = rows
+          .filter((row, index) => index !== 1)
+          .map((row) =>
+            row
+              .trim()
+              .replace(/^\||\|$/g, "")
+              .split("|")
+              .map((cell) => inlineMarkdown(cell.trim())),
+          );
+        const [head = [], ...body] = parsed;
+        const headers = head.map((cell) => `<th>${cell}</th>`).join("");
+        const bodyRows = body
+          .map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`)
+          .join("");
+        return `<table><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+      }
+
+      function inlineMarkdown(value) {
+        return escapeHtml(value)
+          .replace(
+            /@\[video\]\((https?:\/\/[^)\s]+)\)/g,
+            '<video class="preview-media" controls src="$1"></video>',
+          )
+          .replace(
+            /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g,
+            '<img class="preview-media" src="$2" alt="$1" />',
+          )
+          .replace(/`([^`]+)`/g, "<code>$1</code>")
+          .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+          .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+          .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
       async function request(path, options = {}) {
         const headers = {
           Accept: "application/json",
           Authorization: `Bearer ${token}`,
         };
         let body;
-        if (options.payload !== undefined && options.payload !== null) {
+        if (options.formData) {
+          body = options.formData;
+        } else if (options.payload !== undefined && options.payload !== null) {
           headers["Content-Type"] = "application/json";
           body = JSON.stringify(options.payload);
         }
@@ -1225,6 +2362,7 @@
             user.discordUsername,
             user.discordId,
             user.steamId,
+            appVersionOf(user),
             user.regiment,
             user.id,
           ]
@@ -1285,7 +2423,19 @@
         if (user.regiment) parts.push(`[${user.regiment}]`);
         if (user.discordId) parts.push(`Discord ${user.discordId}`);
         if (user.steamId) parts.push(`Steam ${user.steamId}`);
-        return parts.join(" • ") || user.id || "Sem identificadores";
+        if (appVersionOf(user)) parts.push(`App ${appVersionOf(user)}`);
+        return parts.join(" â€¢ ") || user.id || "Sem identificadores";
+      }
+
+      function appVersionOf(user) {
+        return String(
+          user.appVersion ||
+            user.app_version ||
+            user.clientVersion ||
+            user.client_version ||
+            user.version ||
+            "",
+        ).trim();
       }
 
       function detailsText(user) {
@@ -1294,8 +2444,9 @@
           `Discord: ${user.discordId || user.discordUsername || "-"}`,
           `Steam: ${user.steamId || "-"}`,
           `Regimento: ${user.regiment || "-"}`,
+          `Versao do app: ${appVersionOf(user) || "-"}`,
           `Status: ${isBlocked(user) ? "Bloqueado" : "Ativo"}`,
-          `Último login: ${formatDate(user.lastLoginAt || user.updatedAt || user.createdAt)}`,
+          `Ãšltimo login: ${formatDate(user.lastLoginAt || user.updatedAt || user.createdAt)}`,
         ].join("\n");
       }
 
@@ -1316,6 +2467,7 @@
       }
 
       function canLoginPanel(user) {
+        if (NEWS_STAFF_ROLES.has(normalizeRole(user?.role))) return true;
         const level = accessLevel(user);
         if (user?.panelAccess && typeof user.panelAccess.canLoginPanel === "boolean") {
           return user.panelAccess.canLoginPanel && level >= 2;

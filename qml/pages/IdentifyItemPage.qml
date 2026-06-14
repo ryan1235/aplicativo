@@ -121,7 +121,7 @@ Flickable {
                     PrimaryButton {
                         text: identifyItemController.monitoring ? tr("identify.monitor_stop") : tr("identify.monitor_start")
                         enabled: identifyItemController.monitorAvailable
-                        fill: identifyItemController.monitoring ? "#5eead4" : "#1d3353"
+                        fill: identifyItemController.monitoring ? settingsController.accentColor : "#1d3353"
                         hoverFill: identifyItemController.monitoring ? "#8ab4ff" : "#2d496f"
                         textFill: identifyItemController.monitoring ? "#041014" : "#edf6ff"
                         onClicked: identifyItemController.toggleMonitor()
@@ -320,7 +320,7 @@ Flickable {
                                     Layout.preferredWidth: 70
                                     Layout.preferredHeight: 30
                                     radius: 15
-                                    color: score >= identifyItemController.threshold ? "#5eead4" : "#1d3353"
+                                    color: score >= identifyItemController.threshold ? settingsController.accentColor : "#1d3353"
                                     Text {
                                         anchors.centerIn: parent
                                         text: scoreText
@@ -347,3 +347,5 @@ Flickable {
         }
     }
 }
+
+

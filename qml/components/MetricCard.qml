@@ -6,7 +6,7 @@ Rectangle {
     property string title: ""
     property string value: ""
     property string detail: ""
-    property color accent: "#5eead4"
+    property color accent: settingsController.accentColor
     property int contentMargins: 14
     property int contentSpacing: 5
     property int titlePixelSize: 11
@@ -73,3 +73,5 @@ Rectangle {
         }
     }
 }
+
+
