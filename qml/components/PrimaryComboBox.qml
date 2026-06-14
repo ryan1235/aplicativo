@@ -6,14 +6,14 @@ ComboBox {
     id: control
 
     // Properties for theming
-    property color bgNormal: "#0d1a2d"
-    property color bgHover: "#122743"
-    property color borderNormal: "#2a4263"
+    property color bgNormal: settingsController.backgroundColor
+    property color bgHover: settingsController.surfaceColor
+    property color borderNormal: settingsController.borderColor
     property color borderFocus: settingsController.accentColor
-    property color textNormal: "#edf6ff"
-    property color popupBg: "#0c1524"
-    property color popupBorder: "#1d3353"
-    property color itemHover: "#1d3353"
+    property color textNormal: settingsController.textColor
+    property color popupBg: settingsController.surfaceColor
+    property color popupBorder: settingsController.borderColor
+    property color itemHover: settingsController.accentPanelColor
 
     implicitWidth: 140
     implicitHeight: 42
@@ -57,7 +57,7 @@ ComboBox {
                 anchors.topMargin: 1
                 visible: delegateItem.secondaryText !== ""
                 text: delegateItem.secondaryText
-                color: "#7f93b2"
+                color: settingsController.mutedTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 10
                 elide: Text.ElideRight
@@ -70,7 +70,7 @@ ComboBox {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: delegateItem.trailingText !== ""
                 text: delegateItem.trailingText
-                color: "#8ab4ff"
+                color: settingsController.accentColor
                 font.family: "Segoe UI"
                 font.pixelSize: 10
                 font.bold: true
@@ -108,7 +108,7 @@ ComboBox {
             context.moveTo(0, 0);
             context.lineTo(width / 2, height);
             context.lineTo(width, 0);
-            context.strokeStyle = control.activeFocus || control.pressed || control.hovered ? control.borderFocus : "#9eb4cf";
+            context.strokeStyle = control.activeFocus || control.pressed || control.hovered ? control.borderFocus : settingsController.mutedTextColor;
             context.lineWidth = 1.8;
             context.stroke();
         }
@@ -130,9 +130,9 @@ ComboBox {
         implicitWidth: control.implicitWidth
         implicitHeight: control.implicitHeight
         color: control.hovered ? control.bgHover : control.bgNormal
-        border.color: control.activeFocus || control.pressed ? control.borderFocus : (control.hovered ? "#3c5f89" : control.borderNormal)
+        border.color: control.activeFocus || control.pressed ? control.borderFocus : control.borderNormal
         border.width: control.activeFocus || control.pressed ? 1.5 : 1
-        radius: 8
+        radius: settingsController.cardRadius
         
         Behavior on border.color { ColorAnimation { duration: 150 } }
         Behavior on color { ColorAnimation { duration: 150 } }
@@ -166,7 +166,7 @@ ComboBox {
                 contentItem: Rectangle {
                     implicitWidth: 4
                     radius: 2
-                    color: parent.pressed ? control.borderFocus : "#2d496f"
+                    color: parent.pressed ? control.borderFocus : settingsController.borderColor
                 }
             }
         }
@@ -175,7 +175,7 @@ ComboBox {
             color: control.popupBg
             border.color: control.popupBorder
             border.width: 1
-            radius: 9
+            radius: settingsController.cardRadius
         }
     }
 }

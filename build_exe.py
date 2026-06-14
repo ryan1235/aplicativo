@@ -54,6 +54,7 @@ DATA_DIRS = [
 
 DATA_FILES = [
     ("locations.csv", "locations.csv"),
+    ("slang_terms.json", "slang_terms.json"),
     ("update64.db", "update64.db"),
     ("requirements-python.txt", "requirements-python.txt"),
     ("README.md", "README.md"),

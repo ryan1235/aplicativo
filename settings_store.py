@@ -80,6 +80,27 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "start_with_windows": False,
         "last_release_notes_version": "",
         "last_tips_version": "",
+        "theme": {
+            "preset": "coalition",
+            "custom": {
+                "accent": "#5eead4",
+                "accent_hover": "#8ab4ff",
+                "accent_panel": "#10342e",
+                "success": "#62d7a4",
+                "warning": "#ffd166",
+                "warning_text": "#fef3c7",
+                "background": "#070b16",
+                "surface": "#111c31",
+                "text": "#edf6ff",
+                "muted_text": "#99abc4",
+                "border": "#24486d",
+                "gradient_start": "#070b16",
+                "gradient_end": "#0d1729",
+                "gradient_enabled": False,
+                "button_style": "solid",
+                "card_radius": 8,
+            },
+        },
         "chat_discord": {
             "clientId": "",
             "clientSecret": "",
@@ -149,6 +170,14 @@ def load_settings() -> dict[str, Any]:
     settings["app"] = {
         **DEFAULT_SETTINGS["app"],
         **loaded.get("app", {}),
+    }
+    settings["app"]["theme"] = {
+        **DEFAULT_SETTINGS["app"]["theme"],
+        **loaded.get("app", {}).get("theme", {}),
+    }
+    settings["app"]["theme"]["custom"] = {
+        **DEFAULT_SETTINGS["app"]["theme"]["custom"],
+        **loaded.get("app", {}).get("theme", {}).get("custom", {}),
     }
     settings["app"]["chat_discord"] = {
         **DEFAULT_SETTINGS["app"]["chat_discord"],

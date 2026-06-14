@@ -86,9 +86,9 @@ Flickable {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 246
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
             clip: true
 
             Image {
@@ -105,7 +105,7 @@ Flickable {
 
                 Text {
                     text: tr("home.title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 28
                     font.bold: true
@@ -115,7 +115,7 @@ Flickable {
 
                 Text {
                     text: tr("home.body")
-                    color: "#c7d7ed"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     wrapMode: Text.WordWrap
@@ -149,7 +149,7 @@ Flickable {
 
                 Text {
                     text: appController.foxholeStatus + " | " + steamController.status
-                    color: "#8ab4ff"
+                    color: settingsController.accentColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     font.bold: true
@@ -176,7 +176,7 @@ Flickable {
                 title: tr("home.metric_auto_clicker")
                 value: autoClickerController.running ? tr("home.state_running") : tr("home.state_paused")
                 detail: autoClickerController.status
-                accent: "#8ab4ff"
+                accent: settingsController.accentColor
             }
             MetricCard {
                 Layout.fillWidth: true
@@ -196,9 +196,9 @@ Flickable {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
             implicitHeight: 520
 
             ColumnLayout {
@@ -213,7 +213,7 @@ Flickable {
                         spacing: 2
                         Text {
                             text: tr("home.news.title")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 18
                             font.bold: true
@@ -222,7 +222,7 @@ Flickable {
                         }
                         Text {
                             text: tr("home.news.subtitle")
-                            color: "#99abc4"
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 12
                             Layout.fillWidth: true
@@ -258,9 +258,9 @@ Flickable {
                     delegate: Rectangle {
                         width: newsGrid.cellWidth - 16
                         height: newsGrid.cellHeight - 14
-                        radius: 8
-                        color: hoverArea.containsMouse ? "#142a48" : "#101d32"
-                        border.color: hoverArea.containsMouse ? settingsController.accentColor : "#24486d"
+                        radius: settingsController.cardRadius
+                        color: hoverArea.containsMouse ? settingsController.accentPanelColor : settingsController.backgroundColor
+                        border.color: hoverArea.containsMouse ? settingsController.accentColor : settingsController.borderColor
                         border.width: 1
                         clip: true
 
@@ -274,7 +274,7 @@ Flickable {
                             Rectangle {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 138
-                                color: "#152947"
+                                color: settingsController.surfaceColor
                                 clip: true
 
                                 Image {
@@ -296,7 +296,7 @@ Flickable {
                                     anchors.bottomMargin: 14
                                     width: parent.width - 32
                                     text: modelData.image ? "" : "GG COALITION NEWS"
-                                    color: "#edf6ff"
+                                    color: settingsController.textColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 18
                                     font.bold: true
@@ -312,7 +312,7 @@ Flickable {
                                     width: Math.min(parent.width - 28, categoryText.implicitWidth + 22)
                                     height: 26
                                     radius: 6
-                                    color: "#102f3f"
+                                    color: settingsController.accentPanelColor
                                     border.color: settingsController.accentHoverColor
 
                                     Text {
@@ -350,7 +350,7 @@ Flickable {
 
                                 Text {
                                     text: modelData.title || ""
-                                    color: "#edf6ff"
+                                    color: settingsController.textColor
                                     font.family: "Segoe UI"
                                     font.bold: true
                                     font.pixelSize: 17
@@ -362,7 +362,7 @@ Flickable {
 
                                 Text {
                                     text: modelData.excerpt || modelData.body || ""
-                                    color: "#b8c8dc"
+                                    color: settingsController.mutedTextColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 13
                                     Layout.fillWidth: true
@@ -380,7 +380,7 @@ Flickable {
                                         Layout.preferredWidth: 24
                                         Layout.preferredHeight: 24
                                         radius: 12
-                                        color: "#203b5f"
+                                        color: settingsController.accentPanelColor
                                         border.color: settingsController.accentColor
 
                                         Text {
@@ -395,7 +395,7 @@ Flickable {
 
                                     Text {
                                         text: modelData.authorName || "GG Coalition"
-                                        color: "#ff9f6e"
+                                        color: settingsController.warningColor
                                         font.family: "Segoe UI"
                                         font.pixelSize: 12
                                         font.bold: true
@@ -405,7 +405,7 @@ Flickable {
 
                                     Text {
                                         text: root.newsDate(modelData.date)
-                                        color: "#7f93ad"
+                                        color: settingsController.mutedTextColor
                                         font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         elide: Text.ElideRight
@@ -414,7 +414,7 @@ Flickable {
 
                                     Text {
                                         text: String(modelData.viewCount || 0) + " " + tr("home.news.views")
-                                        color: "#99abc4"
+                                        color: settingsController.mutedTextColor
                                         font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         elide: Text.ElideRight
@@ -438,7 +438,7 @@ Flickable {
                         anchors.centerIn: parent
                         width: parent.width - 36
                         text: chatController.apiToken ? tr("home.news.empty") : tr("home.news.login_required")
-                        color: "#99abc4"
+                        color: settingsController.mutedTextColor
                         font.family: "Segoe UI"
                         font.pixelSize: 13
                         font.bold: true

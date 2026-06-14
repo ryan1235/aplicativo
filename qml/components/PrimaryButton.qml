@@ -6,6 +6,7 @@ Button {
     property color fill: settingsController.accentColor
     property color hoverFill: settingsController.accentHoverColor
     property color textFill: "#041014"
+    property string visualStyle: settingsController.buttonStyle
 
     implicitHeight: 38
     leftPadding: 16
@@ -16,7 +17,7 @@ Button {
 
     contentItem: Text {
         text: root.text
-        color: root.enabled ? root.textFill : "#7f93ad"
+        color: root.enabled ? (root.visualStyle === "solid" ? root.textFill : "#edf6ff") : "#7f93ad"
         opacity: root.enabled ? 1 : 0.86
         font: root.font
         horizontalAlignment: Text.AlignHCenter
@@ -25,10 +26,27 @@ Button {
     }
 
     background: Rectangle {
-        radius: 8
-        color: !root.enabled ? "#111c31" : (root.hovered ? root.hoverFill : root.fill)
-        border.color: !root.enabled ? "#1e3554" : "transparent"
-        border.width: !root.enabled ? 1 : 0
+        radius: settingsController.buttonRadius
+        color: {
+            if (!root.enabled)
+                return "#111c31"
+            if (root.visualStyle === "outline")
+                return root.hovered ? settingsController.accentPanelColor : "transparent"
+            if (root.visualStyle === "soft")
+                return root.hovered ? root.hoverFill : settingsController.accentPanelColor
+            if (root.visualStyle === "glass")
+                return root.hovered ? root.hoverFill : settingsController.surfaceColor
+            return root.hovered ? root.hoverFill : root.fill
+        }
+        border.color: {
+            if (!root.enabled)
+                return "#1e3554"
+            if (root.visualStyle === "outline" || root.visualStyle === "glass")
+                return root.fill
+            return "transparent"
+        }
+        border.width: root.visualStyle === "outline" || root.visualStyle === "glass" || !root.enabled ? 1 : 0
+        opacity: root.visualStyle === "glass" && root.enabled ? 0.92 : 1
         Behavior on color { ColorAnimation { duration: 140 } }
         Behavior on border.color { ColorAnimation { duration: 140 } }
     }

@@ -109,6 +109,8 @@ DISCORD_API_BASE = "https://discord.com/api/v10"
 DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 DISCORD_TOKEN_URL = f"{DISCORD_API_BASE}/oauth2/token"
 DISCORD_USER_URL = f"{DISCORD_API_BASE}/users/@me"
+FOXHOLE_WIKI_BASE_URL = "https://foxhole.wiki.gg"
+FOXHOLE_WIKI_API_URL = f"{FOXHOLE_WIKI_BASE_URL}/api.php"
 DISCORD_DEFAULT_REDIRECT_PORT = 53624
 DISCORD_DEFAULT_REDIRECT_PATH = "/discord/callback"
 DISCORD_DEFAULT_CLIENT_ID = "1512509453067358489"
@@ -118,6 +120,191 @@ QUICK_EMOJIS = ("👍", "❤️", "😂", "🔥", "✅", "🫡", "👀", "🚚",
 SOUND_DIRS = (BASE_DIR / "efeitos sonoros", BASE_DIR / "audio")
 SOUND_EXTENSIONS = (".wav", ".mp3", ".wma")
 VALID_CLOSE_ACTIONS = ("ask", "tray", "exit")
+UI_THEME_CUSTOM_DEFAULT = {
+    "accent": "#5eead4",
+    "accent_hover": "#8ab4ff",
+    "accent_panel": "#10342e",
+    "success": "#62d7a4",
+    "warning": "#ffd166",
+    "warning_text": "#fef3c7",
+    "background": "#070b16",
+    "surface": "#111c31",
+    "text": "#edf6ff",
+    "muted_text": "#99abc4",
+    "border": "#24486d",
+    "gradient_start": "#070b16",
+    "gradient_end": "#0d1729",
+    "gradient_enabled": False,
+    "button_style": "solid",
+    "card_radius": 8,
+}
+UI_THEME_COLOR_KEYS = (
+    "accent",
+    "accent_hover",
+    "accent_panel",
+    "success",
+    "warning",
+    "warning_text",
+    "background",
+    "surface",
+    "text",
+    "muted_text",
+    "border",
+    "gradient_start",
+    "gradient_end",
+)
+UI_THEME_PRESETS = {
+    "coalition": {
+        "labelKey": "settings.theme_coalition",
+        "descriptionKey": "settings.theme_coalition_detail",
+        "accent": "#5eead4",
+        "accent_hover": "#8ab4ff",
+        "accent_panel": "#10342e",
+        "success": "#62d7a4",
+        "warning": "#ffd166",
+        "warning_text": "#fef3c7",
+        "background": "#070b16",
+        "surface": "#111c31",
+        "text": "#edf6ff",
+        "muted_text": "#99abc4",
+        "border": "#24486d",
+        "gradient_start": "#070b16",
+        "gradient_end": "#0d1729",
+        "gradient_enabled": False,
+        "button_style": "solid",
+        "card_radius": 8,
+    },
+    "warden": {
+        "labelKey": "settings.theme_warden",
+        "descriptionKey": "settings.theme_warden_detail",
+        "accent": "#8ab4ff",
+        "accent_hover": "#b9d0ff",
+        "accent_panel": "#13243d",
+        "success": "#7dd3fc",
+        "warning": "#ffd166",
+        "warning_text": "#fef3c7",
+        "background": "#06111f",
+        "surface": "#101c31",
+        "text": "#edf6ff",
+        "muted_text": "#a8c0dd",
+        "border": "#2d496f",
+        "gradient_start": "#06111f",
+        "gradient_end": "#13243d",
+        "gradient_enabled": True,
+        "button_style": "soft",
+        "card_radius": 8,
+    },
+    "ember": {
+        "labelKey": "settings.theme_ember",
+        "descriptionKey": "settings.theme_ember_detail",
+        "accent": "#fb7185",
+        "accent_hover": "#fda4af",
+        "accent_panel": "#3a1621",
+        "success": "#34d399",
+        "warning": "#f59e0b",
+        "warning_text": "#ffedd5",
+        "background": "#16090f",
+        "surface": "#24111b",
+        "text": "#fff1f2",
+        "muted_text": "#f3b6c4",
+        "border": "#6d2338",
+        "gradient_start": "#16090f",
+        "gradient_end": "#3a1621",
+        "gradient_enabled": True,
+        "button_style": "glass",
+        "card_radius": 10,
+    },
+    "light": {
+        "labelKey": "settings.theme_light",
+        "descriptionKey": "settings.theme_light_detail",
+        "accent": "#2563eb",
+        "accent_hover": "#1d4ed8",
+        "accent_panel": "#dbeafe",
+        "success": "#059669",
+        "warning": "#d97706",
+        "warning_text": "#7c2d12",
+        "background": "#eef4fb",
+        "surface": "#ffffff",
+        "text": "#0f172a",
+        "muted_text": "#475569",
+        "border": "#b9c8dc",
+        "gradient_start": "#f8fbff",
+        "gradient_end": "#dceafe",
+        "gradient_enabled": True,
+        "button_style": "solid",
+        "card_radius": 8,
+    },
+    "midnight": {
+        "labelKey": "settings.theme_midnight",
+        "descriptionKey": "settings.theme_midnight_detail",
+        "accent": "#38bdf8",
+        "accent_hover": "#a78bfa",
+        "accent_panel": "#0f2540",
+        "success": "#22c55e",
+        "warning": "#eab308",
+        "warning_text": "#fef9c3",
+        "background": "#020617",
+        "surface": "#0b1224",
+        "text": "#f8fafc",
+        "muted_text": "#94a3b8",
+        "border": "#1e3a5f",
+        "gradient_start": "#020617",
+        "gradient_end": "#111827",
+        "gradient_enabled": True,
+        "button_style": "outline",
+        "card_radius": 6,
+    },
+    "accessible": {
+        "labelKey": "settings.theme_accessible",
+        "descriptionKey": "settings.theme_accessible_detail",
+        "accent": "#8ab4ff",
+        "accent_hover": "#f0abfc",
+        "accent_panel": "#13243d",
+        "success": "#8ab4ff",
+        "warning": "#f0abfc",
+        "warning_text": "#fce7f3",
+        "background": "#050b16",
+        "surface": "#101b2f",
+        "text": "#f8fafc",
+        "muted_text": "#bfdbfe",
+        "border": "#3b82f6",
+        "gradient_start": "#050b16",
+        "gradient_end": "#1b2240",
+        "gradient_enabled": False,
+        "button_style": "outline",
+        "card_radius": 8,
+    },
+    "custom": {
+        "labelKey": "settings.theme_custom",
+        "descriptionKey": "settings.theme_custom_detail",
+        **UI_THEME_CUSTOM_DEFAULT,
+    },
+}
+UI_THEME_ORDER = ("coalition", "warden", "ember", "light", "midnight", "accessible", "custom")
+UI_THEME_COLOR_FIELDS = {
+    "accent": "settings.theme_color_accent",
+    "accent_panel": "settings.theme_color_panel",
+    "background": "settings.theme_color_background",
+    "surface": "settings.theme_color_surface",
+    "text": "settings.theme_color_text",
+    "muted_text": "settings.theme_color_muted_text",
+    "border": "settings.theme_color_border",
+    "gradient_start": "settings.theme_color_gradient_start",
+    "gradient_end": "settings.theme_color_gradient_end",
+    "success": "settings.theme_color_success",
+    "warning": "settings.theme_color_warning",
+}
+UI_THEME_BUTTON_STYLES = {
+    "solid": "settings.button_style_solid",
+    "soft": "settings.button_style_soft",
+    "outline": "settings.button_style_outline",
+    "glass": "settings.button_style_glass",
+}
+UI_THEME_CARD_RADIUS_OPTIONS = {
+    "6": "settings.card_radius_compact",
+    "8": "settings.card_radius_standard",
+    "12": "settings.card_radius_round",
+}
 STARTUP_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 OVERLAY_PALETTES = {
     "Azul": {"bg": "#071426", "panel": "#12233d", "accent": "#8ab4ff"},
@@ -820,6 +1007,7 @@ class AppController(QObject):
             "identifyItem": "identify_item",
             "notifications": "notificacoes",
             "settings": "configuracoes",
+            "personalization": "configuracoes",
         }
         self.navItems = DictListModel(["key", "labelKey", "icon", "section", "searchText"], self)
         self.navItems.set_items(self._nav_items())
@@ -1069,6 +1257,7 @@ class AppController(QObject):
             {"key": "identifyItem", "labelKey": "identify.nav", "icon": "target", "section": "tools"},
             {"key": "notifications", "labelKey": "notifications.nav", "icon": "bell", "section": "tools"},
             {"key": "settings", "labelKey": "nav.settings", "icon": "settings", "section": "config"},
+            {"key": "personalization", "labelKey": "nav.personalization", "icon": "palette", "section": "config"},
         ]
         catalogs = {language: Translator._load_catalog(language) for language in SUPPORTED_LANGUAGES}
         fallback = Translator._load_catalog("pt")
@@ -1163,16 +1352,12 @@ class AppController(QObject):
     @Slot()
     def showReleaseNotesIfNeeded(self) -> None:
         app_settings = self._app_settings()
-        if app_settings.get("last_release_notes_version") == APP_VERSION:
-            self._startup_dialog_visible = False
-            self.startupDialogChanged.emit()
-            return
-        self._set_startup_dialog(
-            kind="release",
-            title=self._t("release.heading", version=APP_VERSION),
-            subtitle=self._t("release.subtitle"),
-            body=self._t("release.body"),
-        )
+        if app_settings.get("last_release_notes_version") != APP_VERSION:
+            app_settings["last_release_notes_version"] = APP_VERSION
+            save_settings(self.settings)
+        self._startup_dialog_visible = False
+        self._startup_dialog_kind = ""
+        self.startupDialogChanged.emit()
 
     @Slot()
     def acceptStartupDialog(self) -> None:
@@ -1253,6 +1438,21 @@ class SettingsController(QObject):
     def _notification_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("notifications", {})
 
+    def _theme_settings(self) -> dict[str, Any]:
+        app_settings = self._app_settings()
+        theme = app_settings.setdefault("theme", {})
+        if not isinstance(theme, dict):
+            theme = {}
+            app_settings["theme"] = theme
+        theme.setdefault("preset", "coalition")
+        custom = theme.setdefault("custom", {})
+        if not isinstance(custom, dict):
+            custom = {}
+            theme["custom"] = custom
+        for key, value in UI_THEME_CUSTOM_DEFAULT.items():
+            custom.setdefault(key, value)
+        return theme
+
     def _save(self) -> None:
         save_settings(self.settings)
         self._revision += 1
@@ -1262,23 +1462,60 @@ class SettingsController(QObject):
         return bool(self._app_settings().get(key, default))
 
     def _ui_palette(self) -> dict[str, str]:
+        preset = self.themePreset
         if bool(self._app_settings().get("colorblind_mode_enabled", False)):
-            return {
-                "accent": "#8ab4ff",
-                "accent_hover": "#a9c7ff",
-                "accent_panel": "#13243d",
-                "success": "#8ab4ff",
-                "warning": "#ffd166",
-                "warning_text": "#fef3c7",
+            preset = "accessible"
+        if preset == "custom":
+            custom = self._theme_settings().get("custom", {})
+            palette = {
+                key: self._sanitize_hex_color(custom.get(key), str(UI_THEME_CUSTOM_DEFAULT[key]))
+                for key in UI_THEME_COLOR_KEYS
             }
+            palette["gradient_enabled"] = bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"]))
+            palette["button_style"] = self._sanitize_button_style(custom.get("button_style"))
+            palette["card_radius"] = self._sanitize_card_radius(custom.get("card_radius"))
+            return palette
         return {
-            "accent": "#5eead4",
-            "accent_hover": "#8ab4ff",
-            "accent_panel": "#10342e",
-            "success": "#62d7a4",
-            "warning": "#ffd166",
-            "warning_text": "#fef3c7",
+            key: value
+            for key, value in UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"]).items()
+            if key in UI_THEME_CUSTOM_DEFAULT
         }
+
+    @staticmethod
+    def _sanitize_hex_color(value: Any, fallback: str) -> str:
+        text = str(value or "").strip()
+        if re.fullmatch(r"#[0-9a-fA-F]{6}", text):
+            return text.lower()
+        if re.fullmatch(r"[0-9a-fA-F]{6}", text):
+            return f"#{text.lower()}"
+        return fallback
+
+    @staticmethod
+    def _sanitize_button_style(value: Any) -> str:
+        text = str(value or "").strip()
+        return text if text in UI_THEME_BUTTON_STYLES else "solid"
+
+    @staticmethod
+    def _sanitize_card_radius(value: Any) -> int:
+        try:
+            radius = int(value)
+        except (TypeError, ValueError):
+            return 8
+        return radius if str(radius) in UI_THEME_CARD_RADIUS_OPTIONS else 8
+
+    def _palette_for_preview(self, preset: str) -> dict[str, str]:
+        if preset == "custom":
+            custom = self._theme_settings().get("custom", {})
+            palette = {
+                key: self._sanitize_hex_color(custom.get(key), str(UI_THEME_CUSTOM_DEFAULT[key]))
+                for key in UI_THEME_COLOR_KEYS
+            }
+            palette["gradient_enabled"] = bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"]))
+            palette["button_style"] = self._sanitize_button_style(custom.get("button_style"))
+            palette["card_radius"] = self._sanitize_card_radius(custom.get("card_radius"))
+            return palette
+        palette = UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"])
+        return {key: palette.get(key, fallback) for key, fallback in UI_THEME_CUSTOM_DEFAULT.items()}
 
     @Property(int, notify=changed)
     def revision(self) -> int:
@@ -1303,6 +1540,47 @@ class SettingsController(QObject):
     def status(self) -> str:
         return self._status
 
+    @Property("QVariant", notify=changed)
+    def themePresets(self) -> list[dict[str, Any]]:
+        current = self.themePreset
+        return [
+            {
+                "key": key,
+                "labelKey": str(UI_THEME_PRESETS[key]["labelKey"]),
+                "descriptionKey": str(UI_THEME_PRESETS[key]["descriptionKey"]),
+                "accent": str(self._palette_for_preview(key)["accent"]),
+                "accentPanel": str(self._palette_for_preview(key)["accent_panel"]),
+                "success": str(self._palette_for_preview(key)["success"]),
+                "warning": str(self._palette_for_preview(key)["warning"]),
+                "background": str(self._palette_for_preview(key)["background"]),
+                "active": key == current,
+            }
+            for key in UI_THEME_ORDER
+        ]
+
+    @Property("QVariant", constant=True)
+    def themeColorFields(self) -> list[dict[str, str]]:
+        return [{"key": key, "labelKey": label_key} for key, label_key in UI_THEME_COLOR_FIELDS.items()]
+
+    @Property("QVariant", constant=True)
+    def buttonStyleOptions(self) -> list[dict[str, str]]:
+        return [{"key": key, "labelKey": label_key} for key, label_key in UI_THEME_BUTTON_STYLES.items()]
+
+    @Property("QVariant", constant=True)
+    def cardRadiusOptions(self) -> list[dict[str, str]]:
+        return [{"key": key, "labelKey": label_key} for key, label_key in UI_THEME_CARD_RADIUS_OPTIONS.items()]
+
+    @Property(str, notify=changed)
+    def themePreset(self) -> str:
+        preset = str(self._theme_settings().get("preset") or "coalition")
+        if bool(self._app_settings().get("colorblind_mode_enabled", False)):
+            return "accessible"
+        return preset if preset in UI_THEME_PRESETS else "coalition"
+
+    @Property(bool, notify=changed)
+    def customThemeEnabled(self) -> bool:
+        return self.themePreset == "custom"
+
     @Property(str, notify=changed)
     def accentColor(self) -> str:
         return self._ui_palette()["accent"]
@@ -1326,6 +1604,54 @@ class SettingsController(QObject):
     @Property(str, notify=changed)
     def warningTextColor(self) -> str:
         return self._ui_palette()["warning_text"]
+
+    @Property(str, notify=changed)
+    def backgroundColor(self) -> str:
+        return str(self._ui_palette()["background"])
+
+    @Property(str, notify=changed)
+    def surfaceColor(self) -> str:
+        return str(self._ui_palette()["surface"])
+
+    @Property(str, notify=changed)
+    def textColor(self) -> str:
+        return str(self._ui_palette()["text"])
+
+    @Property(str, notify=changed)
+    def mutedTextColor(self) -> str:
+        return str(self._ui_palette()["muted_text"])
+
+    @Property(str, notify=changed)
+    def borderColor(self) -> str:
+        return str(self._ui_palette()["border"])
+
+    @Property(str, notify=changed)
+    def gradientStartColor(self) -> str:
+        return str(self._ui_palette()["gradient_start"])
+
+    @Property(str, notify=changed)
+    def gradientEndColor(self) -> str:
+        return str(self._ui_palette()["gradient_end"])
+
+    @Property(bool, notify=changed)
+    def gradientEnabled(self) -> bool:
+        return bool(self._ui_palette()["gradient_enabled"])
+
+    @Property(str, notify=changed)
+    def buttonStyle(self) -> str:
+        return self._sanitize_button_style(self._ui_palette()["button_style"])
+
+    @Property(int, notify=changed)
+    def buttonRadius(self) -> int:
+        if self.buttonStyle == "outline":
+            return 6
+        if self.buttonStyle == "glass":
+            return 10
+        return 8
+
+    @Property(int, notify=changed)
+    def cardRadius(self) -> int:
+        return self._sanitize_card_radius(self._ui_palette()["card_radius"])
 
     @Property(bool, notify=changed)
     def colorblindModeEnabled(self) -> bool:
@@ -1402,6 +1728,93 @@ class SettingsController(QObject):
         if self.colorblindModeEnabled == enabled:
             return
         self._app_settings()["colorblind_mode_enabled"] = enabled
+        if enabled:
+            self._theme_settings()["preset"] = "accessible"
+        self._save()
+
+    @Slot(str)
+    def setThemePreset(self, preset: str) -> None:
+        preset = str(preset or "").strip()
+        if preset not in UI_THEME_PRESETS:
+            return
+        app_settings = self._app_settings()
+        app_settings["colorblind_mode_enabled"] = preset == "accessible"
+        theme = self._theme_settings()
+        if theme.get("preset") == preset and self.themePreset == preset:
+            return
+        theme["preset"] = preset
+        self._save()
+
+    @Slot(str, result=str)
+    def customThemeColor(self, key: str) -> str:
+        key = str(key or "").strip()
+        if key not in UI_THEME_COLOR_FIELDS:
+            return ""
+        fallback = UI_THEME_CUSTOM_DEFAULT.get(key, "#5eead4")
+        return self._sanitize_hex_color(self._theme_settings().get("custom", {}).get(key), fallback)
+
+    @Slot(str, str)
+    def setCustomThemeColor(self, key: str, value: str) -> None:
+        key = str(key or "").strip()
+        if key not in UI_THEME_COLOR_FIELDS:
+            return
+        fallback = UI_THEME_CUSTOM_DEFAULT.get(key, "#5eead4")
+        color = self._sanitize_hex_color(value, fallback)
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        self._app_settings()["colorblind_mode_enabled"] = False
+        custom = theme.setdefault("custom", {})
+        if custom.get(key) == color and self.themePreset == "custom":
+            return
+        custom[key] = color
+        if key == "accent":
+            custom["accent_hover"] = color
+        if key == "warning":
+            custom["warning_text"] = "#fef3c7"
+        self._save()
+
+    @Slot(bool)
+    def setThemeGradientEnabled(self, enabled: bool) -> None:
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        self._app_settings()["colorblind_mode_enabled"] = False
+        custom = theme.setdefault("custom", {})
+        enabled = bool(enabled)
+        if bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"])) == enabled and self.themePreset == "custom":
+            return
+        custom["gradient_enabled"] = enabled
+        self._save()
+
+    @Slot(str)
+    def setThemeButtonStyle(self, style: str) -> None:
+        style = self._sanitize_button_style(style)
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        self._app_settings()["colorblind_mode_enabled"] = False
+        custom = theme.setdefault("custom", {})
+        if self._sanitize_button_style(custom.get("button_style")) == style and self.themePreset == "custom":
+            return
+        custom["button_style"] = style
+        self._save()
+
+    @Slot(str)
+    def setThemeCardRadius(self, radius: str) -> None:
+        value = self._sanitize_card_radius(radius)
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        self._app_settings()["colorblind_mode_enabled"] = False
+        custom = theme.setdefault("custom", {})
+        if self._sanitize_card_radius(custom.get("card_radius")) == value and self.themePreset == "custom":
+            return
+        custom["card_radius"] = value
+        self._save()
+
+    @Slot()
+    def resetCustomTheme(self) -> None:
+        theme = self._theme_settings()
+        theme["custom"] = dict(UI_THEME_CUSTOM_DEFAULT)
+        theme["preset"] = "custom"
+        self._app_settings()["colorblind_mode_enabled"] = False
         self._save()
 
     @Slot(str, bool)
@@ -4376,9 +4789,352 @@ class ChatController(QObject):
         self._close_ws()
 
 
+WIKI_KEY_LABELS = {
+    "class": "Classe",
+    "health": "Vida",
+    "resistance": "Resistencia",
+    "armour": "Blindagem",
+    "disable_threshold": "Limite de desativacao",
+    "repair_cost": "Custo de reparo",
+    "crew": "Tripulacao",
+    "inventory_slots": "Espacos no inventario",
+    "armament": "Armamento",
+    "ammo": "Municao",
+    "production_site": "Local de producao",
+    "production_cost_raw": "Custo de producao",
+    "package_size": "Tamanho do pacote",
+    "fuel_capacity": "Capacidade de combustivel",
+    "intel_icon": "Icone de inteligencia",
+}
+
+WIKI_VALUE_TRANSLATIONS = {
+    "Armored Car": "Carro blindado",
+    "Battle Tank": "Tanque de batalha",
+    "Emplacement": "Emplacement",
+    "Field Weapon": "Arma de campo",
+    "Flatbed Truck": "Caminhao prancha",
+    "Heavy Artillery": "Artilharia pesada",
+    "Infantry Weapon": "Arma de infantaria",
+    "Large Item": "Item grande",
+    "Logistics Structure": "Estrutura logistica",
+    "Material": "Material",
+    "Refined Material": "Material refinado",
+    "Resource": "Recurso",
+    "Small Arms": "Armas leves",
+    "Small Item": "Item pequeno",
+    "Structure": "Estrutura",
+    "Vehicle": "Veiculo",
+    "Warden": "Warden",
+    "Colonial": "Colonial",
+    "Both": "Ambos",
+    "Factory": "Fabrica",
+    "Garage": "Garagem",
+    "Mass Production Factory": "Fabrica de producao em massa",
+    "Construction Yard": "Patio de construcao",
+    "Unpackageable": "Nao empacotavel",
+    "None": "Nenhum",
+}
+
+
+def clean_wiki_text(text: Any) -> str:
+    value = html.unescape(str(text or "").replace("\xa0", " "))
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
+def strip_wiki_html(value: str) -> str:
+    value = re.sub(r"<!--.*?-->", " ", value, flags=re.S)
+    value = re.sub(r"<(script|style)\b.*?</\1>", " ", value, flags=re.S | re.I)
+    value = re.sub(r"<sup\b.*?</sup>", " ", value, flags=re.S | re.I)
+    value = re.sub(r"<br\s*/?>", " / ", value, flags=re.I)
+    value = re.sub(r"<[^>]+>", " ", value)
+    return clean_wiki_text(value)
+
+
+def normalize_wiki_key(label: str) -> str:
+    mapping = {
+        "Class": "class",
+        "Health": "health",
+        "Resistance": "resistance",
+        "Armour": "armour",
+        "Disable Threshold": "disable_threshold",
+        "Repair Cost": "repair_cost",
+        "Crew": "crew",
+        "Inventory Slots": "inventory_slots",
+        "Armament": "armament",
+        "Ammo": "ammo",
+        "Production Site": "production_site",
+        "Production Cost": "production_cost_raw",
+        "Package Size": "package_size",
+        "Fuel Capacity": "fuel_capacity",
+        "Intel Icon": "intel_icon",
+    }
+    return mapping.get(label, re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_"))
+
+
+def wiki_field_label(key: str) -> str:
+    if key in WIKI_KEY_LABELS:
+        return WIKI_KEY_LABELS[key]
+    return " ".join(part.capitalize() for part in str(key or "").split("_") if part)
+
+
+def translate_wiki_value(value: Any) -> str:
+    text = clean_wiki_text(value)
+    if not text:
+        return ""
+    if text in WIKI_VALUE_TRANSLATIONS:
+        return WIKI_VALUE_TRANSLATIONS[text]
+    translated = text
+    for source, target in sorted(WIKI_VALUE_TRANSLATIONS.items(), key=lambda item: -len(item[0])):
+        translated = re.sub(rf"\b{re.escape(source)}\b", target, translated)
+    translated = re.sub(r"\bbelow\b", "abaixo de", translated, flags=re.I)
+    translated = re.sub(r"\bhealth\b", "vida", translated, flags=re.I)
+    return translated
+
+
+def wiki_title_candidates(page_title: str) -> list[str]:
+    raw = clean_wiki_text(page_title)
+    candidates = [raw]
+    cleaned = raw
+    patterns = (
+        r"\s+stock$",
+        r"\s+stockpile$",
+        r"\s+crated\s+stock$",
+        r"\s+crate\s+stock$",
+        r"\s+crated$",
+        r"\s+crate$",
+        r"\s+crates$",
+        r"\s+packed$",
+        r"\s+packaged$",
+    )
+    changed = True
+    while changed:
+        changed = False
+        for pattern in patterns:
+            next_value = re.sub(pattern, "", cleaned, flags=re.I).strip()
+            if next_value != cleaned:
+                cleaned = next_value
+                changed = True
+    if cleaned and cleaned != raw:
+        candidates.append(cleaned)
+    no_parentheses = re.sub(r"\s*\([^)]*\)\s*", " ", cleaned).strip()
+    if no_parentheses and no_parentheses not in candidates:
+        candidates.append(no_parentheses)
+    return list(dict.fromkeys(candidate for candidate in candidates if candidate))
+
+
+def cache_wiki_image(image_url: str, page_title: str) -> str:
+    url = clean_wiki_text(image_url)
+    if not url:
+        return ""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        suffix = Path(parsed.path).suffix.lower()
+        if suffix not in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+            suffix = ".png"
+        cache_dir = user_data_dir() / "wiki_images"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        digest = hashlib.sha1(f"{page_title}|{url}".encode("utf-8", errors="ignore")).hexdigest()[:16]
+        target = cache_dir / f"{digest}{suffix}"
+        if not target.exists() or target.stat().st_size <= 0:
+            request = urllib.request.Request(url, headers={"User-Agent": "FELBApp/1.0"})
+            with urllib.request.urlopen(request, timeout=20) as response:
+                target.write_bytes(response.read())
+        return file_url(target)
+    except Exception:
+        return url
+
+
+def extract_wiki_infobox(page_html: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    aside_match = re.search(
+        r"<aside\b(?=[^>]*\bportable-infobox\b)[^>]*>(.*?)</aside>",
+        page_html,
+        flags=re.S | re.I,
+    )
+    if not aside_match:
+        return result
+    infobox = aside_match.group(1)
+
+    title_match = re.search(
+        r"<[^>]*class=(?:\"[^\"]*\bpi-title\b[^\"]*\"|'[^']*\bpi-title\b[^']*'|[^\s>]*\bpi-title\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
+        infobox,
+        flags=re.S | re.I,
+    )
+    if title_match:
+        result["name"] = strip_wiki_html(title_match.group(1))
+
+    image_match = re.search(
+        r"<img\b[^>]*\b(?:data-src|src)=(?:\"([^\"]+)\"|'([^']+)'|([^\s>]+))",
+        infobox,
+        flags=re.S | re.I,
+    )
+    if image_match:
+        src = next((group for group in image_match.groups() if group), "")
+        result["image"] = urllib.parse.urljoin(FOXHOLE_WIKI_BASE_URL, html.unescape(src))
+    else:
+        srcset_match = re.search(r"<img\b[^>]*\bsrcset=(?:\"([^\"]+)\"|'([^']+)')", infobox, flags=re.S | re.I)
+        if srcset_match:
+            srcset = next((group for group in srcset_match.groups() if group), "")
+            src = clean_wiki_text(srcset.split(",", 1)[0].split(" ", 1)[0])
+            result["image"] = urllib.parse.urljoin(FOXHOLE_WIKI_BASE_URL, html.unescape(src))
+
+    label_pattern = re.compile(
+        r"<[^>]*class=(?:\"[^\"]*\bpi-data-label\b[^\"]*\"|'[^']*\bpi-data-label\b[^']*'|[^\s>]*\bpi-data-label\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
+        flags=re.S | re.I,
+    )
+    value_pattern = re.compile(
+        r"<[^>]*class=(?:\"[^\"]*\bpi-data-value\b[^\"]*\"|'[^']*\bpi-data-value\b[^']*'|[^\s>]*\bpi-data-value\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
+        flags=re.S | re.I,
+    )
+    for label_match in label_pattern.finditer(infobox):
+        block = infobox[label_match.end() : label_match.end() + 1800]
+        value_match = re.search(
+            value_pattern,
+            block,
+        )
+        if not value_match:
+            continue
+        label = strip_wiki_html(label_match.group(1))
+        value = strip_wiki_html(value_match.group(1))
+        if label and value:
+            result[normalize_wiki_key(label)] = value
+    return result
+
+
+def extract_wiki_intro(page_html: str) -> str:
+    cleaned = re.sub(r"<aside\b.*?</aside>", " ", page_html, flags=re.S | re.I)
+    cleaned = re.sub(r"<table\b.*?</table>", " ", cleaned, flags=re.S | re.I)
+    cleaned = re.sub(r"<div\b[^>]*(?:id=\"toc\"|class=\"[^\"]*toc[^\"]*\")[^>]*>.*?</div>", " ", cleaned, flags=re.S | re.I)
+    cleaned = re.sub(r"<span\b[^>]*class=\"[^\"]*\bmw-editsection\b[^\"]*\"[^>]*>.*?</span>", " ", cleaned, flags=re.S | re.I)
+    for paragraph in re.findall(r"<p\b[^>]*>(.*?)</p>", cleaned, flags=re.S | re.I):
+        text = strip_wiki_html(paragraph)
+        if len(text) > 24:
+            return text
+    return ""
+
+
+def extract_wiki_production(page_html: str) -> list[dict[str, str]]:
+    production_pos = page_html.find('id="Production"')
+    if production_pos < 0:
+        production_pos = page_html.find("id='Production'")
+    if production_pos < 0:
+        production_pos = page_html.find("id=Production")
+    if production_pos < 0:
+        return []
+
+    table_match = re.search(
+        r"<table\b(?=[^>]*\bwikitable\b)[^>]*>(.*?)</table>",
+        page_html[production_pos:],
+        flags=re.S | re.I,
+    )
+    if not table_match:
+        return []
+
+    rows: list[dict[str, str]] = []
+    for row_match in re.finditer(r"<tr\b[^>]*>(.*?)</tr>", table_match.group(1), flags=re.S | re.I):
+        cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row_match.group(1), flags=re.S | re.I)
+        if len(cells) < 4:
+            continue
+        site = strip_wiki_html(cells[0])
+        input_text = strip_wiki_html(cells[1])
+        output = strip_wiki_html(cells[2])
+        time_text = strip_wiki_html(cells[-1])
+        if site or input_text or output or time_text:
+            rows.append({"site": site, "input": input_text, "output": output, "time": time_text})
+    return rows[:8]
+
+
+def fetch_wiki_page_html(page_title: str) -> str:
+    params = urllib.parse.urlencode(
+        {
+            "action": "parse",
+            "page": page_title,
+            "prop": "text",
+            "format": "json",
+            "formatversion": "2",
+            "origin": "*",
+        }
+    )
+    request = urllib.request.Request(
+        f"{FOXHOLE_WIKI_API_URL}?{params}",
+        headers={"User-Agent": "FELBApp/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="replace"))
+
+    if isinstance(payload, dict) and payload.get("error"):
+        info = payload.get("error") or {}
+        raise RuntimeError(str(info.get("info") or info.get("code") or "Wiki page not found."))
+
+    page = payload.get("parse") if isinstance(payload, dict) else {}
+    page_html = str((page or {}).get("text") or "")
+    if not page_html:
+        raise RuntimeError("Wiki page returned no content.")
+    return page_html
+
+
+def search_wiki_page_title(query: str) -> str:
+    params = urllib.parse.urlencode(
+        {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": "1",
+            "format": "json",
+            "formatversion": "2",
+            "origin": "*",
+        }
+    )
+    request = urllib.request.Request(
+        f"{FOXHOLE_WIKI_API_URL}?{params}",
+        headers={"User-Agent": "FELBApp/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    rows = ((payload.get("query") or {}).get("search") or []) if isinstance(payload, dict) else []
+    if rows and isinstance(rows[0], dict):
+        return clean_wiki_text(rows[0].get("title"))
+    return ""
+
+
+def fetch_wiki_item_info(page_title: str) -> dict[str, Any]:
+    original_title = clean_wiki_text(page_title)
+    candidates = wiki_title_candidates(original_title)
+    last_error: Exception | None = None
+    resolved_title = candidates[0] if candidates else original_title
+    page_html = ""
+    for candidate in candidates:
+        try:
+            resolved_title = candidate
+            page_html = fetch_wiki_page_html(candidate)
+            break
+        except Exception as exc:
+            last_error = exc
+    if not page_html:
+        search_query = candidates[-1] if candidates else original_title
+        fallback_title = search_wiki_page_title(search_query)
+        if not fallback_title:
+            if last_error:
+                raise last_error
+            raise RuntimeError("Wiki page not found.")
+        resolved_title = fallback_title
+        page_html = fetch_wiki_page_html(resolved_title)
+
+    item = extract_wiki_infobox(page_html)
+    item["description"] = extract_wiki_intro(page_html)
+    item["production"] = extract_wiki_production(page_html)
+    item["source_url"] = f"{FOXHOLE_WIKI_BASE_URL}/wiki/{urllib.parse.quote(resolved_title.replace(' ', '_'))}"
+    if item.get("image"):
+        item["remote_image"] = item["image"]
+        item["image"] = cache_wiki_image(str(item.get("image") or ""), resolved_title)
+    return item
+
+
 class ItemSearchController(QObject):
     changed = Signal()
     rowsLoaded = Signal(object, str, str)
+    wikiLoaded = Signal(object, str, int)
 
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -4397,10 +5153,30 @@ class ItemSearchController(QObject):
             ["rowType", "region", "code", "warehouse", "quantity", "updatedAt", "icon", "total"],
             self,
         )
-        self.suggestions = DictListModel(["name"], self)
+        self.suggestions = DictListModel(["name", "alias", "detail", "source"], self)
+        self.wiki_fields = DictListModel(["label", "value"], self)
+        self.wiki_production_rows = DictListModel(["site", "input", "output", "time"], self)
         self._all_rows: list[dict[str, Any]] = []
         self._cached_item_names: list[str] = []
+        self._name_norm_by_name: dict[str, str] = {}
+        self._slang_terms = self._load_slang_terms()
+        self._slang_resolved_names: dict[int, list[str]] = {}
+        self._wiki_title = ""
+        self._wiki_name = ""
+        self._wiki_description = ""
+        self._wiki_image = ""
+        self._wiki_source_url = ""
+        self._wiki_status_key = "item_search.wiki_empty"
+        self._wiki_status_message = ""
+        self._wiki_loading = False
+        self._wiki_request_token = 0
+        self._pending_wiki_title = ""
+        self._wiki_timer = QTimer(self)
+        self._wiki_timer.setSingleShot(True)
+        self._wiki_timer.setInterval(500)
+        self._wiki_timer.timeout.connect(self._run_pending_wiki_lookup)
         self.rowsLoaded.connect(self._apply_loaded_rows)
+        self.wikiLoaded.connect(self._apply_wiki_result)
 
     @Slot()
     def ensureLoaded(self) -> None:
@@ -4465,6 +5241,14 @@ class ItemSearchController(QObject):
     def suggestionRows(self) -> QObject:
         return self.suggestions
 
+    @Property(QObject, constant=True)
+    def wikiFields(self) -> QObject:
+        return self.wiki_fields
+
+    @Property(QObject, constant=True)
+    def wikiProduction(self) -> QObject:
+        return self.wiki_production_rows
+
     @Property("QVariantList", notify=changed)
     def resultRowItems(self) -> list[dict[str, Any]]:
         return self.items.items()
@@ -4472,6 +5256,34 @@ class ItemSearchController(QObject):
     @Property("QVariantList", notify=changed)
     def suggestionRowItems(self) -> list[dict[str, Any]]:
         return self.suggestions.items()
+
+    @Property(bool, notify=changed)
+    def wikiLoading(self) -> bool:
+        return self._wiki_loading
+
+    @Property(str, notify=changed)
+    def wikiStatusKey(self) -> str:
+        return self._wiki_status_key
+
+    @Property(str, notify=changed)
+    def wikiStatusMessage(self) -> str:
+        return self._wiki_status_message
+
+    @Property(str, notify=changed)
+    def wikiName(self) -> str:
+        return self._wiki_name
+
+    @Property(str, notify=changed)
+    def wikiDescription(self) -> str:
+        return self._wiki_description
+
+    @Property(str, notify=changed)
+    def wikiImage(self) -> str:
+        return self._wiki_image
+
+    @Property(str, notify=changed)
+    def wikiSourceUrl(self) -> str:
+        return self._wiki_source_url
 
     @Slot()
     def refresh(self) -> None:
@@ -4507,6 +5319,8 @@ class ItemSearchController(QObject):
             {str(item.get("display_name") or "-") for item in self._all_rows if item.get("display_name")},
             key=str.lower,
         )
+        self._name_norm_by_name = {name: self._normalize_search_text(name) for name in self._cached_item_names}
+        self._slang_resolved_names = {}
         self._last_update = last_update or "-"
         self._loaded = True
         self._status_key = "item_search.loaded"
@@ -4526,30 +5340,277 @@ class ItemSearchController(QObject):
         self._update_search_models()
         self.changed.emit()
 
+    @Slot(str)
+    def fetchWikiInfo(self, title: str) -> None:
+        self._start_wiki_lookup(str(title or "").strip())
+
+    @Slot()
+    def openWikiPage(self) -> None:
+        if self._wiki_source_url:
+            QDesktopServices.openUrl(QUrl(self._wiki_source_url))
+
+    @Slot()
+    def _run_pending_wiki_lookup(self) -> None:
+        self._start_wiki_lookup(self._pending_wiki_title)
+
+    def _clear_wiki_info(self) -> None:
+        self._wiki_timer.stop()
+        self._pending_wiki_title = ""
+        self._wiki_title = ""
+        self._wiki_name = ""
+        self._wiki_description = ""
+        self._wiki_image = ""
+        self._wiki_source_url = ""
+        self._wiki_status_key = "item_search.wiki_empty"
+        self._wiki_status_message = ""
+        self._wiki_loading = False
+        self.wiki_fields.set_items([])
+        self.wiki_production_rows.set_items([])
+
+    def _schedule_wiki_lookup(self) -> None:
+        if not self._query.strip():
+            if self._wiki_title or self._wiki_loading or self._wiki_name:
+                self._clear_wiki_info()
+            return
+        title = (self._best_match or self._selected_name or self._query).strip()
+        if not title:
+            self._clear_wiki_info()
+            return
+        if title == self._wiki_title and (self._wiki_loading or self._wiki_name or self._wiki_status_key != "item_search.wiki_empty"):
+            return
+        self._pending_wiki_title = title
+        self._wiki_timer.start()
+
+    def _start_wiki_lookup(self, title: str) -> None:
+        title = str(title or "").strip()
+        if not title:
+            self._clear_wiki_info()
+            self.changed.emit()
+            return
+        if title == self._wiki_title and self._wiki_loading:
+            return
+
+        self._wiki_request_token += 1
+        token = self._wiki_request_token
+        self._wiki_title = title
+        self._wiki_name = title
+        self._wiki_description = ""
+        self._wiki_image = ""
+        self._wiki_source_url = f"{FOXHOLE_WIKI_BASE_URL}/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+        self._wiki_status_key = "item_search.wiki_loading"
+        self._wiki_status_message = ""
+        self._wiki_loading = True
+        self.wiki_fields.set_items([])
+        self.wiki_production_rows.set_items([])
+        self.changed.emit()
+
+        def worker() -> None:
+            try:
+                self.wikiLoaded.emit(fetch_wiki_item_info(title), "", token)
+            except Exception as exc:
+                self.wikiLoaded.emit({}, str(exc), token)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    @Slot(object, str, int)
+    def _apply_wiki_result(self, data: object, error: str, token: int) -> None:
+        if token != self._wiki_request_token:
+            return
+        self._wiki_loading = False
+        if error:
+            self._wiki_status_key = "item_search.wiki_error"
+            self._wiki_status_message = error
+            self.wiki_fields.set_items([])
+            self.wiki_production_rows.set_items([])
+            self.changed.emit()
+            return
+
+        item = data if isinstance(data, dict) else {}
+        production = item.get("production") if isinstance(item.get("production"), list) else []
+        excluded = {"name", "image", "remote_image", "description", "production", "source_url"}
+        fields = [
+            {"label": wiki_field_label(str(key)), "value": translate_wiki_value(value)}
+            for key, value in item.items()
+            if key not in excluded and translate_wiki_value(value)
+        ]
+        fields.sort(key=lambda row: row["label"].lower())
+        has_data = bool(item.get("name") or item.get("description") or item.get("image") or fields or production)
+
+        self._wiki_name = clean_wiki_text(item.get("name") or self._wiki_title)
+        self._wiki_description = clean_wiki_text(item.get("description") or "")
+        self._wiki_image = str(item.get("image") or "")
+        self._wiki_source_url = str(item.get("source_url") or self._wiki_source_url)
+        self._wiki_status_key = "item_search.wiki_loaded" if has_data else "item_search.wiki_empty"
+        self._wiki_status_message = ""
+        self.wiki_fields.set_items(fields[:12])
+        self.wiki_production_rows.set_items(
+            [
+                {
+                    "site": clean_wiki_text(row.get("site")),
+                    "input": clean_wiki_text(row.get("input")),
+                    "output": clean_wiki_text(row.get("output")),
+                    "time": clean_wiki_text(row.get("time")),
+                }
+                for row in production[:8]
+                if isinstance(row, dict)
+            ]
+        )
+        self.changed.emit()
+
     def _item_names(self) -> list[str]:
         return self._cached_item_names
 
-    def _suggestions_for_query(self, query: str) -> list[str]:
-        lower = query.strip().lower()
-        if not lower:
+    @staticmethod
+    def _normalize_search_text(value: Any) -> str:
+        text = str(value or "").casefold()
+        text = "".join(char for char in unicodedata.normalize("NFKD", text) if not unicodedata.combining(char))
+        return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+    @staticmethod
+    def _load_slang_terms() -> list[dict[str, Any]]:
+        path = BASE_DIR / "slang_terms.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        raw_terms = data.get("slang_terms", []) if isinstance(data, dict) else []
+        terms: list[dict[str, Any]] = []
+        for index, item in enumerate(raw_terms):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("nome") or "").strip()
+            aliases = [str(alias).strip() for alias in item.get("apelidos", []) if str(alias).strip()]
+            if not name and not aliases:
+                continue
+            terms.append(
+                {
+                    "index": index,
+                    "name": name,
+                    "aliases": aliases,
+                    "category": str(item.get("categoria") or "").strip(),
+                    "kind": str(item.get("tipo") or "").strip(),
+                    "faction": str(item.get("faccao") or "").strip(),
+                }
+            )
+        return terms
+
+    def _resolve_slang_names(self, term: dict[str, Any]) -> list[str]:
+        term_index = int(term.get("index", -1))
+        if term_index in self._slang_resolved_names:
+            return self._slang_resolved_names[term_index]
+
+        target_norm = self._normalize_search_text(term.get("name"))
+        alias_norms = [self._normalize_search_text(alias) for alias in term.get("aliases", [])]
+        target_tokens = set(target_norm.split())
+        resolved: list[str] = []
+        for name, norm in self._name_norm_by_name.items():
+            if not norm:
+                continue
+            if target_norm and (norm == target_norm or target_norm in norm or norm in target_norm):
+                resolved.append(name)
+                continue
+            if target_tokens and len(target_tokens) <= 4 and target_tokens.issubset(set(norm.split())):
+                resolved.append(name)
+                continue
+            if any(alias_norm and (alias_norm == norm or f" {alias_norm} " in f" {norm} ") for alias_norm in alias_norms):
+                resolved.append(name)
+
+        unique = sorted(dict.fromkeys(resolved), key=str.lower)
+        self._slang_resolved_names[term_index] = unique[:16]
+        return self._slang_resolved_names[term_index]
+
+    def _slang_matches_for_query(self, query_norm: str) -> list[dict[str, Any]]:
+        if not query_norm:
+            return []
+        scored: list[tuple[int, dict[str, Any]]] = []
+        for term in self._slang_terms:
+            name_norm = self._normalize_search_text(term.get("name"))
+            alias_norms = [self._normalize_search_text(alias) for alias in term.get("aliases", [])]
+            score = 0
+            if any(alias == query_norm for alias in alias_norms):
+                score = 100
+            elif name_norm == query_norm:
+                score = 95
+            elif any(alias.startswith(query_norm) for alias in alias_norms):
+                score = 82
+            elif name_norm.startswith(query_norm):
+                score = 76
+            elif any(query_norm in alias for alias in alias_norms):
+                score = 62
+            elif query_norm in name_norm:
+                score = 55
+            if score:
+                scored.append((score, term))
+        scored.sort(key=lambda item: (-item[0], str(item[1].get("name") or "").lower()))
+        return [term for _score, term in scored[:12]]
+
+    def _suggestions_for_query(self, query: str) -> list[dict[str, str]]:
+        query_norm = self._normalize_search_text(query)
+        if not query_norm:
             return []
         names = self._item_names()
-        starts = [name for name in names if name.lower().startswith(lower)]
-        contains = [name for name in names if lower in name.lower() and name not in starts]
-        return (starts + contains)[:8]
+        starts = [name for name in names if self._name_norm_by_name.get(name, "").startswith(query_norm)]
+        contains = [name for name in names if query_norm in self._name_norm_by_name.get(name, "") and name not in starts]
+
+        rows: list[dict[str, str]] = [
+            {"name": name, "alias": "", "detail": "", "source": "item"}
+            for name in (starts + contains)
+        ]
+
+        seen = {row["name"] for row in rows}
+        for term in self._slang_matches_for_query(query_norm):
+            alias = next(
+                (
+                    str(alias)
+                    for alias in term.get("aliases", [])
+                    if query_norm in self._normalize_search_text(alias)
+                ),
+                str((term.get("aliases") or [""])[0] or ""),
+            )
+            detail_parts = [part for part in (alias, str(term.get("name") or ""), str(term.get("kind") or "")) if part]
+            for name in self._resolve_slang_names(term):
+                if name in seen:
+                    continue
+                rows.append(
+                    {
+                        "name": name,
+                        "alias": alias,
+                        "detail": " -> ".join(detail_parts[:3]),
+                        "source": "slang",
+                    }
+                )
+                seen.add(name)
+                if len(rows) >= 10:
+                    return rows
+
+        return rows[:10]
+
+    def _rows_for_name(self, name: str) -> list[dict[str, Any]]:
+        target = self._normalize_search_text(name)
+        return [item for item in self._all_rows if self._normalize_search_text(item.get("display_name")) == target]
 
     def _matching_rows(self) -> list[dict[str, Any]]:
-        query = self._query.strip().lower()
-        if not query:
+        query_norm = self._normalize_search_text(self._query)
+        if not query_norm:
             return self._all_rows
-        exact = [item for item in self._all_rows if str(item.get("display_name") or "").lower() == query]
+        exact = [item for item in self._all_rows if self._normalize_search_text(item.get("display_name")) == query_norm]
         if exact:
             return exact
         suggestions = self._suggestions_for_query(self._query)
         if suggestions:
-            selected = suggestions[0].lower()
-            return [item for item in self._all_rows if str(item.get("display_name") or "").lower() == selected]
-        return [item for item in self._all_rows if query in str(item.get("display_name") or "").lower()]
+            selected = suggestions[0].get("name", "")
+            selected_rows = self._rows_for_name(selected)
+            if selected_rows:
+                return selected_rows
+
+        slang_rows: list[dict[str, Any]] = []
+        for term in self._slang_matches_for_query(query_norm):
+            for name in self._resolve_slang_names(term):
+                slang_rows.extend(self._rows_for_name(name))
+        if slang_rows:
+            return slang_rows
+
+        return [item for item in self._all_rows if query_norm in self._normalize_search_text(item.get("display_name"))]
 
     @staticmethod
     def _split_location(warehouse: str) -> tuple[str, str, str]:
@@ -4563,8 +5624,8 @@ class ItemSearchController(QObject):
 
     def _update_search_models(self) -> None:
         suggestions = self._suggestions_for_query(self._query)
-        self.suggestions.set_items([{"name": name} for name in suggestions])
-        self._best_match = suggestions[0] if suggestions else ""
+        self.suggestions.set_items(suggestions)
+        self._best_match = suggestions[0].get("name", "") if suggestions else ""
 
         rows = self._matching_rows()
         if not self._query.strip():
@@ -4618,6 +5679,7 @@ class ItemSearchController(QObject):
                     }
                 )
         self.items.set_items(result_rows)
+        self._schedule_wiki_lookup()
 
 
 class IdentifyItemController(QObject):

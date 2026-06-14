@@ -13,7 +13,7 @@ ColumnLayout {
 
     Text {
         text: root.label
-        color: "#99abc4"
+        color: settingsController.mutedTextColor
         font.family: "Segoe UI"
         font.pixelSize: 11
         font.bold: true
@@ -27,8 +27,8 @@ ColumnLayout {
         Layout.preferredHeight: 40
         placeholderText: root.placeholder
         placeholderTextColor: "#60728c"
-        color: "#edf6ff"
-        selectedTextColor: "#041014"
+        color: settingsController.textColor
+        selectedTextColor: settingsController.backgroundColor
         selectionColor: settingsController.accentColor
         font.family: "Segoe UI"
         font.pixelSize: 13
@@ -37,9 +37,9 @@ ColumnLayout {
         verticalAlignment: TextInput.AlignVCenter
         onAccepted: root.accepted(text)
         background: Rectangle {
-            radius: 8
-            color: input.hovered || input.activeFocus ? "#101f36" : "#0c1728"
-            border.color: input.activeFocus ? settingsController.accentColor : (input.hovered ? "#2d496f" : "#1e3554")
+            radius: settingsController.cardRadius
+            color: input.hovered || input.activeFocus ? settingsController.accentPanelColor : settingsController.backgroundColor
+            border.color: input.activeFocus ? settingsController.accentColor : settingsController.borderColor
             border.width: input.activeFocus ? 1.5 : 1
             Behavior on color { ColorAnimation { duration: 120 } }
             Behavior on border.color { ColorAnimation { duration: 120 } }

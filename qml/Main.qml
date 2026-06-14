@@ -14,14 +14,14 @@ ApplicationWindow {
     visible: true
     visibility: Window.Maximized
     title: appController.appTitle
-    color: "#070b16"
+    color: settingsController.backgroundColor
     flags: Qt.Window | Qt.FramelessWindowHint
 
     header: Rectangle {
         id: customTitleBar
         width: parent.width
         height: 32
-        color: "#0a1020"
+        color: settingsController.surfaceColor
         z: 9999
 
         MouseArea {
@@ -198,6 +198,7 @@ ApplicationWindow {
         if (page === "timeTask") return "pages/TimeTaskPage.qml"
         if (page === "notifications") return "pages/NotificationsPage.qml"
         if (page === "settings") return "pages/SettingsPage.qml"
+        if (page === "personalization") return "pages/PersonalizationPage.qml"
         return "pages/HomePage.qml"
     }
 
@@ -985,7 +986,17 @@ ApplicationWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: "#070b16"
+        color: settingsController.backgroundColor
+        gradient: Gradient {
+            GradientStop {
+                position: 0.0
+                color: settingsController.gradientEnabled ? settingsController.gradientStartColor : settingsController.backgroundColor
+            }
+            GradientStop {
+                position: 1.0
+                color: settingsController.gradientEnabled ? settingsController.gradientEndColor : settingsController.backgroundColor
+            }
+        }
 
         RowLayout {
             id: mainLayout
@@ -996,7 +1007,7 @@ ApplicationWindow {
                 id: sidebar
                 Layout.fillHeight: true
                 Layout.preferredWidth: window.sidebarOpen ? 286 : 72
-                color: "#0a1020"
+                color: settingsController.surfaceColor
                 clip: window.sidebarOpen
                 z: 5
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: 190; easing.type: Easing.OutCubic } }
@@ -1015,7 +1026,7 @@ ApplicationWindow {
                             Layout.preferredWidth: 44
                             Layout.preferredHeight: 44
                             radius: 8
-                            color: "#111c31"
+                            color: settingsController.surfaceColor
                             AnimatedImage {
                                 anchors.centerIn: parent
                                 width: 36
@@ -1288,16 +1299,22 @@ ApplicationWindow {
 
                                 Rectangle {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 2
-                                    anchors.rightMargin: 2
+                                    anchors.leftMargin: 4
+                                    anchors.rightMargin: 4
                                     anchors.topMargin: 2
                                     anchors.bottomMargin: 3
-                                    radius: 7
-                                    color: sectionMouse.containsMouse ? "#111c31" : "#0c1628"
-                                    border.color: sectionMouse.containsMouse ? "#2d496f" : "#172943"
-                                    border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 130 } }
-                                    Behavior on border.color { ColorAnimation { duration: 130 } }
+                                    radius: 6
+                                    color: sectionMouse.containsMouse ? Qt.rgba(0.12, 0.21, 0.35, 0.4) : "transparent"
+                                    
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 1
+                                        anchors.top: parent.top
+                                        color: Qt.rgba(1, 1, 1, 0.03)
+                                        visible: index > 0
+                                    }
+                                    
+                                    Behavior on color { ColorAnimation { duration: 150 } }
                                 }
 
                                 RowLayout {
@@ -1307,36 +1324,43 @@ ApplicationWindow {
                                     spacing: 8
 
                                     Rectangle {
-                                        Layout.preferredWidth: 5
-                                        Layout.preferredHeight: 5
-                                        radius: 3
-                                        color: navRow.sectionExpanded ? settingsController.accentColor : "#3f5878"
+                                        Layout.preferredWidth: 4
+                                        Layout.preferredHeight: 4
+                                        radius: 2
+                                        color: navRow.sectionExpanded ? settingsController.accentColor : "#4f6a8f"
                                         Layout.alignment: Qt.AlignVCenter
-                                        Behavior on color { ColorAnimation { duration: 130 } }
+                                        layer.enabled: navRow.sectionExpanded
+                                        layer.effect: DropShadow {
+                                            transparentBorder: true
+                                            color: settingsController.accentColor
+                                            radius: 6
+                                            samples: 13
+                                        }
+                                        Behavior on color { ColorAnimation { duration: 150 } }
                                     }
 
                                     Text {
                                         text: tr(sectionTitleKey(section))
-                                        color: sectionMouse.containsMouse ? "#c7d7ed" : "#7f93ad"
+                                        color: sectionMouse.containsMouse ? "#edf6ff" : (navRow.sectionExpanded ? "#99abc4" : "#6f89aa")
                                         font.family: "Segoe UI"
-                                        font.pixelSize: 10
+                                        font.pixelSize: 11
                                         font.bold: true
+                                        font.letterSpacing: 0.5
                                         font.capitalization: Font.AllUppercase
                                         Layout.fillWidth: true
                                         elide: Text.ElideRight
-                                        Behavior on color { ColorAnimation { duration: 130 } }
+                                        Behavior on color { ColorAnimation { duration: 150 } }
                                     }
 
                                     Text {
                                         text: navRow.sectionExpanded ? "v" : ">"
-                                        color: navRow.sectionExpanded ? settingsController.accentColor : "#7f93ad"
+                                        color: navRow.sectionExpanded ? settingsController.accentColor : "#6f89aa"
                                         font.family: "Segoe UI"
-                                        font.pixelSize: 15
+                                        font.pixelSize: 12
                                         font.bold: true
                                         Layout.preferredWidth: 14
                                         horizontalAlignment: Text.AlignRight
-                                        rotation: navRow.sectionExpanded ? 0 : 0
-                                        Behavior on color { ColorAnimation { duration: 130 } }
+                                        Behavior on color { ColorAnimation { duration: 150 } }
                                     }
                                 }
 
@@ -1352,15 +1376,25 @@ ApplicationWindow {
                             Rectangle {
                                 visible: navRow.itemVisible
                                 x: window.sidebarOpen && mouse.containsMouse ? 5 : 0
-                                width: parent.width
+                                width: parent.width - (window.sidebarOpen && mouse.containsMouse ? 10 : 0)
                                 anchors.bottom: parent.bottom
                                 height: 48
                                 radius: 8
-                                color: navRow.selected ? "#1d3353" : mouse.containsMouse ? "#172943" : "transparent"
-                                border.color: navRow.selected ? "#2d496f" : "transparent"
+                                color: navRow.selected ? Qt.rgba(0.12, 0.22, 0.38, 0.6) : mouse.containsMouse ? Qt.rgba(0.09, 0.16, 0.27, 0.4) : "transparent"
+                                border.color: navRow.selected ? Qt.rgba(0.25, 0.45, 0.75, 0.5) : "transparent"
                                 border.width: 1
                                 Behavior on x { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
-                                Behavior on color { ColorAnimation { duration: 130 } }
+                                Behavior on width { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 8
+                                    color: "transparent"
+                                    border.color: Qt.rgba(1, 1, 1, 0.05)
+                                    border.width: 1
+                                    visible: navRow.selected
+                                }
                             }
 
                             Rectangle {
@@ -1368,14 +1402,22 @@ ApplicationWindow {
                                 x: window.sidebarOpen && mouse.containsMouse ? 9 : 4
                                 anchors.bottom: parent.bottom
                                 anchors.bottomMargin: 9
-                                width: 3
+                                width: 4
                                 height: navRow.selected ? 30 : (mouse.containsMouse ? 22 : 0)
                                 radius: 2
-                                color: navRow.selected ? settingsController.accentColor : "#2d496f"
+                                color: navRow.selected ? settingsController.accentColor : "#3a5b8a"
                                 opacity: navRow.selected || mouse.containsMouse ? 1 : 0
+                                layer.enabled: navRow.selected
+                                layer.effect: DropShadow {
+                                    transparentBorder: true
+                                    color: settingsController.accentColor
+                                    radius: 8
+                                    samples: 17
+                                }
                                 Behavior on x { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
                                 Behavior on height { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutCubic } }
                                 Behavior on opacity { NumberAnimation { duration: navRow.animationDuration } }
+                                Behavior on color { ColorAnimation { duration: 150 } }
                             }
 
                             RowLayout {
@@ -1407,7 +1449,8 @@ ApplicationWindow {
                                             "search": "buscar.png",
                                             "target": "buscariten.png",
                                             "bell": "notificação.png",
-                                            "settings": "config.png"
+                                            "settings": "config.png",
+                                            "palette": "config.png"
                                         }
                                         return map[icon] ? appController.assetUrl("img/iconmenu/" + map[icon]) : ""
                                     }
@@ -1557,7 +1600,7 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 72
-                    color: "#070b16"
+                    color: settingsController.backgroundColor
 
                     RowLayout {
                         anchors.fill: parent
@@ -1615,7 +1658,7 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#070b16"
+                    color: "transparent"
 
                     Loader {
                         id: pageLoader
