@@ -53,9 +53,9 @@ Flickable {
         Layout.minimumHeight: 168
         radius: 8
         opacity: modeEnabled ? 1.0 : 0.68
-        color: active ? Qt.rgba(0.03, 0.12, 0.15, 0.92) : Qt.rgba(0.03, 0.07, 0.13, 0.92)
-        border.color: !modeEnabled ? "#31425c" : (active ? accent : "#1d3353")
-        border.width: active ? 1.5 : 1
+        color: "transparent"
+        border.color: "transparent"
+        Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
         layer.enabled: true
         layer.effect: DropShadow {
             transparentBorder: true
@@ -71,6 +71,7 @@ Flickable {
             color: card.accent
             opacity: !card.modeEnabled ? 0.015 : (card.active ? 0.10 : 0.035)
         }
+        Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: !card.modeEnabled ? Qt.rgba(1,1,1,0.1) : card.accent; opacity: card.active ? 1.0 : 0.2; border.width: card.active ? 1.5 : 1 }
 
         Rectangle {
             anchors.left: parent.left
@@ -99,7 +100,10 @@ Flickable {
                     Layout.preferredWidth: 9
                     Layout.preferredHeight: 9
                     radius: 5
-                    color: !card.modeEnabled ? "#3f5878" : (card.active ? card.accent : "#2d496f")
+                    color: !card.modeEnabled ? "transparent" : (card.active ? card.accent : "transparent")
+                    border.color: !card.modeEnabled ? Qt.rgba(1,1,1,0.2) : card.accent
+                    border.width: card.active ? 0 : 1
+                    opacity: card.active ? 1.0 : 0.5
                 }
 
                 Text {
@@ -117,14 +121,16 @@ Flickable {
                     Layout.preferredHeight: 24
                     radius: 7
                     color: card.active ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(1, 1, 1, 0.04)
-                    border.color: card.active ? card.accent : "#2d496f"
+                    border.color: "transparent"
+                    Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: card.accent; opacity: card.active ? 1.0 : 0.2; border.width: 1 }
                     border.width: 1
 
                     Text {
                         id: statusText
                         anchors.centerIn: parent
                         text: !card.modeEnabled ? tr("clicker.mode_disabled") : (card.active ? "ATIVO" : "PRONTO")
-                        color: !card.modeEnabled ? "#7f93ad" : (card.active ? card.accent : "#7f93ad")
+                        color: !card.modeEnabled ? Qt.rgba(1,1,1,0.4) : card.accent
+                        opacity: card.active ? 1.0 : 0.6
                         font.family: "Segoe UI"
                         font.pixelSize: 10
                         font.bold: true
@@ -163,9 +169,9 @@ Flickable {
                 PrimaryButton {
                     text: card.buttonText
                     Layout.preferredWidth: 92
-                    fill: card.active ? "#24324a" : card.accent
-                    hoverFill: card.active ? "#31405f" : "#8ab4ff"
-                    textFill: card.active ? "#edf6ff" : "#041014"
+                    fill: card.active ? Qt.rgba(0,0,0,0.4) : card.accent
+                    hoverFill: card.active ? Qt.rgba(1,1,1,0.1) : Qt.lighter(card.accent, 1.2)
+                    textFill: card.active ? card.accent : "#041014"
                     enabled: autoClickerController.available && card.modeEnabled
                     onClicked: card.action()
                 }
@@ -246,8 +252,10 @@ Flickable {
                 Layout.preferredWidth: 92
                 Layout.preferredHeight: 30
                 radius: 8
-                color: autoClickerController.active ? settingsController.accentPanelStrongColor : "#13233a"
-                border.color: autoClickerController.active ? settingsController.accentColor : "#2d496f"
+                color: "transparent"
+                border.color: "transparent"
+                Rectangle { anchors.fill: parent; radius: parent.radius; color: autoClickerController.active ? settingsController.accentColor : "#000000"; opacity: autoClickerController.active ? 0.2 : 0.3 }
+                Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: autoClickerController.active ? 1.0 : 0.2; border.width: 1 }
 
                 Text {
                     anchors.centerIn: parent
@@ -263,8 +271,10 @@ Flickable {
         Rectangle {
             Layout.fillWidth: true
             radius: 8
-            color: Qt.rgba(0.03, 0.06, 0.11, 0.88)
-            border.color: autoClickerController.available ? "#1d3353" : "#743047"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: autoClickerController.available ? settingsController.accentColor : settingsController.warningColor; opacity: 0.2; border.width: 1 }
             implicitHeight: statusRows.implicitHeight + 28
             layer.enabled: true
             layer.effect: DropShadow {
@@ -328,9 +338,9 @@ Flickable {
                     PrimaryButton {
                         text: tr("clicker.capture")
                         Layout.preferredWidth: 154
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
                         enabled: autoClickerController.available
                         onClicked: autoClickerController.captureFoxhole()
                     }
@@ -491,8 +501,11 @@ Flickable {
         Rectangle {
             Layout.fillWidth: true
             radius: 8
-            color: Qt.rgba(0.03, 0.06, 0.11, 0.88)
-            border.color: "#1d3353"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: 0.035 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
             implicitHeight: overlayColumn.implicitHeight + 28
             layer.enabled: true
             layer.effect: DropShadow {
@@ -532,9 +545,9 @@ Flickable {
                     PrimaryButton {
                         text: tr("overlay.preview_8s")
                         Layout.preferredWidth: 160
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
                         onClicked: overlayController.preview()
                     }
                 }

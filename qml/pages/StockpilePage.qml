@@ -67,8 +67,11 @@ Flickable {
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
                     radius: 4
-                    color: minusMouse.containsMouse ? "#1d3353" : "transparent"
-                    border.color: "#24486d"
+                    color: "transparent"
+                    border.color: "transparent"
+                    border.width: 0
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: minusMouse.containsMouse ? 0.15 : 0.0 }
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
                     Text {
                         anchors.centerIn: parent
                         text: "-"
@@ -103,8 +106,11 @@ Flickable {
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
                     radius: 4
-                    color: plusMouse.containsMouse ? "#1d3353" : "transparent"
-                    border.color: "#24486d"
+                    color: "transparent"
+                    border.color: "transparent"
+                    border.width: 0
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: plusMouse.containsMouse ? 0.15 : 0.0 }
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
                     Text {
                         anchors.centerIn: parent
                         text: "+"
@@ -132,8 +138,12 @@ Flickable {
             Layout.fillWidth: true
             implicitHeight: stockpileController.apiLoading ? 200 : visualContent.implicitHeight + 24
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: "transparent"
+            border.color: "transparent"
+            border.width: 0
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: 0.035 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
 
             ColumnLayout {
                 anchors.centerIn: parent
@@ -152,7 +162,7 @@ Flickable {
                             ctx.clearRect(0, 0, width, height);
                             ctx.beginPath();
                             ctx.arc(width / 2, height / 2, width / 2 - 4, 0, Math.PI * 2);
-                            ctx.strokeStyle = "#1d3353";
+                            ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
                             ctx.lineWidth = 4;
                             ctx.stroke();
 
@@ -247,8 +257,11 @@ Flickable {
                         }
                         background: Rectangle {
                             radius: 6
-                            color: "#0e1a2d"
-                            border.color: visualWarehouseBox.activeFocus ? settingsController.accentColor : "#2d496f"
+                            color: "transparent"
+                            border.color: "transparent"
+                            border.width: 0
+                            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.4 }
+                            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: visualWarehouseBox.activeFocus ? settingsController.accentColor : settingsController.accentColor; opacity: visualWarehouseBox.activeFocus ? 1.0 : 0.2; border.width: 1 }
                         }
                     }
                 }
@@ -285,11 +298,11 @@ Flickable {
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 1
-                                color: "#1f324b"
+                                color: Qt.rgba(1, 1, 1, 0.1)
                             }
                             Text {
                                 text: tr(groupRow.titleKey || "")
-                                color: groupRow.accent || "#aeb7c2"
+                                color: settingsController.accentColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 9
                                 font.bold: true
@@ -308,9 +321,12 @@ Flickable {
                                         width: 72 * scaleFactor
                                         height: 27 * scaleFactor
                                         radius: 2
-                                        color: tileMouse.containsMouse ? "#1d3353" : "#0f1d32"
-                                        border.color: "#2b4565"
-                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                        color: "transparent"
+                                        border.color: "transparent"
+                                        border.width: 0
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.3 }
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.15 : 0.03; Behavior on opacity { NumberAnimation { duration: 100 } } }
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.8 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 100 } } }
                                         Behavior on width { NumberAnimation { duration: 100 } }
                                         Behavior on height { NumberAnimation { duration: 100 } }
 
@@ -328,8 +344,12 @@ Flickable {
                                             anchors.top: parent.top
                                             anchors.bottom: parent.bottom
                                             width: 37 * scaleFactor
-                                            color: "#172943"
-                                            border.color: "#2b4565"
+                                            color: "transparent"
+                                            border.color: "transparent"
+                                            border.width: 0
+                                            Rectangle { anchors.fill: parent; color: "#000000"; opacity: 0.2 }
+                                            Rectangle { anchors.fill: parent; color: settingsController.accentColor; opacity: 0.05 }
+                                            Rectangle { anchors.fill: parent; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.15; border.width: 1 }
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: String(itemRow.quantity || 0)

@@ -3402,24 +3402,19 @@ class ChatController(QObject):
 
 
 
-    @Slot(str)
-    def fetchProfile(self, user_id: str = "") -> None:
+    @Slot()
+    def fetchProfile(self) -> None:
         if not self._token:
             return
-        is_current_user = not str(user_id or "").strip()
-        if is_current_user:
-            if self._profile_loading:
-                return
-            self._profile_loading = True
-            self._status = self._t("status.checking_user")
-            self.changed.emit()
+        if self._profile_loading:
+            return
+        self._profile_loading = True
+        self.changed.emit()
+
         def run():
             try:
-                if user_id:
-                    res = http_json("GET", f"/chat/users/{user_id}/profile", token=self._token)
-                else:
-                    res = http_json("GET", "/chat/profile", token=self._token)
-                profile = res.get("profile") if isinstance(res.get("profile"), dict) else res
+                res = http_json("GET", "/chat/profile", token=self._token)
+                profile = res.get("profile") if isinstance(res.get("profile"), dict) else {}
                 if isinstance(profile, dict) and isinstance(res.get("panelAccess"), dict):
                     profile = dict(profile)
                     profile["panelAccess"] = res.get("panelAccess")

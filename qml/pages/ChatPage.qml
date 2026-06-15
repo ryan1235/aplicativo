@@ -174,8 +174,10 @@ Rectangle {
             Layout.preferredWidth: 292
             Layout.fillHeight: true
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.05 }
+            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.15; border.width: 1 }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -248,8 +250,10 @@ Rectangle {
                         width: roomsList.width
                         height: 46
                         radius: 7
-                        color: chatController.selectedRoom === rowSlug ? "#1d3353" : roomMouse.containsMouse ? "#172943" : "#0e1a2d"
-                        border.color: chatController.selectedRoom === rowSlug ? settingsController.accentColor : "transparent"
+                        color: "transparent"
+                        border.color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.accentColor; opacity: chatController.selectedRoom === rowSlug ? 0.15 : (roomMouse.containsMouse ? 0.08 : 0.02); Behavior on opacity { NumberAnimation { duration: 120 } } }
+                        Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: settingsController.accentColor; opacity: chatController.selectedRoom === rowSlug ? 0.4 : 0; border.width: 1; Behavior on opacity { NumberAnimation { duration: 120 } } }
                         Behavior on color { ColorAnimation { duration: 120 } }
                         RowLayout {
                             anchors.fill: parent
@@ -334,7 +338,8 @@ Rectangle {
                         width: onlineList.width
                         height: 44
                         radius: 7
-                        color: "#0e1a2d"
+                        color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.accentColor; opacity: 0.03 }
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 8
@@ -439,8 +444,10 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.05 }
+            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.15; border.width: 1 }
 
             ColumnLayout {
                 anchors.fill: parent
@@ -559,8 +566,10 @@ Rectangle {
                             implicitHeight: Math.max(58, messageCardColumn.implicitHeight + 20)
                             height: implicitHeight
                             radius: 8
-                            color: rowId === root.highlightMessageId || rowMentioned ? "#2a3b22" : (hoverMsg.hovered ? "#122036" : (rowMine ? "#0a1321" : "transparent"))
-                            border.color: rowMentioned ? settingsController.warningColor : "transparent"
+                            color: "transparent"
+                            border.color: "transparent"
+                            Rectangle { anchors.fill: parent; radius: 8; color: rowId === root.highlightMessageId || rowMentioned ? settingsController.warningColor : settingsController.accentColor; opacity: rowId === root.highlightMessageId || rowMentioned ? 0.15 : (hoverMsg.hovered ? 0.08 : (rowMine ? 0.03 : 0)); Behavior on opacity { NumberAnimation { duration: 120 } } }
+                            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.warningColor; opacity: rowMentioned ? 0.4 : 0; border.width: 1; Behavior on opacity { NumberAnimation { duration: 120 } } }
                             Behavior on color { ColorAnimation { duration: 120 } }
 
                             HoverHandler { id: hoverMsg }
@@ -843,8 +852,10 @@ Rectangle {
                             font.bold: true
                             background: Rectangle {
                                 radius: 22
-                                color: pickerButton.hovered ? "#1d3353" : "#0e1a2d"
-                                border.color: "#24486d"
+                                color: "transparent"
+                                border.color: "transparent"
+                                Rectangle { anchors.fill: parent; radius: 22; color: settingsController.accentColor; opacity: pickerButton.hovered ? 0.15 : 0.05; Behavior on opacity { NumberAnimation { duration: 120 } } }
+                                Rectangle { anchors.fill: parent; radius: 22; color: "transparent"; border.color: settingsController.accentColor; opacity: pickerButton.hovered ? 0.4 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 120 } } }
                             }
                             onClicked: {
                                 var pos = pickerButton.mapToItem(root, 0, 0)
@@ -881,7 +892,10 @@ Rectangle {
                                     chatController.updateMentionSuggestions("")
                                 }
                             }
-                            background: Rectangle { radius: 22; color: "#0e1a2d"; border.color: "#2d496f" }
+                            background: Item {
+                                Rectangle { anchors.fill: parent; radius: 22; color: settingsController.accentColor; opacity: 0.05 }
+                                Rectangle { anchors.fill: parent; radius: 22; color: "transparent"; border.color: settingsController.accentColor; opacity: messageInput.activeFocus ? 0.4 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 150 } } }
+                            }
                         }
                     }
                 }

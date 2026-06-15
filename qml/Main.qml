@@ -1066,11 +1066,26 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: window.sidebarOpen ? 86 : 54
                         radius: 8
-                        color: profileMouseArea.containsMouse ? "#172943" : "#0e1a2d"
-                        border.color: "#1e3554"
-                        border.width: 1
-                        Behavior on color { ColorAnimation { duration: 150 } }
+                        color: "transparent"
+                        border.color: "transparent"
                         Behavior on Layout.preferredHeight { NumberAnimation { duration: 160 } }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: settingsController.accentColor
+                            opacity: profileMouseArea.containsMouse ? 0.12 : 0.05
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: "transparent"
+                            border.color: settingsController.accentColor
+                            opacity: 0.3
+                            border.width: 1
+                        }
 
                         MouseArea {
                             id: profileMouseArea
@@ -1175,13 +1190,28 @@ ApplicationWindow {
                         visible: window.sidebarOpen
                         opacity: window.sidebarOpen ? 1 : 0
                         radius: 8
-                        color: "#0e1a2d"
-                        border.color: navSearchInput.activeFocus ? settingsController.accentColor : "#1e3554"
-                        border.width: 1
+                        color: "transparent"
+                        border.color: "transparent"
                         clip: true
                         Behavior on Layout.preferredHeight { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
                         Behavior on opacity { NumberAnimation { duration: 130 } }
-                        Behavior on border.color { ColorAnimation { duration: 130 } }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: settingsController.accentColor
+                            opacity: 0.05
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: "transparent"
+                            border.color: settingsController.accentColor
+                            opacity: navSearchInput.activeFocus ? 1.0 : 0.3
+                            border.width: 1
+                            Behavior on opacity { NumberAnimation { duration: 130 } }
+                        }
 
                         RowLayout {
                             anchors.fill: parent
@@ -1304,7 +1334,15 @@ ApplicationWindow {
                                     anchors.topMargin: 2
                                     anchors.bottomMargin: 3
                                     radius: 6
-                                    color: sectionMouse.containsMouse ? Qt.rgba(0.12, 0.21, 0.35, 0.4) : "transparent"
+                                    color: "transparent"
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 6
+                                        color: settingsController.accentColor
+                                        opacity: sectionMouse.containsMouse ? 0.1 : 0
+                                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                                    }
                                     
                                     Rectangle {
                                         width: parent.width
@@ -1313,8 +1351,6 @@ ApplicationWindow {
                                         color: Qt.rgba(1, 1, 1, 0.03)
                                         visible: index > 0
                                     }
-                                    
-                                    Behavior on color { ColorAnimation { duration: 150 } }
                                 }
 
                                 RowLayout {
@@ -1341,7 +1377,7 @@ ApplicationWindow {
 
                                     Text {
                                         text: tr(sectionTitleKey(section))
-                                        color: sectionMouse.containsMouse ? "#edf6ff" : (navRow.sectionExpanded ? "#99abc4" : "#6f89aa")
+                                        color: sectionMouse.containsMouse ? "#edf6ff" : (navRow.sectionExpanded ? settingsController.accentColor : "#6f89aa")
                                         font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         font.bold: true
@@ -1380,13 +1416,30 @@ ApplicationWindow {
                                 anchors.bottom: parent.bottom
                                 height: 48
                                 radius: 8
-                                color: navRow.selected ? Qt.rgba(0.12, 0.22, 0.38, 0.6) : mouse.containsMouse ? Qt.rgba(0.09, 0.16, 0.27, 0.4) : "transparent"
-                                border.color: navRow.selected ? Qt.rgba(0.25, 0.45, 0.75, 0.5) : "transparent"
+                                color: "transparent"
+                                border.color: "transparent"
                                 border.width: 1
                                 Behavior on x { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
                                 Behavior on width { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
-                                Behavior on color { ColorAnimation { duration: 150 } }
                                 
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 8
+                                    color: settingsController.accentColor
+                                    opacity: navRow.selected ? 0.15 : (mouse.containsMouse ? 0.06 : 0)
+                                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                                }
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 8
+                                    color: "transparent"
+                                    border.color: settingsController.accentColor
+                                    opacity: navRow.selected ? 0.4 : 0
+                                    border.width: 1
+                                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                                }
+
                                 Rectangle {
                                     anchors.fill: parent
                                     radius: 8
@@ -1405,8 +1458,8 @@ ApplicationWindow {
                                 width: 4
                                 height: navRow.selected ? 30 : (mouse.containsMouse ? 22 : 0)
                                 radius: 2
-                                color: navRow.selected ? settingsController.accentColor : "#3a5b8a"
-                                opacity: navRow.selected || mouse.containsMouse ? 1 : 0
+                                color: settingsController.accentColor
+                                opacity: navRow.selected ? 1 : (mouse.containsMouse ? 0.5 : 0)
                                 layer.enabled: navRow.selected
                                 layer.effect: DropShadow {
                                     transparentBorder: true
@@ -1429,6 +1482,7 @@ ApplicationWindow {
                                 anchors.leftMargin: window.sidebarOpen ? 18 : 0
                                 anchors.rightMargin: window.sidebarOpen ? 12 : 0
                                 spacing: window.sidebarOpen ? 12 : 0
+
 
                                 Item {
                                     visible: !window.sidebarOpen
@@ -1466,7 +1520,7 @@ ApplicationWindow {
                                 }
                                 Text {
                                     text: icon.length > 0 ? icon.substring(0, 1).toUpperCase() : "-"
-                                    color: navRow.selected ? settingsController.accentColor : "#8ab4ff"
+                                    color: navRow.selected ? settingsController.accentColor : "#99abc4"
                                     font.family: "Segoe UI"
                                     font.pixelSize: 14
                                     font.bold: true
@@ -1480,7 +1534,7 @@ ApplicationWindow {
                                 }
                                 Text {
                                     text: tr(labelKey)
-                                    color: navRow.selected ? "#edf6ff" : "#99abc4"
+                                    color: navRow.selected ? "#edf6ff" : (mouse.containsMouse ? "#edf6ff" : "#99abc4")
                                     font.family: "Segoe UI"
                                     font.pixelSize: 13
                                     font.bold: navRow.selected
@@ -1489,6 +1543,7 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight
                                     Behavior on opacity { NumberAnimation { duration: navRow.animationDuration } }
+                                    Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                             }
 
