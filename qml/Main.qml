@@ -2429,6 +2429,7 @@ ApplicationWindow {
                 required property int matchY
                 required property int matchW
                 required property int matchH
+                required property string scoreText
                 x: matchX
                 y: matchY
                 width: matchW
@@ -2438,6 +2439,268 @@ ApplicationWindow {
                 border.color: settingsController.successColor
                 border.width: 3
                 opacity: 0.92
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.leftMargin: 2
+                    anchors.topMargin: -24
+                    width: 58
+                    height: 22
+                    radius: 6
+                    color: "#111c31"
+                    border.color: settingsController.successColor
+                    Text {
+                        anchors.centerIn: parent
+                        text: scoreText
+                        color: settingsController.successColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
+            }
+        }
+    }
+
+    Window {
+        id: identifyControlOverlayWindow
+        width: 340
+        height: Math.max(150, identifyOverlayPanel.implicitHeight + 10)
+        visible: identifyItemController.monitorControlVisible || identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+        color: "transparent"
+        transientParent: null
+        flags: window.interactiveOverlayFlags
+
+        function place() {
+            var screenWidth = Screen.width > 0 ? Screen.width : 1920
+            x = screenWidth - width - 24
+            y = 24
+        }
+
+        onVisibleChanged: if (visible) place()
+        onHeightChanged: if (visible) place()
+
+        Rectangle {
+            id: identifyOverlayPanel
+            anchors.fill: parent
+            anchors.margins: 3
+            implicitHeight: identifyOverlayLayout.implicitHeight + 24
+            radius: 8
+            color: "#111c31"
+            border.color: settingsController.accentColor
+            border.width: 1
+            opacity: 0.96
+
+            ColumnLayout {
+                id: identifyOverlayLayout
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 12
+                spacing: 7
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text {
+                        text: window.tr("identify.overlay_title")
+                        color: settingsController.accentColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    PrimaryButton {
+                        text: "X"
+                        Layout.preferredWidth: 34
+                        implicitHeight: 26
+                        fill: "#1d3353"
+                        hoverFill: "#2d496f"
+                        textFill: "#edf6ff"
+                        font.pixelSize: 11
+                        onClicked: identifyItemController.hideMonitorOverlay()
+                    }
+                }
+                Text {
+                    text: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                          ? window.tr("identify.select_stockpile_hint")
+                          : identifyItemController.monitorSummary
+                    color: settingsController.textColor
+                    font.family: "Segoe UI"
+                    font.pixelSize: 12
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+                RowLayout {
+                    visible: identifyItemController.selectedImageUrl !== ""
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Rectangle {
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
+                        radius: 6
+                        color: settingsController.accentPanelColor
+                        border.color: settingsController.borderColor
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            source: identifyItemController.selectedImageUrl
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            cache: false
+                        }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+                        Text {
+                            text: identifyItemController.monitorTarget !== "" ? identifyItemController.monitorTarget : window.tr("identify.no_reference")
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            font.bold: true
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: identifyItemController.monitoring ? window.tr("identify.on") : window.tr("identify.off")
+                            color: identifyItemController.monitoring ? settingsController.successColor : settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text {
+                        text: window.tr("identify.live_matches") + ": " + identifyItemController.monitorMatchCount
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        text: window.tr("identify.confidence") + ": " + identifyItemController.monitorBestScoreText
+                        color: settingsController.warningColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    PrimaryButton {
+                        text: window.tr("identify.select")
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        fill: "#1d3353"
+                        hoverFill: "#2d496f"
+                        textFill: "#edf6ff"
+                        font.pixelSize: 11
+                        enabled: !identifyItemController.selectionBusy
+                        onClicked: identifyItemController.selectImage()
+                    }
+                    PrimaryButton {
+                        text: window.tr("identify.paste")
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        fill: "#1d3353"
+                        hoverFill: "#2d496f"
+                        textFill: "#edf6ff"
+                        font.pixelSize: 11
+                        enabled: !identifyItemController.selectionBusy
+                        onClicked: identifyItemController.pasteClipboard()
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    PrimaryButton {
+                        text: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                              ? window.tr("identify.cancel_select")
+                              : window.tr("identify.select_stockpile")
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        fill: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible ? settingsController.warningColor : "#1d3353"
+                        hoverFill: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible ? "#ffd166" : "#2d496f"
+                        textFill: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible ? "#041014" : "#edf6ff"
+                        font.pixelSize: 11
+                        onClicked: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                                   ? identifyItemController.cancelStockpileItemSelection()
+                                   : identifyItemController.beginStockpileItemSelection()
+                    }
+                    PrimaryButton {
+                        text: window.tr("identify.clear_reference")
+                        Layout.preferredWidth: 118
+                        implicitHeight: 30
+                        fill: "#1d3353"
+                        hoverFill: "#2d496f"
+                        textFill: "#edf6ff"
+                        font.pixelSize: 11
+                        onClicked: identifyItemController.clearReference()
+                    }
+                }
+            }
+        }
+    }
+
+    Window {
+        id: identifySelectionOverlayWindow
+        x: 0
+        y: 0
+        width: Math.max(1, (Screen.width > 0 ? Screen.width : 1920) - identifyControlOverlayWindow.width - 48)
+        height: Screen.height > 0 ? Screen.height : 1080
+        visible: identifyItemController.selectionOverlayVisible
+        color: "transparent"
+        transientParent: null
+        flags: window.interactiveOverlayFlags
+
+        Rectangle {
+            anchors.fill: parent
+            color: "#000000"
+            opacity: 0.05
+        }
+
+        Repeater {
+            model: identifyItemController.selectionCandidatesModel
+            delegate: Rectangle {
+                required property int candidateIndex
+                required property int selectX
+                required property int selectY
+                required property int selectW
+                required property int selectH
+                property bool hot: false
+                x: selectX
+                y: selectY
+                width: selectW
+                height: selectH
+                radius: 5
+                scale: hot ? 1.03 : 1.0
+                transformOrigin: Item.Center
+                color: hot ? "#445eead4" : "#145eead4"
+                border.color: hot ? settingsController.warningColor : settingsController.accentColor
+                border.width: hot ? 3 : 2
+                opacity: 0.94
+                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: parent.hot = true
+                    onExited: parent.hot = false
+                    onClicked: identifyItemController.selectStockpileCandidate(parent.candidateIndex)
+                }
             }
         }
     }

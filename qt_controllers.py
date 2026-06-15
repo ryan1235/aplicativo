@@ -44,13 +44,10 @@ from auto_clicker import ACTION_KEYS, HOTKEYS, MOUSE_BUTTONS, POINT, RECT, AutoC
 import identify_service
 from identify_service import (
     dependencies_status as identify_dependencies_status,
+    detect_stockpile_item_regions,
+    prepare_detection_template,
+    prepare_detection_template_path,
     grab_clipboard_image,
-    grab_screen_image,
-    index_icon_templates,
-    prepare_image,
-    prepare_image_path,
-    scan_image,
-    scan_image_path,
 )
 from i18n import SUPPORTED_LANGUAGES, Translator, normalize_language
 from production_service import (
@@ -5678,50 +5675,56 @@ class ItemSearchController(QObject):
 
 
 class IdentifyItemController(QObject):
+    MONITOR_PRESENCE_GRACE_TICKS = 50
+
     changed = Signal()
     scanFinished = Signal(list, str)
     monitorFinished = Signal(object, str, bool)
+    selectionFinished = Signal(object, str)
 
     def __init__(self, item_search: ItemSearchController, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.item_search = item_search
         self.results = DictListModel(["name", "score", "scoreText", "icon", "path"], self)
-        self.monitorMatches = DictListModel(["matchX", "matchY", "matchW", "matchH"], self)
-        self._templates: list[Any] = []
-        self._templates_loaded = False
+        self.monitorMatches = DictListModel(["matchX", "matchY", "matchW", "matchH", "matchScore", "scoreText"], self)
+        self.selectionCandidates = DictListModel(["candidateIndex", "selectX", "selectY", "selectW", "selectH", "cropX", "cropY", "cropW", "cropH"], self)
         self._status = "Ready."
         self._selected_path: Path | None = None
         self._selected_image_url = ""
-        self._mode = "Hybrid"
-        self._threshold = 0.85
+        self._reference_preview_revision = 0
+        self._mode = "Color"
+        self._threshold = 0.86
         self._scanning = False
         self._clipboard_image = None
+        self._detection_template: Any | None = None
         self._last_result_rows: list[dict[str, Any]] = []
         self._monitoring = False
         self._monitor_dependencies_checked = False
         self._monitor_available = True
-        self._monitor_target_name = ""
         self._monitor_overlay_visible = False
+        self._monitor_control_visible = False
         self._monitor_worker_active = False
         self._monitor_hwnd = 0
-        self._monitor_tick = 0
+        self._monitor_match_count = 0
+        self._monitor_best_score = 0.0
+        self._monitor_summary = "Detection off."
+        self._monitor_last_rows: list[dict[str, Any]] = []
+        self._monitor_miss_count = 0
+        self._monitor_sound_played = False
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_screenshot = None
+        self._selection_candidate_rows: list[dict[str, Any]] = []
+        self._selection_request_id = 0
         self._monitor_timer = QTimer(self)
-        self._monitor_timer.setInterval(280)
+        self._monitor_timer.setInterval(200)
         self._monitor_timer.timeout.connect(self._run_monitor_tick)
         self.scanFinished.connect(self._apply_scan_result)
         self.monitorFinished.connect(self._apply_monitor_result)
+        self.selectionFinished.connect(self._apply_selection_result)
 
     @Slot()
     def ensureLoaded(self) -> None:
-        self.changed.emit()
-
-    def _ensure_templates_loaded(self) -> None:
-        """Load icon templates lazily on first use to avoid spending 50-80MB at startup."""
-        if self._templates_loaded:
-            return
-        self._templates, load_status = index_icon_templates()
-        self._templates_loaded = True
-        self._status = f"{load_status} | {identify_dependencies_status()}"
         self.changed.emit()
 
     @Property(str, notify=changed)
@@ -5758,15 +5761,49 @@ class IdentifyItemController(QObject):
 
     @Property(str, notify=changed)
     def monitorTarget(self) -> str:
-        return self._monitor_target_name
+        if self._detection_template is not None:
+            return str(getattr(self._detection_template, "name", "") or "selected image")
+        if self._selected_path:
+            return self._selected_path.name
+        if self._clipboard_image is not None:
+            return "clipboard image"
+        return ""
 
     @Property(bool, notify=changed)
     def monitorOverlayVisible(self) -> bool:
         return self._monitor_overlay_visible
 
+    @Property(bool, notify=changed)
+    def monitorControlVisible(self) -> bool:
+        return self._monitor_control_visible
+
+    @Property(bool, notify=changed)
+    def selectionOverlayVisible(self) -> bool:
+        return self._selection_overlay_visible
+
+    @Property(bool, notify=changed)
+    def selectionBusy(self) -> bool:
+        return self._selection_busy
+
+    @Property(int, notify=changed)
+    def monitorMatchCount(self) -> int:
+        return self._monitor_match_count
+
+    @Property(float, notify=changed)
+    def monitorBestScore(self) -> float:
+        return self._monitor_best_score
+
+    @Property(str, notify=changed)
+    def monitorBestScoreText(self) -> str:
+        return f"{self._monitor_best_score:.3f}" if self._monitor_best_score > 0 else "-"
+
+    @Property(str, notify=changed)
+    def monitorSummary(self) -> str:
+        return self._monitor_summary
+
     @Property(int, notify=changed)
     def indexedCount(self) -> int:
-        return len(self._templates)
+        return 0
 
     @Property(QObject, constant=True)
     def resultsModel(self) -> QObject:
@@ -5776,36 +5813,31 @@ class IdentifyItemController(QObject):
     def monitorMatchesModel(self) -> QObject:
         return self.monitorMatches
 
+    @Property(QObject, constant=True)
+    def selectionCandidatesModel(self) -> QObject:
+        return self.selectionCandidates
+
     @Property("QStringList", constant=True)
     def modes(self) -> list[str]:
-        return ["Gray", "Color", "Hybrid"]
+        return ["Color"]
 
     @Slot()
     def reindex(self) -> None:
-        self._templates, load_status = index_icon_templates()
-        self._templates_loaded = True
-        self._status = f"{load_status} | {identify_dependencies_status()}"
+        self._status = f"Direct OpenCV detection | {identify_dependencies_status()}"
         self.changed.emit()
 
     @Slot(str)
     def setMode(self, mode: str) -> None:
-        if mode not in {"Gray", "Color", "Hybrid"}:
-            return
-        self._mode = mode
+        self._mode = "Color"
         self.changed.emit()
 
     @Slot(float)
     def setThreshold(self, value: float) -> None:
-        self._threshold = max(0.5, min(0.99, float(value)))
+        self._threshold = 0.86
         self.changed.emit()
 
     @Slot(int)
     def selectResult(self, index: int) -> None:
-        if index < 0 or index >= len(self._last_result_rows):
-            return
-        self._monitor_target_name = str(self._last_result_rows[index].get("name") or "")
-        if self._monitoring and self._monitor_target_name:
-            self._status = f"Monitoring: {self._monitor_target_name}"
         self.changed.emit()
 
     @Slot()
@@ -5829,29 +5861,170 @@ class IdentifyItemController(QObject):
     def _set_selected_path(self, path: Path) -> None:
         self._selected_path = path
         self._clipboard_image = None
-        self._selected_image_url = file_url(path)
-        self._status = f"Selected: {path.name}"
+        self._prepare_reference_from_path(path)
+        if self._detection_template is not None:
+            self._set_reference_preview_url(path)
+            self._reset_monitor_tracking(clear_visible_matches=True)
+            self._status = f"Reference selected: {path.name}"
+            if self._monitor_control_visible and not self._monitoring:
+                self.startMonitor()
+                return
         self.changed.emit()
 
     @Slot()
     def scanSelected(self) -> None:
-        if self._scanning:
+        self.showMonitorOverlay()
+
+    @Slot()
+    def showMonitorOverlay(self) -> None:
+        self._monitor_control_visible = True
+        if self._monitoring:
+            self._monitor_summary = f"Detection active: {self.monitorTarget or 'selected image'}"
+            self._status = self._monitor_summary
+        elif self._detection_template is not None:
+            self.startMonitor()
             return
-        if not self._selected_path and self._clipboard_image is None:
-            self._status = "Select, paste, or capture an image first."
+        else:
+            self._monitor_summary = "Select an item from stockpile or paste a reference image."
+            self._status = self._monitor_summary
+        self.changed.emit()
+
+    @Slot()
+    def hideMonitorOverlay(self) -> None:
+        if self._monitoring:
+            self.stopMonitor()
+        self._selection_request_id += 1
+        self._monitor_control_visible = False
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        self.changed.emit()
+
+    @Slot()
+    def clearReference(self) -> None:
+        was_monitoring = self._monitoring
+        if was_monitoring:
+            self.stopMonitor()
+        self._selected_path = None
+        self._selected_image_url = ""
+        self._reference_preview_revision += 1
+        self._clipboard_image = None
+        self._detection_template = None
+        self._last_result_rows = []
+        self.results.set_items([])
+        self._selection_request_id += 1
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        self._reset_monitor_tracking(clear_visible_matches=True)
+        self._monitor_summary = "No reference selected."
+        self._status = "Reference cleared."
+        self.changed.emit()
+
+    @Slot()
+    def beginStockpileItemSelection(self) -> None:
+        if self._selection_busy:
+            return
+        np_module, cv2_module, image_grab = identify_service.monitor_dependencies()
+        self._monitor_available = bool(np_module is not None and cv2_module is not None and image_grab is not None)
+        if not self._monitor_available:
+            self._status = "Install numpy and opencv-python for stockpile item selection."
             self.changed.emit()
             return
-        self._ensure_templates_loaded()
-        self._begin_scan()
+        if not self._is_foxhole_focused():
+            self._status = "Focus Foxhole with the stockpile panel open first."
+            self.changed.emit()
+            return
+        bbox = self._window_client_rect()
+        offset_x = int(bbox[0]) if bbox else 0
+        offset_y = int(bbox[1]) if bbox else 0
+        self._selection_busy = True
+        self._selection_overlay_visible = False
+        self.selectionCandidates.set_items([])
+        self._status = "Scanning stockpile panel..."
+        self._selection_request_id += 1
+        request_id = self._selection_request_id
+        self.changed.emit()
 
         def worker() -> None:
-            if self._clipboard_image is not None:
-                matches, status = scan_image(self._clipboard_image, self._templates, mode=self._mode)
-            else:
-                matches, status = scan_image_path(Path(self._selected_path), self._templates, mode=self._mode)
-            self.scanFinished.emit([match_to_dict(match) for match in matches], status)
+            try:
+                _np_module, _cv2_module, grabber = identify_service.monitor_dependencies()
+                if grabber is None:
+                    self.selectionFinished.emit({"rows": [], "image": None, "requestId": request_id}, "Screen capture is unavailable.")
+                    return
+                screenshot = grabber.grab(bbox=bbox) if bbox else grabber.grab()
+                regions, status = detect_stockpile_item_regions(screenshot)
+                scale_x, scale_y = self._qt_screen_scale(screenshot.width, screenshot.height)
+                rows: list[dict[str, Any]] = []
+                for region in regions:
+                    row = dict(region)
+                    row["candidateIndex"] = len(rows)
+                    display_x = int(row["selectX"]) + offset_x
+                    display_y = int(row["selectY"]) + offset_y
+                    row["selectX"] = int(round(display_x * scale_x))
+                    row["selectY"] = int(round(display_y * scale_y))
+                    row["selectW"] = max(8, int(round(int(row["selectW"]) * scale_x)))
+                    row["selectH"] = max(8, int(round(int(row["selectH"]) * scale_y)))
+                    rows.append(row)
+                self.selectionFinished.emit({"rows": rows, "image": screenshot, "requestId": request_id}, status)
+            except Exception as exc:
+                self.selectionFinished.emit({"rows": [], "image": None, "requestId": request_id}, f"Stockpile selection error: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
+
+    @Slot()
+    def cancelStockpileItemSelection(self) -> None:
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_request_id += 1
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        self._status = "Stockpile item selection canceled."
+        self.changed.emit()
+
+    @Slot(int)
+    def selectStockpileCandidate(self, index: int) -> None:
+        if index < 0 or index >= len(self._selection_candidate_rows) or self._selection_screenshot is None:
+            return
+        row = self._selection_candidate_rows[index]
+        try:
+            crop_x = int(row.get("cropX", 0))
+            crop_y = int(row.get("cropY", 0))
+            crop_w = int(row.get("cropW", 0))
+            crop_h = int(row.get("cropH", 0))
+            crop = self._selection_screenshot.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h)).convert("RGBA")
+        except Exception as exc:
+            self._status = f"Could not crop selected item: {exc}"
+            self.changed.emit()
+            return
+
+        self._clipboard_image = crop
+        self._selected_path = None
+        self._prepare_reference_from_image(crop, "stockpile item")
+        preview_path = identify_preview_path()
+        try:
+            crop.save(preview_path)
+            self._set_reference_preview_url(preview_path)
+        except Exception:
+            self._selected_image_url = ""
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        if self._detection_template is not None:
+            self._reset_monitor_tracking(clear_visible_matches=True)
+            self._monitor_summary = "Reference selected from stockpile."
+            self._status = "Reference selected from stockpile."
+            if self._monitor_control_visible and not self._monitoring:
+                self.startMonitor()
+                return
+        self.changed.emit()
 
     @Slot()
     def pasteClipboard(self) -> None:
@@ -5862,50 +6035,78 @@ class IdentifyItemController(QObject):
             return
         self._clipboard_image = image
         self._selected_path = None
+        self._prepare_reference_from_image(image, "clipboard image")
         preview_path = identify_preview_path()
         try:
             image.save(preview_path)
-            self._selected_image_url = file_url(preview_path)
+            self._set_reference_preview_url(preview_path)
         except Exception:
             self._selected_image_url = ""
-        self._status = status
+        if self._detection_template is not None:
+            self._reset_monitor_tracking(clear_visible_matches=True)
+            self._status = f"{status} Reference ready."
+            if self._monitor_control_visible and not self._monitoring:
+                self.startMonitor()
+                return
         self.changed.emit()
-        self.scanSelected()
 
-    @Slot()
-    def captureScreen(self) -> None:
-        image, status = grab_screen_image()
-        if image is None:
+    def _prepare_reference_from_path(self, path: Path) -> None:
+        template, status = prepare_detection_template_path(path)
+        self._detection_template = template
+        self._monitor_summary = status
+        if template is None:
             self._status = status
-            self.changed.emit()
-            return
-        self._clipboard_image = image
-        self._selected_path = None
-        preview_path = identify_preview_path()
-        try:
-            image.save(preview_path)
-            self._selected_image_url = file_url(preview_path)
-        except Exception:
-            self._selected_image_url = ""
-        self._status = status
-        self.changed.emit()
-        self.scanSelected()
+
+    def _prepare_reference_from_image(self, image, name: str) -> None:
+        template, status = prepare_detection_template(image, name=name)
+        self._detection_template = template
+        self._monitor_summary = status
+        if template is None:
+            self._status = status
+
+    def _set_reference_preview_url(self, path: Path) -> None:
+        self._reference_preview_revision += 1
+        self._selected_image_url = f"{file_url(path)}?v={self._reference_preview_revision}"
+
+    def _reset_monitor_tracking(self, *, clear_visible_matches: bool = False) -> None:
+        self._monitor_last_rows = []
+        self._monitor_miss_count = 0
+        self._monitor_sound_played = False
+        if clear_visible_matches:
+            self.monitorMatches.set_items([])
+            self._monitor_match_count = 0
+            self._monitor_best_score = 0.0
 
     def _begin_scan(self) -> None:
         self._scanning = True
-        self._status = f"Scanning {len(self._templates)} templates with {self._mode.lower()} mode..."
+        self._status = "Starting direct detection..."
         self.changed.emit()
 
     @Slot(list, str)
     def _apply_scan_result(self, matches: list[dict[str, Any]], status: str) -> None:
-        visible = [match for match in matches if float(match.get("score", 0.0)) >= self._threshold]
-        rows = visible or matches
-        self._last_result_rows = rows
-        self.results.set_items(rows)
-        if rows and not self._monitor_target_name:
-            self._monitor_target_name = str(rows[0].get("name") or "")
-        self._status = f"{status}; showing {len(rows)} result(s)"
+        self._last_result_rows = matches
+        self.results.set_items(matches)
+        self._status = status
         self._scanning = False
+        self.changed.emit()
+
+    @Slot(object, str)
+    def _apply_selection_result(self, payload: object, status: str) -> None:
+        rows: list[dict[str, Any]] = []
+        image = None
+        if isinstance(payload, dict):
+            request_id = payload.get("requestId")
+            if request_id is not None and int(request_id) != self._selection_request_id:
+                return
+            raw_rows = payload.get("rows", [])
+            rows = list(raw_rows) if isinstance(raw_rows, list) else []
+            image = payload.get("image")
+        self._selection_busy = False
+        self._selection_candidate_rows = rows
+        self._selection_screenshot = image
+        self.selectionCandidates.set_items(rows)
+        self._selection_overlay_visible = bool(rows)
+        self._status = status
         self.changed.emit()
 
     @Slot()
@@ -5924,16 +6125,20 @@ class IdentifyItemController(QObject):
             self._status = "Install numpy and opencv-python for on-screen monitoring."
             self.changed.emit()
             return
-        if not self._monitor_target_name and self._last_result_rows:
-            self._monitor_target_name = str(self._last_result_rows[0].get("name") or "")
-        if not self._monitor_target_name and self._current_target_gray() is None:
-            self._status = "Run an identification first."
+        if self._detection_template is None:
+            self._monitor_control_visible = True
+            self._monitor_summary = "Select an item from stockpile or paste a reference image first."
+            self._status = self._monitor_summary
             self.changed.emit()
             return
-        self._ensure_templates_loaded()
+        self._monitor_control_visible = True
         self._monitoring = True
-        self._monitor_tick = 0
-        self._status = f"Monitoring: {self._monitor_target_name or 'selected image'}"
+        self._monitor_overlay_visible = True
+        self._monitor_match_count = 0
+        self._monitor_best_score = 0.0
+        self._monitor_summary = "Detection active. Waiting for Foxhole focus."
+        self._reset_monitor_tracking(clear_visible_matches=True)
+        self._status = f"Detection active: {self.monitorTarget or 'selected image'}"
         self._monitor_timer.start()
         self.changed.emit()
 
@@ -5944,34 +6149,12 @@ class IdentifyItemController(QObject):
         self._monitor_overlay_visible = False
         self._monitor_timer.stop()
         self.monitorMatches.set_items([])
+        self._monitor_match_count = 0
+        self._monitor_best_score = 0.0
+        self._monitor_summary = "Detection off."
+        self._reset_monitor_tracking(clear_visible_matches=False)
         self._status = "Monitoring stopped."
         self.changed.emit()
-
-    def _current_target_gray(self):
-        if self._selected_path and self._selected_path.exists():
-            gray, _color = prepare_image_path(self._selected_path)
-            return gray
-        if self._clipboard_image is not None:
-            gray, _color = prepare_image(self._clipboard_image)
-            return gray
-        return None
-
-    def _monitor_templates(self) -> list[Any]:
-        templates: list[Any] = []
-        current_gray = self._current_target_gray()
-        if current_gray is not None:
-            templates.append(current_gray)
-        if self._monitor_target_name:
-            templates.extend(template.gray for template in self._templates if template.name == self._monitor_target_name)
-        deduped: list[Any] = []
-        seen: set[int] = set()
-        for template in templates:
-            identity = id(template)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            deduped.append(template)
-        return deduped
 
     def _is_foxhole_focused(self) -> bool:
         try:
@@ -6012,21 +6195,59 @@ class IdentifyItemController(QObject):
         except Exception:
             return None
 
+    def _qt_screen_scale(self, image_width: int | None = None, image_height: int | None = None) -> tuple[float, float]:
+        try:
+            screen = QGuiApplication.primaryScreen()
+            geometry = screen.geometry() if screen is not None else None
+            logical_width = float(geometry.width()) if geometry is not None and geometry.width() > 0 else 0.0
+            logical_height = float(geometry.height()) if geometry is not None and geometry.height() > 0 else 0.0
+        except Exception:
+            logical_width = 0.0
+            logical_height = 0.0
+        try:
+            user32 = ctypes.windll.user32
+            physical_width = float(user32.GetSystemMetrics(0))
+            physical_height = float(user32.GetSystemMetrics(1))
+        except Exception:
+            physical_width = float(image_width or 0)
+            physical_height = float(image_height or 0)
+        if image_width and image_height and (physical_width <= 0 or physical_height <= 0):
+            physical_width = float(image_width)
+            physical_height = float(image_height)
+        scale_x = logical_width / physical_width if logical_width > 0 and physical_width > 0 else 1.0
+        scale_y = logical_height / physical_height if logical_height > 0 and physical_height > 0 else 1.0
+        if not 0.25 <= scale_x <= 4.0:
+            scale_x = 1.0
+        if not 0.25 <= scale_y <= 4.0:
+            scale_y = 1.0
+        return scale_x, scale_y
+
+    def _play_detection_alert(self) -> None:
+        def worker() -> None:
+            try:
+                import winsound
+
+                winsound.Beep(500, 180)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
     @Slot()
     def _run_monitor_tick(self) -> None:
         if not self._monitoring or self._monitor_worker_active:
             return
-        self._monitor_tick += 1
-        templates = self._monitor_templates()
-        if not templates:
-            self._status = "Run an identification first."
-            self._monitor_overlay_visible = False
+        template = self._detection_template
+        if template is None:
+            self._status = "Select, paste, or choose a stockpile item first."
+            self._monitor_summary = "No reference selected."
             self.monitorMatches.set_items([])
             self.changed.emit()
             return
         if not self._is_foxhole_focused():
-            self._status = f"Monitoring: {self._monitor_target_name or 'selected image'} | waiting for Foxhole focus"
-            self._monitor_overlay_visible = False
+            self._status = f"Detection active: {self.monitorTarget or 'selected image'} | waiting for Foxhole focus"
+            self._monitor_summary = "Waiting for Foxhole focus."
+            self._monitor_match_count = 0
             self.monitorMatches.set_items([])
             self.changed.emit()
             return
@@ -6041,37 +6262,68 @@ class IdentifyItemController(QObject):
                     self.monitorFinished.emit([], "Monitor dependencies are unavailable.", False)
                     return
                 screenshot = image_grab.grab(bbox=bbox) if bbox else image_grab.grab()
-                screen_np = np_module.array(screenshot)
+                screen_np = np_module.array(screenshot.convert("RGB"), dtype=np_module.uint8)
                 gray = cv2_module.cvtColor(screen_np, cv2_module.COLOR_RGB2GRAY)
-                matches: list[dict[str, int]] = []
+                base_template = template.gray
+                scale_x, scale_y = self._qt_screen_scale(screenshot.width, screenshot.height)
+                matches: list[dict[str, Any]] = []
                 best_score = -1.0
-                for template in templates:
-                    for scale in (0.85, 1.0, 1.15):
-                        th = max(12, int(template.shape[0] * scale))
-                        tw = max(12, int(template.shape[1] * scale))
-                        if th >= gray.shape[0] or tw >= gray.shape[1]:
-                            continue
-                        interpolation = cv2_module.INTER_AREA if scale < 1 else cv2_module.INTER_CUBIC
-                        resized = cv2_module.resize(template, (tw, th), interpolation=interpolation)
-                        result = cv2_module.matchTemplate(gray, resized, cv2_module.TM_CCOEFF_NORMED)
-                        _min_val, max_val, _min_loc, _max_loc = cv2_module.minMaxLoc(result)
-                        best_score = max(best_score, float(max_val))
-                        ys, xs = np_module.where(result >= threshold)
-                        for x, y in zip(xs.tolist(), ys.tolist()):
-                            gx = int(x + (bbox[0] if bbox else 0))
-                            gy = int(y + (bbox[1] if bbox else 0))
-                            if all(abs(gx - item["matchX"]) > 20 or abs(gy - item["matchY"]) > 20 for item in matches):
-                                matches.append({"matchX": gx, "matchY": gy, "matchW": tw, "matchH": th})
-                            if len(matches) >= 10:
+                th, tw = int(base_template.shape[0]), int(base_template.shape[1])
+                if th < gray.shape[0] and tw < gray.shape[1]:
+                    result = cv2_module.matchTemplate(gray, base_template, cv2_module.TM_CCOEFF_NORMED)
+                    _min_val, max_val, _min_loc, max_loc = cv2_module.minMaxLoc(result)
+                    best_score = max(best_score, float(max_val))
+                    if max_val >= threshold:
+                        mask = (result >= threshold).astype(np_module.uint8) * 255
+                        contours, _hierarchy = cv2_module.findContours(mask, cv2_module.RETR_EXTERNAL, cv2_module.CHAIN_APPROX_SIMPLE)
+                        ranked: list[tuple[float, int, int]] = []
+                        for contour in contours:
+                            rx, ry, rw, rh = cv2_module.boundingRect(contour)
+                            roi = result[ry : ry + rh, rx : rx + rw]
+                            if roi.size == 0:
+                                continue
+                            _roi_min, roi_max, _roi_min_loc, roi_max_loc = cv2_module.minMaxLoc(roi)
+                            ranked.append((float(roi_max), int(rx + roi_max_loc[0]), int(ry + roi_max_loc[1])))
+                        if not ranked:
+                            ranked.append((float(max_val), int(max_loc[0]), int(max_loc[1])))
+                        ranked.sort(reverse=True)
+                        min_distance = max(12, int(max(tw, th) * 0.65))
+                        for score, x, y in ranked:
+                            physical_x = int(x + (bbox[0] if bbox else 0))
+                            physical_y = int(y + (bbox[1] if bbox else 0))
+                            display_x = int(round(physical_x * scale_x))
+                            display_y = int(round(physical_y * scale_y))
+                            display_w = max(8, int(round(tw * scale_x)))
+                            display_h = max(8, int(round(th * scale_y)))
+                            center_x = display_x + (display_w // 2)
+                            center_y = display_y + (display_h // 2)
+                            duplicate = False
+                            for item in matches:
+                                item_center_x = int(item["matchX"]) + (int(item["matchW"]) // 2)
+                                item_center_y = int(item["matchY"]) + (int(item["matchH"]) // 2)
+                                if abs(center_x - item_center_x) < min_distance and abs(center_y - item_center_y) < min_distance:
+                                    duplicate = True
+                                    break
+                            if duplicate:
+                                continue
+                            matches.append(
+                                {
+                                    "matchX": display_x,
+                                    "matchY": display_y,
+                                    "matchW": display_w,
+                                    "matchH": display_h,
+                                    "matchScore": score,
+                                    "scoreText": f"{score:.3f}",
+                                }
+                            )
+                            if len(matches) >= 12:
                                 break
-                        if len(matches) >= 10:
-                            break
-                    if len(matches) >= 10:
-                        break
                 if matches:
-                    self.monitorFinished.emit(matches, f"Found: {len(matches)}", True)
+                    matches.sort(key=lambda item: float(item.get("matchScore", 0.0)), reverse=True)
+                    self.monitorFinished.emit(matches[:12], f"Detected: {len(matches[:12])}", True)
                 else:
-                    self.monitorFinished.emit([], f"Searching... score {best_score:.3f}", False)
+                    score_text = f"{best_score:.3f}" if best_score >= 0 else "-"
+                    self.monitorFinished.emit([], f"Searching... best confidence {score_text}", True)
             except Exception as exc:
                 self.monitorFinished.emit([], f"Monitor error: {exc}", False)
 
@@ -6086,14 +6338,42 @@ class IdentifyItemController(QObject):
             self.changed.emit()
             return
         rows = list(matches) if isinstance(matches, list) else []
+        if rows:
+            if not self._monitor_sound_played:
+                self._play_detection_alert()
+                self._monitor_sound_played = True
+            self._monitor_last_rows = [dict(item) for item in rows if isinstance(item, dict)]
+            self._monitor_miss_count = 0
+        else:
+            self._monitor_miss_count += 1
+            if self._monitor_miss_count < self.MONITOR_PRESENCE_GRACE_TICKS and self._monitor_last_rows:
+                rows = [dict(item) for item in self._monitor_last_rows]
+                status = "Detected: held"
+            else:
+                self._monitor_last_rows = []
+                self._monitor_sound_played = False
+
         self.monitorMatches.set_items(rows)
-        self._monitor_overlay_visible = bool(visible and rows and self._monitoring)
+        self._monitor_overlay_visible = bool(visible and self._monitoring)
+        self._monitor_match_count = len(rows)
+        scores = [float(item.get("matchScore", 0.0)) for item in rows if isinstance(item, dict)]
+        if scores:
+            self._monitor_best_score = max(scores)
+        elif match := re.search(r"(?:confidence|score)\s+([0-9.]+)", status, flags=re.IGNORECASE):
+            try:
+                self._monitor_best_score = float(match.group(1))
+            except ValueError:
+                self._monitor_best_score = 0.0
+        elif "confidence" not in status.lower() and "score" not in status.lower():
+            self._monitor_best_score = 0.0
+        self._monitor_summary = status
         self._status = status
         self.changed.emit()
 
     @Slot()
     def shutdown(self) -> None:
         self.stopMonitor()
+        self.cancelStockpileItemSelection()
 
 
 class ProductionController(QObject):
@@ -8006,16 +8286,6 @@ def identify_preview_path() -> Path:
     path = extracted_dir() / "identify-preview.png"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def match_to_dict(match) -> dict[str, Any]:
-    return {
-        "name": str(match.name),
-        "score": float(match.score),
-        "scoreText": f"{float(match.score):.3f}",
-        "icon": file_url(match.path) if match.path and Path(match.path).exists() else "",
-        "path": str(match.path),
-    }
 
 
 def load_item_index() -> list[dict[str, str]]:

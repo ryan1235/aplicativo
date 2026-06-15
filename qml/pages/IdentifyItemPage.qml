@@ -16,63 +16,39 @@ Flickable {
         return i18nController.t(key)
     }
 
-    function fmt(key, token, value) {
-        return tr(key).replace(token, value)
-    }
-
     ColumnLayout {
         id: content
         width: root.width
         spacing: 16
 
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
-            spacing: 12
-
-            ColumnLayout {
+            spacing: 3
+            Text {
+                text: tr("identify.title")
+                color: settingsController.textColor
+                font.family: "Segoe UI"
+                font.pixelSize: 26
+                font.bold: true
                 Layout.fillWidth: true
-                spacing: 3
-                Text {
-                    text: tr("identify.title")
-                    color: "#edf6ff"
-                    font.family: "Segoe UI"
-                    font.pixelSize: 26
-                    font.bold: true
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-                Text {
-                    text: tr("identify.subtitle")
-                    color: "#8ab4ff"
-                    font.family: "Segoe UI"
-                    font.pixelSize: 12
-                    font.bold: true
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
+                elide: Text.ElideRight
             }
-
-            PrimaryButton {
-                text: tr("identify.reindex")
-                fill: "#1d3353"
-                hoverFill: "#2d496f"
-                textFill: "#edf6ff"
-                onClicked: identifyItemController.reindex()
-            }
-            PrimaryButton {
-                text: tr("identify.open_search")
-                fill: "#1d3353"
-                hoverFill: "#2d496f"
-                textFill: "#edf6ff"
-                onClicked: appController.setCurrentPage("itemSearch")
+            Text {
+                text: tr("identify.subtitle")
+                color: settingsController.accentHoverColor
+                font.family: "Segoe UI"
+                font.pixelSize: 12
+                font.bold: true
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
             }
         }
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? "#ff7a90" : "#24486d"
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? "#ff7a90" : settingsController.borderColor
             implicitHeight: actionColumn.implicitHeight + 28
 
             ColumnLayout {
@@ -85,7 +61,7 @@ Flickable {
 
                 Text {
                     text: identifyItemController.status
-                    color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? "#ffb3c0" : "#99abc4"
+                    color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? "#ffb3c0" : settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     Layout.fillWidth: true
@@ -107,85 +83,60 @@ Flickable {
                         onClicked: identifyItemController.pasteClipboard()
                     }
                     PrimaryButton {
-                        text: tr("identify.capture")
+                        text: tr("identify.clear_reference")
                         fill: "#1d3353"
                         hoverFill: "#2d496f"
                         textFill: "#edf6ff"
-                        onClicked: identifyItemController.captureScreen()
+                        onClicked: identifyItemController.clearReference()
                     }
+                    Item { Layout.fillWidth: true }
                     PrimaryButton {
-                        text: identifyItemController.scanning ? tr("identify.scanning") : tr("identify.scan")
-                        enabled: !identifyItemController.scanning
-                        onClicked: identifyItemController.scanSelected()
-                    }
-                    PrimaryButton {
-                        text: identifyItemController.monitoring ? tr("identify.monitor_stop") : tr("identify.monitor_start")
+                        text: tr("identify.detection_on")
                         enabled: identifyItemController.monitorAvailable
-                        fill: identifyItemController.monitoring ? settingsController.accentColor : "#1d3353"
-                        hoverFill: identifyItemController.monitoring ? "#8ab4ff" : "#2d496f"
-                        textFill: identifyItemController.monitoring ? "#041014" : "#edf6ff"
-                        onClicked: identifyItemController.toggleMonitor()
+                        fill: settingsController.accentColor
+                        hoverFill: settingsController.accentHoverColor
+                        textFill: "#041014"
+                        onClicked: identifyItemController.showMonitorOverlay()
                     }
                 }
             }
         }
 
-        Rectangle {
+        GridLayout {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
-            implicitHeight: settingsRow.implicitHeight + 28
+            columns: root.width > 860 ? 4 : 2
+            columnSpacing: 12
+            rowSpacing: 12
 
-            RowLayout {
-                id: settingsRow
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 14
-                spacing: 12
-
-                Text {
-                    text: tr("identify.mode")
-                    color: "#99abc4"
-                    font.family: "Segoe UI"
-                    font.bold: true
-                }
-                PrimaryComboBox {
-                    Layout.preferredWidth: 140
-                    model: identifyItemController.modes
-                    currentIndex: Math.max(0, identifyItemController.modes.indexOf(identifyItemController.mode))
-                    onActivated: identifyItemController.setMode(currentText)
-                }
-                Text {
-                    text: tr("identify.threshold")
-                    color: "#99abc4"
-                    font.family: "Segoe UI"
-                    font.bold: true
-                }
-                Slider {
-                    id: thresholdSlider
-                    from: 0.5
-                    to: 0.99
-                    value: identifyItemController.threshold
-                    Layout.preferredWidth: 240
-                    onMoved: identifyItemController.setThreshold(value)
-                }
-                Text {
-                    text: thresholdSlider.value.toFixed(2)
-                    color: "#edf6ff"
-                    font.family: "Segoe UI"
-                    font.bold: true
-                    Layout.preferredWidth: 42
-                }
-                Text {
-                    text: fmt("identify.templates", "{count}", String(identifyItemController.indexedCount))
-                    color: "#99abc4"
-                    font.family: "Segoe UI"
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignRight
-                    elide: Text.ElideLeft
-                }
+            MetricCard {
+                Layout.fillWidth: true
+                title: tr("identify.detection")
+                value: identifyItemController.monitoring ? tr("identify.on") : tr("identify.off")
+                detail: identifyItemController.monitorTarget !== "" ? identifyItemController.monitorTarget : tr("identify.no_image")
+                accent: identifyItemController.monitoring ? settingsController.successColor : settingsController.mutedTextColor
+                valuePixelSize: 20
+            }
+            MetricCard {
+                Layout.fillWidth: true
+                title: tr("identify.live_matches")
+                value: String(identifyItemController.monitorMatchCount)
+                detail: tr("identify.overlay_title")
+                accent: settingsController.accentColor
+            }
+            MetricCard {
+                Layout.fillWidth: true
+                title: tr("identify.confidence")
+                value: identifyItemController.monitorBestScoreText
+                detail: tr("identify.color_cv")
+                accent: settingsController.accentHoverColor
+            }
+            MetricCard {
+                Layout.fillWidth: true
+                title: tr("identify.engine")
+                value: "OpenCV"
+                detail: tr("identify.direct_match")
+                accent: settingsController.warningColor
+                valuePixelSize: 20
             }
         }
 
@@ -197,18 +148,18 @@ Flickable {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 420
-                radius: 8
-                color: "#111c31"
-                border.color: "#24486d"
+                Layout.preferredHeight: 430
+                radius: settingsController.cardRadius
+                color: settingsController.surfaceColor
+                border.color: settingsController.borderColor
 
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 14
                     spacing: 10
                     Text {
-                        text: tr("identify.target")
-                        color: "#edf6ff"
+                        text: tr("identify.reference")
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 17
                         font.bold: true
@@ -217,22 +168,23 @@ Flickable {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        radius: 8
-                        color: "#0e1a2d"
-                        border.color: "#2d496f"
+                        radius: settingsController.cardRadius
+                        color: settingsController.accentPanelColor
+                        border.color: settingsController.borderColor
                         Image {
                             anchors.fill: parent
                             anchors.margins: 12
                             source: identifyItemController.selectedImageUrl
                             fillMode: Image.PreserveAspectFit
                             asynchronous: true
+                            cache: false
                             visible: identifyItemController.selectedImageUrl !== ""
                         }
                         Text {
                             anchors.centerIn: parent
                             width: parent.width - 32
                             text: tr("identify.crop_hint")
-                            color: "#99abc4"
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 13
                             wrapMode: Text.WordWrap
@@ -242,7 +194,7 @@ Flickable {
                     }
                     Text {
                         text: identifyItemController.selectedPath !== "" ? identifyItemController.selectedPath : tr("identify.no_image")
-                        color: "#99abc4"
+                        color: settingsController.mutedTextColor
                         font.family: "Segoe UI"
                         font.pixelSize: 11
                         Layout.fillWidth: true
@@ -253,78 +205,95 @@ Flickable {
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 420
-                radius: 8
-                color: "#111c31"
-                border.color: "#24486d"
+                Layout.preferredHeight: 430
+                radius: settingsController.cardRadius
+                color: settingsController.surfaceColor
+                border.color: settingsController.borderColor
 
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 14
                     spacing: 10
                     Text {
-                        text: tr("identify.matches")
-                        color: "#edf6ff"
+                        text: tr("identify.live")
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 17
                         font.bold: true
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: identifyItemController.monitorSummary
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
                     }
                     ListView {
-                        id: identifyResults
+                        id: detectionResults
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: identifyItemController.resultsModel
+                        model: identifyItemController.monitorMatchesModel
                         spacing: 8
                         clip: true
                         delegate: Rectangle {
+                            required property int matchX
+                            required property int matchY
+                            required property int matchW
+                            required property int matchH
+                            required property real matchScore
+                            required property string scoreText
                             width: ListView.view.width
-                            height: 58
-                            radius: 8
+                            height: 64
+                            radius: settingsController.cardRadius
                             color: index % 2 ? "#0e1a2d" : "#13213a"
-                            border.color: "#24486d"
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: identifyItemController.selectResult(index)
-                            }
+                            border.color: settingsController.borderColor
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 9
-                                spacing: 10
-                                Image {
-                                    source: icon
-                                    Layout.preferredWidth: 38
-                                    Layout.preferredHeight: 38
-                                    fillMode: Image.PreserveAspectFit
+                                anchors.margins: 10
+                                spacing: 12
+                                Rectangle {
+                                    Layout.preferredWidth: 42
+                                    Layout.preferredHeight: 42
+                                    radius: 21
+                                    color: settingsController.accentPanelColor
+                                    border.color: settingsController.accentColor
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: String(index + 1)
+                                        color: settingsController.accentColor
+                                        font.family: "Segoe UI"
+                                        font.bold: true
+                                    }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 1
+                                    spacing: 2
                                     Text {
-                                        text: name
-                                        color: "#edf6ff"
+                                        text: tr("identify.position") + " " + matchX + ", " + matchY
+                                        color: settingsController.textColor
                                         font.family: "Segoe UI"
                                         font.bold: true
                                         Layout.fillWidth: true
                                         elide: Text.ElideRight
                                     }
                                     Text {
-                                        text: path
-                                        color: "#99abc4"
+                                        text: matchW + " x " + matchH
+                                        color: settingsController.mutedTextColor
                                         font.family: "Segoe UI"
-                                        font.pixelSize: 10
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideMiddle
+                                        font.pixelSize: 11
                                     }
                                 }
                                 Rectangle {
-                                    Layout.preferredWidth: 70
+                                    Layout.preferredWidth: 78
                                     Layout.preferredHeight: 30
                                     radius: 15
-                                    color: score >= identifyItemController.threshold ? settingsController.accentColor : "#1d3353"
+                                    color: matchScore >= 0.9 ? settingsController.successColor : settingsController.accentColor
                                     Text {
                                         anchors.centerIn: parent
                                         text: scoreText
-                                        color: score >= identifyItemController.threshold ? "#041014" : "#edf6ff"
+                                        color: "#041014"
                                         font.family: "Segoe UI"
                                         font.bold: true
                                     }
@@ -334,12 +303,12 @@ Flickable {
 
                         Text {
                             anchors.centerIn: parent
-                            text: tr("identify.no_image")
-                            color: "#99abc4"
+                            text: identifyItemController.monitoring ? tr("identify.no_detections") : tr("identify.off")
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 13
                             font.bold: true
-                            visible: identifyResults.count === 0
+                            visible: detectionResults.count === 0
                         }
                     }
                 }
@@ -347,5 +316,3 @@ Flickable {
         }
     }
 }
-
-
