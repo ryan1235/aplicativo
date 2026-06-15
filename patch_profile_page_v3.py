@@ -325,7 +325,7 @@ Rectangle {
                             id: regimentCombo
                             Layout.fillWidth: true
                             Layout.preferredHeight: 44
-                            model: ["Nenhum", "CIB", "STORM", "WRG", "LIDA", "7CMD", "FELB", "GDO", "DOG'Z", "REQ (MeTaL)"]
+                            model: ["Nenhum", "CIB", "STORM", "WRG", "LIDA", "7CMD", "FELB", "GDO", "DOG'Z", "REQ"]
                             
                             Component.onCompleted: {
                                 var current = profile.regiment || "Nenhum";

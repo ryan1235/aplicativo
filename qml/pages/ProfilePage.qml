@@ -331,7 +331,7 @@ Rectangle {
                             id: regimentCombo
                             Layout.fillWidth: true
                             Layout.preferredHeight: 44
-                            model: [tr("profile.regiment_none"), "STORM", "WRG", "LIDA", "7CMD", "FELB", "GDO", "DOGZ", "REQ (MeTaL)"]
+                            model: [tr("profile.regiment_none"), "STORM", "WRG", "LIDA", "7CMD", "FELB", "GDO", "DOGZ", "REQ"]
                             
                             Component.onCompleted: {
                                 var current = profile.regiment || tr("profile.regiment_none");
