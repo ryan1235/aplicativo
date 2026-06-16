@@ -888,6 +888,11 @@ class DictListModel(QAbstractListModel):
     def set_items(self, items: list[dict[str, Any]]) -> None:
         if items == self._items:
             return
+        if len(items) == len(self._items):
+            self._items = items
+            if items:
+                self.dataChanged.emit(self.index(0, 0), self.index(len(items) - 1, 0), list(self._role_names.keys()))
+            return
         self.beginResetModel()
         self._items = items
         self.endResetModel()
@@ -5675,7 +5680,9 @@ class ItemSearchController(QObject):
 
 
 class IdentifyItemController(QObject):
-    MONITOR_PRESENCE_GRACE_TICKS = 50
+    MONITOR_VISUAL_HOLD_TICKS = 6
+    MONITOR_VISUAL_KEEP_RATIO = 0.92
+    MONITOR_SOUND_RESET_MISS_TICKS = 10
 
     changed = Signal()
     scanFinished = Signal(list, str)
@@ -6266,6 +6273,10 @@ class IdentifyItemController(QObject):
                 gray = cv2_module.cvtColor(screen_np, cv2_module.COLOR_RGB2GRAY)
                 base_template = template.gray
                 scale_x, scale_y = self._qt_screen_scale(screenshot.width, screenshot.height)
+                if self._monitor_control_visible:
+                    mask_w = min(gray.shape[1], max(1, int(round(420 / max(scale_x, 0.01)))))
+                    mask_h = min(gray.shape[0], max(1, int(round(300 / max(scale_y, 0.01)))))
+                    gray[:mask_h, gray.shape[1] - mask_w :] = 0
                 matches: list[dict[str, Any]] = []
                 best_score = -1.0
                 th, tw = int(base_template.shape[0]), int(base_template.shape[1])
@@ -6345,12 +6356,25 @@ class IdentifyItemController(QObject):
             self._monitor_last_rows = [dict(item) for item in rows if isinstance(item, dict)]
             self._monitor_miss_count = 0
         else:
-            self._monitor_miss_count += 1
-            if self._monitor_miss_count < self.MONITOR_PRESENCE_GRACE_TICKS and self._monitor_last_rows:
+            reported_score = 0.0
+            if match := re.search(r"(?:confidence|score)\s+([0-9.]+)", status, flags=re.IGNORECASE):
+                try:
+                    reported_score = float(match.group(1))
+                except ValueError:
+                    reported_score = 0.0
+            near_match = reported_score >= (float(self._threshold) * self.MONITOR_VISUAL_KEEP_RATIO)
+            if near_match and self._monitor_last_rows:
                 rows = [dict(item) for item in self._monitor_last_rows]
                 status = "Detected: held"
+                self._monitor_miss_count = 0
             else:
+                self._monitor_miss_count += 1
+            if not rows and self._monitor_miss_count < self.MONITOR_VISUAL_HOLD_TICKS and self._monitor_last_rows:
+                rows = [dict(item) for item in self._monitor_last_rows]
+                status = "Detected: held"
+            elif not rows:
                 self._monitor_last_rows = []
+            if self._monitor_miss_count >= self.MONITOR_SOUND_RESET_MISS_TICKS:
                 self._monitor_sound_played = False
 
         self.monitorMatches.set_items(rows)
