@@ -3235,6 +3235,11 @@ class StockpileController(QObject):
             return self._visual_update_label(item)
         return "-"
 
+    @Property(bool, notify=changed)
+    def visualWarehouseInactive(self) -> bool:
+        item = self._visual_warehouse_lookup.get(self._visual_warehouse)
+        return self._depot_state(item) == "inactive" if item else False
+
     @Property("QVariantList", notify=visualGroupRowsChanged)
     def visualGroupRows(self) -> list[dict[str, Any]]:
         return self._cached_visual_groups
@@ -3404,12 +3409,11 @@ class StockpileController(QObject):
         warehouses: list[dict[str, Any]],
         stockpiles: list[str],
     ) -> None:
-        self._visual_items = rows
-        self._visual_items_by_warehouse = {}
+        raw_items_by_warehouse: dict[str, list[dict[str, Any]]] = {}
         for item in rows:
             warehouse = str(item.get("warehouse") or "")
             if warehouse:
-                self._visual_items_by_warehouse.setdefault(warehouse, []).append(item)
+                raw_items_by_warehouse.setdefault(warehouse, []).append(item)
 
         enriched_warehouses: list[dict[str, Any]] = []
         self._visual_warehouse_lookup = {}
@@ -3419,9 +3423,21 @@ class StockpileController(QObject):
                 continue
             enriched = dict(warehouse)
             enriched.update(self._warehouse_meta(enriched))
+            if not self._is_visual_stockpile_visible(enriched):
+                continue
             enriched_warehouses.append(enriched)
             self._visual_warehouse_lookup[name] = enriched
 
+        visible_names = set(self._visual_warehouse_lookup)
+        self._visual_items_by_warehouse = {
+            name: raw_items_by_warehouse.get(name, [])
+            for name in visible_names
+        }
+        self._visual_items = [
+            item
+            for item in rows
+            if str(item.get("warehouse") or "") in visible_names
+        ]
         self._visual_warehouses = enriched_warehouses
         self._visual_warehouse_options = self._build_visual_warehouse_options(enriched_warehouses)
 
@@ -3449,6 +3465,30 @@ class StockpileController(QObject):
             return parts[0], second, second
         value = parts[0] if parts else "-"
         return "", "", value
+
+    @staticmethod
+    def _depot_state(warehouse: dict[str, Any] | None) -> str:
+        if not isinstance(warehouse, dict):
+            return ""
+        return str(warehouse.get("depot_state") or warehouse.get("DepotState") or "").strip().lower()
+
+    @staticmethod
+    def _has_gg_stockpile_prefix(warehouse: dict[str, Any]) -> bool:
+        name = str(warehouse.get("name") or "")
+        _map_part, _town, name_code = StockpileController._warehouse_parts(name)
+        candidates = [
+            warehouse.get("code"),
+            warehouse.get("display_name"),
+            warehouse.get("warehouse_name"),
+            warehouse.get("stockpile_name"),
+            warehouse.get("neme"),
+            name_code,
+        ]
+        return any(str(value or "").strip().upper().startswith("GG-") for value in candidates)
+
+    @classmethod
+    def _is_visual_stockpile_visible(cls, warehouse: dict[str, Any]) -> bool:
+        return cls._has_gg_stockpile_prefix(warehouse) and cls._depot_state(warehouse) != "lost"
 
     @staticmethod
     def _warehouse_meta(warehouse: dict[str, Any] | str) -> dict[str, str]:
@@ -3507,11 +3547,14 @@ class StockpileController(QObject):
             options.append({"text": region, "type": "header"})
             for warehouse in grouped[region]:
                 updated_raw = str(warehouse.get("last_update") or warehouse.get("updatedAt") or "")
+                inactive = self._depot_state(warehouse) == "inactive"
                 options.append(
                     {
                         "text": str(warehouse.get("code") or warehouse.get("name") or "-"),
                         "subText": str(warehouse.get("placePath") or ""),
-                        "sideText": format_relative_time(updated_raw),
+                        "sideText": "" if inactive else format_relative_time(updated_raw),
+                        "sideTextKey": "stockpile.visual_depot_inactive_badge" if inactive else "",
+                        "sideColor": "#ef4444" if inactive else "",
                         "id": str(warehouse.get("name") or ""),
                         "type": "item",
                     }

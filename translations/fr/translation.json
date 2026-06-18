@@ -544,6 +544,8 @@
   "stockpile.visual_select": "Stockpile",
   "stockpile.visual_empty": "En attente des items du stockpile",
   "stockpile.visual_updated": "Mis a jour: {value}",
+  "stockpile.visual_depot_inactive_badge": "Inactif",
+  "stockpile.visual_depot_inactive_warning": "Stockpile indisponible : perdu par les Colonials, mais récupérable si les Wardens reprennent la région à temps.",
   "stockpile.public": "Public",
   "stockpile.group_priority": "PRIORITE",
   "stockpile.group_starter": "ESSENTIELS",

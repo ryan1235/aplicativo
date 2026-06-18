@@ -224,6 +224,16 @@ Flickable {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
+                        Text {
+                            visible: stockpileController.visualWarehouseInactive
+                            text: tr("stockpile.visual_depot_inactive_warning")
+                            color: settingsController.dangerColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            font.bold: true
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
                     }
                     PrimaryComboBox {
                         id: visualWarehouseBox

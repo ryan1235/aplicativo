@@ -544,6 +544,8 @@
   "stockpile.visual_select": "Estoque",
   "stockpile.visual_empty": "Aguardando itens do estoque",
   "stockpile.visual_updated": "Atualizado: {value}",
+  "stockpile.visual_depot_inactive_badge": "Inativo",
+  "stockpile.visual_depot_inactive_warning": "Estoque indisponível: perdido para os coloniais, mas recuperável se os wardens retomarem a região a tempo.",
   "stockpile.public": "Público",
   "stockpile.group_priority": "PRIORIDADE",
   "stockpile.group_starter": "ESSENCIAIS",

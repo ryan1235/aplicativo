@@ -15,6 +15,11 @@ ComboBox {
     property color popupBorder: settingsController.borderColor
     property color itemHover: settingsController.accentPanelColor
 
+    function tr(key) {
+        i18nController.revision
+        return key ? i18nController.t(key) : ""
+    }
+
     implicitWidth: 140
     implicitHeight: 42
 
@@ -24,7 +29,8 @@ ComboBox {
         property bool isHeaderRow: isObjectRow && modelData.type === "header"
         property string primaryText: isObjectRow ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
         property string secondaryText: isObjectRow ? (modelData.subText || "") : ""
-        property string trailingText: isObjectRow ? (modelData.sideText || "") : ""
+        property string trailingText: isObjectRow ? (modelData.sideTextKey ? control.tr(modelData.sideTextKey) : (modelData.sideText || "")) : ""
+        property color trailingColor: isObjectRow && modelData.sideColor ? modelData.sideColor : settingsController.accentColor
 
         width: control.popup.width
         height: isHeaderRow ? 28 : (secondaryText !== "" || trailingText !== "" ? 44 : 36)
@@ -70,7 +76,7 @@ ComboBox {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: delegateItem.trailingText !== ""
                 text: delegateItem.trailingText
-                color: settingsController.accentColor
+                color: delegateItem.trailingColor
                 font.family: "Segoe UI"
                 font.pixelSize: 10
                 font.bold: true

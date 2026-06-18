@@ -556,6 +556,7 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
                 "change_count": 0,
                 "categories": set(),
                 "last_update": "",
+                "depot_state": "",
             },
         )
         quantity = item.get("Quantity") or 0
@@ -572,6 +573,9 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
         warehouse_last_update = str(item.get("WarehouseLastUpdate") or "")
         if warehouse_last_update:
             current["last_update"] = warehouse_last_update
+        depot_state = str(item.get("depot_state") or item.get("DepotState") or "").strip()
+        if depot_state:
+            current["depot_state"] = depot_state
         if display_name:
             current["display_name"] = display_name
         if map_name:
@@ -603,9 +607,13 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
                 "change_count": 0,
                 "categories": set(),
                 "last_update": "",
+                "depot_state": "",
             },
         )
         current["change_count"] += 1
+        depot_state = str(change.get("depot_state") or change.get("DepotState") or "").strip()
+        if depot_state:
+            current["depot_state"] = depot_state
         if display_name:
             current["display_name"] = display_name
         if map_name:
