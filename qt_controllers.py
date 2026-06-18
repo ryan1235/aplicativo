@@ -788,7 +788,11 @@ def _strip_hex_suffix(value: str) -> str:
 
 
 def stockpile_map_name(value: str) -> str:
-    return re.sub(r"\s+", "", _strip_hex_suffix(value))
+    text = _strip_hex_suffix(value).strip()
+    if not text:
+        return ""
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _location_index() -> dict[tuple[str, str], dict[str, str]]:
@@ -3422,6 +3426,13 @@ class StockpileController(QObject):
             if not name:
                 continue
             enriched = dict(warehouse)
+            for row in raw_items_by_warehouse.get(name, []):
+                if not enriched.get("map_name") and row.get("map_name"):
+                    enriched["map_name"] = row.get("map_name")
+                if not enriched.get("town") and row.get("town"):
+                    enriched["town"] = row.get("town")
+                if enriched.get("map_name") and enriched.get("town"):
+                    break
             enriched.update(self._warehouse_meta(enriched))
             if not self._is_visual_stockpile_visible(enriched):
                 continue
@@ -3509,23 +3520,24 @@ class StockpileController(QObject):
             explicit_map = ""
             explicit_town = ""
         map_part, town, code = StockpileController._warehouse_parts(name)
-        map_part = explicit_map or map_part
-        town = explicit_town or town
-        map_key = _compact_location_key(_strip_hex_suffix(map_part))
-        matched = _location_index().get((map_key, town.lower())) if map_key and town else None
+        lookup_map = explicit_map or map_part
+        lookup_town = explicit_town or town
+        map_key = _compact_location_key(_strip_hex_suffix(lookup_map))
+        matched = _location_index().get((map_key, lookup_town.lower())) if map_key and lookup_town else None
 
-        region = str((matched or {}).get("region") or _strip_hex_suffix(map_part) or "Outros")
-        display_town = str((matched or {}).get("town") or town)
-        map_name = stockpile_map_name(map_part or str((matched or {}).get("region") or region))
-        place_path = f"{map_name}/{display_town}" if map_name and display_town else map_name or display_town or name
+        region = str((matched or {}).get("region") or _strip_hex_suffix(lookup_map) or "Outros")
+        display_town = str(explicit_town or (matched or {}).get("town") or town)
+        map_name = explicit_map or stockpile_map_name(str((matched or {}).get("mapName") or "") or map_part or region)
+        place_path = f"{map_name} - {display_town}" if map_name and display_town else map_name or display_town or name
         title = explicit_title or (code if code and code != display_town else name)
         return {
-            "region": region,
+            "region": map_name or region,
             "town": display_town,
             "code": title,
             "mapName": map_name,
             "placePath": place_path,
-            "groupLabel": place_path,
+            "optionSubText": display_town or place_path,
+            "groupLabel": map_name or region or place_path,
         }
 
     @staticmethod
@@ -3551,7 +3563,7 @@ class StockpileController(QObject):
                 options.append(
                     {
                         "text": str(warehouse.get("code") or warehouse.get("name") or "-"),
-                        "subText": str(warehouse.get("placePath") or ""),
+                        "subText": str(warehouse.get("optionSubText") or warehouse.get("placePath") or ""),
                         "sideText": "" if inactive else format_relative_time(updated_raw),
                         "sideTextKey": "stockpile.visual_depot_inactive_badge" if inactive else "",
                         "sideColor": "#ef4444" if inactive else "",
