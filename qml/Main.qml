@@ -2452,10 +2452,11 @@ ApplicationWindow {
                 required property int matchW
                 required property int matchH
                 required property string scoreText
-                x: matchX
-                y: matchY
-                width: matchW
-                height: matchH
+                property int markerPad: Math.max(6, Math.round(Math.max(matchW, matchH) * 0.18))
+                x: Math.max(0, matchX - markerPad)
+                y: Math.max(0, matchY - markerPad)
+                width: Math.min(identifyMonitorOverlayWindow.width - x, matchW + markerPad * 2)
+                height: Math.min(identifyMonitorOverlayWindow.height - y, matchH + markerPad * 2)
                 radius: Math.min(width, height) / 2
                 color: "transparent"
                 border.color: settingsController.successColor
@@ -2646,16 +2647,17 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 8
                     PrimaryButton {
-                        text: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                        property bool selectingStockpile: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                        text: selectingStockpile
                               ? window.tr("identify.cancel_select")
                               : window.tr("identify.select_stockpile")
                         Layout.fillWidth: true
                         implicitHeight: 30
-                        fill: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible ? settingsController.warningColor : settingsController.controlColor
-                        hoverFill: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible ? settingsController.warningColor : settingsController.controlHoverColor
-                        textFill: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible ? settingsController.textInverseColor : settingsController.textColor
+                        fill: selectingStockpile ? "#efc85f" : settingsController.controlColor
+                        hoverFill: selectingStockpile ? "#ffd976" : settingsController.controlHoverColor
+                        textFill: selectingStockpile ? "#101820" : settingsController.textColor
                         font.pixelSize: 11
-                        onClicked: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                        onClicked: selectingStockpile
                                    ? identifyItemController.cancelStockpileItemSelection()
                                    : identifyItemController.beginStockpileItemSelection()
                     }
@@ -2707,10 +2709,10 @@ ApplicationWindow {
                 radius: 5
                 scale: hot ? 1.03 : 1.0
                 transformOrigin: Item.Center
-                color: settingsController.accentColor
-                border.color: hot ? settingsController.warningColor : settingsController.accentColor
+                color: hot ? Qt.rgba(0.98, 0.78, 0.22, 0.30) : Qt.rgba(0.00, 0.88, 0.78, 0.16)
+                border.color: hot ? "#f4d35e" : "#42e6d3"
                 border.width: hot ? 3 : 2
-                opacity: hot ? 0.28 : 0.08
+                opacity: 1.0
                 Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
                 Behavior on color { ColorAnimation { duration: 120 } }
                 Behavior on border.color { ColorAnimation { duration: 120 } }

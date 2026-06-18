@@ -6318,9 +6318,7 @@ class ItemSearchController(QObject):
 
 
 class IdentifyItemController(QObject):
-    MONITOR_VISUAL_HOLD_TICKS = 6
-    MONITOR_VISUAL_KEEP_RATIO = 0.92
-    MONITOR_SOUND_RESET_MISS_TICKS = 10
+    MONITOR_SOUND_RESET_MISS_TICKS = 4
 
     changed = Signal()
     scanFinished = Signal(list, str)
@@ -6722,6 +6720,44 @@ class IdentifyItemController(QObject):
             self._monitor_match_count = 0
             self._monitor_best_score = 0.0
 
+    def _held_monitor_rows(self) -> list[dict[str, Any]]:
+        return [dict(item) for item in self._monitor_last_rows if isinstance(item, dict)]
+
+    def _register_monitor_miss(self) -> None:
+        self._monitor_miss_count += 1
+        self._monitor_last_rows = []
+        if self._monitor_miss_count >= self.MONITOR_SOUND_RESET_MISS_TICKS:
+            self._monitor_sound_played = False
+
+    def _stabilize_monitor_scores(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not self._monitor_last_rows:
+            return [dict(item) for item in rows]
+        stable_rows: list[dict[str, Any]] = []
+        used_indexes: set[int] = set()
+        previous_rows = [dict(item) for item in self._monitor_last_rows if isinstance(item, dict)]
+        for row in rows:
+            stable = dict(row)
+            row_center_x = int(stable.get("matchX", 0)) + (int(stable.get("matchW", 0)) // 2)
+            row_center_y = int(stable.get("matchY", 0)) + (int(stable.get("matchH", 0)) // 2)
+            best_index = -1
+            best_distance = 999999
+            for index, previous in enumerate(previous_rows):
+                if index in used_indexes:
+                    continue
+                previous_center_x = int(previous.get("matchX", 0)) + (int(previous.get("matchW", 0)) // 2)
+                previous_center_y = int(previous.get("matchY", 0)) + (int(previous.get("matchH", 0)) // 2)
+                distance = abs(row_center_x - previous_center_x) + abs(row_center_y - previous_center_y)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_index = index
+            if best_index >= 0 and best_distance <= 6:
+                previous = previous_rows[best_index]
+                stable["matchScore"] = previous.get("matchScore", stable.get("matchScore", 0.0))
+                stable["scoreText"] = previous.get("scoreText", stable.get("scoreText", ""))
+                used_indexes.add(best_index)
+            stable_rows.append(stable)
+        return stable_rows
+
     def _begin_scan(self) -> None:
         self._scanning = True
         self._status = "Starting direct detection..."
@@ -6886,14 +6922,15 @@ class IdentifyItemController(QObject):
         if template is None:
             self._status = "Select, paste, or choose a stockpile item first."
             self._monitor_summary = "No reference selected."
-            self.monitorMatches.set_items([])
+            self._reset_monitor_tracking(clear_visible_matches=True)
             self.changed.emit()
             return
         if not self._is_foxhole_focused():
             self._status = f"Detection active: {self.monitorTarget or 'selected image'} | waiting for Foxhole focus"
             self._monitor_summary = "Waiting for Foxhole focus."
-            self._monitor_match_count = 0
-            self.monitorMatches.set_items([])
+            rows = self._held_monitor_rows()
+            self._monitor_match_count = len(rows)
+            self.monitorMatches.set_items(rows)
             self.changed.emit()
             return
         bbox = self._window_client_rect()
@@ -6991,32 +7028,20 @@ class IdentifyItemController(QObject):
             if not self._monitor_sound_played:
                 self._play_detection_alert()
                 self._monitor_sound_played = True
-            self._monitor_last_rows = [dict(item) for item in rows if isinstance(item, dict)]
+            rows = self._stabilize_monitor_scores([dict(item) for item in rows if isinstance(item, dict)])
+            self._monitor_last_rows = [dict(item) for item in rows]
             self._monitor_miss_count = 0
         else:
-            reported_score = 0.0
-            if match := re.search(r"(?:confidence|score)\s+([0-9.]+)", status, flags=re.IGNORECASE):
-                try:
-                    reported_score = float(match.group(1))
-                except ValueError:
-                    reported_score = 0.0
-            near_match = reported_score >= (float(self._threshold) * self.MONITOR_VISUAL_KEEP_RATIO)
-            if near_match and self._monitor_last_rows:
-                rows = [dict(item) for item in self._monitor_last_rows]
-                status = "Detected: held"
-                self._monitor_miss_count = 0
+            if visible:
+                self._register_monitor_miss()
+                rows = []
             else:
-                self._monitor_miss_count += 1
-            if not rows and self._monitor_miss_count < self.MONITOR_VISUAL_HOLD_TICKS and self._monitor_last_rows:
-                rows = [dict(item) for item in self._monitor_last_rows]
+                rows = self._held_monitor_rows()
+            if rows:
                 status = "Detected: held"
-            elif not rows:
-                self._monitor_last_rows = []
-            if self._monitor_miss_count >= self.MONITOR_SOUND_RESET_MISS_TICKS:
-                self._monitor_sound_played = False
 
         self.monitorMatches.set_items(rows)
-        self._monitor_overlay_visible = bool(visible and self._monitoring)
+        self._monitor_overlay_visible = bool((visible or rows) and self._monitoring)
         self._monitor_match_count = len(rows)
         scores = [float(item.get("matchScore", 0.0)) for item in rows if isinstance(item, dict)]
         if scores:
