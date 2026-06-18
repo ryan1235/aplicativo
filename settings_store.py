@@ -5,6 +5,7 @@ from typing import Any
 
 from app_paths import extracted_dir, settings_path
 from i18n import detect_user_language
+from personalization_store import load_personalization_settings
 from stockpiler import DEFAULT_WATCH_FILE, discover_map_data_file
 
 
@@ -20,7 +21,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "pilot_hotkey": "F4",
         "right_hold_hotkey": "F9",
         "mouse_button": "Esquerdo",
-        "interval": 0.2,
+        "interval": 0.5,
         "mode": "Foxhole",
         "modes_enabled": {
             "auto": True,
@@ -55,6 +56,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "overlay_panel_y": None,
         "overlay_notification_x": None,
         "overlay_notification_y": None,
+        "w_doubletap_enabled": False,
         "right_doubletap_enabled": False,
     },
     "stockpile": {
@@ -80,27 +82,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "start_with_windows": False,
         "last_release_notes_version": "",
         "last_tips_version": "",
-        "theme": {
-            "preset": "coalition",
-            "custom": {
-                "accent": "#5eead4",
-                "accent_hover": "#8ab4ff",
-                "accent_panel": "#10342e",
-                "success": "#62d7a4",
-                "warning": "#ffd166",
-                "warning_text": "#fef3c7",
-                "background": "#070b16",
-                "surface": "#111c31",
-                "text": "#edf6ff",
-                "muted_text": "#99abc4",
-                "border": "#24486d",
-                "gradient_start": "#070b16",
-                "gradient_end": "#0d1729",
-                "gradient_enabled": False,
-                "button_style": "solid",
-                "card_radius": 8,
-            },
-        },
         "chat_discord": {
             "clientId": "",
             "clientSecret": "",
@@ -111,7 +92,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "chat_mention_overlay_enabled": True,
         "chat_mention_sound_enabled": True,
         "chat_show_translated_messages": True,
-        "colorblind_mode_enabled": False,
         "sidebar_open": True,
         "sidebar_sections": {
             "core": True,
@@ -147,6 +127,11 @@ def load_settings() -> dict[str, Any]:
         **DEFAULT_SETTINGS["auto_clicker"],
         **loaded.get("auto_clicker", {}),
     }
+    try:
+        if float(settings["auto_clicker"].get("interval", 0.5)) < 0.5:
+            settings["auto_clicker"]["interval"] = 0.5
+    except (TypeError, ValueError):
+        settings["auto_clicker"]["interval"] = 0.5
     settings["stockpile"] = {
         **DEFAULT_SETTINGS["stockpile"],
         **loaded.get("stockpile", {}),
@@ -171,14 +156,13 @@ def load_settings() -> dict[str, Any]:
         **DEFAULT_SETTINGS["app"],
         **loaded.get("app", {}),
     }
-    settings["app"]["theme"] = {
-        **DEFAULT_SETTINGS["app"]["theme"],
-        **loaded.get("app", {}).get("theme", {}),
-    }
-    settings["app"]["theme"]["custom"] = {
-        **DEFAULT_SETTINGS["app"]["theme"]["custom"],
-        **loaded.get("app", {}).get("theme", {}).get("custom", {}),
-    }
+    legacy_app_settings = loaded.get("app", {})
+    load_personalization_settings(
+        legacy_theme=legacy_app_settings.get("theme"),
+        legacy_colorblind=legacy_app_settings.get("colorblind_mode_enabled"),
+    )
+    settings["app"].pop("theme", None)
+    settings["app"].pop("colorblind_mode_enabled", None)
     settings["app"]["chat_discord"] = {
         **DEFAULT_SETTINGS["app"]["chat_discord"],
         **loaded.get("app", {}).get("chat_discord", {}),

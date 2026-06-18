@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -22,7 +22,7 @@ Rectangle {
             Layout.fillWidth: true
             Text {
                 text: tr("production.title")
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 26
                 font.bold: true
@@ -31,23 +31,23 @@ Rectangle {
             }
             PrimaryButton {
                 text: tr("production.reload_db")
-                fill: "#1d3353"
-                hoverFill: "#2d496f"
-                textFill: "#edf6ff"
+                fill: Qt.rgba(0,0,0,0.4)
+                hoverFill: Qt.rgba(1,1,1,0.1)
+                textFill: settingsController.accentColor
                 onClicked: productionController.reload()
             }
             PrimaryButton {
                 text: tr("production.clear")
-                fill: "#1d3353"
-                hoverFill: "#2d496f"
-                textFill: "#edf6ff"
+                fill: Qt.rgba(0,0,0,0.4)
+                hoverFill: Qt.rgba(1,1,1,0.1)
+                textFill: settingsController.accentColor
                 onClicked: productionController.clear()
             }
         }
 
         Text {
             text: productionController.status
-            color: productionController.status.indexOf("missing") >= 0 || productionController.status.indexOf("error") >= 0 ? "#ff7a90" : "#99abc4"
+            color: productionController.status.indexOf("missing") >= 0 || productionController.status.indexOf("error") >= 0 ? settingsController.dangerColor : settingsController.mutedTextColor
             font.family: "Segoe UI"
             font.pixelSize: 12
             Layout.fillWidth: true
@@ -63,8 +63,8 @@ Rectangle {
                 spacing: 6
                 Repeater {
                     model: [
-                        { "label": tr("production.mode_factory"), "value": "factory", "fill": "#23334f" },
-                        { "label": tr("production.mode_mpf"), "value": "mpf", "fill": "#263f73" }
+                        { "label": tr("production.mode_factory"), "value": "factory", "fill": settingsController.controlColor },
+                        { "label": tr("production.mode_mpf"), "value": "mpf", "fill": settingsController.infoColor }
                     ]
                     delegate: Button {
                         id: modeButton
@@ -77,7 +77,7 @@ Rectangle {
                         contentItem: Text {
                             id: modeLabel
                             text: modeButton.text
-                            color: modeButton.checked ? "#031014" : "#e2f0ff"
+                            color: modeButton.checked ? settingsController.textInverseColor : settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 13
                             font.bold: true
@@ -87,9 +87,10 @@ Rectangle {
                         }
                         background: Rectangle {
                             radius: 7
-                            color: modeButton.checked ? settingsController.accentColor : modelData.fill
-                            border.color: modeButton.checked ? "#b8fff6" : "#4b6f9e"
-                            border.width: modeButton.checked ? 2 : 1
+                            color: "transparent"
+                            border.color: "transparent"
+                            Rectangle { anchors.fill: parent; radius: 7; color: modeButton.checked ? settingsController.accentColor : settingsController.scrimColor; opacity: modeButton.checked ? 1.0 : 0.3 }
+                            Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: modeButton.checked ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: modeButton.checked ? 2 : 1 }
                         }
                     }
                 }
@@ -104,7 +105,7 @@ Rectangle {
                     }
                     Text {
                         text: productionController.factoryMultiplier
-                        color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 14; font.bold: true
+                        color: settingsController.textColor; font.family: "Segoe UI"; font.pixelSize: 14; font.bold: true
                     }
                     PrimaryButton {
                         text: "+"
@@ -115,16 +116,16 @@ Rectangle {
                 }
             }
 
-            Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: "#24486d" }
+            Rectangle { Layout.preferredWidth: 1; Layout.preferredHeight: 20; color: settingsController.borderColor }
 
             // Faction Selection
             RowLayout {
                 spacing: 6
                 Repeater {
                     model: [
-                        { "label": tr("production.faction_neutral"), "value": "Neutral", "fill": "#20314d" },
-                        { "label": tr("production.faction_warden"), "value": "Warden", "fill": "#263f73" },
-                        { "label": tr("production.faction_colonial"), "value": "Colonial", "fill": "#244f44" }
+                        { "label": tr("production.faction_neutral"), "value": "Neutral", "fill": settingsController.controlColor },
+                        { "label": tr("production.faction_warden"), "value": "Warden", "fill": settingsController.infoColor },
+                        { "label": tr("production.faction_colonial"), "value": "Colonial", "fill": settingsController.successColor }
                     ]
                     delegate: Button {
                         id: factionButton
@@ -137,7 +138,7 @@ Rectangle {
                         contentItem: Text {
                             id: factionLabel
                             text: factionButton.text
-                            color: factionButton.checked ? "#031014" : "#e2f0ff"
+                            color: factionButton.checked ? settingsController.textInverseColor : settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 13
                             font.bold: true
@@ -147,9 +148,10 @@ Rectangle {
                         }
                         background: Rectangle {
                             radius: 7
-                            color: factionButton.checked ? settingsController.accentColor : modelData.fill
-                            border.color: factionButton.checked ? "#b8fff6" : "#4b6f9e"
-                            border.width: factionButton.checked ? 2 : 1
+                            color: "transparent"
+                            border.color: "transparent"
+                            Rectangle { anchors.fill: parent; radius: 7; color: factionButton.checked ? settingsController.accentColor : settingsController.scrimColor; opacity: factionButton.checked ? 1.0 : 0.3 }
+                            Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: factionButton.checked ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: factionButton.checked ? 2 : 1 }
                         }
                     }
                 }
@@ -176,9 +178,10 @@ Rectangle {
                         onClicked: productionController.setCategory(String(model.name || ""))
                         background: Rectangle {
                             radius: 4
-                            color: model.active ? settingsController.accentColor : "#111c31"
-                            border.color: model.active ? settingsController.accentColor : "#24486d"
-                            Behavior on color { ColorAnimation { duration: 120 } }
+                            color: "transparent"
+                            border.color: "transparent"
+                            Rectangle { anchors.fill: parent; radius: 4; color: model.active ? settingsController.accentColor : settingsController.scrimColor; opacity: model.active ? 0.3 : 0.2; Behavior on opacity { NumberAnimation { duration: 120 } } }
+                            Rectangle { anchors.fill: parent; radius: 4; color: "transparent"; border.color: settingsController.accentColor; opacity: model.active ? 1.0 : 0.2; border.width: 1; Behavior on opacity { NumberAnimation { duration: 120 } } }
                         }
                         contentItem: ColumnLayout {
                             spacing: 4
@@ -194,7 +197,7 @@ Rectangle {
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
                                 text: (model.mark || "") + " " + String(model.count || 0)
-                                color: model.active ? "#041014" : "#edf6ff"
+                                color: model.active ? settingsController.accentColor : settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 11
                                 font.bold: true
@@ -214,8 +217,11 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: 8
-                color: "#111c31"
-                border.color: "#24486d"
+                color: "transparent"
+                border.color: "transparent"
+                Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.2 }
+                Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.035 }
+                Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -227,7 +233,7 @@ Rectangle {
                         spacing: 10
                         Text {
                             text: tr("production.items")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 17
                             font.bold: true
@@ -237,9 +243,9 @@ Rectangle {
                             Layout.maximumWidth: 280
                             Layout.preferredHeight: 32
                             placeholderText: tr("production.search_placeholder") || "Buscar item..."
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             onTextChanged: productionController.search(text)
-                            background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#3b628f" }
+                            background: Rectangle { radius: 7; color: "transparent"; Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.3 } border.color: Qt.rgba(1,1,1,0.1) }
                         }
                     }
 
@@ -258,9 +264,11 @@ Rectangle {
                             width: 108
                             height: 84
                             radius: 8
-                            color: mouse.containsMouse ? "#172943" : "#0e1a2d"
-                            border.color: "#2d496f"
-                            Behavior on color { ColorAnimation { duration: 120 } }
+                            color: "transparent"
+                            border.color: "transparent"
+                            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.3 }
+                            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: mouse.containsMouse ? 0.15 : 0.03 }
+                            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: mouse.containsMouse ? 0.8 : 0.15; border.width: 1 }
 
                             ColumnLayout {
                                 anchors.fill: parent
@@ -279,7 +287,7 @@ Rectangle {
                                 }
                                 Text {
                                     text: model.name || "-"
-                                    color: "#edf6ff"
+                                    color: settingsController.textColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 9
                                     font.bold: true
@@ -290,7 +298,7 @@ Rectangle {
                                 }
                                 Text {
                                     text: (model.faction || "-") + " | " + String(model.quantityPerCrate || 0) + "/crate"
-                                    color: "#99abc4"
+                                    color: settingsController.mutedTextColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 8
                                     Layout.fillWidth: true
@@ -322,8 +330,11 @@ Rectangle {
                 Layout.preferredWidth: 390
                 Layout.fillHeight: true
                 radius: 8
-                color: "#111c31"
-                border.color: "#24486d"
+                color: "transparent"
+                border.color: "transparent"
+                Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.2 }
+                Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.035 }
+                Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -338,8 +349,10 @@ Rectangle {
                             Layout.fillWidth: true
                             implicitHeight: summaryCol.implicitHeight + 20
                             radius: 8
-                            color: "#0e1a2d"
-                            border.color: "#1e3554"
+                            color: "transparent"
+                            border.color: "transparent"
+                            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.4 }
+                            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: Qt.rgba(1,1,1,0.1); border.width: 1 }
                             
                             RowLayout {
                                 id: summaryCol
@@ -352,22 +365,22 @@ Rectangle {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 4
-                                    Text { text: tr("production.summary"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
-                                    Text { text: productionController.summary; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
-                                    Text { text: productionController.orders; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    Text { text: tr("production.summary"); color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                    Text { text: productionController.summary; color: settingsController.textColor; font.family: "Segoe UI"; font.pixelSize: 16; font.bold: true }
+                                    Text { text: productionController.orders; color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
                                 }
                                 
                                 Rectangle {
                                     Layout.preferredWidth: 1
                                     Layout.fillHeight: true
-                                    color: "#1e3554"
+                                    color: Qt.rgba(1,1,1,0.1)
                                 }
                                 
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 4
-                                    Text { text: tr("production.materials"); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
-                                    Text { text: productionController.materialDetail; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true; wrapMode: Text.WordWrap; maximumLineCount: 2 }
+                                    Text { text: tr("production.materials"); color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                    Text { text: productionController.materialDetail; color: settingsController.textColor; font.family: "Segoe UI"; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true; wrapMode: Text.WordWrap; maximumLineCount: 2 }
                                 }
                             }
                         }
@@ -382,8 +395,8 @@ Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 56
                                     radius: 6
-                                    color: "#07111f"
-                                    border.color: "#1e3554"
+                                    color: settingsController.backgroundColor
+                                    border.color: Qt.rgba(1,1,1,0.1)
                                     
                                     RowLayout {
                                         anchors.fill: parent
@@ -400,11 +413,11 @@ Rectangle {
                                         ColumnLayout {
                                             spacing: 0
                                             Layout.fillWidth: true
-                                            Text { text: model.label || ""; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                            Text { text: model.label || ""; color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                                             RowLayout {
                                                 spacing: 4
-                                                Text { text: String(model.quantity || 0); color: "#8ab4ff"; font.family: "Segoe UI"; font.pixelSize: 13; font.bold: true }
-                                                Text { text: String(model.crates || 0) + "cx"; color: "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                                                Text { text: String(model.quantity || 0); color: settingsController.accentColor; font.family: "Segoe UI"; font.pixelSize: 13; font.bold: true }
+                                                Text { text: String(model.crates || 0) + "cx"; color: settingsController.textColor; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                                             }
                                         }
                                     }
@@ -418,7 +431,7 @@ Rectangle {
                         visible: String(productionController.warning || "") !== ""
                         Layout.preferredHeight: visible ? warningText.implicitHeight + 12 : 0
                         radius: 7
-                        color: "#201b12"
+                        color: settingsController.warningTextColor
                         border.color: settingsController.warningColor
                         RowLayout {
                             anchors.fill: parent
@@ -462,7 +475,7 @@ Rectangle {
                                 spacing: 8
                                 Text {
                                     text: tr("production.queue")
-                                    color: "#edf6ff"
+                                    color: settingsController.textColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 15
                                     font.bold: true
@@ -470,9 +483,9 @@ Rectangle {
                                 }
                                 PrimaryButton {
                                     text: tr("production.clear") || "Limpar Tudo"
-                                    fill: "#132b43"
-                                    hoverFill: "#1d416b"
-                                    textFill: "#edf6ff"
+                                    fill: Qt.rgba(0,0,0,0.4)
+                                    hoverFill: Qt.rgba(1,1,1,0.1)
+                                    textFill: settingsController.accentColor
                                     implicitHeight: 22
                                     font.pixelSize: 10
                                     onClicked: productionController.clear()
@@ -490,9 +503,11 @@ Rectangle {
                                         width: queueColumn.width
                                         height: 35
                                         radius: 7
-                                        color: row.active ? "#132b43" : "#0e1a2d"
-                                        border.color: row.active ? settingsController.accentColor : "#1e3554"
-                                        Behavior on color { ColorAnimation { duration: 120 } }
+                                        color: "transparent"
+                                        border.color: "transparent"
+                                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.4 }
+                                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.accentColor; opacity: row.active ? 0.15 : 0.0; Behavior on opacity { NumberAnimation { duration: 120 } } }
+                                        Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: row.active ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
                                         RowLayout {
                                             anchors.fill: parent
                                             anchors.margins: 5
@@ -506,8 +521,8 @@ Rectangle {
                                             ColumnLayout {
                                                 Layout.preferredWidth: 42
                                                 spacing: 0
-                                                Text { text: row.mark || ""; color: row.active ? settingsController.accentColor : "#edf6ff"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                                Text { text: String(row.count || 0) + "/" + String(row.limit || 0); color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                                                Text { text: row.mark || ""; color: row.active ? settingsController.accentColor : settingsController.textColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                                                Text { text: String(row.count || 0) + "/" + String(row.limit || 0); color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                             }
 
                                             Item { Layout.fillWidth: true }
@@ -521,8 +536,11 @@ Rectangle {
                                                         width: 26
                                                         height: 26
                                                         radius: 5
-                                                        color: slot.filled ? "#172943" : "#07111f"
-                                                        border.color: slot.filled ? "#2d6a91" : "#1e3554"
+                                                        color: "transparent"
+                                                        border.color: "transparent"
+                                                        Rectangle { anchors.fill: parent; radius: 5; color: settingsController.scrimColor; opacity: slot.filled ? 0.0 : 0.3 }
+                                                        Rectangle { anchors.fill: parent; radius: 5; color: settingsController.accentColor; opacity: slot.filled ? 0.2 : 0.0 }
+                                                        Rectangle { anchors.fill: parent; radius: 5; color: "transparent"; border.color: slot.filled ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
                                                         opacity: slot.filled ? 1.0 : 0.72
 
                                                         Image {
@@ -536,7 +554,7 @@ Rectangle {
                                                         Text {
                                                             anchors.centerIn: parent
                                                             text: slot.filled ? String(slot.name || "").slice(0, 2).toUpperCase() : ""
-                                                            color: "#edf6ff"
+                                                            color: settingsController.textColor
                                                             font.family: "Segoe UI"
                                                             font.pixelSize: 8
                                                             font.bold: true
@@ -550,7 +568,8 @@ Rectangle {
                                                             width: 13
                                                             height: 10
                                                             radius: 3
-                                                            color: "#07111f"
+                                                            color: "transparent"
+                                                            Rectangle { anchors.fill: parent; radius: 3; color: settingsController.scrimColor; opacity: 0.5 }
                                                             border.color: settingsController.accentColor
                                                             Text {
                                                                 anchors.centerIn: parent
@@ -582,12 +601,12 @@ Rectangle {
                                                 visible: (row.count || 0) > 0
                                                 onClicked: productionController.clearCategory(row.name || "")
                                                 background: Rectangle {
-                                                    color: parent.hovered ? "#8c2e2e" : "transparent"
+                                                    color: parent.hovered ? settingsController.dangerHoverColor : "transparent"
                                                     radius: 4
                                                 }
                                                 contentItem: Text {
                                                     text: parent.text
-                                                    color: parent.hovered ? "#ffffff" : "#99abc4"
+                                                    color: parent.hovered ? settingsController.textColor : settingsController.mutedTextColor
                                                     horizontalAlignment: Text.AlignHCenter
                                                     verticalAlignment: Text.AlignVCenter
                                                     font.pixelSize: 12
@@ -602,7 +621,7 @@ Rectangle {
                             Text {
                                 width: planningContent.width
                                 text: tr("production.routes")
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 15
                                 font.bold: true
@@ -612,8 +631,10 @@ Rectangle {
                                 width: planningContent.width
                                 height: Math.max(170, routesContent.implicitHeight + 16)
                                 radius: 8
-                                color: "#0e1a2d"
-                                border.color: "#24486d"
+                                color: "transparent"
+                                border.color: "transparent"
+                                Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.4 }
+                                Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: Qt.rgba(1,1,1,0.1); border.width: 1 }
 
                                 ColumnLayout {
                                     id: routesContent
@@ -625,7 +646,7 @@ Rectangle {
                                         Layout.fillWidth: true
                                         Text {
                                             text: productionController.routeSummary
-                                            color: "#edf6ff"
+                                            color: settingsController.textColor
                                             font.family: "Segoe UI"
                                             font.pixelSize: 12
                                             font.bold: true
@@ -651,8 +672,10 @@ Rectangle {
                                                 width: routeTripsColumn.width
                                                 height: mainCol.implicitHeight + 16
                                                 radius: 8
-                                                color: "#0a1526"
-                                                border.color: row.warning ? "#8c2e2e" : "#1e3554"
+                                                color: "transparent"
+                                                border.color: "transparent"
+                                                Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.5 }
+                                                Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: row.warning ? settingsController.warningColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
                                                 
                                                 ColumnLayout {
                                                     id: mainCol
@@ -675,7 +698,7 @@ Rectangle {
                                                                 Layout.fillWidth: true
                                                                 Layout.preferredHeight: 22
                                                                 radius: 4
-                                                                color: "#132b43"
+                                                                color: Qt.rgba(0,0,0,0.4)
                                                                 Text {
                                                                     anchors.fill: parent
                                                                     anchors.leftMargin: 4
@@ -692,20 +715,20 @@ Rectangle {
                                                             }
                                                             RowLayout {
                                                                 spacing: 4
-                                                                Text { text: tr("production.route_input") || "Ida:"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 10; font.capitalization: Font.Capitalize }
+                                                                Text { text: tr("production.route_input") || "Ida:"; color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 10; font.capitalization: Font.Capitalize }
                                                                 Item { Layout.fillWidth: true }
                                                                 Text { text: String(row.inputSlots || 0) + "/" + String(row.capacity || 0); color: settingsController.warningColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
                                                             }
                                                         }
                                                         
-                                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: "#1e3554"; Layout.topMargin: 2; Layout.bottomMargin: 2 }
+                                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Qt.rgba(1,1,1,0.1); Layout.topMargin: 2; Layout.bottomMargin: 2 }
                                                         
                                                         // Middle: Materials to Take
                                                         ColumnLayout {
                                                             Layout.fillWidth: true
                                                             Layout.alignment: Qt.AlignTop
                                                             spacing: 4
-                                                            Text { text: tr("production.route_take") || "Levar"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                                            Text { text: tr("production.route_take") || "Levar"; color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
                                                             Repeater {
                                                                 model: row.materialsList || []
                                                                 delegate: RowLayout {
@@ -719,7 +742,7 @@ Rectangle {
                                                                     }
                                                                     Text {
                                                                         text: (row.vehicle === "Flatbed" ? modelData.crates + "x crates " : modelData.quantity + "x ") + modelData.label
-                                                                        color: "#edf6ff"
+                                                                        color: settingsController.textColor
                                                                         font.family: "Segoe UI"
                                                                         font.pixelSize: 11
                                                                         Layout.fillWidth: true
@@ -730,20 +753,20 @@ Rectangle {
                                                             Text {
                                                                 visible: (!row.materialsList || row.materialsList.length === 0)
                                                                 text: "-"
-                                                                color: "#edf6ff"
+                                                                color: settingsController.textColor
                                                                 font.family: "Segoe UI"
                                                                 font.pixelSize: 11
                                                             }
                                                         }
                                                         
-                                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: "#1e3554"; Layout.topMargin: 2; Layout.bottomMargin: 2 }
+                                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: Qt.rgba(1,1,1,0.1); Layout.topMargin: 2; Layout.bottomMargin: 2 }
                                                         
                                                         // Right: Items to Collect
                                                         ColumnLayout {
                                                             Layout.fillWidth: true
                                                             Layout.alignment: Qt.AlignTop
                                                             spacing: 4
-                                                            Text { text: tr("production.route_collect") || "Retirar"; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
+                                                            Text { text: tr("production.route_collect") || "Retirar"; color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true }
                                                             Repeater {
                                                                 model: row.ordersList || []
                                                                 delegate: RowLayout {
@@ -757,7 +780,7 @@ Rectangle {
                                                                     }
                                                                     Text {
                                                                         text: modelData.count + "x " + modelData.name + " (" + modelData.count + " caixas)"
-                                                                        color: "#edf6ff"
+                                                                        color: settingsController.textColor
                                                                         font.family: "Segoe UI"
                                                                         font.pixelSize: 11
                                                                         Layout.fillWidth: true
@@ -768,7 +791,7 @@ Rectangle {
                                                             Text {
                                                                 visible: (!row.ordersList || row.ordersList.length === 0)
                                                                 text: "-"
-                                                                color: "#edf6ff"
+                                                                color: settingsController.textColor
                                                                 font.family: "Segoe UI"
                                                                 font.pixelSize: 11
                                                             }
@@ -780,8 +803,8 @@ Rectangle {
                                                         Layout.minimumHeight: 26
                                                         implicitHeight: warningRow.implicitHeight + 8
                                                         radius: 4
-                                                        color: "#2a1111"
-                                                        border.color: "#5c2b2b"
+                                                        color: settingsController.dangerPanelColor
+                                                        border.color: settingsController.dangerColor
                                                         visible: Boolean(row.warning)
                                                         RowLayout {
                                                             id: warningRow
@@ -791,7 +814,7 @@ Rectangle {
                                                             Text { text: "âš ï¸"; font.pixelSize: 12; Layout.alignment: Qt.AlignTop }
                                                             Text { 
                                                                 text: row.warning || ""
-                                                                color: "#ff9999"
+                                                                color: settingsController.dangerColor
                                                                 font.family: "Segoe UI"
                                                                 font.pixelSize: 11
                                                                 font.bold: true

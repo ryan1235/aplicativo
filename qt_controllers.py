@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import colorsys
 import csv
 import ctypes
 from datetime import datetime, timezone
@@ -68,6 +69,7 @@ from production_service import (
     load_production_items,
     plan_transport_routes,
 )
+from personalization_store import DEFAULT_THEME_CUSTOM, load_personalization_settings, save_personalization_settings
 from settings_store import load_settings, save_settings, selected_language
 from steam_profile import SteamProfile, get_local_steam_profile
 from stockpiler import (
@@ -88,7 +90,7 @@ from stockpiler import (
 
 
 APP_TITLE = "GG Coalition"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.3"
 UPDATE_REPO = "ryan1235/aplicativo"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
@@ -117,24 +119,7 @@ QUICK_EMOJIS = ("👍", "❤️", "😂", "🔥", "✅", "🫡", "👀", "🚚",
 SOUND_DIRS = (BASE_DIR / "efeitos sonoros", BASE_DIR / "audio")
 SOUND_EXTENSIONS = (".wav", ".mp3", ".wma")
 VALID_CLOSE_ACTIONS = ("ask", "tray", "exit")
-UI_THEME_CUSTOM_DEFAULT = {
-    "accent": "#5eead4",
-    "accent_hover": "#8ab4ff",
-    "accent_panel": "#10342e",
-    "success": "#62d7a4",
-    "warning": "#ffd166",
-    "warning_text": "#fef3c7",
-    "background": "#070b16",
-    "surface": "#111c31",
-    "text": "#edf6ff",
-    "muted_text": "#99abc4",
-    "border": "#24486d",
-    "gradient_start": "#070b16",
-    "gradient_end": "#0d1729",
-    "gradient_enabled": False,
-    "button_style": "solid",
-    "card_radius": 8,
-}
+UI_THEME_CUSTOM_DEFAULT = DEFAULT_THEME_CUSTOM
 UI_THEME_COLOR_KEYS = (
     "accent",
     "accent_hover",
@@ -145,8 +130,20 @@ UI_THEME_COLOR_KEYS = (
     "background",
     "surface",
     "text",
+    "text_inverse",
+    "secondary_text",
     "muted_text",
+    "disabled_text",
     "border",
+    "surface_alt",
+    "surface_raised",
+    "control",
+    "control_hover",
+    "danger",
+    "danger_hover",
+    "danger_panel",
+    "info",
+    "scrim",
     "gradient_start",
     "gradient_end",
 )
@@ -155,18 +152,18 @@ UI_THEME_PRESETS = {
         "labelKey": "settings.theme_coalition",
         "descriptionKey": "settings.theme_coalition_detail",
         "accent": "#5eead4",
-        "accent_hover": "#8ab4ff",
-        "accent_panel": "#10342e",
+        "accent_hover": "#34d399",
+        "accent_panel": "#123b34",
         "success": "#62d7a4",
-        "warning": "#ffd166",
-        "warning_text": "#fef3c7",
+        "warning": "#f59e0b",
+        "warning_text": "#ffedd5",
         "background": "#070b16",
         "surface": "#111c31",
         "text": "#edf6ff",
-        "muted_text": "#99abc4",
-        "border": "#24486d",
+        "muted_text": "#9fb3c8",
+        "border": "#2b4b68",
         "gradient_start": "#070b16",
-        "gradient_end": "#0d1729",
+        "gradient_end": "#12243a",
         "gradient_enabled": False,
         "button_style": "solid",
         "card_radius": 8,
@@ -174,19 +171,19 @@ UI_THEME_PRESETS = {
     "warden": {
         "labelKey": "settings.theme_warden",
         "descriptionKey": "settings.theme_warden_detail",
-        "accent": "#8ab4ff",
-        "accent_hover": "#b9d0ff",
-        "accent_panel": "#13243d",
+        "accent": "#93c5fd",
+        "accent_hover": "#facc15",
+        "accent_panel": "#172554",
         "success": "#7dd3fc",
-        "warning": "#ffd166",
-        "warning_text": "#fef3c7",
-        "background": "#06111f",
-        "surface": "#101c31",
+        "warning": "#facc15",
+        "warning_text": "#422006",
+        "background": "#07111d",
+        "surface": "#101827",
         "text": "#edf6ff",
-        "muted_text": "#a8c0dd",
-        "border": "#2d496f",
-        "gradient_start": "#06111f",
-        "gradient_end": "#13243d",
+        "muted_text": "#b6c7d9",
+        "border": "#2e4b68",
+        "gradient_start": "#07111d",
+        "gradient_end": "#1b2a3e",
         "gradient_enabled": True,
         "button_style": "soft",
         "card_radius": 8,
@@ -195,18 +192,18 @@ UI_THEME_PRESETS = {
         "labelKey": "settings.theme_ember",
         "descriptionKey": "settings.theme_ember_detail",
         "accent": "#fb7185",
-        "accent_hover": "#fda4af",
-        "accent_panel": "#3a1621",
+        "accent_hover": "#f97316",
+        "accent_panel": "#3a1827",
         "success": "#34d399",
         "warning": "#f59e0b",
         "warning_text": "#ffedd5",
-        "background": "#16090f",
-        "surface": "#24111b",
+        "background": "#170b12",
+        "surface": "#26151f",
         "text": "#fff1f2",
-        "muted_text": "#f3b6c4",
-        "border": "#6d2338",
-        "gradient_start": "#16090f",
-        "gradient_end": "#3a1621",
+        "muted_text": "#e7b5c2",
+        "border": "#713247",
+        "gradient_start": "#170b12",
+        "gradient_end": "#3a1827",
         "gradient_enabled": True,
         "button_style": "glass",
         "card_radius": 10,
@@ -235,8 +232,8 @@ UI_THEME_PRESETS = {
         "labelKey": "settings.theme_midnight",
         "descriptionKey": "settings.theme_midnight_detail",
         "accent": "#38bdf8",
-        "accent_hover": "#a78bfa",
-        "accent_panel": "#0f2540",
+        "accent_hover": "#22d3ee",
+        "accent_panel": "#0f2d3f",
         "success": "#22c55e",
         "warning": "#eab308",
         "warning_text": "#fef9c3",
@@ -250,6 +247,66 @@ UI_THEME_PRESETS = {
         "gradient_enabled": True,
         "button_style": "outline",
         "card_radius": 6,
+    },
+    "verdant": {
+        "labelKey": "settings.theme_verdant",
+        "descriptionKey": "settings.theme_verdant_detail",
+        "accent": "#84cc16",
+        "accent_hover": "#bef264",
+        "accent_panel": "#1f3515",
+        "success": "#22c55e",
+        "warning": "#fbbf24",
+        "warning_text": "#422006",
+        "background": "#07120b",
+        "surface": "#101d15",
+        "text": "#f2ffe8",
+        "muted_text": "#b4c9aa",
+        "border": "#355430",
+        "gradient_start": "#07120b",
+        "gradient_end": "#172812",
+        "gradient_enabled": True,
+        "button_style": "soft",
+        "card_radius": 8,
+    },
+    "signal": {
+        "labelKey": "settings.theme_signal",
+        "descriptionKey": "settings.theme_signal_detail",
+        "accent": "#f97316",
+        "accent_hover": "#38bdf8",
+        "accent_panel": "#3b2212",
+        "success": "#10b981",
+        "warning": "#facc15",
+        "warning_text": "#422006",
+        "background": "#11100b",
+        "surface": "#1d1a14",
+        "text": "#fff7ed",
+        "muted_text": "#d7c6a8",
+        "border": "#60412b",
+        "gradient_start": "#11100b",
+        "gradient_end": "#2a1a12",
+        "gradient_enabled": True,
+        "button_style": "solid",
+        "card_radius": 6,
+    },
+    "aurora": {
+        "labelKey": "settings.theme_aurora",
+        "descriptionKey": "settings.theme_aurora_detail",
+        "accent": "#a78bfa",
+        "accent_hover": "#5eead4",
+        "accent_panel": "#281f45",
+        "success": "#5eead4",
+        "warning": "#f0abfc",
+        "warning_text": "#fae8ff",
+        "background": "#0f1020",
+        "surface": "#181827",
+        "text": "#f8f7ff",
+        "muted_text": "#c8bddc",
+        "border": "#4b3d71",
+        "gradient_start": "#0f1020",
+        "gradient_end": "#17233b",
+        "gradient_enabled": True,
+        "button_style": "glass",
+        "card_radius": 12,
     },
     "accessible": {
         "labelKey": "settings.theme_accessible",
@@ -277,15 +334,26 @@ UI_THEME_PRESETS = {
         **UI_THEME_CUSTOM_DEFAULT,
     },
 }
-UI_THEME_ORDER = ("coalition", "warden", "ember", "light", "midnight", "accessible", "custom")
+UI_THEME_ORDER = ("coalition", "warden", "ember", "verdant", "signal", "aurora", "light", "midnight", "accessible", "custom")
 UI_THEME_COLOR_FIELDS = {
     "accent": "settings.theme_color_accent",
     "accent_panel": "settings.theme_color_panel",
     "background": "settings.theme_color_background",
     "surface": "settings.theme_color_surface",
     "text": "settings.theme_color_text",
+    "text_inverse": "settings.theme_color_text_inverse",
+    "secondary_text": "settings.theme_color_secondary_text",
     "muted_text": "settings.theme_color_muted_text",
+    "disabled_text": "settings.theme_color_disabled_text",
     "border": "settings.theme_color_border",
+    "surface_alt": "settings.theme_color_surface_alt",
+    "surface_raised": "settings.theme_color_surface_raised",
+    "control": "settings.theme_color_control",
+    "control_hover": "settings.theme_color_control_hover",
+    "danger": "settings.theme_color_danger",
+    "danger_panel": "settings.theme_color_danger_panel",
+    "info": "settings.theme_color_info",
+    "scrim": "settings.theme_color_scrim",
     "gradient_start": "settings.theme_color_gradient_start",
     "gradient_end": "settings.theme_color_gradient_end",
     "success": "settings.theme_color_success",
@@ -298,9 +366,127 @@ UI_THEME_BUTTON_STYLES = {
     "glass": "settings.button_style_glass",
 }
 UI_THEME_CARD_RADIUS_OPTIONS = {
+    "4": "settings.card_radius_sharp",
     "6": "settings.card_radius_compact",
     "8": "settings.card_radius_standard",
     "12": "settings.card_radius_round",
+    "16": "settings.card_radius_pill",
+}
+UI_THEME_ACCENT_PALETTES = {
+    "teal": {"label": "Teal", "accent": "#5eead4", "support": "#34d399", "warm": "#f59e0b"},
+    "sky": {"label": "Sky", "accent": "#38bdf8", "support": "#818cf8", "warm": "#facc15"},
+    "lime": {"label": "Lime", "accent": "#84cc16", "support": "#22c55e", "warm": "#fbbf24"},
+    "amber": {"label": "Amber", "accent": "#f59e0b", "support": "#ef4444", "warm": "#fde047"},
+    "rose": {"label": "Rose", "accent": "#fb7185", "support": "#f97316", "warm": "#facc15"},
+    "violet": {"label": "Violet", "accent": "#a78bfa", "support": "#5eead4", "warm": "#f0abfc"},
+    "steel": {"label": "Steel", "accent": "#93c5fd", "support": "#64748b", "warm": "#facc15"},
+    "white": {"label": "White", "accent": "#e5e7eb", "support": "#38bdf8", "warm": "#fbbf24"},
+}
+COLORBLIND_PROFILE_ORDER = ("none", "unsure", "deuteranopia", "protanopia", "tritanopia", "achromatopsia")
+COLORBLIND_PROFILE_OPTIONS = {
+    "none": {
+        "labelKey": "settings.colorblind_profile_none",
+        "descriptionKey": "settings.colorblind_profile_none_detail",
+    },
+    "unsure": {
+        "labelKey": "settings.colorblind_profile_unsure",
+        "descriptionKey": "settings.colorblind_profile_unsure_detail",
+    },
+    "deuteranopia": {
+        "labelKey": "settings.colorblind_profile_deuteranopia",
+        "descriptionKey": "settings.colorblind_profile_deuteranopia_detail",
+    },
+    "protanopia": {
+        "labelKey": "settings.colorblind_profile_protanopia",
+        "descriptionKey": "settings.colorblind_profile_protanopia_detail",
+    },
+    "tritanopia": {
+        "labelKey": "settings.colorblind_profile_tritanopia",
+        "descriptionKey": "settings.colorblind_profile_tritanopia_detail",
+    },
+    "achromatopsia": {
+        "labelKey": "settings.colorblind_profile_achromatopsia",
+        "descriptionKey": "settings.colorblind_profile_achromatopsia_detail",
+    },
+}
+COLORBLIND_THEME_OVERRIDES = {
+    "unsure": {
+        "accent": "#3b82f6",
+        "accent_hover": "#ec4899",
+        "accent_panel": "#162a4a",
+        "success": "#38bdf8",
+        "warning": "#f97316",
+        "warning_text": "#fff7ed",
+        "danger": "#ec4899",
+        "danger_hover": "#be185d",
+        "danger_panel": "#3b1730",
+        "info": "#a78bfa",
+        "border": "#3b82f6",
+        "control": "#1d3353",
+        "control_hover": "#375f8f",
+    },
+    "deuteranopia": {
+        "accent": "#2563eb",
+        "accent_hover": "#f97316",
+        "accent_panel": "#132a4f",
+        "success": "#06b6d4",
+        "warning": "#f59e0b",
+        "warning_text": "#fff7ed",
+        "danger": "#db2777",
+        "danger_hover": "#be185d",
+        "danger_panel": "#38162b",
+        "info": "#7c3aed",
+        "border": "#3b82f6",
+        "control": "#1d3353",
+        "control_hover": "#365d8d",
+    },
+    "protanopia": {
+        "accent": "#1d4ed8",
+        "accent_hover": "#f59e0b",
+        "accent_panel": "#13264a",
+        "success": "#0891b2",
+        "warning": "#fbbf24",
+        "warning_text": "#422006",
+        "danger": "#c026d3",
+        "danger_hover": "#a21caf",
+        "danger_panel": "#321636",
+        "info": "#9333ea",
+        "border": "#3b82f6",
+        "control": "#1d3353",
+        "control_hover": "#365d8d",
+    },
+    "tritanopia": {
+        "accent": "#ec4899",
+        "accent_hover": "#14b8a6",
+        "accent_panel": "#3a1730",
+        "success": "#14b8a6",
+        "warning": "#f97316",
+        "warning_text": "#fff7ed",
+        "danger": "#f43f5e",
+        "danger_hover": "#e11d48",
+        "danger_panel": "#3b1624",
+        "info": "#a855f7",
+        "border": "#ec4899",
+        "control": "#3a2145",
+        "control_hover": "#58356e",
+    },
+    "achromatopsia": {
+        "accent": "#f8fafc",
+        "accent_hover": "#cbd5e1",
+        "accent_panel": "#263241",
+        "success": "#f8fafc",
+        "warning": "#e2e8f0",
+        "warning_text": "#020617",
+        "danger": "#ffffff",
+        "danger_hover": "#cbd5e1",
+        "danger_panel": "#334155",
+        "info": "#e2e8f0",
+        "border": "#f8fafc",
+        "control": "#334155",
+        "control_hover": "#475569",
+        "text_inverse": "#020617",
+        "scrim": "#000000",
+    },
 }
 STARTUP_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 OVERLAY_PALETTES = {
@@ -308,12 +494,14 @@ OVERLAY_PALETTES = {
     "Verde": {"bg": "#071a18", "panel": "#10342e", "accent": "#5eead4"},
     "Roxo": {"bg": "#141125", "panel": "#2a214b", "accent": "#c4b5fd"},
     "Vermelho": {"bg": "#211016", "panel": "#431926", "accent": "#ff8aa0"},
+    "Acessivel": {"bg": "#050b16", "panel": "#162a4a", "accent": "#f97316"},
 }
 OVERLAY_COLOR_LABEL_KEYS = {
     "Azul": "overlay.color_blue",
     "Verde": "overlay.color_green",
     "Roxo": "overlay.color_purple",
     "Vermelho": "overlay.color_red",
+    "Acessivel": "overlay.color_accessible",
 }
 
 PANEL_REQUIRED_ACCESS_LEVEL = 2
@@ -446,6 +634,145 @@ def debug_login_response(label: str, result: dict[str, Any]) -> None:
 
 def file_url(path: str | Path) -> str:
     return QUrl.fromLocalFile(str(Path(path).resolve())).toString()
+
+
+def markdown_inline_html(value: object) -> str:
+    text = html.escape(str(value or ""))
+    text = re.sub(
+        r"@\[video\]\((https?://[^)\s]+)\)",
+        r'<a href="\1">video</a>',
+        text,
+    )
+    text = re.sub(
+        r"!\[([^\]]*)\]\((https?://[^)\s]+)\)",
+        r'<img src="\2" alt="\1" />',
+        text,
+    )
+    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
+    text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', text)
+    return text
+
+
+def markdown_table_html(rows: list[str]) -> str:
+    parsed: list[list[str]] = []
+    for index, row in enumerate(rows):
+        if index == 1:
+            continue
+        cells = [markdown_inline_html(cell.strip()) for cell in row.strip().strip("|").split("|")]
+        parsed.append(cells)
+    if not parsed:
+        return ""
+    headers = "".join(f"<th>{cell}</th>" for cell in parsed[0])
+    body_rows = "".join(
+        f"<tr>{''.join(f'<td>{cell}</td>' for cell in row)}</tr>"
+        for row in parsed[1:]
+    )
+    return f"<table><thead><tr>{headers}</tr></thead><tbody>{body_rows}</tbody></table>"
+
+
+def markdown_is_table_start(lines: list[str], index: int) -> bool:
+    current = lines[index] if index < len(lines) else ""
+    next_line = lines[index + 1] if index + 1 < len(lines) else ""
+    return bool(
+        re.match(r"^\s*\|.+\|\s*$", current)
+        and re.match(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$", next_line)
+    )
+
+
+def markdown_to_html(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    lines = text.splitlines()
+    output: list[str] = []
+    list_tag = ""
+
+    def close_list() -> None:
+        nonlocal list_tag
+        if list_tag:
+            output.append(f"</{list_tag}>")
+            list_tag = ""
+
+    index = 0
+    while index < len(lines):
+        raw = lines[index]
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            close_list()
+            index += 1
+            continue
+        if re.match(r"^(-{3,}|\*{3,})$", stripped):
+            close_list()
+            output.append("<hr />")
+            index += 1
+            continue
+        if markdown_is_table_start(lines, index):
+            close_list()
+            table_rows: list[str] = []
+            while index < len(lines) and re.match(r"^\s*\|.+\|\s*$", lines[index]):
+                table_rows.append(lines[index])
+                index += 1
+            output.append(markdown_table_html(table_rows))
+            continue
+        heading = re.match(r"^(#{1,3})\s+(.+)$", line)
+        if heading:
+            close_list()
+            level = len(heading.group(1))
+            output.append(f"<h{level}>{markdown_inline_html(heading.group(2))}</h{level}>")
+            index += 1
+            continue
+        unordered = re.match(r"^[-*]\s+(.+)$", line)
+        ordered = re.match(r"^\d+\.\s+(.+)$", line)
+        if unordered or ordered:
+            tag = "ul" if unordered else "ol"
+            if list_tag != tag:
+                close_list()
+                list_tag = tag
+                output.append(f"<{tag}>")
+            output.append(f"<li>{markdown_inline_html((unordered or ordered).group(1))}</li>")
+            index += 1
+            continue
+        if line.startswith("> "):
+            close_list()
+            output.append(f"<blockquote>{markdown_inline_html(line[2:])}</blockquote>")
+            index += 1
+            continue
+        close_list()
+        output.append(f"<p>{markdown_inline_html(line)}</p>")
+        index += 1
+
+    close_list()
+    return "".join(output)
+
+
+def markdown_to_news_blocks(value: object) -> list[dict[str, Any]]:
+    html_value = markdown_to_html(value)
+    return [{"type": "rich", "html": html_value}] if html_value else []
+
+
+def news_image_url(item: dict[str, Any]) -> str:
+    for key in (
+        "thumbnailUrl",
+        "thumbnail",
+        "coverImageUrl",
+        "coverImage",
+        "imageUrl",
+        "image",
+        "bannerUrl",
+        "banner",
+    ):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    media = item.get("media") if isinstance(item.get("media"), dict) else {}
+    for key in ("thumbnailUrl", "url", "imageUrl", "src"):
+        value = str(media.get(key) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 _LOCATION_INDEX: dict[tuple[str, str], dict[str, str]] | None = None
@@ -1429,6 +1756,10 @@ class SettingsController(QObject):
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
+        self.personalization = load_personalization_settings(
+            legacy_theme=self.settings.get("app", {}).get("theme"),
+            legacy_colorblind=self.settings.get("app", {}).get("colorblind_mode_enabled"),
+        )
         self._revision = 0
         self._status = ""
 
@@ -1440,12 +1771,20 @@ class SettingsController(QObject):
     def _notification_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("notifications", {})
 
+    def _personalization_settings(self) -> dict[str, Any]:
+        if not isinstance(self.personalization, dict):
+            self.personalization = load_personalization_settings()
+        self.personalization.setdefault("colorblind_mode_enabled", False)
+        self.personalization.setdefault("colorblind_profile", "none")
+        self.personalization.setdefault("sidebar_width", 286)
+        return self.personalization
+
     def _theme_settings(self) -> dict[str, Any]:
-        app_settings = self._app_settings()
-        theme = app_settings.setdefault("theme", {})
+        personalization = self._personalization_settings()
+        theme = personalization.setdefault("theme", {})
         if not isinstance(theme, dict):
             theme = {}
-            app_settings["theme"] = theme
+            personalization["theme"] = theme
         theme.setdefault("preset", "coalition")
         custom = theme.setdefault("custom", {})
         if not isinstance(custom, dict):
@@ -1460,12 +1799,18 @@ class SettingsController(QObject):
         self._revision += 1
         self.changed.emit()
 
+    def _save_personalization(self) -> None:
+        save_personalization_settings(self.personalization)
+        self._revision += 1
+        self.changed.emit()
+
     def _app_bool(self, key: str, default: bool = True) -> bool:
         return bool(self._app_settings().get(key, default))
 
     def _ui_palette(self) -> dict[str, str]:
         preset = self.themePreset
-        if bool(self._app_settings().get("colorblind_mode_enabled", False)):
+        colorblind_profile = self.colorblindProfile
+        if bool(self._personalization_settings().get("colorblind_mode_enabled", False)):
             preset = "accessible"
         if preset == "custom":
             custom = self._theme_settings().get("custom", {})
@@ -1477,11 +1822,11 @@ class SettingsController(QObject):
             palette["button_style"] = self._sanitize_button_style(custom.get("button_style"))
             palette["card_radius"] = self._sanitize_card_radius(custom.get("card_radius"))
             return palette
-        return {
-            key: value
-            for key, value in UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"]).items()
-            if key in UI_THEME_CUSTOM_DEFAULT
-        }
+        source = UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"])
+        palette = {key: source.get(key, fallback) for key, fallback in UI_THEME_CUSTOM_DEFAULT.items()}
+        if preset == "accessible":
+            palette.update(COLORBLIND_THEME_OVERRIDES.get(colorblind_profile, COLORBLIND_THEME_OVERRIDES["unsure"]))
+        return palette
 
     @staticmethod
     def _sanitize_hex_color(value: Any, fallback: str) -> str:
@@ -1505,6 +1850,75 @@ class SettingsController(QObject):
             return 8
         return radius if str(radius) in UI_THEME_CARD_RADIUS_OPTIONS else 8
 
+    @staticmethod
+    def _hex_to_rgb(value: Any, fallback: str = "#5eead4") -> tuple[int, int, int]:
+        text = SettingsController._sanitize_hex_color(value, fallback).lstrip("#")
+        return int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16)
+
+    @staticmethod
+    def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+        return "#{:02x}{:02x}{:02x}".format(
+            max(0, min(255, int(rgb[0]))),
+            max(0, min(255, int(rgb[1]))),
+            max(0, min(255, int(rgb[2]))),
+        )
+
+    @classmethod
+    def _mix_color(cls, left: Any, right: Any, amount: float) -> str:
+        amount = max(0.0, min(1.0, float(amount)))
+        left_rgb = cls._hex_to_rgb(left)
+        right_rgb = cls._hex_to_rgb(right)
+        return cls._rgb_to_hex(tuple(round(left_rgb[i] * (1.0 - amount) + right_rgb[i] * amount) for i in range(3)))
+
+    @classmethod
+    def _shift_color(cls, value: Any, hue_shift: float = 0.0, saturation: float = 1.0, lightness: float = 1.0) -> str:
+        r, g, b = cls._hex_to_rgb(value)
+        hue, lum, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        hue = (hue + hue_shift) % 1.0
+        lum = max(0.03, min(0.96, lum * lightness))
+        sat = max(0.08, min(1.0, sat * saturation))
+        nr, ng, nb = colorsys.hls_to_rgb(hue, lum, sat)
+        return cls._rgb_to_hex((round(nr * 255), round(ng * 255), round(nb * 255)))
+
+    @classmethod
+    def _theme_from_accent(cls, accent: Any, support: Any | None = None, warm: Any | None = None) -> dict[str, Any]:
+        accent_color = cls._sanitize_hex_color(accent, UI_THEME_CUSTOM_DEFAULT["accent"])
+        support_color = cls._sanitize_hex_color(support, cls._shift_color(accent_color, 0.28, 0.9, 0.95))
+        warm_color = cls._sanitize_hex_color(warm, cls._shift_color(accent_color, 0.12, 1.05, 1.08))
+        background = cls._shift_color(accent_color, -0.03, 0.45, 0.18)
+        surface = cls._mix_color(background, "#ffffff", 0.055)
+        panel = cls._mix_color(background, accent_color, 0.24)
+        return {
+            "accent": accent_color,
+            "accent_hover": support_color,
+            "accent_panel": panel,
+            "success": support_color,
+            "warning": warm_color,
+            "warning_text": "#fff7ed",
+            "background": background,
+            "surface": surface,
+            "text": "#f8fafc",
+            "text_inverse": "#041014",
+            "secondary_text": "#c7d7ed",
+            "muted_text": cls._mix_color("#94a3b8", accent_color, 0.14),
+            "disabled_text": "#7f93ad",
+            "border": cls._mix_color(surface, accent_color, 0.36),
+            "surface_alt": cls._mix_color(background, "#ffffff", 0.04),
+            "surface_raised": cls._mix_color(background, accent_color, 0.14),
+            "control": cls._mix_color(background, accent_color, 0.28),
+            "control_hover": cls._mix_color(background, accent_color, 0.42),
+            "danger": "#fb7185",
+            "danger_hover": "#e11d48",
+            "danger_panel": cls._mix_color(background, "#fb7185", 0.22),
+            "info": cls._shift_color(accent_color, 0.08, 0.95, 1.1),
+            "scrim": "#000000",
+            "gradient_start": background,
+            "gradient_end": cls._mix_color(background, support_color, 0.18),
+            "gradient_enabled": True,
+            "button_style": secrets.choice(tuple(UI_THEME_BUTTON_STYLES.keys())),
+            "card_radius": secrets.choice(tuple(int(key) for key in UI_THEME_CARD_RADIUS_OPTIONS.keys())),
+        }
+
     def _palette_for_preview(self, preset: str) -> dict[str, str]:
         if preset == "custom":
             custom = self._theme_settings().get("custom", {})
@@ -1518,6 +1932,24 @@ class SettingsController(QObject):
             return palette
         palette = UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"])
         return {key: palette.get(key, fallback) for key, fallback in UI_THEME_CUSTOM_DEFAULT.items()}
+
+    def _activate_custom_from_current_palette(self) -> tuple[dict[str, Any], bool]:
+        theme = self._theme_settings()
+        custom = theme.setdefault("custom", {})
+        changed = theme.get("preset") != "custom" or bool(self._personalization_settings().get("colorblind_mode_enabled", False))
+        if theme.get("preset") != "custom":
+            current = self._ui_palette()
+            custom = {
+                key: current.get(key, UI_THEME_CUSTOM_DEFAULT[key])
+                for key in UI_THEME_COLOR_KEYS
+            }
+            custom["gradient_enabled"] = bool(current.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"]))
+            custom["button_style"] = self._sanitize_button_style(current.get("button_style"))
+            custom["card_radius"] = self._sanitize_card_radius(current.get("card_radius"))
+            theme["custom"] = custom
+        theme["preset"] = "custom"
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        return custom, changed
 
     @Property(int, notify=changed)
     def revision(self) -> int:
@@ -1555,9 +1987,37 @@ class SettingsController(QObject):
                 "success": str(self._palette_for_preview(key)["success"]),
                 "warning": str(self._palette_for_preview(key)["warning"]),
                 "background": str(self._palette_for_preview(key)["background"]),
+                "surface": str(self._palette_for_preview(key)["surface"]),
+                "border": str(self._palette_for_preview(key)["border"]),
                 "active": key == current,
             }
             for key in UI_THEME_ORDER
+        ]
+
+    @Property("QVariant", constant=True)
+    def accentPaletteOptions(self) -> list[dict[str, str]]:
+        return [
+            {
+                "key": key,
+                "label": str(value["label"]),
+                "accent": str(value["accent"]),
+                "support": str(value["support"]),
+                "warm": str(value["warm"]),
+            }
+            for key, value in UI_THEME_ACCENT_PALETTES.items()
+        ]
+
+    @Property("QVariant", notify=changed)
+    def colorblindProfileOptions(self) -> list[dict[str, Any]]:
+        current = self.colorblindProfile
+        return [
+            {
+                "key": key,
+                "labelKey": str(COLORBLIND_PROFILE_OPTIONS[key]["labelKey"]),
+                "descriptionKey": str(COLORBLIND_PROFILE_OPTIONS[key]["descriptionKey"]),
+                "active": key == current and (key == "none" or self.colorblindModeEnabled),
+            }
+            for key in COLORBLIND_PROFILE_ORDER
         ]
 
     @Property("QVariant", constant=True)
@@ -1575,9 +2035,14 @@ class SettingsController(QObject):
     @Property(str, notify=changed)
     def themePreset(self) -> str:
         preset = str(self._theme_settings().get("preset") or "coalition")
-        if bool(self._app_settings().get("colorblind_mode_enabled", False)):
+        if bool(self._personalization_settings().get("colorblind_mode_enabled", False)):
             return "accessible"
         return preset if preset in UI_THEME_PRESETS else "coalition"
+
+    @Property(str, notify=changed)
+    def colorblindProfile(self) -> str:
+        profile = str(self._personalization_settings().get("colorblind_profile") or "none").strip()
+        return profile if profile in COLORBLIND_PROFILE_OPTIONS else "none"
 
     @Property(bool, notify=changed)
     def customThemeEnabled(self) -> bool:
@@ -1620,12 +2085,60 @@ class SettingsController(QObject):
         return str(self._ui_palette()["text"])
 
     @Property(str, notify=changed)
+    def textInverseColor(self) -> str:
+        return str(self._ui_palette()["text_inverse"])
+
+    @Property(str, notify=changed)
+    def secondaryTextColor(self) -> str:
+        return str(self._ui_palette()["secondary_text"])
+
+    @Property(str, notify=changed)
     def mutedTextColor(self) -> str:
         return str(self._ui_palette()["muted_text"])
 
     @Property(str, notify=changed)
+    def disabledTextColor(self) -> str:
+        return str(self._ui_palette()["disabled_text"])
+
+    @Property(str, notify=changed)
     def borderColor(self) -> str:
         return str(self._ui_palette()["border"])
+
+    @Property(str, notify=changed)
+    def surfaceAltColor(self) -> str:
+        return str(self._ui_palette()["surface_alt"])
+
+    @Property(str, notify=changed)
+    def surfaceRaisedColor(self) -> str:
+        return str(self._ui_palette()["surface_raised"])
+
+    @Property(str, notify=changed)
+    def controlColor(self) -> str:
+        return str(self._ui_palette()["control"])
+
+    @Property(str, notify=changed)
+    def controlHoverColor(self) -> str:
+        return str(self._ui_palette()["control_hover"])
+
+    @Property(str, notify=changed)
+    def dangerColor(self) -> str:
+        return str(self._ui_palette()["danger"])
+
+    @Property(str, notify=changed)
+    def dangerHoverColor(self) -> str:
+        return str(self._ui_palette()["danger_hover"])
+
+    @Property(str, notify=changed)
+    def dangerPanelColor(self) -> str:
+        return str(self._ui_palette()["danger_panel"])
+
+    @Property(str, notify=changed)
+    def infoColor(self) -> str:
+        return str(self._ui_palette()["info"])
+
+    @Property(str, notify=changed)
+    def scrimColor(self) -> str:
+        return str(self._ui_palette()["scrim"])
 
     @Property(str, notify=changed)
     def gradientStartColor(self) -> str:
@@ -1645,11 +2158,12 @@ class SettingsController(QObject):
 
     @Property(int, notify=changed)
     def buttonRadius(self) -> int:
+        radius = self.cardRadius
         if self.buttonStyle == "outline":
-            return 6
+            return max(4, min(10, radius))
         if self.buttonStyle == "glass":
-            return 10
-        return 8
+            return max(8, radius)
+        return max(4, min(16, radius))
 
     @Property(int, notify=changed)
     def cardRadius(self) -> int:
@@ -1657,7 +2171,15 @@ class SettingsController(QObject):
 
     @Property(bool, notify=changed)
     def colorblindModeEnabled(self) -> bool:
-        return bool(self._app_settings().get("colorblind_mode_enabled", False))
+        return bool(self._personalization_settings().get("colorblind_mode_enabled", False))
+
+    @Property(int, notify=changed)
+    def sidebarWidth(self) -> int:
+        try:
+            width = int(self._personalization_settings().get("sidebar_width", 286))
+        except (TypeError, ValueError):
+            width = 286
+        return max(240, min(340, width))
 
     @Property(bool, notify=changed)
     def stockpileSoundEnabled(self) -> bool:
@@ -1729,23 +2251,54 @@ class SettingsController(QObject):
         enabled = bool(enabled)
         if self.colorblindModeEnabled == enabled:
             return
-        self._app_settings()["colorblind_mode_enabled"] = enabled
+        self._personalization_settings()["colorblind_mode_enabled"] = enabled
+        if enabled:
+            if self.colorblindProfile == "none":
+                self._personalization_settings()["colorblind_profile"] = "unsure"
+            self._theme_settings()["preset"] = "accessible"
+        self._save_personalization()
+
+    @Slot(str)
+    def setColorblindProfile(self, profile: str) -> None:
+        profile = str(profile or "").strip()
+        if profile not in COLORBLIND_PROFILE_OPTIONS:
+            return
+        personalization = self._personalization_settings()
+        enabled = profile != "none"
+        if personalization.get("colorblind_profile") == profile and bool(personalization.get("colorblind_mode_enabled", False)) == enabled:
+            return
+        personalization["colorblind_profile"] = profile
+        personalization["colorblind_mode_enabled"] = enabled
         if enabled:
             self._theme_settings()["preset"] = "accessible"
-        self._save()
+        self._save_personalization()
+
+    @Slot(int)
+    def setSidebarWidth(self, width: int) -> None:
+        try:
+            value = int(width)
+        except (TypeError, ValueError):
+            return
+        value = max(240, min(340, value))
+        personalization = self._personalization_settings()
+        if int(personalization.get("sidebar_width", 286)) == value:
+            return
+        personalization["sidebar_width"] = value
+        self._save_personalization()
 
     @Slot(str)
     def setThemePreset(self, preset: str) -> None:
         preset = str(preset or "").strip()
         if preset not in UI_THEME_PRESETS:
             return
-        app_settings = self._app_settings()
-        app_settings["colorblind_mode_enabled"] = preset == "accessible"
+        self._personalization_settings()["colorblind_mode_enabled"] = preset == "accessible"
+        if preset == "accessible" and self.colorblindProfile == "none":
+            self._personalization_settings()["colorblind_profile"] = "unsure"
         theme = self._theme_settings()
         if theme.get("preset") == preset and self.themePreset == preset:
             return
         theme["preset"] = preset
-        self._save()
+        self._save_personalization()
 
     @Slot(str, result=str)
     def customThemeColor(self, key: str) -> str:
@@ -1764,7 +2317,7 @@ class SettingsController(QObject):
         color = self._sanitize_hex_color(value, fallback)
         theme = self._theme_settings()
         theme["preset"] = "custom"
-        self._app_settings()["colorblind_mode_enabled"] = False
+        self._personalization_settings()["colorblind_mode_enabled"] = False
         custom = theme.setdefault("custom", {})
         if custom.get(key) == color and self.themePreset == "custom":
             return
@@ -1773,51 +2326,81 @@ class SettingsController(QObject):
             custom["accent_hover"] = color
         if key == "warning":
             custom["warning_text"] = "#fef3c7"
-        self._save()
+        self._save_personalization()
 
     @Slot(bool)
     def setThemeGradientEnabled(self, enabled: bool) -> None:
-        theme = self._theme_settings()
-        theme["preset"] = "custom"
-        self._app_settings()["colorblind_mode_enabled"] = False
-        custom = theme.setdefault("custom", {})
+        custom, activated = self._activate_custom_from_current_palette()
         enabled = bool(enabled)
-        if bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"])) == enabled and self.themePreset == "custom":
+        if bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"])) == enabled and not activated:
             return
         custom["gradient_enabled"] = enabled
-        self._save()
+        self._save_personalization()
 
     @Slot(str)
     def setThemeButtonStyle(self, style: str) -> None:
         style = self._sanitize_button_style(style)
-        theme = self._theme_settings()
-        theme["preset"] = "custom"
-        self._app_settings()["colorblind_mode_enabled"] = False
-        custom = theme.setdefault("custom", {})
-        if self._sanitize_button_style(custom.get("button_style")) == style and self.themePreset == "custom":
+        custom, activated = self._activate_custom_from_current_palette()
+        if self._sanitize_button_style(custom.get("button_style")) == style and not activated:
             return
         custom["button_style"] = style
-        self._save()
+        self._save_personalization()
 
     @Slot(str)
     def setThemeCardRadius(self, radius: str) -> None:
         value = self._sanitize_card_radius(radius)
-        theme = self._theme_settings()
-        theme["preset"] = "custom"
-        self._app_settings()["colorblind_mode_enabled"] = False
-        custom = theme.setdefault("custom", {})
-        if self._sanitize_card_radius(custom.get("card_radius")) == value and self.themePreset == "custom":
+        custom, activated = self._activate_custom_from_current_palette()
+        if self._sanitize_card_radius(custom.get("card_radius")) == value and not activated:
             return
         custom["card_radius"] = value
-        self._save()
+        self._save_personalization()
+
+    @Slot(str)
+    def applyAccentPalette(self, key: str) -> None:
+        key = str(key or "").strip()
+        option = UI_THEME_ACCENT_PALETTES.get(key)
+        if not option:
+            return
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        theme["custom"] = self._theme_from_accent(option["accent"], option["support"], option["warm"])
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
+
+    @Slot(str)
+    def generateThemeFromAccent(self, value: str) -> None:
+        accent = self._sanitize_hex_color(value, UI_THEME_CUSTOM_DEFAULT["accent"])
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        theme["custom"] = self._theme_from_accent(accent)
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
+
+    @Slot()
+    def randomizeCustomTheme(self) -> None:
+        option = secrets.choice(tuple(UI_THEME_ACCENT_PALETTES.values()))
+        hue_shift = (secrets.randbelow(41) - 20) / 360.0
+        accent = self._shift_color(option["accent"], hue_shift, 1.0, 1.0)
+        support = self._shift_color(option["support"], hue_shift / 2.0, 1.0, 1.0)
+        warm = self._shift_color(option["warm"], -hue_shift / 3.0, 1.0, 1.0)
+        custom = self._theme_from_accent(accent, support, warm)
+        custom["button_style"] = secrets.choice(("solid", "soft", "outline", "glass"))
+        custom["card_radius"] = secrets.choice((4, 6, 8, 12, 16))
+        custom["gradient_enabled"] = secrets.choice((True, True, False))
+
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        theme["custom"] = custom
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
 
     @Slot()
     def resetCustomTheme(self) -> None:
         theme = self._theme_settings()
         theme["custom"] = dict(UI_THEME_CUSTOM_DEFAULT)
         theme["preset"] = "custom"
-        self._app_settings()["colorblind_mode_enabled"] = False
-        self._save()
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
 
     @Slot(str, bool)
     def setNotificationEnabled(self, key: str, enabled: bool) -> None:
@@ -1838,6 +2421,16 @@ class SettingsController(QObject):
     @Slot(result=str)
     def settingsPath(self) -> str:
         return str(settings_path())
+
+    @Slot(result=str)
+    def personalizationPath(self) -> str:
+        from personalization_store import PERSONALIZATION_PATH
+
+        return str(PERSONALIZATION_PATH)
+
+    @Slot(result=str)
+    def personalizationJson(self) -> str:
+        return json.dumps(self.personalization, indent=2, ensure_ascii=False)
 
     @Slot(result=str)
     def settingsJson(self) -> str:
@@ -1889,7 +2482,7 @@ class AutoClickerController(QObject):
     statusFromWorker = Signal(str)
     menuRequested = Signal()
     orderRequested = Signal(str)
-    DEFAULT_INTERVAL = 0.2
+    DEFAULT_INTERVAL = 0.5
     MODE_KEYS = ("auto", "move", "pilot", "right_hold", "fixed", "artillery")
 
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
@@ -1991,7 +2584,7 @@ class AutoClickerController(QObject):
             str(data.get("right_hold_hotkey", "F9")),
         )
         self.clicker.shift_enabled = bool(data.get("shift_enabled", False))
-        self.clicker.w_doubletap_enabled = bool(data.get("w_doubletap_enabled", True))
+        self.clicker.w_doubletap_enabled = bool(data.get("w_doubletap_enabled", False))
         self.clicker.right_doubletap_enabled = bool(data.get("right_doubletap_enabled", False))
         self.clicker.set_slot_positions(
             {
@@ -2252,7 +2845,7 @@ class AutoClickerController(QObject):
         if getattr(self.clicker, "right_hold_enabled", False):
             return f"Esc ou {self.rightHoldHotkey} para soltar"
         if getattr(self.clicker, "artillery_enabled", False):
-            return "Esc ou clique direito para parar"
+            return f"{self.artilleryHotkey} ou clique esquerdo para parar"
         if getattr(self.clicker, "move_click_enabled", False):
             return f"Esc ou {self.moveHotkey} para soltar"
         if getattr(self.clicker, "fixed_click_enabled", False):
@@ -2368,7 +2961,7 @@ class AutoClickerController(QObject):
 
     @Property(bool, notify=changed)
     def wDoubleTapEnabled(self) -> bool:
-        return bool(self._clicker_settings().get("w_doubletap_enabled", True))
+        return bool(self._clicker_settings().get("w_doubletap_enabled", False))
 
     @Slot(bool)
     def setWDoubleTapEnabled(self, value: bool) -> None:
@@ -3336,6 +3929,7 @@ class ChatController(QObject):
         )
         self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt", "regiment", "role"], self)
         self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
+        self.i18n.changed.connect(self._refresh_room_labels)
         self.resultFromWorker.connect(self._apply_result)
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(15000)
@@ -4389,6 +4983,8 @@ class ChatController(QObject):
             rooms = payload.get("chats") or payload.get("rooms") or []
             self.rooms.set_items([self._room_to_row(room) for room in rooms])
             self._status = f"{len(rooms)} chat rooms loaded"
+            if self._selected_room:
+                self._selected_room_label = self._room_label(self._selected_room)
             if not self._selected_room and rooms:
                 first = self._room_to_row(rooms[0])
                 self.selectRoom(str(first["slug"]))
@@ -4498,9 +5094,11 @@ class ChatController(QObject):
 
     def _room_to_row(self, room: dict[str, Any]) -> dict[str, Any]:
         slug = str(room.get("slug") or room.get("id") or "")
+        raw_label = str(room.get("name") or room.get("label") or slug or "Room")
         return {
             "slug": slug,
-            "label": str(room.get("name") or room.get("label") or slug or "Room"),
+            "label": self._translated_room_label(slug, raw_label),
+            "rawLabel": raw_label,
             "unread": int(room.get("unreadCount") or room.get("unread") or 0),
         }
 
@@ -4510,6 +5108,46 @@ class ChatController(QObject):
             if row.get("slug") == slug:
                 return str(row.get("label") or slug)
         return slug
+
+    def _room_translation_key(self, slug: str, label: str = "") -> str:
+        value = f"{slug} {label}".strip().casefold()
+        normalized = unicodedata.normalize("NFKD", value)
+        normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+        normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+        tokens = set(normalized.split())
+        if "global" in tokens:
+            return "home.chat.room_global"
+        if tokens & {"discussion", "discusion", "discussao", "discussaoo", "discussione", "debate"}:
+            return "home.chat.room_discussion"
+        if tokens & {"logi", "logistica", "logistics", "logistique", "logisticaa"}:
+            return "home.chat.room_logi"
+        if tokens & {"faci", "facility", "facilities", "instalacoes", "instalaciones", "installations"}:
+            return "home.chat.room_faci"
+        if tokens & {"front", "frente", "linha", "frontline"}:
+            return "home.chat.room_front"
+        return ""
+
+    def _translated_room_label(self, slug: str, label: str = "") -> str:
+        key = self._room_translation_key(slug, label)
+        return self._t(key) if key else (label or slug or "Room")
+
+    @Slot()
+    def _refresh_room_labels(self) -> None:
+        rows = []
+        for row in self.rooms.items():
+            raw_label = str(row.get("rawLabel") or row.get("label") or row.get("slug") or "")
+            rows.append(
+                {
+                    **row,
+                    "label": self._translated_room_label(str(row.get("slug") or ""), raw_label),
+                    "rawLabel": raw_label,
+                }
+            )
+        if rows:
+            self.rooms.set_items(rows)
+        if self._selected_room:
+            self._selected_room_label = self._room_label(self._selected_room)
+        self.changed.emit()
 
     @staticmethod
     def _merge_user_rows(primary: list[dict[str, Any]], secondary: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -8878,9 +9516,14 @@ class NewsController(QObject):
             type_value = str(item.get("type") or item.get("category") or "general").strip() or "general"
             date_value = item.get("publishedAt") or item.get("startsAt") or item.get("createdAt") or ""
             author = item.get("author") if isinstance(item.get("author"), dict) else {}
+            body_html = str(item.get("bodyHtml") or item.get("html") or "").strip() or markdown_to_html(body)
+            content_blocks = item.get("contentBlocks") if isinstance(item.get("contentBlocks"), list) else []
+            if not content_blocks:
+                content_blocks = markdown_to_news_blocks(body)
             plain_body = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", body)
             plain_body = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", plain_body)
             plain_body = re.sub(r"^[#>*\-\s]+", "", plain_body, flags=re.MULTILINE).strip()
+            image_url = news_image_url(item)
             items.append(
                 {
                     **item,
@@ -8888,10 +9531,11 @@ class NewsController(QObject):
                     "body": plain_body,
                     "bodyMarkdown": body,
                     "bodyMarkdownNoImages": plain_body,
-                    "bodyHtml": html.escape(body).replace("\n", "<br>"),
-                    "contentBlocks": [],
+                    "bodyHtml": body_html,
+                    "contentBlocks": content_blocks,
                     "excerpt": " ".join(plain_body.split())[:220],
-                    "image": item.get("imageUrl") or item.get("image") or "",
+                    "image": image_url,
+                    "thumbnail": str(item.get("thumbnailUrl") or item.get("thumbnail") or image_url),
                     "category": type_value.replace("-", " ").replace("_", " ").title(),
                     "date": str(date_value or ""),
                     "viewCount": int_or_none(item.get("viewCount")) or 0,

@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -26,7 +26,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: 40
         placeholderText: root.placeholder
-        placeholderTextColor: "#60728c"
+        placeholderTextColor: settingsController.disabledTextColor
         color: settingsController.textColor
         selectedTextColor: settingsController.backgroundColor
         selectionColor: settingsController.accentColor

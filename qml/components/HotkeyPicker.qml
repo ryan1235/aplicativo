@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -12,8 +12,8 @@ Rectangle {
     height: 36
     radius: 8
     opacity: enabled ? 1.0 : 0.45
-    color: enabled && (pickerMouse.containsMouse || isRecording) ? "#101f36" : "#0c1728"
-    border.color: isRecording ? settingsController.accentColor : (enabled && pickerMouse.containsMouse ? "#2d496f" : "#1e3554")
+    color: enabled && (pickerMouse.containsMouse || isRecording) ? settingsController.surfaceAltColor : settingsController.backgroundColor
+    border.color: isRecording ? settingsController.accentColor : (enabled && pickerMouse.containsMouse ? settingsController.controlHoverColor : settingsController.borderColor)
     border.width: isRecording ? 1.5 : 1
     Behavior on color { ColorAnimation { duration: 120 } }
     Behavior on border.color { ColorAnimation { duration: 120 } }
@@ -21,7 +21,7 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         text: isRecording ? "Pressione..." : currentKey
-        color: enabled ? (isRecording ? settingsController.accentColor : "#edf6ff") : "#7f93ad"
+        color: enabled ? (isRecording ? settingsController.accentColor : settingsController.textColor) : settingsController.disabledTextColor
         font.family: "Segoe UI"
         font.pixelSize: 13
         font.bold: true

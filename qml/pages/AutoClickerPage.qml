@@ -31,7 +31,7 @@ Flickable {
     }
 
     function actionLabel(active) {
-        return active ? "Soltar" : "Ativar"
+        return active ? tr("clicker.release") : tr("clicker.start")
     }
 
     component ModeCard: Rectangle {
@@ -55,7 +55,7 @@ Flickable {
         opacity: modeEnabled ? 1.0 : 0.68
         color: "transparent"
         border.color: "transparent"
-        Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
+        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.2 }
         layer.enabled: true
         layer.effect: DropShadow {
             transparentBorder: true
@@ -108,7 +108,7 @@ Flickable {
 
                 Text {
                     text: card.title
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 15
                     font.bold: true
@@ -145,7 +145,7 @@ Flickable {
 
             Text {
                 text: card.detail
-                color: "#99abc4"
+                color: settingsController.mutedTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
@@ -171,7 +171,7 @@ Flickable {
                     Layout.preferredWidth: 92
                     fill: card.active ? Qt.rgba(0,0,0,0.4) : card.accent
                     hoverFill: card.active ? Qt.rgba(1,1,1,0.1) : Qt.lighter(card.accent, 1.2)
-                    textFill: card.active ? card.accent : "#041014"
+                    textFill: card.active ? card.accent : settingsController.textInverseColor
                     enabled: autoClickerController.available && card.modeEnabled
                     onClicked: card.action()
                 }
@@ -204,7 +204,7 @@ Flickable {
 
         Text {
             text: parent.label
-            color: "#c7d7ed"
+            color: settingsController.secondaryTextColor
             font.family: "Segoe UI"
             font.pixelSize: 12
             wrapMode: Text.WordWrap
@@ -230,7 +230,7 @@ Flickable {
 
                 Text {
                     text: tr("clicker.automation_overlay")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 25
                     font.bold: true
@@ -240,12 +240,22 @@ Flickable {
 
                 Text {
                     text: autoClickerController.overlayPrimaryText
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
+            }
+
+            PrimaryButton {
+                text: tr("clicker.capture")
+                Layout.preferredWidth: 154
+                fill: Qt.rgba(0,0,0,0.4)
+                hoverFill: Qt.rgba(1,1,1,0.1)
+                textFill: settingsController.accentColor
+                enabled: autoClickerController.available
+                onClicked: autoClickerController.captureFoxhole()
             }
 
             Rectangle {
@@ -254,119 +264,16 @@ Flickable {
                 radius: 8
                 color: "transparent"
                 border.color: "transparent"
-                Rectangle { anchors.fill: parent; radius: parent.radius; color: autoClickerController.active ? settingsController.accentColor : "#000000"; opacity: autoClickerController.active ? 0.2 : 0.3 }
+                Rectangle { anchors.fill: parent; radius: parent.radius; color: autoClickerController.active ? settingsController.accentColor : settingsController.scrimColor; opacity: autoClickerController.active ? 0.2 : 0.3 }
                 Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: autoClickerController.active ? 1.0 : 0.2; border.width: 1 }
 
                 Text {
                     anchors.centerIn: parent
                     text: autoClickerController.active ? tr("clicker.on_badge") : tr("clicker.paused_badge")
-                    color: autoClickerController.active ? settingsController.accentColor : "#c7d7ed"
+                    color: autoClickerController.active ? settingsController.accentColor : settingsController.secondaryTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
                     font.bold: true
-                }
-            }
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            radius: 8
-            color: "transparent"
-            border.color: "transparent"
-            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
-            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: autoClickerController.available ? settingsController.accentColor : settingsController.warningColor; opacity: 0.2; border.width: 1 }
-            implicitHeight: statusRows.implicitHeight + 28
-            layer.enabled: true
-            layer.effect: DropShadow {
-                transparentBorder: true
-                color: Qt.rgba(0, 0, 0, 0.22)
-                radius: 18
-                samples: 37
-                verticalOffset: 5
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: parent.radius
-                color: autoClickerController.active ? settingsController.accentColor : "#8ab4ff"
-                opacity: autoClickerController.active ? 0.07 : 0.035
-            }
-
-            ColumnLayout {
-                id: statusRows
-                anchors.fill: parent
-                anchors.margins: 14
-                spacing: 12
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 3
-
-                        Text {
-                            text: autoClickerController.targetTitle
-                            color: "#edf6ff"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 15
-                            font.bold: true
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-
-                        Text {
-                            text: autoClickerController.status
-                            color: autoClickerController.available ? "#99abc4" : "#ff7a90"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 12
-                            wrapMode: Text.WordWrap
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                    }
-
-                    PrimaryButton {
-                        text: autoClickerController.running ? tr("clicker.pause_all") : tr("clicker.resume")
-                        Layout.preferredWidth: 120
-                        enabled: autoClickerController.available
-                        onClicked: autoClickerController.toggle()
-                    }
-
-                    PrimaryButton {
-                        text: tr("clicker.capture")
-                        Layout.preferredWidth: 154
-                        fill: Qt.rgba(0,0,0,0.4)
-                        hoverFill: Qt.rgba(1,1,1,0.1)
-                        textFill: settingsController.accentColor
-                        enabled: autoClickerController.available
-                        onClicked: autoClickerController.captureFoxhole()
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 10
-
-                    Text {
-                        text: "Modo: " + autoClickerController.modeSummary
-                        color: settingsController.accentColor
-                        font.family: "Segoe UI"
-                        font.pixelSize: 12
-                        font.bold: true
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-
-                    Text {
-                        text: "Resposta " + autoClickerController.interval.toFixed(1) + "s"
-                        color: "#8ab4ff"
-                        font.family: "Segoe UI"
-                        font.pixelSize: 12
-                        font.bold: true
-                    }
                 }
             }
         }
@@ -384,7 +291,7 @@ Flickable {
                 active: autoClickerController.running
                 modeEnabled: autoClickerController.autoModeEnabled
                 accent: settingsController.accentColor
-                buttonText: active ? tr("clicker.pause") : tr("clicker.resume")
+                buttonText: active ? tr("clicker.pause") : tr("clicker.start")
                 onAction: autoClickerController.toggle()
                 onHotkeySelected: function(key) { autoClickerController.setHotkey(key) }
                 onModeToggled: function(value) { autoClickerController.setModeEnabled("auto", value) }
@@ -402,7 +309,7 @@ Flickable {
                         onActivated: autoClickerController.setMouseButton(currentText)
                         contentItem: Text {
                             text: tr(autoClickerController.mouseButtonLabel(mouseCombo.currentText))
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.pixelSize: 12
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 10
@@ -424,7 +331,7 @@ Flickable {
                 hotkey: autoClickerController.moveHotkey
                 active: autoClickerController.moveRunning
                 modeEnabled: autoClickerController.moveModeEnabled
-                accent: "#8ab4ff"
+                accent: settingsController.infoColor
                 onAction: autoClickerController.toggleMoveClick()
                 onHotkeySelected: function(key) { autoClickerController.setMoveHotkey(key) }
                 onModeToggled: function(value) { autoClickerController.setModeEnabled("move", value) }
@@ -461,7 +368,7 @@ Flickable {
                 hotkey: autoClickerController.rightHoldHotkey
                 active: autoClickerController.rightHoldRunning
                 modeEnabled: autoClickerController.rightHoldModeEnabled
-                accent: "#8ab4ff"
+                accent: settingsController.infoColor
                 onAction: autoClickerController.toggleRightHold()
                 onHotkeySelected: function(key) { autoClickerController.setRightHoldHotkey(key) }
                 onModeToggled: function(value) { autoClickerController.setModeEnabled("right_hold", value) }
@@ -479,7 +386,7 @@ Flickable {
                 hotkey: autoClickerController.fixedHotkey
                 active: autoClickerController.fixedRunning
                 modeEnabled: autoClickerController.fixedModeEnabled
-                accent: "#f8c15d"
+                accent: settingsController.warningColor
                 onAction: autoClickerController.toggleFixedClick()
                 onHotkeySelected: function(key) { autoClickerController.setFixedHotkey(key) }
                 onModeToggled: function(value) { autoClickerController.setModeEnabled("fixed", value) }
@@ -491,7 +398,7 @@ Flickable {
                 hotkey: autoClickerController.artilleryHotkey
                 active: autoClickerController.artilleryRunning
                 modeEnabled: autoClickerController.artilleryModeEnabled
-                accent: "#ff7a90"
+                accent: settingsController.dangerColor
                 onAction: autoClickerController.toggleArtillery()
                 onHotkeySelected: function(key) { autoClickerController.setArtilleryHotkey(key) }
                 onModeToggled: function(value) { autoClickerController.setModeEnabled("artillery", value) }
@@ -503,7 +410,7 @@ Flickable {
             radius: 8
             color: "transparent"
             border.color: "transparent"
-            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.2 }
             Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: 0.035 }
             Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
             implicitHeight: overlayColumn.implicitHeight + 28
@@ -528,7 +435,7 @@ Flickable {
 
                     Text {
                         text: tr("overlay.in_game_title")
-                        color: "#edf6ff"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 16
                         font.bold: true
@@ -619,7 +526,7 @@ Flickable {
 
                             Text {
                                 text: autoClickerController.overlayPrimaryText
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 13
                                 font.bold: true
@@ -629,7 +536,7 @@ Flickable {
 
                             Text {
                                 text: autoClickerController.overlayHintText !== "" ? autoClickerController.overlayHintText : tr("overlay.compact_hint")
-                                color: "#99abc4"
+                                color: settingsController.mutedTextColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 11
                                 Layout.fillWidth: true
@@ -647,7 +554,7 @@ Flickable {
 
                     Text {
                         text: tr("overlay.color_label")
-                        color: "#99abc4"
+                        color: settingsController.mutedTextColor
                         font.pixelSize: 12
                         font.bold: true
                     }
@@ -661,7 +568,7 @@ Flickable {
                         onActivated: overlayController.setColorName(currentText)
                         contentItem: Text {
                             text: tr(overlayController.colorLabelKey(colorCombo.currentText))
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.pixelSize: 12
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 10
@@ -673,7 +580,7 @@ Flickable {
 
                     Text {
                         text: tr("overlay.hide_hotkey")
-                        color: "#99abc4"
+                        color: settingsController.mutedTextColor
                         font.pixelSize: 12
                         font.bold: true
                     }

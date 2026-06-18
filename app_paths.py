@@ -41,6 +41,10 @@ def settings_path() -> Path:
     return user_data_dir() / "felb_settings.json"
 
 
+def personalization_settings_path() -> Path:
+    return user_data_dir() / "felb_personalization.json"
+
+
 def resolve_writable_path(value: str | Path) -> Path:
     path = Path(value)
     if path.is_absolute():

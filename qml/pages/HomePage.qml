@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -131,16 +131,16 @@ Flickable {
                     }
                     PrimaryButton {
                         text: tr("nav.auto_clicker")
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: settingsController.controlColor
+                        hoverFill: settingsController.controlHoverColor
+                        textFill: settingsController.textColor
                         onClicked: appController.setCurrentPage("autoClicker")
                     }
                     PrimaryButton {
                         text: tr("stockpile.nav")
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: settingsController.controlColor
+                        hoverFill: settingsController.controlHoverColor
+                        textFill: settingsController.textColor
                         onClicked: appController.setCurrentPage("stockpile")
                     }
                 }
@@ -286,7 +286,8 @@ Flickable {
 
                                 Rectangle {
                                     anchors.fill: parent
-                                    color: hoverArea.containsMouse ? "#1407111f" : "#3307111f"
+                                    color: settingsController.scrimColor
+                                    opacity: hoverArea.containsMouse ? 0.08 : 0.20
                                 }
 
                                 Text {

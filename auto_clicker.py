@@ -91,7 +91,7 @@ class AutoClicker:
         self.hotkey_name = "F3"
         self.hotkey_vk = HOTKEYS[self.hotkey_name]
         self.mouse_button = "Esquerdo"
-        self.interval = 0.2
+        self.interval = 0.5
         self.modes_enabled: dict[str, bool] = {
             "auto": True,
             "move": True,
@@ -143,8 +143,8 @@ class AutoClicker:
         self.w_hold_enabled = False
         self.w_hold_hwnd = 0
         self.w_last_tap = 0.0
-        self.w_double_tap_threshold = 0.20  # seconds between taps
-        self.w_doubletap_enabled = True  # can be toggled from UI
+        self.w_double_tap_threshold = 0.35  # seconds between taps
+        self.w_doubletap_enabled = False  # can be toggled from UI
 
         # Right mouse hold: background RMB hold for Foxhole.
         self.right_hold_enabled = False
@@ -152,7 +152,7 @@ class AutoClicker:
         self.right_hold_lparam = 0
         self.right_hold_worker_running = False
         self.right_hold_button_down = False
-        self.right_double_tap_threshold = 0.20
+        self.right_double_tap_threshold = 0.35
         self.right_doubletap_enabled = False
 
         # Shift hold with autoclick
@@ -548,8 +548,6 @@ class AutoClicker:
         lbtn = bool(self.user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
         rbtn = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
         mbtn = bool(self.user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000)
-        wasd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (self._w_hold_vk, VK_A, VK_S, VK_D))
-
         if self.move_click_enabled and esc:
             self.disable_move_click("cancel: esc")
 
@@ -558,8 +556,8 @@ class AutoClicker:
         if self.fixed_click_enabled and (esc or lbtn or rbtn or mbtn or asd):
             self.disable_fixed_click("cancel: mouse/asd/esc")
 
-        if self.artillery_enabled and (esc or rbtn or mbtn):
-            self.disable_artillery("cancel: esc")
+        if self.artillery_enabled and lbtn:
+            self.disable_artillery("cancel: left click")
 
         # W-hold cancels on Esc only (not on W press — that would cancel itself)
         if self.w_hold_enabled and esc:
@@ -972,7 +970,7 @@ class AutoClicker:
                     self.enable_w_hold()
                 last_tap = now
             prev_w = w_down
-            time.sleep(0.015)
+            time.sleep(0.01)
 
     def _keyboard_hook_loop(self) -> None:
         self.keyboard_hook_thread_id = int(self.kernel32.GetCurrentThreadId() or 0)
@@ -1020,7 +1018,7 @@ class AutoClicker:
                 else:
                     last_tap = now
             prev_down = is_down
-            time.sleep(0.015)
+            time.sleep(0.01)
 
 
     # -----------------------------------------------------------------------

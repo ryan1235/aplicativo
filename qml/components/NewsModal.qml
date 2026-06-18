@@ -85,13 +85,14 @@ Popup {
     }
     
     background: Rectangle {
-        color: "#0f1b2f"
-        border.color: "#32618d"
+        color: settingsController.surfaceAltColor
+        border.color: settingsController.borderColor
         radius: 8
     }
 
     Overlay.modal: Rectangle {
-        color: "#9907111f"
+        color: settingsController.scrimColor
+        opacity: 0.60
     }
 
     onOpened: {
@@ -113,7 +114,7 @@ Popup {
                 Layout.preferredHeight: 28
                 Layout.minimumWidth: modalCategoryText.implicitWidth + 22
                 radius: 14
-                color: "#102f3f"
+                color: settingsController.surfaceRaisedColor
                 border.color: settingsController.accentHoverColor
 
                 Text {
@@ -130,7 +131,7 @@ Popup {
             Text {
                 Layout.fillWidth: true
                 text: root.metaText()
-                color: "#9eb4cf"
+                color: settingsController.secondaryTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 font.bold: true
@@ -141,9 +142,9 @@ Popup {
             PrimaryButton {
                 Layout.preferredWidth: 96
                 text: tr("toolbar.close")
-                fill: "#1d3353"
-                hoverFill: "#2d496f"
-                textFill: "#edf6ff"
+                fill: settingsController.controlColor
+                hoverFill: settingsController.controlHoverColor
+                textFill: settingsController.textColor
                 onClicked: root.close()
             }
         }
@@ -151,7 +152,7 @@ Popup {
         Text {
             Layout.fillWidth: true
             text: newsItem ? (newsItem.title || "News") : ""
-            color: "#edf6ff"
+            color: settingsController.textColor
             font.family: "Segoe UI"
             font.pixelSize: 30
             font.bold: true
@@ -162,7 +163,7 @@ Popup {
         Rectangle {
             Layout.fillWidth: true
             height: 1
-            color: "#24486d"
+            color: settingsController.borderColor
         }
 
         ScrollView {
@@ -210,7 +211,7 @@ Popup {
             property var block: ({})
             width: articleColumn.width
             text: block.html || ""
-            color: "#edf6ff"
+            color: settingsController.textColor
             font.family: "Segoe UI"
             font.pixelSize: block.level === 1 ? 25 : block.level === 2 ? 21 : 18
             font.bold: true
@@ -226,7 +227,7 @@ Popup {
             property var block: ({})
             width: articleColumn.width
             text: block.html || ""
-            color: "#c7d7ed"
+            color: settingsController.secondaryTextColor
             font.family: "Segoe UI"
             font.pixelSize: 15
             wrapMode: Text.WordWrap
@@ -243,8 +244,8 @@ Popup {
             width: articleColumn.width
             implicitHeight: quoteText.implicitHeight + 20
             radius: 7
-            color: "#10243a"
-            border.color: "#24486d"
+            color: settingsController.surfaceRaisedColor
+            border.color: settingsController.borderColor
 
             Rectangle {
                 width: 3
@@ -262,7 +263,7 @@ Popup {
                 anchors.margins: 12
                 anchors.leftMargin: 16
                 text: block.html || ""
-                color: "#9eb4cf"
+                color: settingsController.secondaryTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 14
                 font.italic: true
@@ -277,7 +278,7 @@ Popup {
         Rectangle {
             width: articleColumn.width
             implicitHeight: 1
-            color: "#24486d"
+            color: settingsController.borderColor
         }
     }
 
@@ -290,11 +291,12 @@ Popup {
 
             Rectangle {
                 id: imageFrame
-                width: parent.width
-                implicitHeight: Math.min(360, Math.max(190, width * 0.48))
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(parent.width, 540)
+                implicitHeight: width * 0.5625
                 radius: 8
-                color: "#07111f"
-                border.color: "#24486d"
+                color: settingsController.backgroundColor
+                border.color: settingsController.borderColor
                 clip: true
 
                 Image {
@@ -309,9 +311,11 @@ Popup {
 
             Text {
                 id: imageCaption
-                width: parent.width
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: imageFrame.width
+                horizontalAlignment: Text.AlignHCenter
                 text: block.alt || ""
-                color: "#7f93ad"
+                color: settingsController.disabledTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap

@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -83,8 +83,8 @@ Popup {
     
     background: Rectangle {
         radius: 12
-        color: "#111c31"
-        border.color: "#24486d"
+        color: settingsController.surfaceColor
+        border.color: settingsController.borderColor
         border.width: 1
     }
     
@@ -100,12 +100,12 @@ Popup {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
                 background: Rectangle {
-                    color: root.currentTab === 0 ? "#1d3353" : "transparent"
+                    color: root.currentTab === 0 ? settingsController.controlColor : "transparent"
                     radius: 6
                 }
                 contentItem: Text {
                     text: tr("home.chat.emoji")
-                    color: root.currentTab === 0 ? settingsController.accentColor : "#99abc4"
+                    color: root.currentTab === 0 ? settingsController.accentColor : settingsController.mutedTextColor
                     font.bold: root.currentTab === 0
                     font.pixelSize: 13
                     horizontalAlignment: Text.AlignHCenter
@@ -117,12 +117,12 @@ Popup {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
                 background: Rectangle {
-                    color: root.currentTab === 1 ? "#1d3353" : "transparent"
+                    color: root.currentTab === 1 ? settingsController.controlColor : "transparent"
                     radius: 6
                 }
                 contentItem: Text {
                     text: tr("home.chat.gifs")
-                    color: root.currentTab === 1 ? settingsController.accentColor : "#99abc4"
+                    color: root.currentTab === 1 ? settingsController.accentColor : settingsController.mutedTextColor
                     font.bold: root.currentTab === 1
                     font.pixelSize: 13
                     horizontalAlignment: Text.AlignHCenter
@@ -145,8 +145,8 @@ Popup {
                 id: emojiSearch
                 Layout.fillWidth: true
                 placeholderText: tr("home.chat.search_emojis")
-                color: "#edf6ff"
-                background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
+                color: settingsController.textColor
+                background: Rectangle { radius: 7; color: settingsController.surfaceAltColor; border.color: settingsController.controlHoverColor }
                 onTextChanged: root.filterEmojis(text)
             }
 
@@ -160,7 +160,7 @@ Popup {
                 delegate: Rectangle {
                     width: 36
                     height: 36
-                    color: mouseEmoji.containsMouse ? "#1d3353" : "transparent"
+                    color: mouseEmoji.containsMouse ? settingsController.controlColor : "transparent"
                     radius: 6
                     Text {
                         anchors.centerIn: parent
@@ -190,8 +190,8 @@ Popup {
                 id: gifSearch
                 Layout.fillWidth: true
                 placeholderText: tr("home.chat.search_gifs_tenor")
-                color: "#edf6ff"
-                background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
+                color: settingsController.textColor
+                background: Rectangle { radius: 7; color: settingsController.surfaceAltColor; border.color: settingsController.controlHoverColor }
                 onAccepted: root.searchGifs(text)
             }
             
@@ -206,7 +206,7 @@ Popup {
                 delegate: Rectangle {
                     width: 136
                     height: 104
-                    color: "#0e1a2d"
+                    color: settingsController.surfaceAltColor
                     radius: 8
                     clip: true
                     
@@ -229,7 +229,7 @@ Popup {
                         }
                         Rectangle {
                             anchors.fill: parent
-                            color: "#ffffff"
+                            color: settingsController.textColor
                             opacity: parent.containsMouse ? 0.1 : 0
                         }
                     }

@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -48,7 +48,7 @@ Flickable {
             Layout.fillWidth: true
             radius: settingsController.cardRadius
             color: settingsController.surfaceColor
-            border.color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? "#ff7a90" : settingsController.borderColor
+            border.color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? settingsController.dangerColor : settingsController.borderColor
             implicitHeight: actionColumn.implicitHeight + 28
 
             ColumnLayout {
@@ -61,7 +61,7 @@ Flickable {
 
                 Text {
                     text: identifyItemController.status
-                    color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? "#ffb3c0" : settingsController.mutedTextColor
+                    color: identifyItemController.status.toLowerCase().indexOf("missing") >= 0 ? settingsController.dangerColor : settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     Layout.fillWidth: true
@@ -77,16 +77,16 @@ Flickable {
                     }
                     PrimaryButton {
                         text: tr("identify.paste")
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: settingsController.controlColor
+                        hoverFill: settingsController.controlHoverColor
+                        textFill: settingsController.textColor
                         onClicked: identifyItemController.pasteClipboard()
                     }
                     PrimaryButton {
                         text: tr("identify.clear_reference")
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: settingsController.controlColor
+                        hoverFill: settingsController.controlHoverColor
+                        textFill: settingsController.textColor
                         onClicked: identifyItemController.clearReference()
                     }
                     Item { Layout.fillWidth: true }
@@ -95,7 +95,7 @@ Flickable {
                         enabled: identifyItemController.monitorAvailable
                         fill: settingsController.accentColor
                         hoverFill: settingsController.accentHoverColor
-                        textFill: "#041014"
+                        textFill: settingsController.textInverseColor
                         onClicked: identifyItemController.showMonitorOverlay()
                     }
                 }
@@ -247,7 +247,7 @@ Flickable {
                             width: ListView.view.width
                             height: 64
                             radius: settingsController.cardRadius
-                            color: index % 2 ? "#0e1a2d" : "#13213a"
+                            color: index % 2 ? settingsController.surfaceAltColor : settingsController.surfaceRaisedColor
                             border.color: settingsController.borderColor
                             RowLayout {
                                 anchors.fill: parent
@@ -293,7 +293,7 @@ Flickable {
                                     Text {
                                         anchors.centerIn: parent
                                         text: scoreText
-                                        color: "#041014"
+                                        color: settingsController.textInverseColor
                                         font.family: "Segoe UI"
                                         font.bold: true
                                     }

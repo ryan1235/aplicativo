@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
@@ -66,8 +66,8 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 320
                 radius: 12
-                color: "#0a1321"
-                border.color: "#1d3353"
+                color: settingsController.backgroundColor
+                border.color: settingsController.controlColor
                 border.width: 1
                 clip: true
 
@@ -76,7 +76,7 @@ Rectangle {
                     id: bannerRect
                     width: parent.width
                     height: 140
-                    color: profile.accentColor ? profile.accentColor : "#1a293e"
+                    color: profile.accentColor ? profile.accentColor : settingsController.surfaceRaisedColor
                     
                     Image {
                         anchors.fill: parent
@@ -91,7 +91,7 @@ Rectangle {
                         anchors.fill: parent
                         gradient: Gradient {
                             GradientStop { position: 0.0; color: "transparent" }
-                            GradientStop { position: 1.0; color: "#0a1321" }
+                            GradientStop { position: 1.0; color: settingsController.backgroundColor }
                         }
                     }
                 }
@@ -102,8 +102,8 @@ Rectangle {
                     width: 120
                     height: 120
                     radius: 60
-                    color: "#1d3353"
-                    border.color: "#0a1321"
+                    color: settingsController.controlColor
+                    border.color: settingsController.backgroundColor
                     border.width: 6
                     anchors.bottom: bannerRect.bottom
                     anchors.bottomMargin: -60
@@ -140,15 +140,15 @@ Rectangle {
                     anchors.top: parent.top
                     anchors.margins: 16
                     radius: 18
-                    color: logoutHover.containsMouse ? "#ef4444" : "#1d3353"
-                    border.color: logoutHover.containsMouse ? "#f87171" : "transparent"
+                    color: logoutHover.containsMouse ? settingsController.dangerColor : settingsController.controlColor
+                    border.color: logoutHover.containsMouse ? settingsController.dangerColor : "transparent"
                     border.width: 1
                     Behavior on color { ColorAnimation { duration: 150 } }
                     
                     RowLayout {
                         anchors.centerIn: parent
                         spacing: 6
-                        Text { text: tr("profile.logout"); color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 13 }
+                        Text { text: tr("profile.logout"); color: settingsController.textColor; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 13 }
                     }
                     MouseArea {
                         id: logoutHover
@@ -173,7 +173,7 @@ Rectangle {
                         spacing: 12
                         Text {
                             text: profile.globalName || profile.displayName || chatController.currentUserName || tr("profile.default_user")
-                            color: "#ffffff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 28
                             font.bold: true
@@ -188,7 +188,7 @@ Rectangle {
                                 id: roleText
                                 anchors.centerIn: parent
                                 text: profile.role || ""
-                                color: "#0a1321"
+                                color: settingsController.backgroundColor
                                 font.pixelSize: 12
                                 font.bold: true
                                 font.letterSpacing: 0.5
@@ -198,7 +198,7 @@ Rectangle {
 
                     Text {
                         text: "@" + (profile.username || chatController.currentUserName || tr("profile.unknown_user"))
-                        color: "#99abc4"
+                        color: settingsController.mutedTextColor
                         font.family: "Segoe UI"
                         font.pixelSize: 15
                     }
@@ -215,8 +215,8 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 250
                     radius: 12
-                    color: "#0a1321"
-                    border.color: "#1d3353"
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.controlColor
                     border.width: 1
 
                     ColumnLayout {
@@ -226,7 +226,7 @@ Rectangle {
 
                         Text {
                             text: tr("profile.overview")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 18
                             font.bold: true
@@ -235,7 +235,7 @@ Rectangle {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 1
-                            color: "#1d3353"
+                            color: settingsController.controlColor
                         }
 
                         // SubstituÃ­do GridLayout por ColumnLayout -> RowLayout para evitar cortes de texto longo
@@ -245,21 +245,21 @@ Rectangle {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: tr("profile.stock_updates"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: tr("profile.stock_updates"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { text: (profile.stockUpdateHelpCount || 0).toString(); color: settingsController.accentColor; font.bold: true; font.pixelSize: 14 }
                             }
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: tr("profile.online_time"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: tr("profile.online_time"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { text: formatTime(profile.totalOnlineSeconds); color: settingsController.accentColor; font.bold: true; font.pixelSize: 14 }
                             }
                             
                             RowLayout {
                                 Layout.fillWidth: true
-                                Text { text: tr("profile.last_login"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: tr("profile.last_login"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { 
                                     text: formatDate(profile.lastLoginAt)
@@ -274,7 +274,7 @@ Rectangle {
                             RowLayout {
                                 Layout.fillWidth: true
                                 visible: profile.createdAt !== undefined
-                                Text { text: tr("profile.created_at"); color: "#99abc4"; font.pixelSize: 14 }
+                                Text { text: tr("profile.created_at"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
                                 Text { 
                                     text: formatDate(profile.createdAt)
@@ -296,8 +296,8 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 250
                     radius: 12
-                    color: "#0a1321"
-                    border.color: "#1d3353"
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.controlColor
                     border.width: 1
 
                     ColumnLayout {
@@ -307,7 +307,7 @@ Rectangle {
 
                         Text {
                             text: tr("profile.regiment")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 18
                             font.bold: true
@@ -316,12 +316,12 @@ Rectangle {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 1
-                            color: "#1d3353"
+                            color: settingsController.controlColor
                         }
                         
                         Text {
                             text: tr("profile.regiment_hint")
-                            color: "#99abc4"
+                            color: settingsController.mutedTextColor
                             font.pixelSize: 13
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
@@ -342,14 +342,14 @@ Rectangle {
                             
                             // Elegant ComboBox styling
                             background: Rectangle {
-                                color: "#122036"
+                                color: settingsController.surfaceRaisedColor
                                 radius: 6
-                                border.color: regimentCombo.activeFocus ? settingsController.accentColor : "#1d3353"
+                                border.color: regimentCombo.activeFocus ? settingsController.accentColor : settingsController.controlColor
                                 border.width: 1
                             }
                             contentItem: Text {
                                 text: regimentCombo.currentText
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.pixelSize: 14
                                 font.bold: true
                                 verticalAlignment: Text.AlignVCenter
@@ -388,7 +388,7 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 60
                 radius: 12
-                color: "#1d3353"
+                color: settingsController.controlColor
                 border.color: settingsController.accentColor
                 border.width: 1
                 visible: chatController.canOpenAdminPanel

@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -28,7 +28,7 @@ Flickable {
                 spacing: 3
                 Text {
                     text: tr("stockpile.title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 26
                     font.bold: true
@@ -36,7 +36,7 @@ Flickable {
                 }
                 Text {
                     text: tr("stockpile.subtitle")
-                    color: "#8ab4ff"
+                    color: settingsController.infoColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
                     font.bold: true
@@ -49,7 +49,7 @@ Flickable {
                 text: "Atualizar"
                 fill: settingsController.accentColor
                 hoverFill: settingsController.accentHoverColor
-                textFill: "#022c22"
+                textFill: settingsController.textInverseColor
                 onClicked: stockpileController.refreshApiSnapshot()
             }
             Item { Layout.fillWidth: true }
@@ -57,7 +57,7 @@ Flickable {
                 spacing: 8
                 Text {
                     text: "HUD:"
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     font.bold: true
@@ -75,7 +75,7 @@ Flickable {
                     Text {
                         anchors.centerIn: parent
                         text: "-"
-                        color: stockpileController.hudScale > 0.5 ? "#edf6ff" : "#4a6282"
+                        color: stockpileController.hudScale > 0.5 ? settingsController.textColor : settingsController.disabledTextColor
                         font.pixelSize: 16
                         font.bold: true
                         anchors.verticalCenterOffset: -1
@@ -114,7 +114,7 @@ Flickable {
                     Text {
                         anchors.centerIn: parent
                         text: "+"
-                        color: stockpileController.hudScale < 3.0 ? "#edf6ff" : "#4a6282"
+                        color: stockpileController.hudScale < 3.0 ? settingsController.textColor : settingsController.disabledTextColor
                         font.pixelSize: 16
                         font.bold: true
                         anchors.verticalCenterOffset: -1
@@ -141,7 +141,7 @@ Flickable {
             color: "transparent"
             border.color: "transparent"
             border.width: 0
-            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.2 }
             Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: 0.035 }
             Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
 
@@ -208,7 +208,7 @@ Flickable {
                         spacing: 2
                         Text {
                             text: tr("stockpile.visual_title")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 17
                             font.bold: true
@@ -217,7 +217,7 @@ Flickable {
                         }
                         Text {
                             text: tr("stockpile.visual_updated").replace("{value}", stockpileController.visualWarehouseUpdatedAt)
-                            color: "#99abc4"
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 10
                             font.bold: true
@@ -247,7 +247,7 @@ Flickable {
                         }
                         contentItem: Text {
                             text: visualWarehouseBox.displayText
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 11
                             font.bold: true
@@ -260,7 +260,7 @@ Flickable {
                             color: "transparent"
                             border.color: "transparent"
                             border.width: 0
-                            Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.4 }
+                            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.4 }
                             Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: visualWarehouseBox.activeFocus ? settingsController.accentColor : settingsController.accentColor; opacity: visualWarehouseBox.activeFocus ? 1.0 : 0.2; border.width: 1 }
                         }
                     }
@@ -270,7 +270,7 @@ Flickable {
                     Layout.fillWidth: true
                     visible: stockpileController.visualGroupRows.length === 0
                     text: tr("stockpile.visual_empty")
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     font.bold: true
@@ -324,7 +324,7 @@ Flickable {
                                         color: "transparent"
                                         border.color: "transparent"
                                         border.width: 0
-                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.3 }
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.3 }
                                         Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.15 : 0.03; Behavior on opacity { NumberAnimation { duration: 100 } } }
                                         Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.8 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 100 } } }
                                         Behavior on width { NumberAnimation { duration: 100 } }
@@ -347,13 +347,13 @@ Flickable {
                                             color: "transparent"
                                             border.color: "transparent"
                                             border.width: 0
-                                            Rectangle { anchors.fill: parent; color: "#000000"; opacity: 0.2 }
+                                            Rectangle { anchors.fill: parent; color: settingsController.scrimColor; opacity: 0.2 }
                                             Rectangle { anchors.fill: parent; color: settingsController.accentColor; opacity: 0.05 }
                                             Rectangle { anchors.fill: parent; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.15; border.width: 1 }
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: String(itemRow.quantity || 0)
-                                                color: "#edf6ff"
+                                                color: settingsController.textColor
                                                 font.family: "Segoe UI"
                                                 font.pixelSize: Math.max(9, 10 * scaleFactor)
                                                 font.bold: true

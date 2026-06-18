@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
@@ -53,7 +53,7 @@ Flickable {
         color: "transparent"
         border.color: "transparent"
         border.width: 0
-        Rectangle { anchors.fill: parent; radius: parent.radius; color: "#000000"; opacity: 0.2 }
+        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.2 }
         Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: Qt.rgba(1, 1, 1, 0.08); border.width: 1 }
         implicitHeight: panelContent.implicitHeight + 28
         layer.enabled: true
@@ -98,7 +98,7 @@ Flickable {
 
             Text {
                 text: label
-                color: "#7f93ad"
+                color: settingsController.disabledTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 10
                 font.bold: true
@@ -119,7 +119,7 @@ Flickable {
     }
 
     component FieldLabel: Text {
-        color: "#99abc4"
+        color: settingsController.mutedTextColor
         font.family: "Segoe UI"
         font.pixelSize: 11
         font.bold: true
@@ -150,7 +150,7 @@ Flickable {
 
                 Text {
                     text: tr("timetask.title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 26
                     font.bold: true
@@ -175,14 +175,14 @@ Flickable {
                 radius: 8
                 color: "transparent"
                 border.color: "transparent"
-                Rectangle { anchors.fill: parent; radius: parent.radius; color: timeTaskController.recording ? settingsController.warningColor : timeTaskController.replaying ? settingsController.accentColor : "#000000"; opacity: timeTaskController.recording || timeTaskController.replaying ? 0.2 : 0.3 }
+                Rectangle { anchors.fill: parent; radius: parent.radius; color: timeTaskController.recording ? settingsController.warningColor : timeTaskController.replaying ? settingsController.accentColor : settingsController.scrimColor; opacity: timeTaskController.recording || timeTaskController.replaying ? 0.2 : 0.3 }
                 Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: timeTaskController.recording ? settingsController.warningColor : timeTaskController.replaying ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
 
                 Text {
                     id: liveStateText
                     anchors.centerIn: parent
                     text: timeTaskController.recording ? tr("timetask.overlay_recording") : timeTaskController.replaying ? tr("timetask.overlay_playing") : tr("timetask.status_idle")
-                    color: timeTaskController.recording ? settingsController.warningColor : timeTaskController.replaying ? settingsController.accentColor : "#99abc4"
+                    color: timeTaskController.recording ? settingsController.warningColor : timeTaskController.replaying ? settingsController.accentColor : settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
                     font.bold: true
@@ -212,7 +212,7 @@ Flickable {
 
                     Text {
                         text: tr("timetask.record_title")
-                        color: "#edf6ff"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 18
                         font.bold: true
@@ -231,7 +231,7 @@ Flickable {
 
                     Text {
                         text: timeTaskController.status
-                        color: timeTaskController.available ? "#c7d7ed" : "#ff7a90"
+                        color: timeTaskController.available ? settingsController.secondaryTextColor : settingsController.dangerColor
                         font.family: "Segoe UI"
                         font.pixelSize: 12
                         wrapMode: Text.WordWrap
@@ -249,7 +249,7 @@ Flickable {
                 StatPill {
                     label: tr("timetask.status")
                     value: timeTaskController.recording ? tr("timetask.overlay_recording") : timeTaskController.replaying ? tr("timetask.overlay_playing") : tr("timetask.status_idle")
-                    accent: timeTaskController.recording ? settingsController.warningColor : timeTaskController.replaying ? settingsController.accentColor : "#8ab4ff"
+                    accent: timeTaskController.recording ? settingsController.warningColor : timeTaskController.replaying ? settingsController.accentColor : settingsController.infoColor
                 }
 
                 StatPill {
@@ -290,9 +290,9 @@ Flickable {
                     text: tr("timetask.stop")
                     enabled: timeTaskController.recording
                     Layout.preferredWidth: 112
-                    fill: "#ff7a90"
-                    hoverFill: "#b94a5d"
-                    textFill: "#111c31"
+                    fill: settingsController.dangerColor
+                    hoverFill: settingsController.dangerHoverColor
+                    textFill: settingsController.surfaceColor
                     onClicked: timeTaskController.stopRecording()
                 }
 
@@ -301,8 +301,8 @@ Flickable {
                     enabled: timeTaskController.available && timeTaskController.hasCapturedEvents
                     Layout.preferredWidth: 112
                     fill: settingsController.accentColor
-                    hoverFill: "#8ab4ff"
-                    textFill: "#041014"
+                    hoverFill: settingsController.infoColor
+                    textFill: settingsController.textInverseColor
                     onClicked: timeTaskController.requestSaveCurrent()
                 }
 
@@ -329,7 +329,7 @@ Flickable {
 
                 Text {
                     text: tr("timetask.playback_settings")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 17
                     font.bold: true
@@ -341,8 +341,8 @@ Flickable {
                     enabled: timeTaskController.available
                     Layout.preferredWidth: 118
                     fill: settingsController.accentColor
-                    hoverFill: "#8ab4ff"
-                    textFill: "#041014"
+                    hoverFill: settingsController.infoColor
+                    textFill: settingsController.textInverseColor
                     onClicked: timeTaskController.playSelected()
                 }
 
@@ -350,9 +350,9 @@ Flickable {
                     text: tr("timetask.cancel")
                     enabled: timeTaskController.replaying
                     Layout.preferredWidth: 118
-                    fill: "#ff7a90"
-                    hoverFill: "#b94a5d"
-                    textFill: "#edf6ff"
+                    fill: settingsController.dangerColor
+                    hoverFill: settingsController.dangerHoverColor
+                    textFill: settingsController.textColor
                     onClicked: timeTaskController.stopReplay()
                 }
             }
@@ -382,10 +382,12 @@ Flickable {
                         Layout.preferredHeight: 40
                         text: timeTaskController.repeat
                         onEditingFinished: timeTaskController.setRepeat(text)
-                        color: "#edf6ff"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         verticalAlignment: Text.AlignVCenter
-                        background: Rectangle { radius: 7; color: "#07111f"; border.color: Qt.rgba(1,1,1,0.1) }
+                        background: Rectangle { radius: 7; color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.3 }
+                        border.color: Qt.rgba(1,1,1,0.1) }
                     }
                 }
 
@@ -408,10 +410,12 @@ Flickable {
                         Layout.preferredHeight: 40
                         text: timeTaskController.stockInterval
                         onEditingFinished: timeTaskController.setStockInterval(text)
-                        color: "#edf6ff"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         verticalAlignment: Text.AlignVCenter
-                        background: Rectangle { radius: 7; color: "#07111f"; border.color: Qt.rgba(1,1,1,0.1) }
+                        background: Rectangle { radius: 7; color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.3 }
+                        border.color: Qt.rgba(1,1,1,0.1) }
                     }
                 }
 
@@ -442,7 +446,7 @@ Flickable {
 
                     Text {
                         text: tr("timetask.replay_title")
-                        color: "#edf6ff"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 18
                         font.bold: true
@@ -451,7 +455,7 @@ Flickable {
 
                     Text {
                         text: timeTaskController.selectedMacroName !== "" ? timeTaskController.selectedMacroName : tr("timetask.replay_empty")
-                        color: "#99abc4"
+                        color: settingsController.mutedTextColor
                         font.family: "Segoe UI"
                         font.pixelSize: 12
                         elide: Text.ElideRight
@@ -481,7 +485,7 @@ Flickable {
                     anchors.centerIn: parent
                     visible: macroList.count === 0
                     text: tr("timetask.replay_empty")
-                    color: "#60728c"
+                    color: settingsController.disabledTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     font.bold: true
@@ -494,7 +498,7 @@ Flickable {
                     color: "transparent"
                     border.color: "transparent"
                     border.width: 0
-                    Rectangle { anchors.fill: parent; radius: 8; color: "#000000"; opacity: 0.2 }
+                    Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.2 }
                     Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: selected ? 0.15 : (macroMouse.containsMouse ? 0.08 : 0.02); Behavior on opacity { NumberAnimation { duration: 120 } } }
                     Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: selected ? 1.0 : 0.2; border.width: selected ? 1.5 : 1; Behavior on opacity { NumberAnimation { duration: 120 } } }
 
@@ -508,7 +512,7 @@ Flickable {
                             Layout.preferredWidth: 5
                             Layout.fillHeight: true
                             radius: 3
-                            color: selected ? settingsController.accentColor : "#8ab4ff"
+                            color: selected ? settingsController.accentColor : settingsController.infoColor
                             opacity: selected ? 1.0 : 0.65
                         }
 
@@ -518,7 +522,7 @@ Flickable {
 
                             Text {
                                 text: name
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 15
                                 font.bold: true
@@ -538,7 +542,7 @@ Flickable {
 
                             Text {
                                 text: tr("timetask.created_at") + " " + createdAt + "    " + tr("timetask.updated_at") + " " + updatedAt
-                                color: "#99abc4"
+                                color: settingsController.mutedTextColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 11
                                 Layout.fillWidth: true
@@ -547,7 +551,7 @@ Flickable {
 
                             Text {
                                 text: path
-                                color: "#60728c"
+                                color: settingsController.disabledTextColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 10
                                 Layout.fillWidth: true
@@ -567,8 +571,8 @@ Flickable {
                                     text: tr("timetask.play")
                                     Layout.fillWidth: true
                                     fill: settingsController.accentColor
-                                    hoverFill: "#8ab4ff"
-                                    textFill: "#041014"
+                                    hoverFill: settingsController.infoColor
+                                    textFill: settingsController.textInverseColor
                                     onClicked: {
                                         timeTaskController.selectMacro(index)
                                         timeTaskController.playSelected()
@@ -608,9 +612,9 @@ Flickable {
                                 PrimaryButton {
                                     text: tr("timetask.delete")
                                     Layout.fillWidth: true
-                                    fill: "#4b1d31"
-                                    hoverFill: "#6b2744"
-                                    textFill: "#edf6ff"
+                                    fill: settingsController.dangerPanelColor
+                                    hoverFill: settingsController.dangerHoverColor
+                                    textFill: settingsController.textColor
                                     onClicked: {
                                         timeTaskController.selectMacro(index)
                                         openConfirm("delete", tr("timetask.delete"), tr("timetask.delete_confirm").replace("{name}", name))
@@ -638,7 +642,7 @@ Flickable {
 
         Text {
             text: tr("timetask.folder").replace("{path}", timeTaskController.macroFolder)
-            color: "#60728c"
+            color: settingsController.disabledTextColor
             font.family: "Segoe UI"
             font.pixelSize: 11
             Layout.fillWidth: true
@@ -656,7 +660,7 @@ Flickable {
 
         background: Rectangle {
             radius: 10
-            color: "#0a121e"
+            color: settingsController.backgroundColor
             border.color: settingsController.accentColor
         }
 
@@ -665,7 +669,7 @@ Flickable {
 
             Text {
                 text: tr("timetask.save_name_title")
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 18
                 font.bold: true
@@ -674,7 +678,7 @@ Flickable {
 
             Text {
                 text: timeTaskController.captureSummary
-                color: "#99abc4"
+                color: settingsController.mutedTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 Layout.fillWidth: true
@@ -685,11 +689,13 @@ Flickable {
                 id: saveNameField
                 Layout.fillWidth: true
                 Layout.preferredHeight: 40
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 verticalAlignment: Text.AlignVCenter
                 selectByMouse: true
-                background: Rectangle { radius: 7; color: "#07111f"; border.color: Qt.rgba(1,1,1,0.1) }
+                background: Rectangle { radius: 7; color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.3 }
+                        border.color: Qt.rgba(1,1,1,0.1) }
                 Keys.onReturnPressed: {
                     timeTaskController.saveCurrent(text)
                     saveNameDialog.close()
@@ -735,7 +741,7 @@ Flickable {
 
         background: Rectangle {
             radius: 10
-            color: "#0a121e"
+            color: settingsController.backgroundColor
             border.color: settingsController.accentColor
         }
 
@@ -743,7 +749,7 @@ Flickable {
             spacing: 12
             Text {
                 text: tr("timetask.rename_title")
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 18
                 font.bold: true
@@ -753,11 +759,13 @@ Flickable {
                 id: renameField
                 Layout.fillWidth: true
                 Layout.preferredHeight: 40
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 verticalAlignment: Text.AlignVCenter
                 selectByMouse: true
-                background: Rectangle { radius: 7; color: "#07111f"; border.color: Qt.rgba(1,1,1,0.1) }
+                background: Rectangle { radius: 7; color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.3 }
+                        border.color: Qt.rgba(1,1,1,0.1) }
                 Keys.onReturnPressed: {
                     timeTaskController.renameSelectedMacro(text)
                     renameDialog.close()
@@ -804,15 +812,15 @@ Flickable {
 
         background: Rectangle {
             radius: 10
-            color: "#0a121e"
-            border.color: confirmDialog.kind === "delete" ? "#ff7a90" : "#8ab4ff"
+            color: settingsController.backgroundColor
+            border.color: confirmDialog.kind === "delete" ? settingsController.dangerColor : settingsController.infoColor
         }
 
         contentItem: ColumnLayout {
             spacing: 10
             Text {
                 id: confirmTitle
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 18
                 font.bold: true
@@ -820,7 +828,7 @@ Flickable {
             }
             Text {
                 id: confirmBody
-                color: "#99abc4"
+                color: settingsController.mutedTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 Layout.fillWidth: true
@@ -847,9 +855,9 @@ Flickable {
                 PrimaryButton {
                     text: confirmDialog.kind === "delete" ? tr("timetask.delete") : tr("timetask.overwrite")
                     Layout.fillWidth: true
-                    fill: confirmDialog.kind === "delete" ? "#ff7a90" : "#1d3353"
-                    hoverFill: confirmDialog.kind === "delete" ? "#b94a5d" : "#2d496f"
-                    textFill: "#edf6ff"
+                    fill: confirmDialog.kind === "delete" ? settingsController.dangerColor : settingsController.controlColor
+                    hoverFill: confirmDialog.kind === "delete" ? settingsController.dangerHoverColor : settingsController.controlHoverColor
+                    textFill: settingsController.textColor
                     onClicked: {
                         if (confirmDialog.kind === "delete")
                             timeTaskController.deleteSelectedMacro()

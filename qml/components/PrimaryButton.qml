@@ -1,11 +1,11 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 
 Button {
     id: root
     property color fill: settingsController.accentColor
     property color hoverFill: settingsController.accentHoverColor
-    property color textFill: "#041014"
+    property color textFill: settingsController.textInverseColor
     property string visualStyle: settingsController.buttonStyle
 
     implicitHeight: 38
@@ -17,7 +17,7 @@ Button {
 
     contentItem: Text {
         text: root.text
-        color: root.enabled ? (root.visualStyle === "solid" ? root.textFill : "#edf6ff") : "#7f93ad"
+        color: root.enabled ? (root.visualStyle === "solid" ? root.textFill : settingsController.textColor) : settingsController.disabledTextColor
         opacity: root.enabled ? 1 : 0.86
         font: root.font
         horizontalAlignment: Text.AlignHCenter
@@ -29,7 +29,7 @@ Button {
         radius: settingsController.buttonRadius
         color: {
             if (!root.enabled)
-                return "#111c31"
+                return Qt.rgba(0, 0, 0, 0.4)
             if (root.visualStyle === "outline")
                 return root.hovered ? settingsController.accentPanelColor : "transparent"
             if (root.visualStyle === "soft")
@@ -40,7 +40,7 @@ Button {
         }
         border.color: {
             if (!root.enabled)
-                return "#1e3554"
+                return Qt.rgba(1, 1, 1, 0.1)
             if (root.visualStyle === "outline" || root.visualStyle === "glass")
                 return root.fill
             return "transparent"

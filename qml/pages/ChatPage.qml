@@ -1,6 +1,7 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 import "../components"
 
 Rectangle {
@@ -142,6 +143,47 @@ Rectangle {
         lastMessageCount = count
     }
 
+    component RoundAvatar: Rectangle {
+        id: avatarRoot
+        property string sourceUrl: ""
+        property string initials: "?"
+        property int imageSize: 48
+
+        radius: Math.min(width, height) / 2
+        color: settingsController.controlColor
+        clip: true
+
+        Image {
+            anchors.fill: parent
+            anchors.margins: 1
+            source: avatarRoot.sourceUrl
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: false
+            sourceSize.width: avatarRoot.imageSize
+            sourceSize.height: avatarRoot.imageSize
+            visible: avatarRoot.sourceUrl !== ""
+            layer.enabled: true
+            layer.effect: OpacityMask {
+                maskSource: Rectangle {
+                    width: avatarRoot.width - 2
+                    height: avatarRoot.height - 2
+                    radius: Math.min(width, height) / 2
+                    visible: false
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: avatarRoot.initials
+            color: settingsController.accentColor
+            font.bold: true
+            font.pixelSize: Math.max(11, Math.round(Math.min(avatarRoot.width, avatarRoot.height) * 0.34))
+            visible: avatarRoot.sourceUrl === ""
+        }
+    }
+
     Timer {
         id: highlightReset
         interval: 1000
@@ -186,7 +228,7 @@ Rectangle {
 
                 Text {
                     text: tr("home.chat.title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 20
                     font.bold: true
@@ -196,7 +238,7 @@ Rectangle {
 
                 Text {
                     text: chatController.status
-                    color: chatController.connected ? "#8ab4ff" : "#99abc4"
+                    color: chatController.connected ? settingsController.infoColor : settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     Layout.fillWidth: true
@@ -212,7 +254,7 @@ Rectangle {
 
                 Text {
                     text: tr("home.chat.rooms") + " (" + roomsList.count + ")"
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
                     font.bold: true
@@ -260,7 +302,7 @@ Rectangle {
                             anchors.margins: 10
                             Text {
                                 text: rowLabel
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.bold: true
                                 elide: Text.ElideRight
@@ -276,7 +318,7 @@ Rectangle {
                                     id: unreadText
                                     anchors.centerIn: parent
                                     text: String(rowUnread)
-                                    color: "#041014"
+                                    color: settingsController.textInverseColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 11
                                     font.bold: true
@@ -295,7 +337,7 @@ Rectangle {
 
                 Text {
                     text: tr("home.chat.online") + " (" + onlineList.count + ")"
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
                     font.bold: true
@@ -344,31 +386,12 @@ Rectangle {
                             anchors.fill: parent
                             anchors.margins: 8
                             spacing: 8
-                            Rectangle {
+                            RoundAvatar {
                                 Layout.preferredWidth: 32
                                 Layout.preferredHeight: 32
-                                radius: 16
-                                color: "#1d3353"
-                                clip: true
-                                Image {
-                                    anchors.fill: parent
-                                    anchors.margins: 1
-                                    source: rowAvatar
-                                    fillMode: Image.PreserveAspectCrop
-                                    asynchronous: true
-                                    cache: false
-                                    sourceSize.width: 48
-                                    sourceSize.height: 48
-                                    visible: rowAvatar !== ""
-                                }
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: (rowName || "?").substring(0, 2).toUpperCase()
-                                    color: settingsController.accentColor
-                                    font.bold: true
-                                    font.pixelSize: 12
-                                    visible: rowAvatar === ""
-                                }
+                                sourceUrl: rowAvatar
+                                initials: (rowName || "?").substring(0, 2).toUpperCase()
+                                imageSize: 48
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true
@@ -376,11 +399,11 @@ Rectangle {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 6
-                                    Text { text: rowName; color: "#edf6ff"; font.family: "Segoe UI"; font.bold: true; Layout.maximumWidth: 120; elide: Text.ElideRight }
+                                    Text { text: rowName; color: settingsController.textColor; font.family: "Segoe UI"; font.bold: true; Layout.maximumWidth: 120; elide: Text.ElideRight }
                                     Text { text: "[" + rowRegiment + "]"; color: settingsController.accentColor; opacity: 0.8; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 11; visible: rowRegiment !== "" }
                                     Rectangle {
                                         visible: rowRole !== ""
-                                        color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#d97706" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
+                                        color: rowRole === "DEV" ? settingsController.dangerColor : (rowRole === "ADMIN" ? settingsController.dangerColor : (rowRole === "WINNER" ? settingsController.warningColor : (rowRole === "MEMBER" ? settingsController.disabledTextColor : settingsController.infoColor)))
                                         radius: 4
                                         Layout.preferredWidth: roleText.implicitWidth + 8
                                         Layout.preferredHeight: 14
@@ -388,7 +411,7 @@ Rectangle {
                                             id: roleText
                                             anchors.centerIn: parent
                                             text: rowRole
-                                            color: "#ffffff"
+                                            color: settingsController.textColor
                                             font.pixelSize: 9
                                             font.bold: true
                                             font.family: "Segoe UI"
@@ -426,7 +449,7 @@ Rectangle {
                                         }
                                     }
                                     Component.onCompleted: updateText()
-                                    color: "#99abc4"
+                                    color: settingsController.mutedTextColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 10
                                     Layout.fillWidth: true
@@ -461,7 +484,7 @@ Rectangle {
                         spacing: 2
                         Text {
                             text: chatController.selectedRoomLabel || tr("home.chat.select")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 18
                             font.bold: true
@@ -470,7 +493,7 @@ Rectangle {
                         }
                         Text {
                             text: chatController.currentUserName ? tr("home.chat.connected_as") + " " + chatController.currentUserName : tr("home.chat.no_user")
-                            color: "#99abc4"
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 11
                             Layout.fillWidth: true
@@ -480,9 +503,9 @@ Rectangle {
                     PrimaryButton {
                         text: chatController.loadingOlderMessages ? tr("home.chat.loading_older") : tr("home.chat.load_older")
                         enabled: chatController.hasOlderMessages && !chatController.loadingOlderMessages
-                        fill: enabled ? "#1d3353" : "#0e1a2d"
-                        hoverFill: "#1d3353"
-                        textFill: enabled ? "#edf6ff" : "#60728c"
+                        fill: enabled ? settingsController.controlColor : settingsController.surfaceAltColor
+                        hoverFill: settingsController.controlColor
+                        textFill: enabled ? settingsController.textColor : settingsController.disabledTextColor
                         onClicked: {
                             root.preservingOlderMessages = true
                             root.stickMessagesToBottom = false
@@ -585,7 +608,7 @@ Rectangle {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 20
-                                    color: hoverReplyTarget.containsMouse ? "#24395e" : "#1a293e"
+                                    color: hoverReplyTarget.containsMouse ? settingsController.controlHoverColor : settingsController.surfaceRaisedColor
                                     radius: 4
                                     visible: rowReplyToId !== ""
                                     MouseArea {
@@ -598,39 +621,20 @@ Rectangle {
                                         anchors.fill: parent
                                         anchors.margins: 4
                                         spacing: 4
-                                        Text { text: "< " + rowReplyToAuthor; color: "#8ab4ff"; font.bold: true; font.pixelSize: 10 }
-                                        Text { text: rowReplyToBody; color: "#99abc4"; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
+                                        Text { text: "< " + rowReplyToAuthor; color: settingsController.infoColor; font.bold: true; font.pixelSize: 10 }
+                                        Text { text: rowReplyToBody; color: settingsController.mutedTextColor; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
                                     }
                                 }
 
                                 RowLayout {
                                     Layout.fillWidth: true
                                     spacing: 12
-                                    Rectangle {
+                                    RoundAvatar {
                                         Layout.preferredWidth: 38
                                         Layout.preferredHeight: 38
-                                        radius: 19
-                                        color: "#1d3353"
-                                        clip: true
-                                        Image {
-                                            anchors.fill: parent
-                                            anchors.margins: 1
-                                            source: rowAvatar
-                                            fillMode: Image.PreserveAspectCrop
-                                            asynchronous: true
-                                            cache: false
-                                            sourceSize.width: 56
-                                            sourceSize.height: 56
-                                            visible: rowAvatar !== ""
-                                        }
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: (rowAuthor || "?").substring(0, 2).toUpperCase()
-                                            color: settingsController.accentColor
-                                            font.bold: true
-                                            font.pixelSize: 13
-                                            visible: rowAvatar === ""
-                                        }
+                                        sourceUrl: rowAvatar
+                                        initials: (rowAuthor || "?").substring(0, 2).toUpperCase()
+                                        imageSize: 56
                                     }
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -641,7 +645,7 @@ Rectangle {
                                             Text { text: rowAuthor; color: settingsController.accentColor; font.bold: true; font.family: "Segoe UI"; elide: Text.ElideRight; Layout.maximumWidth: 200 }
                                             Rectangle {
                                                 visible: rowRole !== ""
-                                                color: rowRole === "DEV" ? "#f43f5e" : (rowRole === "ADMIN" ? "#ef4444" : (rowRole === "WINNER" ? "#d97706" : (rowRole === "MEMBER" ? "#64748b" : "#3b82f6")))
+                                                color: rowRole === "DEV" ? settingsController.dangerColor : (rowRole === "ADMIN" ? settingsController.dangerColor : (rowRole === "WINNER" ? settingsController.warningColor : (rowRole === "MEMBER" ? settingsController.disabledTextColor : settingsController.infoColor)))
                                                 radius: 4
                                                 Layout.preferredWidth: messageRoleText.implicitWidth + 8
                                                 Layout.preferredHeight: 14
@@ -649,7 +653,7 @@ Rectangle {
                                                     id: messageRoleText
                                                     anchors.centerIn: parent
                                                     text: rowRole
-                                                    color: "#ffffff"
+                                                    color: settingsController.textColor
                                                     font.pixelSize: 9
                                                     font.bold: true
                                                     font.family: "Segoe UI"
@@ -659,7 +663,7 @@ Rectangle {
                                         }
                                         Text { text: rowRegiment; color: settingsController.accentColor; opacity: 0.7; font.family: "Segoe UI"; font.pixelSize: 10; visible: rowRegiment !== ""; Layout.fillWidth: true; elide: Text.ElideRight }
                                     }
-                                    Text { text: rowMeta; color: "#99abc4"; font.family: "Segoe UI"; font.pixelSize: 11; Layout.alignment: Qt.AlignTop }
+                                    Text { text: rowMeta; color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 11; Layout.alignment: Qt.AlignTop }
                                 }
 
                                 Flow {
@@ -674,7 +678,7 @@ Rectangle {
                                             Text {
                                                 id: content
                                                 text: seg.mention && seg.mention.length > 0 ? ("@" + seg.mention) : seg.text
-                                                color: seg.mention && seg.mention.length > 0 ? settingsController.warningColor : "#edf6ff"
+                                                color: seg.mention && seg.mention.length > 0 ? settingsController.warningColor : settingsController.textColor
                                                 font.family: "Segoe UI"
                                                 font.pixelSize: 13
                                                 wrapMode: Text.WordWrap
@@ -752,8 +756,8 @@ Rectangle {
                                     Layout.preferredWidth: 30
                                     Layout.preferredHeight: 30
                                     radius: 15
-                                    color: hoverReply.containsMouse ? "#24486d" : "#1d3353"
-                                    Text { anchors.centerIn: parent; text: "<"; font.pixelSize: 14; color: "#edf6ff"; font.bold: true }
+                                    color: hoverReply.containsMouse ? settingsController.borderColor : settingsController.controlColor
+                                    Text { anchors.centerIn: parent; text: "<"; font.pixelSize: 14; color: settingsController.textColor; font.bold: true }
                                     MouseArea {
                                         id: hoverReply
                                         anchors.fill: parent
@@ -790,13 +794,13 @@ Rectangle {
                         }
                         background: Rectangle {
                             radius: 8
-                            color: "#172943"
-                            border.color: "#2d496f"
+                            color: settingsController.surfaceRaisedColor
+                            border.color: settingsController.controlHoverColor
                         }
                         contentItem: Text {
                             id: mentionText
                             text: "@" + rowMention
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 12
                             font.bold: true
@@ -815,16 +819,16 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 30
                         radius: 6
-                        color: "#1d3353"
+                        color: settingsController.controlColor
                         visible: root.replyingTo !== ""
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 6
                             spacing: 8
-                            Text { text: tr("home.chat.reply_to") + root.replyingToLabel; color: "#edf6ff"; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                            Text { text: tr("home.chat.reply_to") + root.replyingToLabel; color: settingsController.textColor; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                             Text {
                                 text: "x"
-                                color: "#f87171"
+                                color: settingsController.dangerColor
                                 font.pixelSize: 14
                                 font.bold: true
                                 MouseArea {
@@ -870,7 +874,7 @@ Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 44
                             placeholderText: tr("home.chat.message")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.pixelSize: 15
                             verticalAlignment: TextInput.AlignVCenter
                             topPadding: 10

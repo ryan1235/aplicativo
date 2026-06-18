@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -182,7 +182,7 @@ Flickable {
                         Layout.preferredWidth: root.wide ? 285 : 230
                         Layout.preferredHeight: 56
                         radius: settingsController.cardRadius
-                        color: itemSearchController.statusKey === "item_search.error" ? "#311523" : settingsController.backgroundColor
+                        color: itemSearchController.statusKey === "item_search.error" ? settingsController.dangerPanelColor : settingsController.backgroundColor
                         border.color: itemSearchController.statusKey === "item_search.error" ? settingsController.warningColor : settingsController.borderColor
 
                         ColumnLayout {
