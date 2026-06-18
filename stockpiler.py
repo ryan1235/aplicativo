@@ -660,6 +660,157 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def parse_stockpile_timestamp(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number > 10_000_000_000:
+            number /= 1000.0
+        try:
+            return datetime.fromtimestamp(number, tz=timezone.utc)
+        except (OSError, OverflowError, ValueError):
+            return None
+
+    text = str(value).strip()
+    if not text or text == "-":
+        return None
+    if text.isdigit():
+        return parse_stockpile_timestamp(int(text))
+
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _stockpile_key(value: Any) -> str:
+    return str(value or "").strip().replace("\\", "/").casefold()
+
+
+def api_warehouse_last_updates(api_result: dict[str, Any]) -> dict[str, datetime]:
+    body = api_result.get("body")
+    if not isinstance(body, dict):
+        return {}
+
+    updates: dict[str, datetime] = {}
+
+    def record(name: Any, value: Any) -> None:
+        key = _stockpile_key(name)
+        parsed = parse_stockpile_timestamp(value)
+        if not key or parsed is None:
+            return
+        current = updates.get(key)
+        if current is None or parsed > current:
+            updates[key] = parsed
+
+    for item in body.get("data") or []:
+        if not isinstance(item, dict):
+            continue
+        name = item.get("WarehouseName") or item.get("warehouse_name")
+        updated = (
+            item.get("WarehouseLastUpdate")
+            or item.get("warehouse_last_update")
+            or item.get("last_update")
+            or item.get("updatedAt")
+        )
+        record(name, updated)
+
+    for change in body.get("changes") or []:
+        if not isinstance(change, dict):
+            continue
+        name = change.get("warehouse_name") or change.get("WarehouseName")
+        updated = (
+            change.get("WarehouseLastUpdate")
+            or change.get("warehouse_last_update")
+            or change.get("last_update")
+            or change.get("updatedAt")
+        )
+        record(name, updated)
+
+    return updates
+
+
+def _filtered_payload_with_reports(payload: dict[str, Any], reports: list[dict[str, Any]]) -> dict[str, Any]:
+    filtered = dict(payload)
+    metadata = dict(filtered.get("metadata") if isinstance(filtered.get("metadata"), dict) else {})
+    metadata["report_count"] = len(reports)
+    filtered["metadata"] = metadata
+    filtered["reports"] = reports
+    return filtered
+
+
+def filter_payload_reports_newer_than_api(
+    payload: dict[str, Any],
+    api_result: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    reports = payload.get("reports") if isinstance(payload, dict) else []
+    reports = reports if isinstance(reports, list) else []
+    api_updates = api_warehouse_last_updates(api_result)
+    kept_reports: list[dict[str, Any]] = []
+    decisions: list[dict[str, str]] = []
+
+    for report in reports:
+        if not isinstance(report, dict):
+            continue
+        header = report.get("header") if isinstance(report.get("header"), dict) else {}
+        metadata = report.get("metadata") if isinstance(report.get("metadata"), dict) else {}
+        inventory_name = str(header.get("inventory_name") or "")
+        local_raw = metadata.get("last_updated")
+        local_dt = parse_stockpile_timestamp(local_raw)
+        api_dt = api_updates.get(_stockpile_key(inventory_name))
+
+        if api_dt is None:
+            kept_reports.append(report)
+            decisions.append(
+                {
+                    "inventory_name": inventory_name or "-",
+                    "action": "keep",
+                    "reason": "missing API stockpile timestamp",
+                    "local_last_updated": str(local_raw or ""),
+                    "api_last_updated": "",
+                }
+            )
+            continue
+
+        if local_dt is not None and local_dt > api_dt:
+            kept_reports.append(report)
+            decisions.append(
+                {
+                    "inventory_name": inventory_name or "-",
+                    "action": "keep",
+                    "reason": "local stockpile timestamp is newer",
+                    "local_last_updated": local_dt.isoformat(),
+                    "api_last_updated": api_dt.isoformat(),
+                }
+            )
+            continue
+
+        decisions.append(
+            {
+                "inventory_name": inventory_name or "-",
+                "action": "skip",
+                "reason": "API stockpile timestamp is newer or equal",
+                "local_last_updated": local_dt.isoformat() if local_dt else str(local_raw or ""),
+                "api_last_updated": api_dt.isoformat(),
+            }
+        )
+
+    return _filtered_payload_with_reports(payload, kept_reports), decisions
+
+
 def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST") -> dict[str, Any]:
     body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     log_upload = purpose == "upload" and method.upper() == "POST"
@@ -880,7 +1031,57 @@ def extract_and_post(
         gc.collect()
         return None
 
+    _runtime_log("[Stockpile] checking API warehouse timestamps before upload")
+    api_snapshot = request_stockpile_debug(api_url)
+    payload, freshness_decisions = filter_payload_reports_newer_than_api(payload, api_snapshot)
+    for decision in freshness_decisions:
+        _debug_log(
+            "[Stockpile API Guard] "
+            f"{decision.get('action', '-')} {decision.get('inventory_name', '-')} "
+            f"local={decision.get('local_last_updated', '') or '-'} "
+            f"api={decision.get('api_last_updated', '') or '-'} "
+            f"reason={decision.get('reason', '-')}"
+        )
+
     report_count = len(payload.get("reports", []))
+    if report_count <= 0:
+        log_stockpile_debug_details(
+            payload,
+            source_file=path,
+            output=output,
+            sent_output=sent_output,
+            upload_reason=upload_reason,
+            capture_changed=capture_changed,
+            api_payload_changed=api_payload_changed,
+            extracted_entries=extracted_entries,
+            action="skip: API has newer or equal stockpile timestamps",
+        )
+        _runtime_log("[Stockpile] API has newer or equal stockpile timestamps; API skipped")
+        del api_snapshot
+        del payload
+        gc.collect()
+        return None
+
+    current_hash = stable_payload_hash(payload)
+    api_payload_changed = payload_changed_since_json(payload, sent_output, current_hash)
+    if not api_payload_changed and not force_api_refresh:
+        log_stockpile_debug_details(
+            payload,
+            source_file=path,
+            output=output,
+            sent_output=sent_output,
+            upload_reason=upload_reason,
+            capture_changed=capture_changed,
+            api_payload_changed=api_payload_changed,
+            extracted_entries=extracted_entries,
+            action="skip: same fresh reports as last sent JSON",
+        )
+        _runtime_log("[Stockpile] fresh reports unchanged after API timestamp check; API skipped")
+        del api_snapshot
+        del payload
+        gc.collect()
+        return None
+
     log_stockpile_debug_details(
         payload,
         source_file=path,
@@ -900,6 +1101,7 @@ def extract_and_post(
     del api_message
     summary["payload_changed"] = api_payload_changed
     summary["upload_reason"] = upload_reason
+    del api_snapshot
     del payload
     gc.collect()
     return summary
