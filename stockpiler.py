@@ -526,6 +526,32 @@ def format_to_local_pc_time(value: str) -> str:
         return text
 
 
+_MAP_NAME_KEYS = ("map_name", "MapName", "mapName", "map", "Map", "region", "Region")
+_TOWN_KEYS = ("town", "Town", "town_name", "TownName", "townName", "location", "Location")
+_DEPOT_STATE_KEYS = ("depot_state", "DepotState", "depotState", "state", "State")
+_STOCKPILE_NAME_KEYS = ("name", "neme", "Name", "stockpile_name", "StockpileName")
+
+
+def _first_text(mapping: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = mapping.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _nested_warehouse(item: dict[str, Any]) -> dict[str, Any]:
+    warehouse = item.get("warehouse")
+    return warehouse if isinstance(warehouse, dict) else {}
+
+
+def _stockpile_field_text(item: dict[str, Any], *keys: str) -> str:
+    return _first_text(item, *keys) or _first_text(_nested_warehouse(item), *keys)
+
+
 def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
     body = api_result.get("body")
     if not isinstance(body, dict):
@@ -538,9 +564,9 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
         warehouse_name = item.get("WarehouseName")
         if not warehouse_name:
             continue
-        map_name = str(item.get("map_name") or item.get("MapName") or item.get("mapName") or "").strip()
-        town = str(item.get("town") or item.get("Town") or "").strip()
-        display_name = str(item.get("name") or item.get("neme") or item.get("Name") or item.get("stockpile_name") or item.get("StockpileName") or "").strip()
+        map_name = _stockpile_field_text(item, *_MAP_NAME_KEYS)
+        town = _stockpile_field_text(item, *_TOWN_KEYS)
+        display_name = _stockpile_field_text(item, *_STOCKPILE_NAME_KEYS)
         if not display_name:
             display_name = str(warehouse_name).split("/")[-1].strip()
         current = warehouses.setdefault(
@@ -573,7 +599,7 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
         warehouse_last_update = str(item.get("WarehouseLastUpdate") or "")
         if warehouse_last_update:
             current["last_update"] = warehouse_last_update
-        depot_state = str(item.get("depot_state") or item.get("DepotState") or "").strip()
+        depot_state = _stockpile_field_text(item, *_DEPOT_STATE_KEYS)
         if depot_state:
             current["depot_state"] = depot_state
         if display_name:
@@ -589,9 +615,9 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
         warehouse_name = change.get("warehouse_name") or change.get("WarehouseName")
         if not warehouse_name:
             continue
-        map_name = str(change.get("map_name") or change.get("MapName") or change.get("mapName") or "").strip()
-        town = str(change.get("town") or change.get("Town") or "").strip()
-        display_name = str(change.get("name") or change.get("neme") or change.get("Name") or change.get("stockpile_name") or change.get("StockpileName") or "").strip()
+        map_name = _stockpile_field_text(change, *_MAP_NAME_KEYS)
+        town = _stockpile_field_text(change, *_TOWN_KEYS)
+        display_name = _stockpile_field_text(change, *_STOCKPILE_NAME_KEYS)
         if not display_name:
             display_name = str(warehouse_name).split("/")[-1].strip()
         current = warehouses.setdefault(
@@ -611,7 +637,7 @@ def warehouse_summaries(api_result: dict[str, Any]) -> list[dict[str, Any]]:
             },
         )
         current["change_count"] += 1
-        depot_state = str(change.get("depot_state") or change.get("DepotState") or "").strip()
+        depot_state = _stockpile_field_text(change, *_DEPOT_STATE_KEYS)
         if depot_state:
             current["depot_state"] = depot_state
         if display_name:
@@ -649,9 +675,9 @@ def api_item_rows(api_result: dict[str, Any]) -> list[dict[str, Any]]:
         rows.append(
             {
                 "warehouse": str(item.get("WarehouseName") or "-"),
-                "warehouse_name": str(item.get("name") or item.get("neme") or item.get("Name") or item.get("stockpile_name") or item.get("StockpileName") or ""),
-                "map_name": str(item.get("map_name") or item.get("MapName") or item.get("mapName") or ""),
-                "town": str(item.get("town") or item.get("Town") or ""),
+                "warehouse_name": _stockpile_field_text(item, *_STOCKPILE_NAME_KEYS),
+                "map_name": _stockpile_field_text(item, *_MAP_NAME_KEYS),
+                "town": _stockpile_field_text(item, *_TOWN_KEYS),
                 "display_name": str(item.get("DisplayName") or item.get("asset_name") or "-"),
                 "asset_name": asset_name,
                 "icon_name": str(item.get("icon_name") or ""),

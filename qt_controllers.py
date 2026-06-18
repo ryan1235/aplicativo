@@ -776,6 +776,7 @@ def news_image_url(item: dict[str, Any]) -> str:
 
 
 _LOCATION_INDEX: dict[tuple[str, str], dict[str, str]] | None = None
+_LOCATION_CODE_INDEX: dict[tuple[str, str], dict[str, str]] | None = None
 
 
 def _compact_location_key(value: str) -> str:
@@ -793,6 +794,54 @@ def stockpile_map_name(value: str) -> str:
         return ""
     text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _first_mapping_text(mapping: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = mapping.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _warehouse_nested(warehouse: dict[str, Any]) -> dict[str, Any]:
+    nested = warehouse.get("warehouse")
+    return nested if isinstance(nested, dict) else {}
+
+
+def _warehouse_text(warehouse: dict[str, Any], *keys: str) -> str:
+    return _first_mapping_text(warehouse, *keys) or _first_mapping_text(_warehouse_nested(warehouse), *keys)
+
+
+def _town_code_candidates(town: str, code: str = "") -> list[str]:
+    candidates: list[str] = []
+    code_text = re.sub(r"[^A-Z0-9]", "", str(code or "").upper())
+    if len(code_text) >= 2:
+        candidates.append(code_text[-2:])
+
+    normalized = re.sub(r"['’]", "", str(town or ""))
+    words = re.findall(r"[A-Za-z0-9]+", normalized)
+    if words:
+        candidates.append("".join(word[0].upper() for word in words))
+        main_words = [word for word in words if word.lower() not in {"a", "an", "of", "the"}]
+        if main_words:
+            candidates.append("".join(word[0].upper() for word in main_words))
+
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def _stockpile_town_code(value: str) -> str:
+    parts = [part.strip() for part in str(value or "").upper().split("-") if part.strip()]
+    if len(parts) >= 2 and parts[0] == "GG":
+        return re.sub(r"[^A-Z0-9]", "", parts[1])
+    return ""
 
 
 def _location_index() -> dict[tuple[str, str], dict[str, str]]:
@@ -815,6 +864,7 @@ def _location_index() -> dict[tuple[str, str], dict[str, str]]:
                         "region": region,
                         "town": town,
                         "mapName": stockpile_map_name(region),
+                        "code": str(row.get("Code") or "").strip(),
                     }
         except OSError:
             continue
@@ -822,6 +872,36 @@ def _location_index() -> dict[tuple[str, str], dict[str, str]]:
             break
     _LOCATION_INDEX = index
     return index
+
+
+def _location_code_index() -> dict[tuple[str, str], dict[str, str]]:
+    global _LOCATION_CODE_INDEX
+    if _LOCATION_CODE_INDEX is not None:
+        return _LOCATION_CODE_INDEX
+
+    index: dict[tuple[str, str], dict[str, str]] = {}
+    for location in _location_index().values():
+        map_key = _compact_location_key(location.get("region", ""))
+        if not map_key:
+            continue
+        for code in _town_code_candidates(location.get("town", ""), location.get("code", "")):
+            index.setdefault((map_key, code), location)
+    _LOCATION_CODE_INDEX = index
+    return index
+
+
+def _location_from_stockpile_code(map_key: str, *values: str) -> dict[str, str] | None:
+    if not map_key:
+        return None
+    locations = _location_code_index()
+    for value in values:
+        town_code = _stockpile_town_code(value)
+        if not town_code:
+            continue
+        matched = locations.get((map_key, town_code))
+        if matched:
+            return matched
+    return None
 
 
 def obfuscate_string(text: str) -> str:
@@ -3481,7 +3561,7 @@ class StockpileController(QObject):
     def _depot_state(warehouse: dict[str, Any] | None) -> str:
         if not isinstance(warehouse, dict):
             return ""
-        return str(warehouse.get("depot_state") or warehouse.get("DepotState") or "").strip().lower()
+        return _warehouse_text(warehouse, "depot_state", "DepotState", "depotState", "state", "State").lower()
 
     @staticmethod
     def _has_gg_stockpile_prefix(warehouse: dict[str, Any]) -> bool:
@@ -3512,8 +3592,8 @@ class StockpileController(QObject):
                 or warehouse.get("neme")
                 or ""
             ).strip()
-            explicit_map = str(warehouse.get("map_name") or warehouse.get("mapName") or warehouse.get("MapName") or "").strip()
-            explicit_town = str(warehouse.get("town") or warehouse.get("Town") or "").strip()
+            explicit_map = _warehouse_text(warehouse, "map_name", "MapName", "mapName", "map", "Map", "region", "Region")
+            explicit_town = _warehouse_text(warehouse, "town", "Town", "town_name", "TownName", "townName", "location", "Location")
         else:
             name = str(warehouse or "")
             explicit_title = ""
@@ -3524,6 +3604,8 @@ class StockpileController(QObject):
         lookup_town = explicit_town or town
         map_key = _compact_location_key(_strip_hex_suffix(lookup_map))
         matched = _location_index().get((map_key, lookup_town.lower())) if map_key and lookup_town else None
+        if not matched:
+            matched = _location_from_stockpile_code(map_key, explicit_title, code, name)
 
         region = str((matched or {}).get("region") or _strip_hex_suffix(lookup_map) or "Outros")
         display_town = str(explicit_town or (matched or {}).get("town") or town)
