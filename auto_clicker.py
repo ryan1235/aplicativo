@@ -1,6 +1,7 @@
 import ctypes
 from ctypes import wintypes
 import os
+import queue
 import random
 from pathlib import Path
 import threading
@@ -43,7 +44,9 @@ WM_KEYUP = 0x0101
 WM_SYSKEYDOWN = 0x0104
 WM_QUIT = 0x0012
 WH_KEYBOARD_LL = 13
+WH_MOUSE_LL = 14
 LLKHF_INJECTED = 0x00000010
+LLMHF_INJECTED = 0x00000001
 CWP_SKIPINVISIBLE = 0x0001
 CWP_SKIPDISABLED = 0x0002
 
@@ -79,6 +82,16 @@ class KBDLLHOOKSTRUCT(ctypes.Structure):
     _fields_ = [
         ("vkCode", wintypes.DWORD),
         ("scanCode", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("pt", POINT),
+        ("mouseData", wintypes.DWORD),
         ("flags", wintypes.DWORD),
         ("time", wintypes.DWORD),
         ("dwExtraInfo", ctypes.c_size_t),
@@ -154,6 +167,9 @@ class AutoClicker:
         self.right_hold_button_down = False
         self.right_double_tap_threshold = 0.35
         self.right_doubletap_enabled = False
+        self.right_last_tap = 0.0
+        self.right_suppress_next_up = False
+        self.right_mouse_action_queue = queue.SimpleQueue()
 
         # Shift hold with autoclick
         self.shift_enabled = False
@@ -188,10 +204,14 @@ class AutoClicker:
         self.keyboard_hook_handle = 0
         self.keyboard_hook_proc = None
         self.keyboard_hook_thread_id = 0
+        self.mouse_hook_handle = 0
+        self.mouse_hook_proc = None
+        self.mouse_hook_thread_id = 0
         self.user32 = ctypes.windll.user32
         self.kernel32 = ctypes.windll.kernel32
         self.user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_size_t]
         self.user32.PostMessageW.restype = ctypes.c_bool
+        self.user32.GetForegroundWindow.restype = ctypes.c_void_p
         self.user32.WindowFromPoint.argtypes = [POINT]
         self.user32.WindowFromPoint.restype = ctypes.c_void_p
         self.user32.ChildWindowFromPointEx.argtypes = [ctypes.c_void_p, POINT, ctypes.c_uint]
@@ -213,9 +233,13 @@ class AutoClicker:
         self.monitor_thread = threading.Thread(target=self.monitor_hotkeys, daemon=True)
         self.click_thread = threading.Thread(target=self.click_loop, daemon=True)
         self.keyboard_hook_thread = threading.Thread(target=self._keyboard_hook_loop, daemon=True)
+        self.mouse_hook_thread = threading.Thread(target=self._mouse_hook_loop, daemon=True)
+        self.right_mouse_action_thread = threading.Thread(target=self._right_mouse_action_loop, daemon=True)
         self.monitor_thread.start()
         self.click_thread.start()
         self.keyboard_hook_thread.start()
+        self.mouse_hook_thread.start()
+        self.right_mouse_action_thread.start()
         self.log("AutoClicker iniciado")
 
     def set_language(self, language: str) -> None:
@@ -462,6 +486,21 @@ class AutoClicker:
                 self.user32.PostThreadMessageW(self.keyboard_hook_thread_id, WM_QUIT, 0, 0)
             except Exception:
                 pass
+        if self.mouse_hook_handle:
+            try:
+                self.user32.UnhookWindowsHookEx(self.mouse_hook_handle)
+            except Exception:
+                pass
+            self.mouse_hook_handle = 0
+        if self.mouse_hook_thread_id:
+            try:
+                self.user32.PostThreadMessageW(self.mouse_hook_thread_id, WM_QUIT, 0, 0)
+            except Exception:
+                pass
+        try:
+            self.right_mouse_action_queue.put(None)
+        except Exception:
+            pass
         self.log("Parando AutoClicker")
 
     def status_text(self) -> str:
@@ -510,9 +549,8 @@ class AutoClicker:
         for vk in watch_keys:
             self.key_was_down[vk] = False
 
-        # Double-tap monitoring runs in background threads.
+        # Double-tap W monitoring runs in a background thread.
         threading.Thread(target=self._w_doubletap_monitor, daemon=True).start()
-        threading.Thread(target=self._right_doubletap_monitor, daemon=True).start()
 
         while not self.stop_event.is_set():
             self.handle_key_press(self.move_hotkey_vk, self.toggle_move_click)
@@ -1002,23 +1040,96 @@ class AutoClicker:
             self.user32.DispatchMessageW(ctypes.byref(message))
         self.keyboard_hook_thread_id = 0
 
-    def _right_doubletap_monitor(self) -> None:
-        prev_down = False
-        last_tap = 0.0
+    def _right_mouse_action_loop(self) -> None:
         while not self.stop_event.is_set():
-            is_down = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
-            if is_down and not prev_down:
-                now = time.monotonic()
-                if self.right_hold_enabled:
-                    self.disable_right_hold("cancel: right click")
-                    last_tap = 0.0
-                elif self.mode_is_enabled("right_hold") and self.right_doubletap_enabled and (now - last_tap) <= self.right_double_tap_threshold:
+            action = self.right_mouse_action_queue.get()
+            if action is None:
+                break
+            try:
+                if action == "enable":
                     self.enable_right_hold()
-                    last_tap = 0.0
-                else:
-                    last_tap = now
-            prev_down = is_down
-            time.sleep(0.01)
+                elif action == "cancel":
+                    self.disable_right_hold("cancel: right click")
+            except Exception as exc:
+                self.log(f"Erro na acao do botao direito: {exc}")
+
+    def _queue_right_mouse_action(self, action: str) -> None:
+        try:
+            self.right_mouse_action_queue.put(action)
+        except Exception:
+            pass
+
+    def _mouse_hook_loop(self) -> None:
+        self.mouse_hook_thread_id = int(self.kernel32.GetCurrentThreadId() or 0)
+        hook_proc_type = ctypes.WINFUNCTYPE(wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+
+        def hook_proc(code: int, w_param: int, l_param: int) -> int:
+            try:
+                if code >= 0:
+                    event = ctypes.cast(l_param, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
+                    is_injected = bool(event.flags & LLMHF_INJECTED)
+                    if not is_injected and self._handle_right_mouse_hook_message(int(w_param)):
+                        return 1
+            except Exception:
+                pass
+            return self.user32.CallNextHookEx(self.mouse_hook_handle, code, w_param, l_param)
+
+        self.mouse_hook_proc = hook_proc_type(hook_proc)
+        self.mouse_hook_handle = int(self.user32.SetWindowsHookExW(WH_MOUSE_LL, self.mouse_hook_proc, 0, 0) or 0)
+        if not self.mouse_hook_handle:
+            self.log("Mouse hook indisponivel; duplo RMB nao consegue absorver o segundo clique")
+            return
+
+        message = wintypes.MSG()
+        while not self.stop_event.is_set():
+            result = self.user32.GetMessageW(ctypes.byref(message), 0, 0, 0)
+            if result <= 0:
+                break
+            self.user32.TranslateMessage(ctypes.byref(message))
+            self.user32.DispatchMessageW(ctypes.byref(message))
+        self.mouse_hook_thread_id = 0
+
+    def _handle_right_mouse_hook_message(self, message: int) -> bool:
+        right_down = MOUSE_BUTTONS["Direito"]["down"]
+        right_up = MOUSE_BUTTONS["Direito"]["up"]
+
+        if message == right_up and self.right_suppress_next_up:
+            self.right_suppress_next_up = False
+            return True
+
+        if message != right_down:
+            return False
+
+        if self.right_hold_enabled:
+            self.right_last_tap = 0.0
+            if self.is_foxhole_foreground_window():
+                self._queue_right_mouse_action("cancel")
+            return False
+
+        if not self._right_doubletap_context_active():
+            self.right_last_tap = 0.0
+            return False
+
+        now = time.monotonic()
+        if self.right_last_tap and (now - self.right_last_tap) <= self.right_double_tap_threshold:
+            self.right_last_tap = 0.0
+            self.right_suppress_next_up = True
+            self._queue_right_mouse_action("enable")
+            return True
+
+        self.right_last_tap = now
+        return False
+
+    def _right_doubletap_context_active(self) -> bool:
+        return bool(
+            self.mode_is_enabled("right_hold")
+            and self.right_doubletap_enabled
+            and self.is_foxhole_foreground_window()
+        )
+
+    def is_foxhole_foreground_window(self) -> bool:
+        hwnd = int(self.user32.GetForegroundWindow() or 0)
+        return bool(hwnd and self.is_foxhole_window(hwnd))
 
 
     # -----------------------------------------------------------------------
