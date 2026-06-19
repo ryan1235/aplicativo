@@ -410,8 +410,8 @@ Flickable {
 
                                 ColumnLayout {
                                     Layout.fillWidth: model.rowType === "region"
-                                    Layout.preferredWidth: model.rowType === "region" ? -1 : Math.min(260, Math.max(170, results.width * 0.18))
-                                    Layout.minimumWidth: model.rowType === "region" ? 0 : 150
+                                    Layout.preferredWidth: model.rowType === "region" ? -1 : Math.min(220, Math.max(145, results.width * 0.15))
+                                    Layout.minimumWidth: model.rowType === "region" ? 0 : 135
                                     Layout.alignment: Qt.AlignVCenter
                                     spacing: 1
 
@@ -431,7 +431,7 @@ Flickable {
                                 Text {
                                     visible: model.rowType !== "region"
                                     Layout.fillWidth: true
-                                    Layout.minimumWidth: 180
+                                    Layout.minimumWidth: 150
                                     Layout.alignment: Qt.AlignVCenter
                                     text: model.place || model.warehouse || "-"
                                     color: settingsController.textColor
@@ -443,17 +443,35 @@ Flickable {
                                     elide: Text.ElideMiddle
                                 }
 
-                                Text {
+                                ColumnLayout {
                                     visible: model.rowType !== "region"
-                                    Layout.preferredWidth: Math.min(330, Math.max(245, results.width * 0.26))
+                                    Layout.preferredWidth: Math.min(390, Math.max(285, results.width * 0.31))
+                                    Layout.minimumWidth: 250
                                     Layout.alignment: Qt.AlignVCenter
-                                    text: tr("item_search.last_update").replace("{value}", model.updatedAt || "-") + (model.updatedAgo ? " (" + model.updatedAgo + ")" : "")
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 12
-                                    horizontalAlignment: Text.AlignRight
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
+                                    spacing: 0
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: tr("item_search.last_update").replace("{value}", model.updatedAt || "-")
+                                        color: settingsController.mutedTextColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        horizontalAlignment: Text.AlignRight
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        visible: model.updatedAgo !== ""
+                                        Layout.fillWidth: true
+                                        text: model.updatedAgo
+                                        color: settingsController.mutedTextColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 11
+                                        horizontalAlignment: Text.AlignRight
+                                        verticalAlignment: Text.AlignVCenter
+                                        elide: Text.ElideRight
+                                    }
                                 }
 
                                 Rectangle {
