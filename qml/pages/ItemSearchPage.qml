@@ -50,49 +50,64 @@ Item {
         return trOr(key, key)
     }
 
-    ColumnLayout {
-        id: content
+    Flickable {
+        id: pageScroll
         anchors.fill: parent
-        spacing: 14
+        clip: true
+        contentWidth: width
+        contentHeight: content.height
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height + 1
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 12
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 3
-
-                Text {
-                    text: tr("item_search.title")
-                    color: settingsController.textColor
-                    font.family: "Segoe UI"
-                    font.pixelSize: 26
-                    font.bold: true
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    text: tr("item_search.subtitle")
-                    color: settingsController.mutedTextColor
-                    font.family: "Segoe UI"
-                    font.pixelSize: 12
-                    font.bold: true
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
-            }
-
-            PrimaryButton {
-                text: itemSearchController.loading ? tr("item_search.loading") : tr("stockpile.debug_check_button")
-                enabled: !itemSearchController.loading
-                Layout.preferredWidth: 156
-                onClicked: itemSearchController.refresh()
-            }
+        ScrollBar.vertical: ScrollBar {
+            policy: pageScroll.contentHeight > pageScroll.height + 1 ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+            active: pageScroll.moving || pageScroll.flicking
         }
 
-        Rectangle {
+        ColumnLayout {
+            id: content
+            width: Math.max(0, pageScroll.width - root.scrollBarContentPadding)
+            height: Math.max(pageScroll.height, implicitHeight)
+            spacing: 14
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 3
+
+                    Text {
+                        text: tr("item_search.title")
+                        color: settingsController.textColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 26
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        text: tr("item_search.subtitle")
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        font.bold: true
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                PrimaryButton {
+                    text: itemSearchController.loading ? tr("item_search.loading") : tr("stockpile.debug_check_button")
+                    enabled: !itemSearchController.loading
+                    Layout.preferredWidth: 156
+                    onClicked: itemSearchController.refresh()
+                }
+            }
+
+            Rectangle {
             Layout.fillWidth: true
             radius: settingsController.cardRadius
             color: settingsController.surfaceColor
