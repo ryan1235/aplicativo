@@ -44,6 +44,7 @@ WM_MOUSEMOVE = 0x0200
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
 WM_SYSKEYDOWN = 0x0104
+WM_SYSKEYUP = 0x0105
 WM_QUIT = 0x0012
 WH_KEYBOARD_LL = 13
 WH_MOUSE_LL = 14
@@ -206,6 +207,7 @@ class AutoClicker:
         self.foxhole_hotkey_context_cache_active = False
         self.foxhole_target_context_cache_until = 0.0
         self.foxhole_target_context_cache_active = False
+        self.esc_suppress_next_up = False
         self.keyboard_hook_handle = 0
         self.keyboard_hook_proc = None
         self.keyboard_hook_thread_id = 0
@@ -610,26 +612,20 @@ class AutoClicker:
             return
 
         esc = bool(self.user32.GetAsyncKeyState(VK_ESC) & 0x8000)
+        if esc and self.any_autoclicker_active():
+            self.cancel_all_autoclickers("cancel: esc")
+            return
+
         lbtn = bool(self.user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
         rbtn = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
         mbtn = bool(self.user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000)
-        if self.move_click_enabled and self.mode_is_enabled("move") and esc:
-            self.disable_move_click("cancel: esc")
-
-        # Double-click fixo cancela com mouse/asd/esc (W excludido pois w_hold usa W)
+        # Double-click fixo cancela com mouse/asd (W excludido pois w_hold usa W)
         asd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (VK_A, VK_S, VK_D))
-        if self.fixed_click_enabled and self.mode_is_enabled("fixed") and (esc or lbtn or rbtn or mbtn or asd):
-            self.disable_fixed_click("cancel: mouse/asd/esc")
+        if self.fixed_click_enabled and self.mode_is_enabled("fixed") and (lbtn or rbtn or mbtn or asd):
+            self.disable_fixed_click("cancel: mouse/asd")
 
         if self.artillery_enabled and self.mode_is_enabled("artillery") and lbtn:
             self.disable_artillery("cancel: left click")
-
-        # W-hold cancels on Esc only (not on W press — that would cancel itself)
-        if self.w_hold_enabled and self.mode_is_enabled("pilot") and esc:
-            self.disable_w_hold("cancel: esc")
-
-        if self.right_hold_enabled and self.mode_is_enabled("right_hold") and esc:
-            self.disable_right_hold("cancel: esc")
 
     def shift_modifier_active(self) -> bool:
         return bool(
@@ -638,6 +634,29 @@ class AutoClicker:
             and self.foxhole_target_context_active()
             and self.user32.GetAsyncKeyState(VK_SHIFT) & 0x8000
         )
+
+    def any_autoclicker_active(self) -> bool:
+        return bool(
+            self.enabled
+            or self.move_click_enabled
+            or self.move_click_holding
+            or self.fixed_click_enabled
+            or self.artillery_enabled
+            or self.w_hold_enabled
+            or self.w_hold_key_down
+            or self.right_hold_enabled
+            or self.right_hold_button_down
+        )
+
+    def cancel_all_autoclickers(self, reason: str) -> None:
+        if not self.any_autoclicker_active():
+            return
+        self.pause()
+        self.disable_move_click(reason)
+        self.disable_fixed_click(reason)
+        self.disable_artillery(reason)
+        self.disable_w_hold(reason)
+        self.disable_right_hold(reason)
 
     def refresh_shift_state(self) -> None:
         current = self.shift_modifier_active()
@@ -1068,11 +1087,25 @@ class AutoClicker:
 
         def hook_proc(code: int, w_param: int, l_param: int) -> int:
             try:
-                if code >= 0 and int(w_param) in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                message = int(w_param)
+                if code >= 0 and message in (WM_KEYDOWN, WM_SYSKEYDOWN, WM_KEYUP, WM_SYSKEYUP):
                     event = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
                     is_injected = bool(event.flags & LLKHF_INJECTED)
+                    if event.vkCode == VK_ESC and not is_injected:
+                        if message in (WM_KEYUP, WM_SYSKEYUP) and self.esc_suppress_next_up:
+                            self.esc_suppress_next_up = False
+                            return 1
+                        if (
+                            message in (WM_KEYDOWN, WM_SYSKEYDOWN)
+                            and self.any_autoclicker_active()
+                            and self.foxhole_hotkey_context_active()
+                        ):
+                            self.esc_suppress_next_up = True
+                            self.cancel_all_autoclickers("cancel: esc")
+                            return 1
                     if (
-                        event.vkCode == int(self._w_hold_vk)
+                        message in (WM_KEYDOWN, WM_SYSKEYDOWN)
+                        and event.vkCode == int(self._w_hold_vk)
                         and not is_injected
                         and self.w_hold_enabled
                         and self.mode_is_enabled("pilot")
@@ -1086,7 +1119,7 @@ class AutoClicker:
         self.keyboard_hook_proc = hook_proc_type(hook_proc)
         self.keyboard_hook_handle = int(self.user32.SetWindowsHookExW(WH_KEYBOARD_LL, self.keyboard_hook_proc, 0, 0) or 0)
         if not self.keyboard_hook_handle:
-            self.log("Keyboard hook indisponivel; W-Hold ainda cancela por F4/Esc/S")
+            self.log("Keyboard hook indisponivel; Esc cancela por polling, sem absorver a tecla")
             return
 
         message = wintypes.MSG()
