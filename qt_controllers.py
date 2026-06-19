@@ -3003,6 +3003,41 @@ class AutoClickerController(QObject):
             self.changed.emit()
 
     @Slot()
+    def toggleMoveClick(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_move_click()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def togglePilot(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_pilot()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def toggleRightHold(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_right_hold()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def toggleFixedClick(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_fixed_click()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def toggleArtillery(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_artillery()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
     def captureFoxhole(self) -> None:
         if self.clicker:
             self._status = self.clicker.use_foxhole_window()
