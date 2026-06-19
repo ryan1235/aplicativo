@@ -468,6 +468,7 @@ Rectangle {
 
                     ScrollView {
                         id: planningScroll
+                        property int scrollGutter: 14
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
@@ -475,7 +476,7 @@ Rectangle {
 
                         Column {
                             id: planningContent
-                            width: planningScroll.availableWidth
+                            width: Math.max(0, planningScroll.availableWidth - planningScroll.scrollGutter)
                             spacing: 8
 
                             RowLayout {
@@ -503,59 +504,59 @@ Rectangle {
                             Column {
                                 id: queueColumn
                                 width: planningContent.width
-                                spacing: 5
+                                spacing: 6
                                 Repeater {
                                     model: productionController.queueCategoryRows
                                     delegate: Rectangle {
                                         property var row: modelData
                                         width: queueColumn.width
-                                        height: 35
-                                        radius: 7
+                                        height: 42
+                                        radius: 8
                                         color: "transparent"
                                         border.color: "transparent"
-                                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.4 }
-                                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.accentColor; opacity: row.active ? 0.15 : 0.0; Behavior on opacity { NumberAnimation { duration: 120 } } }
-                                        Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: row.active ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
+                                        Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.4 }
+                                        Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: row.active ? 0.15 : 0.0; Behavior on opacity { NumberAnimation { duration: 120 } } }
+                                        Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: row.active ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.margins: 5
-                                            spacing: 7
+                                            anchors.margins: 6
+                                            spacing: 8
                                             Image {
                                                 source: row.icon || ""
-                                                Layout.preferredWidth: 24
-                                                Layout.preferredHeight: 24
+                                                Layout.preferredWidth: 28
+                                                Layout.preferredHeight: 28
                                                 fillMode: Image.PreserveAspectFit
                                             }
                                             ColumnLayout {
-                                                Layout.preferredWidth: 42
+                                                Layout.preferredWidth: 48
                                                 spacing: 0
-                                                Text { text: row.mark || ""; color: row.active ? settingsController.accentColor : settingsController.textColor; font.family: "Segoe UI"; font.pixelSize: 11; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                                                Text { text: String(row.count || 0) + "/" + String(row.limit || 0); color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 9; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                                                Text { text: row.mark || ""; color: row.active ? settingsController.accentColor : settingsController.textColor; font.family: "Segoe UI"; font.pixelSize: 12; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                                                Text { text: String(row.count || 0) + "/" + String(row.limit || 0); color: settingsController.mutedTextColor; font.family: "Segoe UI"; font.pixelSize: 10; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                             }
 
                                             Item { Layout.fillWidth: true }
 
                                             Flow {
-                                                spacing: 4
+                                                spacing: 5
                                                 Repeater {
                                                     model: row.slots || []
                                                     delegate: Rectangle {
                                                         property var slot: modelData
-                                                        width: 26
-                                                        height: 26
-                                                        radius: 5
+                                                        width: 30
+                                                        height: 30
+                                                        radius: 6
                                                         color: "transparent"
                                                         border.color: "transparent"
-                                                        Rectangle { anchors.fill: parent; radius: 5; color: settingsController.scrimColor; opacity: slot.filled ? 0.0 : 0.3 }
-                                                        Rectangle { anchors.fill: parent; radius: 5; color: settingsController.accentColor; opacity: slot.filled ? 0.2 : 0.0 }
-                                                        Rectangle { anchors.fill: parent; radius: 5; color: "transparent"; border.color: slot.filled ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
+                                                        Rectangle { anchors.fill: parent; radius: 6; color: settingsController.scrimColor; opacity: slot.filled ? 0.0 : 0.3 }
+                                                        Rectangle { anchors.fill: parent; radius: 6; color: settingsController.accentColor; opacity: slot.filled ? 0.2 : 0.0 }
+                                                        Rectangle { anchors.fill: parent; radius: 6; color: "transparent"; border.color: slot.filled ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
                                                         opacity: slot.filled ? 1.0 : 0.72
 
                                                         Image {
                                                             anchors.centerIn: parent
                                                             source: slot.icon || ""
-                                                            width: 22
-                                                            height: 22
+                                                            width: 26
+                                                            height: 26
                                                             fillMode: Image.PreserveAspectFit
                                                             visible: slot.filled && String(slot.icon || "") !== ""
                                                         }
@@ -564,7 +565,7 @@ Rectangle {
                                                             text: slot.filled ? String(slot.name || "").slice(0, 2).toUpperCase() : ""
                                                             color: settingsController.textColor
                                                             font.family: "Segoe UI"
-                                                            font.pixelSize: 8
+                                                            font.pixelSize: 9
                                                             font.bold: true
                                                             visible: slot.filled && String(slot.icon || "") === ""
                                                         }
@@ -573,8 +574,8 @@ Rectangle {
                                                             anchors.right: parent.right
                                                             anchors.top: parent.top
                                                             anchors.margins: 1
-                                                            width: 13
-                                                            height: 10
+                                                            width: 15
+                                                            height: 11
                                                             radius: 3
                                                             color: "transparent"
                                                             Rectangle { anchors.fill: parent; radius: 3; color: settingsController.scrimColor; opacity: 0.5 }
@@ -584,7 +585,7 @@ Rectangle {
                                                                 text: String(slot.discount || 0)
                                                                 color: settingsController.accentColor
                                                                 font.family: "Segoe UI"
-                                                                font.pixelSize: 7
+                                                                font.pixelSize: 8
                                                                 font.bold: true
                                                             }
                                                         }
@@ -604,8 +605,8 @@ Rectangle {
 
                                             Button {
                                                 text: "âœ•"
-                                                Layout.preferredWidth: 24
-                                                Layout.preferredHeight: 24
+                                                Layout.preferredWidth: 28
+                                                Layout.preferredHeight: 28
                                                 visible: (row.count || 0) > 0
                                                 onClicked: productionController.clearCategory(row.name || "")
                                                 background: Rectangle {
