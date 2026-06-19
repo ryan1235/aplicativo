@@ -5922,7 +5922,7 @@ class ItemSearchController(QObject):
         self._total = 0
         self._last_update = "-"
         self.items = DictListModel(
-            ["rowType", "region", "code", "warehouse", "place", "quantity", "updatedAt", "icon", "total"],
+            ["rowType", "region", "code", "warehouse", "place", "quantity", "updatedAt", "updatedAgo", "icon", "total"],
             self,
         )
         self.suggestions = DictListModel(["name", "alias", "detail", "source"], self)
@@ -6477,6 +6477,7 @@ class ItemSearchController(QObject):
                     "place": "",
                     "quantity": 0,
                     "updatedAt": "",
+                    "updatedAgo": "",
                     "icon": "",
                     "total": region_total,
                 }
@@ -6485,6 +6486,7 @@ class ItemSearchController(QObject):
                 _region, _name, fallback_code = self._split_location(str(item.get("warehouse") or "-"))
                 code = str(meta.get("code") or fallback_code or "-")
                 place = str(meta.get("placePath") or item.get("warehouse") or "-")
+                updated_raw = str(item.get("warehouse_last_update") or "-")
                 icon_path = str(item.get("icon_path") or "")
                 result_rows.append(
                     {
@@ -6494,7 +6496,8 @@ class ItemSearchController(QObject):
                         "warehouse": str(item.get("warehouse") or "-"),
                         "place": place,
                         "quantity": max(0, int(item.get("quantity", 0) or 0)),
-                        "updatedAt": format_to_local_pc_time(str(item.get("warehouse_last_update") or "-")),
+                        "updatedAt": format_to_local_pc_time(updated_raw),
+                        "updatedAgo": format_relative_time(updated_raw),
                         "icon": file_url(icon_path) if icon_path and Path(icon_path).exists() else "",
                         "total": 0,
                     }

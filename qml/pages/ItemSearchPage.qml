@@ -263,6 +263,8 @@ Flickable {
                                 font.pixelSize: 12
                                 font.bold: true
                                 Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight
                             }
                         }
@@ -382,7 +384,7 @@ Flickable {
 
                         delegate: Rectangle {
                             width: results.width
-                            height: model.rowType === "region" ? 42 : 56
+                            height: model.rowType === "region" ? 42 : 62
                             radius: settingsController.cardRadius
                             color: model.rowType === "region"
                                 ? settingsController.accentPanelColor
@@ -397,17 +399,20 @@ Flickable {
                                 Image {
                                     visible: model.rowType !== "region"
                                     source: model.icon || ""
-                                    Layout.preferredWidth: 34
-                                    Layout.preferredHeight: 34
+                                    Layout.preferredWidth: 38
+                                    Layout.preferredHeight: 38
                                     fillMode: Image.PreserveAspectFit
                                     asynchronous: true
                                     cache: false
-                                    sourceSize.width: 42
-                                    sourceSize.height: 42
+                                    sourceSize.width: 46
+                                    sourceSize.height: 46
                                 }
 
                                 ColumnLayout {
-                                    Layout.fillWidth: true
+                                    Layout.fillWidth: model.rowType === "region"
+                                    Layout.preferredWidth: model.rowType === "region" ? -1 : Math.min(260, Math.max(170, results.width * 0.18))
+                                    Layout.minimumWidth: model.rowType === "region" ? 0 : 150
+                                    Layout.alignment: Qt.AlignVCenter
                                     spacing: 1
 
                                     Text {
@@ -416,27 +421,45 @@ Flickable {
                                             : model.code || "-"
                                         color: settingsController.textColor
                                         font.family: "Segoe UI"
-                                        font.pixelSize: model.rowType === "region" ? 13 : 12
+                                        font.pixelSize: model.rowType === "region" ? 13 : 16
                                         font.bold: true
                                         Layout.fillWidth: true
                                         elide: Text.ElideRight
                                     }
+                                }
 
-                                    Text {
-                                        visible: model.rowType !== "region"
-                                        text: (model.place || model.warehouse || "-") + " | " + tr("item_search.last_update").replace("{value}", model.updatedAt || "-")
-                                        color: settingsController.mutedTextColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 10
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideMiddle
-                                    }
+                                Text {
+                                    visible: model.rowType !== "region"
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 180
+                                    Layout.alignment: Qt.AlignVCenter
+                                    text: model.place || model.warehouse || "-"
+                                    color: settingsController.textColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignLeft
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideMiddle
+                                }
+
+                                Text {
+                                    visible: model.rowType !== "region"
+                                    Layout.preferredWidth: Math.min(330, Math.max(245, results.width * 0.26))
+                                    Layout.alignment: Qt.AlignVCenter
+                                    text: tr("item_search.last_update").replace("{value}", model.updatedAt || "-") + (model.updatedAgo ? " (" + model.updatedAgo + ")" : "")
+                                    color: settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
+                                    horizontalAlignment: Text.AlignRight
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
                                 }
 
                                 Rectangle {
                                     visible: model.rowType !== "region"
-                                    Layout.preferredWidth: 92
-                                    Layout.preferredHeight: 34
+                                    Layout.preferredWidth: 106
+                                    Layout.preferredHeight: 38
                                     radius: Math.min(8, settingsController.cardRadius)
                                     color: settingsController.accentPanelColor
                                     border.color: settingsController.accentColor
@@ -447,7 +470,7 @@ Flickable {
                                         text: String(model.quantity || 0)
                                         color: settingsController.accentColor
                                         font.family: "Segoe UI"
-                                        font.pixelSize: 14
+                                        font.pixelSize: 16
                                         font.bold: true
                                         horizontalAlignment: Text.AlignRight
                                         verticalAlignment: Text.AlignVCenter
