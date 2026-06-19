@@ -293,7 +293,7 @@ class AutoClicker:
         self.log(f"Config: hotkey={self.hotkey_name} botao={self.mouse_button} intervalo={self.interval:.2f}s")
         self.status_callback(self.status_text())
 
-    def configure_modes_enabled(self, modes: dict[str, bool]) -> None:
+    def configure_modes_enabled(self, modes: dict[str, bool], *, stop_disabled: bool = True) -> None:
         defaults = {
             "auto": True,
             "move": True,
@@ -304,6 +304,9 @@ class AutoClicker:
         }
         defaults.update({key: bool(value) for key, value in modes.items() if key in defaults})
         self.modes_enabled = defaults
+        if not stop_disabled:
+            self.status_callback(self.status_text())
+            return
         if not self.mode_is_enabled("auto"):
             self.pause()
         if not self.mode_is_enabled("move"):
@@ -555,15 +558,21 @@ class AutoClicker:
         threading.Thread(target=self._w_doubletap_monitor, daemon=True).start()
 
         while not self.stop_event.is_set():
-            self.handle_key_press(self.move_hotkey_vk, self.toggle_move_click)
-            self.handle_key_press(self.hotkey_vk, self.toggle)
-            self.handle_key_press(self.fixed_hotkey_vk, self.toggle_fixed_click)
-            self.handle_key_press(self.pilot_hotkey_vk, self.toggle_pilot)
-            self.handle_key_press(self.right_hold_hotkey_vk, self.toggle_right_hold)
-            self.handle_key_press(self.artillery_hotkey_vk, self.toggle_artillery)
+            if self.mode_is_enabled("move"):
+                self.handle_key_press(self.move_hotkey_vk, self.toggle_move_click)
+            if self.mode_is_enabled("auto"):
+                self.handle_key_press(self.hotkey_vk, self.toggle)
+            if self.mode_is_enabled("fixed"):
+                self.handle_key_press(self.fixed_hotkey_vk, self.toggle_fixed_click)
+            if self.mode_is_enabled("pilot"):
+                self.handle_key_press(self.pilot_hotkey_vk, self.toggle_pilot)
+            if self.mode_is_enabled("right_hold"):
+                self.handle_key_press(self.right_hold_hotkey_vk, self.toggle_right_hold)
+            if self.mode_is_enabled("artillery"):
+                self.handle_key_press(self.artillery_hotkey_vk, self.toggle_artillery)
             self.handle_key_press(HOTKEYS["F5"], self.open_orders_menu)
 
-            if self.fixed_click_enabled:
+            if self.fixed_click_enabled and self.mode_is_enabled("fixed"):
                 self.handle_key_press(VK_1, lambda: self.trigger_slot_click(1))
                 self.handle_key_press(VK_2, lambda: self.trigger_slot_click(2))
                 self.handle_key_press(VK_3, lambda: self.trigger_slot_click(3))
@@ -594,27 +603,28 @@ class AutoClicker:
         lbtn = bool(self.user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
         rbtn = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
         mbtn = bool(self.user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000)
-        if self.move_click_enabled and esc:
+        if self.move_click_enabled and self.mode_is_enabled("move") and esc:
             self.disable_move_click("cancel: esc")
 
         # Double-click fixo cancela com mouse/asd/esc (W excludido pois w_hold usa W)
         asd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (VK_A, VK_S, VK_D))
-        if self.fixed_click_enabled and (esc or lbtn or rbtn or mbtn or asd):
+        if self.fixed_click_enabled and self.mode_is_enabled("fixed") and (esc or lbtn or rbtn or mbtn or asd):
             self.disable_fixed_click("cancel: mouse/asd/esc")
 
-        if self.artillery_enabled and lbtn:
+        if self.artillery_enabled and self.mode_is_enabled("artillery") and lbtn:
             self.disable_artillery("cancel: left click")
 
         # W-hold cancels on Esc only (not on W press — that would cancel itself)
-        if self.w_hold_enabled and esc:
+        if self.w_hold_enabled and self.mode_is_enabled("pilot") and esc:
             self.disable_w_hold("cancel: esc")
 
-        if self.right_hold_enabled and esc:
+        if self.right_hold_enabled and self.mode_is_enabled("right_hold") and esc:
             self.disable_right_hold("cancel: esc")
 
     def shift_modifier_active(self) -> bool:
         return bool(
             self.shift_enabled
+            and self.mode_is_enabled("auto")
             and self.foxhole_hotkey_context_active()
             and self.user32.GetAsyncKeyState(VK_SHIFT) & 0x8000
         )
@@ -977,7 +987,7 @@ class AutoClicker:
         last_reassert = 0.0
         try:
             while self.w_hold_enabled and not self.stop_event.is_set():
-                if not self.foxhole_hotkey_context_active():
+                if not self.mode_is_enabled("pilot") or not self.foxhole_hotkey_context_active():
                     prev_s = False
                     time.sleep(0.03)
                     continue
@@ -1051,6 +1061,7 @@ class AutoClicker:
                         event.vkCode == int(self._w_hold_vk)
                         and not is_injected
                         and self.w_hold_enabled
+                        and self.mode_is_enabled("pilot")
                         and self.foxhole_hotkey_context_active()
                     ):
                         self.disable_w_hold("cancel: W")
@@ -1135,7 +1146,7 @@ class AutoClicker:
 
         if self.right_hold_enabled:
             self.right_last_tap = 0.0
-            if self.foxhole_hotkey_context_active():
+            if self.mode_is_enabled("right_hold") and self.foxhole_hotkey_context_active():
                 self._queue_right_mouse_action("cancel")
             return False
 

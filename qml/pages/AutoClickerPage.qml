@@ -185,7 +185,7 @@ Flickable {
                     fill: card.active ? Qt.rgba(0,0,0,0.4) : card.accent
                     hoverFill: card.active ? Qt.rgba(1,1,1,0.1) : Qt.lighter(card.accent, 1.2)
                     textFill: card.active ? card.accent : settingsController.textInverseColor
-                    enabled: autoClickerController.available && card.modeEnabled
+                    enabled: autoClickerController.available && (card.modeEnabled || card.active)
                     onClicked: card.action()
                 }
 
@@ -265,13 +265,13 @@ Flickable {
             }
 
             PrimaryButton {
-                text: tr("clicker.capture")
+                text: autoClickerController.allModesEnabled ? tr("clicker.pause_all") : tr("clicker.enable_all")
                 Layout.preferredWidth: 154
-                fill: Qt.rgba(0,0,0,0.4)
-                hoverFill: Qt.rgba(1,1,1,0.1)
-                textFill: settingsController.accentColor
+                fill: autoClickerController.allModesEnabled ? Qt.rgba(0,0,0,0.4) : settingsController.accentColor
+                hoverFill: autoClickerController.allModesEnabled ? Qt.rgba(1,1,1,0.1) : Qt.lighter(settingsController.accentColor, 1.15)
+                textFill: autoClickerController.allModesEnabled ? settingsController.accentColor : settingsController.textInverseColor
                 enabled: autoClickerController.available
-                onClicked: autoClickerController.captureFoxhole()
+                onClicked: autoClickerController.toggleAllModes()
             }
 
             Rectangle {

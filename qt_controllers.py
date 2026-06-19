@@ -2825,6 +2825,10 @@ class AutoClickerController(QObject):
     def artilleryModeEnabled(self) -> bool:
         return self._mode_enabled("artillery")
 
+    @Property(bool, notify=changed)
+    def allModesEnabled(self) -> bool:
+        return all(self._mode_enabled(key) for key in self.MODE_KEYS)
+
     @Property(str, notify=changed)
     def targetTitle(self) -> str:
         return str(self.clicker.target_title if self.clicker and self.clicker.target_title else "Foxhole")
@@ -3096,6 +3100,17 @@ class AutoClickerController(QObject):
         save_settings(self.settings)
         if self.clicker:
             self.clicker.configure_modes_enabled(modes)
+            self._status = self.clicker.status_text()
+        self.changed.emit()
+
+    @Slot()
+    def toggleAllModes(self) -> None:
+        enabled = not all(self._mode_enabled(key) for key in self.MODE_KEYS)
+        modes = {key: enabled for key in self.MODE_KEYS}
+        self._clicker_settings()["modes_enabled"] = modes
+        save_settings(self.settings)
+        if self.clicker:
+            self.clicker.configure_modes_enabled(modes, stop_disabled=False)
             self._status = self.clicker.status_text()
         self.changed.emit()
 
