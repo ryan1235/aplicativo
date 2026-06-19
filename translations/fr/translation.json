@@ -277,6 +277,8 @@
   "clicker.save": "Enregistrer",
   "clicker.saved": "Configuration enregistrée",
   "clicker.on_badge": "ACTIF",
+  "clicker.mode_ready": "PRET",
+  "clicker.mode_disabled": "DESACTIVE",
   "clicker.paused_badge": "EN PAUSE",
   "clicker.shortcuts_title": "Fonctions rapides",
   "clicker.shortcuts_auto": "{hotkey}: Auto Clicker standard (activer/desactiver)",

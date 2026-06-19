@@ -185,7 +185,7 @@ Flickable {
                 }
 
                 Text {
-                    text: "Puxando estoques..."
+                    text: tr("stockpile.refreshing")
                     color: settingsController.accentColor
                     font.family: "Segoe UI"
                     font.pixelSize: 16

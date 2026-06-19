@@ -128,7 +128,7 @@ Flickable {
                     Text {
                         id: statusText
                         anchors.centerIn: parent
-                        text: !card.modeEnabled ? tr("clicker.mode_disabled") : (card.active ? "ATIVO" : "PRONTO")
+                        text: !card.modeEnabled ? tr("clicker.mode_disabled") : (card.active ? tr("clicker.on_badge") : tr("clicker.mode_ready"))
                         color: !card.modeEnabled ? Qt.rgba(1,1,1,0.4) : card.accent
                         opacity: card.active ? 1.0 : 0.6
                         font.family: "Segoe UI"

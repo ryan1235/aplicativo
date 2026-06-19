@@ -277,6 +277,8 @@
   "clicker.save": "Salvar",
   "clicker.saved": "Configuração salva",
   "clicker.on_badge": "LIGADO",
+  "clicker.mode_ready": "PRONTO",
+  "clicker.mode_disabled": "DESATIVADO",
   "clicker.paused_badge": "PAUSADO",
   "clicker.shortcuts_title": "Funções rápidas",
   "clicker.shortcuts_auto": "{hotkey}: Auto Clicker padrão (liga/desliga)",
