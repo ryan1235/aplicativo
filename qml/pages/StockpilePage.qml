@@ -241,6 +241,8 @@ Flickable {
                         Layout.preferredHeight: 32
                         enabled: stockpileController.visualWarehouseOptions.length > 0
                         textRole: "text"
+                        popupStartsAtTop: true
+                        popupScrollbarTextPadding: 14
                         model: stockpileController.visualWarehouseOptions
                         currentIndex: {
                             var opts = stockpileController.visualWarehouseOptions;

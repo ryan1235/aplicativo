@@ -14,6 +14,8 @@ ComboBox {
     property color popupBg: settingsController.surfaceColor
     property color popupBorder: settingsController.borderColor
     property color itemHover: settingsController.accentPanelColor
+    property bool popupStartsAtTop: false
+    property int popupScrollbarTextPadding: 0
 
     function tr(key) {
         i18nController.revision
@@ -32,7 +34,7 @@ ComboBox {
         property string trailingText: isObjectRow ? (modelData.sideTextKey ? control.tr(modelData.sideTextKey) : (modelData.sideText || "")) : ""
         property color trailingColor: isObjectRow && modelData.sideColor ? modelData.sideColor : settingsController.accentColor
 
-        width: control.popup.width
+        width: ListView.view ? ListView.view.width : control.popup.width
         height: isHeaderRow ? 28 : (secondaryText !== "" || trailingText !== "" ? 44 : 36)
         enabled: isObjectRow ? modelData.type !== "header" : true
         
@@ -44,7 +46,7 @@ ComboBox {
                 anchors.left: parent.left
                 anchors.leftMargin: delegateItem.isObjectRow && modelData.type === "item" ? 12 : 0
                 anchors.right: trailingLabel.visible ? trailingLabel.left : parent.right
-                anchors.rightMargin: trailingLabel.visible ? 8 : 0
+                anchors.rightMargin: trailingLabel.visible ? 8 : control.popupScrollbarTextPadding
                 y: delegateItem.secondaryText !== "" ? 5 : Math.round((parent.height - height) / 2)
                 text: delegateItem.primaryText
                 color: delegateItem.isHeaderRow ? settingsController.accentColor : (control.highlightedIndex === index ? control.borderFocus : control.textNormal)
@@ -58,7 +60,7 @@ ComboBox {
             Text {
                 anchors.left: primaryLabel.left
                 anchors.right: parent.right
-                anchors.rightMargin: 8
+                anchors.rightMargin: 8 + control.popupScrollbarTextPadding
                 anchors.top: primaryLabel.bottom
                 anchors.topMargin: 1
                 visible: delegateItem.secondaryText !== ""
@@ -72,7 +74,7 @@ ComboBox {
             Text {
                 id: trailingLabel
                 anchors.right: parent.right
-                anchors.rightMargin: 4
+                anchors.rightMargin: 4 + control.popupScrollbarTextPadding
                 anchors.verticalCenter: parent.verticalCenter
                 visible: delegateItem.trailingText !== ""
                 text: delegateItem.trailingText
@@ -150,6 +152,15 @@ ComboBox {
         implicitHeight: Math.min(contentItem.implicitHeight + 10, 280)
         padding: 5
 
+        onOpened: {
+            if (control.popupStartsAtTop) {
+                Qt.callLater(function() {
+                    popupList.positionViewAtBeginning();
+                    popupList.contentY = 0;
+                });
+            }
+        }
+
         enter: Transition {
             NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 150; easing.type: Easing.OutQuad }
             NumberAnimation { property: "y"; from: control.height - 10; to: control.height + 6; duration: 150; easing.type: Easing.OutBack }
@@ -161,10 +172,11 @@ ComboBox {
         }
 
         contentItem: ListView {
+            id: popupList
             clip: true
             implicitHeight: contentHeight
             model: control.popup.visible ? control.delegateModel : null
-            currentIndex: control.highlightedIndex
+            currentIndex: control.popupStartsAtTop ? -1 : control.highlightedIndex
 
             ScrollBar.vertical: ScrollBar {
                 active: true
