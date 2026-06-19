@@ -43,14 +43,16 @@ Flickable {
         property bool modeEnabled: true
         property color accent: settingsController.accentColor
         property string buttonText: root.actionLabel(active)
+        property int fixedHeight: 236
         default property alias extraContent: extraBox.data
         signal action()
         signal hotkeySelected(string key)
         signal modeToggled(bool value)
 
         Layout.fillWidth: true
-        implicitHeight: cardContent.implicitHeight + 28
-        Layout.minimumHeight: 168
+        implicitHeight: fixedHeight
+        Layout.preferredHeight: fixedHeight
+        Layout.minimumHeight: fixedHeight
         radius: 8
         opacity: modeEnabled ? 1.0 : 0.68
         color: "transparent"
@@ -327,7 +329,7 @@ Flickable {
 
             ModeCard {
                 title: tr("clicker.move_click_hold")
-                detail: "Esc ou " + autoClickerController.moveHotkey + " solta"
+                detail: tr("clicker.release_hotkey_hint").replace("{hotkey}", autoClickerController.moveHotkey)
                 hotkey: autoClickerController.moveHotkey
                 active: autoClickerController.moveRunning
                 modeEnabled: autoClickerController.moveModeEnabled
@@ -339,7 +341,7 @@ Flickable {
 
             ModeCard {
                 title: autoClickerController.wHoldLabel.replace(":", "")
-                detail: trReplaceWZ("clicker.hold_w_hint") + " | S pausa"
+                detail: tr("clicker.w_hold_card_detail").replace("{hotkey}", autoClickerController.pilotHotkey)
                 hotkey: autoClickerController.pilotHotkey
                 active: autoClickerController.pilotRunning
                 modeEnabled: autoClickerController.pilotModeEnabled
@@ -439,7 +441,6 @@ Flickable {
                         font.family: "Segoe UI"
                         font.pixelSize: 16
                         font.bold: true
-                        Layout.fillWidth: true
                     }
 
                     SettingLine {
@@ -448,6 +449,8 @@ Flickable {
                         checked: overlayController.enabled
                         onChanged: function(value) { overlayController.setEnabled(value) }
                     }
+
+                    Item { Layout.fillWidth: true }
 
                     PrimaryButton {
                         text: tr("overlay.preview_8s")

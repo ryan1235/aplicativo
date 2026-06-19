@@ -2838,7 +2838,7 @@ class AutoClickerController(QObject):
         if self.clicker.enabled:
             items.append(f"AUTO {self.hotkey} ({self.interval:.2f}s)")
         if self.clicker.move_click_enabled:
-            items.append(f"MOVE {self.moveHotkey}")
+            items.append(f"LEFT HOLD {self.moveHotkey}")
         if self.clicker.fixed_click_enabled:
             items.append(f"FIXED {self.fixedHotkey}")
             items.append("SLOTS 1-4")
@@ -2866,7 +2866,7 @@ class AutoClickerController(QObject):
         if getattr(self.clicker, "artillery_enabled", False):
             return f"Artilharia {self.artilleryHotkey}: R + clique"
         if getattr(self.clicker, "move_click_enabled", False):
-            return f"Move-click {self.moveHotkey}: segurando clique"
+            return f"Left Hold {self.moveHotkey}: segurando esquerdo"
         if getattr(self.clicker, "fixed_click_enabled", False):
             return f"Fixo {self.fixedHotkey}: clique + slots 1-4"
         if getattr(self.clicker, "enabled", False):
@@ -2979,7 +2979,7 @@ class AutoClickerController(QObject):
         return "\n".join(
             [
                 f"{self.hotkey}: default Auto Clicker toggle",
-                f"{self.moveHotkey}: Move-Click hold",
+                f"{self.moveHotkey}: Left Hold",
                 f"{self.fixedHotkey}: fixed double-click and slots 1-4",
                 f"{self.pilotHotkey}: pilot sequence",
                 f"{self.rightHoldHotkey}: right mouse hold",
