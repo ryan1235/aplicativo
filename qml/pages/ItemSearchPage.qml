@@ -3,11 +3,9 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
 
-Flickable {
+Item {
     id: root
     clip: true
-    contentWidth: width
-    contentHeight: content.implicitHeight + 32
 
     property bool wide: width >= 1120
 
@@ -53,7 +51,7 @@ Flickable {
 
     ColumnLayout {
         id: content
-        width: root.width
+        anchors.fill: parent
         spacing: 14
 
         RowLayout {
@@ -112,6 +110,7 @@ Flickable {
 
                     Rectangle {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: root.wide ? 430 : 260
                         Layout.preferredHeight: 56
                         radius: settingsController.cardRadius
                         color: settingsController.backgroundColor
@@ -179,7 +178,75 @@ Flickable {
                     }
 
                     Rectangle {
-                        Layout.preferredWidth: root.wide ? 285 : 230
+                        Layout.preferredWidth: root.wide ? 148 : 124
+                        Layout.preferredHeight: 56
+                        radius: settingsController.cardRadius
+                        color: settingsController.backgroundColor
+                        border.color: settingsController.borderColor
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 9
+                            spacing: 0
+
+                            Text {
+                                text: itemSearchController.selectedName !== "" ? fmt("item_search.result_title", "{item}", itemSearchController.selectedName) : tr("item_search.total").replace("{total}", String(itemSearchController.total))
+                                color: settingsController.mutedTextColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 10
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                text: itemSearchController.selectedName !== "" ? String(itemSearchController.total) : "-"
+                                color: settingsController.accentColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 18
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: root.wide ? 148 : 124
+                        Layout.preferredHeight: 56
+                        radius: settingsController.cardRadius
+                        color: settingsController.backgroundColor
+                        border.color: settingsController.borderColor
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 9
+                            spacing: 0
+
+                            Text {
+                                text: tr("item_search.available_items")
+                                color: settingsController.mutedTextColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 10
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                text: itemSearchController.loaded ? String(itemSearchController.statusCount) : "-"
+                                color: settingsController.successColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 18
+                                font.bold: true
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: root.wide ? 230 : 200
                         Layout.preferredHeight: 56
                         radius: settingsController.cardRadius
                         color: itemSearchController.statusKey === "item_search.error" ? settingsController.dangerPanelColor : settingsController.backgroundColor
@@ -287,44 +354,15 @@ Flickable {
 
         GridLayout {
             Layout.fillWidth: true
-            columns: root.width > 960 ? 3 : 1
-            columnSpacing: 12
-            rowSpacing: 12
-
-            MetricCard {
-                Layout.fillWidth: true
-                title: itemSearchController.selectedName !== "" ? fmt("item_search.result_title", "{item}", itemSearchController.selectedName) : tr("item_search.title")
-                value: itemSearchController.selectedName !== "" ? String(itemSearchController.total) : "-"
-                detail: tr("item_search.total").replace("{total}", String(itemSearchController.total))
-                accent: settingsController.accentColor
-            }
-
-            MetricCard {
-                Layout.fillWidth: true
-                title: tr("item_search.available_items")
-                value: itemSearchController.loaded ? String(itemSearchController.statusCount) : "-"
-                detail: tr("item_search.last_update").replace("{value}", itemSearchController.lastUpdate)
-                accent: settingsController.successColor
-            }
-
-            MetricCard {
-                Layout.fillWidth: true
-                title: trOr("item_search.wiki_title", "Wiki do item")
-                value: itemSearchController.wikiLoading ? "..." : (itemSearchController.wikiName !== "" ? itemSearchController.wikiName : "-")
-                detail: root.wikiStatusText()
-                accent: settingsController.warningColor
-            }
-        }
-
-        GridLayout {
-            Layout.fillWidth: true
+            Layout.fillHeight: true
             columns: root.wide ? 2 : 1
             columnSpacing: 12
             rowSpacing: 12
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(430, root.height - 286)
+                Layout.fillHeight: true
+                Layout.minimumHeight: root.wide ? 320 : 250
                 radius: settingsController.cardRadius
                 color: settingsController.surfaceColor
                 border.color: settingsController.borderColor
@@ -517,18 +555,22 @@ Flickable {
 
             Rectangle {
                 Layout.fillWidth: !root.wide
-                Layout.preferredWidth: root.wide ? 392 : 0
-                Layout.preferredHeight: root.wide ? Math.max(430, root.height - 286) : Math.max(380, wikiColumn.implicitHeight + 28)
+                Layout.fillHeight: true
+                Layout.preferredWidth: root.wide ? Math.min(520, Math.max(430, root.width * 0.3)) : root.width
+                Layout.minimumHeight: root.wide ? 320 : 250
                 radius: settingsController.cardRadius
                 color: settingsController.surfaceColor
                 border.color: settingsController.borderColor
 
                 Flickable {
+                    id: wikiScroller
                     anchors.fill: parent
                     anchors.margins: 14
                     clip: true
                     contentWidth: width
                     contentHeight: wikiColumn.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ScrollBar { active: wikiScroller.moving }
 
                     ColumnLayout {
                         id: wikiColumn
