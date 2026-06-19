@@ -6,6 +6,7 @@ import "../components"
 Rectangle {
     id: root
     color: "transparent"
+    property int scrollBarContentPadding: 14
 
     Component.onCompleted: productionController.ensureLoaded()
 
@@ -14,9 +15,25 @@ Rectangle {
         return i18nController.t(key)
     }
 
-    ColumnLayout {
+    Flickable {
+        id: pageScroll
         anchors.fill: parent
-        spacing: 12
+        clip: true
+        contentWidth: width
+        contentHeight: content.height
+        boundsBehavior: Flickable.StopAtBounds
+        interactive: contentHeight > height + 1
+
+        ScrollBar.vertical: ScrollBar {
+            policy: pageScroll.contentHeight > pageScroll.height + 1 ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+            active: pageScroll.moving || pageScroll.flicking
+        }
+
+        ColumnLayout {
+            id: content
+            width: Math.max(0, pageScroll.width - root.scrollBarContentPadding)
+            height: Math.max(pageScroll.height, implicitHeight)
+            spacing: 12
 
         RowLayout {
             Layout.fillWidth: true
@@ -215,6 +232,7 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.minimumHeight: 560
             spacing: 8
 
             Rectangle {

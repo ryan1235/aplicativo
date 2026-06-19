@@ -8,7 +8,15 @@ Flickable {
     id: root
     clip: true
     contentWidth: width
-    contentHeight: content.implicitHeight + 40
+    contentHeight: content.y + content.height + 20
+    boundsBehavior: Flickable.StopAtBounds
+    interactive: contentHeight > height + 1
+    property int scrollBarContentPadding: 14
+
+    ScrollBar.vertical: ScrollBar {
+        policy: root.contentHeight > root.height + 1 ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+        active: root.moving || root.flicking
+    }
 
     function tr(key) {
         i18nController.revision
@@ -230,7 +238,8 @@ Flickable {
 
     ColumnLayout {
         id: content
-        width: Math.max(320, parent.width - 40)
+        width: Math.max(320, parent.width - 40 - root.scrollBarContentPadding)
+        height: Math.max(root.height - y - 20, implicitHeight)
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
         anchors.topMargin: 20
