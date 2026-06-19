@@ -380,7 +380,7 @@ Flickable {
 
             ModeCard {
                 title: tr("clicker.right_hold_short")
-                detail: tr("clicker.hold_right_hint")
+                detail: tr("clicker.right_hold_help")
                 hotkey: autoClickerController.rightHoldHotkey
                 active: autoClickerController.rightHoldRunning
                 modeEnabled: autoClickerController.rightHoldModeEnabled

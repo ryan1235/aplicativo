@@ -34,6 +34,8 @@ MOUSE_BUTTONS = {
     "Direito": {"down": 0x0204, "up": 0x0205, "mk": 0x0002},
     "Meio": {"down": 0x0207, "up": 0x0208, "mk": 0x0010},
 }
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
 FOXHOLE_PATH_HINTS = ("\\steamapps\\common\\foxhole\\", "/steamapps/common/foxhole/")
 IGNORED_PROCESS_HINTS = ("discord", "chrome", "msedge", "firefox", "opera", "steam", "python")
@@ -159,10 +161,9 @@ class AutoClicker:
         self.w_double_tap_threshold = 0.35  # seconds between taps
         self.w_doubletap_enabled = False  # can be toggled from UI
 
-        # Right mouse hold: background RMB hold for Foxhole.
+        # Right mouse hold: physical RMB hold, only while Foxhole is focused.
         self.right_hold_enabled = False
         self.right_hold_hwnd = 0
-        self.right_hold_lparam = 0
         self.right_hold_worker_running = False
         self.right_hold_button_down = False
         self.right_double_tap_threshold = 0.35
@@ -231,6 +232,8 @@ class AutoClicker:
         self.user32.GetMessageW.restype = ctypes.c_int
         self.user32.TranslateMessage.argtypes = [ctypes.POINTER(wintypes.MSG)]
         self.user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
+        self.user32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]
+        self.user32.mouse_event.restype = None
 
         self.monitor_thread = threading.Thread(target=self.monitor_hotkeys, daemon=True)
         self.click_thread = threading.Thread(target=self.click_loop, daemon=True)
@@ -845,6 +848,10 @@ class AutoClicker:
             self.log("Right Hold ignorado: modo desativado")
             self.status_callback(self.status_text())
             return
+        if not self.is_foxhole_foreground_window():
+            self.log("Right Hold abortado: Foxhole precisa estar em foco")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("right hold on")
         self.disable_artillery("right hold on")
@@ -857,7 +864,6 @@ class AutoClicker:
             return
         self.right_hold_enabled = True
         self.right_hold_hwnd = hwnd
-        self.right_hold_lparam = self.make_lparam(self.click_x, self.click_y)
         self._set_right_hold_button(True)
         self.log(f"Right Hold ON ({self.right_hold_hotkey_name}): Esc/hotkey para parar")
         self.status_callback(self.status_text())
@@ -870,36 +876,27 @@ class AutoClicker:
         self.right_hold_enabled = False
         self._set_right_hold_button(False)
         self.right_hold_hwnd = 0
-        self.right_hold_lparam = 0
         self.log(f"Right Hold OFF: {reason}")
         self.status_callback(self.status_text())
 
     def _set_right_hold_button(self, down: bool) -> None:
         if down == self.right_hold_button_down:
             return
-        hwnd = self.right_hold_hwnd or self.click_hwnd or self.target_hwnd
-        button = MOUSE_BUTTONS["Direito"]
-        lparam = self.right_hold_lparam or self.make_lparam(self.click_x, self.click_y)
-        if hwnd:
-            self.user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
-            self.user32.PostMessageW(hwnd, button["down" if down else "up"], button["mk"] if down else 0, lparam)
+        self.user32.mouse_event(MOUSEEVENTF_RIGHTDOWN if down else MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
         self.right_hold_button_down = down
 
     def _right_hold_worker(self) -> None:
         self.right_hold_worker_running = True
-        last_reassert = 0.0
         try:
             while self.right_hold_enabled and not self.stop_event.is_set():
                 hwnd = self.right_hold_hwnd or self.click_hwnd or self.target_hwnd
                 if not hwnd or not self.user32.IsWindow(hwnd):
                     self.disable_right_hold("janela perdida")
                     break
-                now = time.monotonic()
-                if now - last_reassert >= 0.20:
-                    last_reassert = now
-                    self.right_hold_button_down = False
-                    self._set_right_hold_button(True)
-                time.sleep(0.04)
+                if not self.is_foxhole_foreground_window():
+                    self.disable_right_hold("Foxhole fora de foco")
+                    break
+                time.sleep(0.05)
         finally:
             self.right_hold_worker_running = False
             if not self.right_hold_enabled:
@@ -1147,7 +1144,9 @@ class AutoClicker:
         if self.right_hold_enabled:
             self.right_last_tap = 0.0
             if self.mode_is_enabled("right_hold") and self.foxhole_hotkey_context_active():
+                self.right_suppress_next_up = True
                 self._queue_right_mouse_action("cancel")
+                return True
             return False
 
         if not self._right_doubletap_context_active():

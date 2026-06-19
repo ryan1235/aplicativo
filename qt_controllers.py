@@ -9107,7 +9107,7 @@ class OverlayController(QObject):
         if time.monotonic() <= self._preview_until:
             self._set_visible(True)
             return
-        # Also show overlay when background hold modes are active.
+        # Also show overlay when hold modes are active.
         clicker = self.auto_clicker.clicker
         if clicker and (
             getattr(clicker, "move_click_enabled", False)
