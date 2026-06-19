@@ -70,6 +70,7 @@ Rectangle {
                         id: modeButton
                         text: modelData.label
                         checkable: true
+                        hoverEnabled: true
                         checked: productionController.mode === modelData.value
                         Layout.preferredWidth: Math.max(118, modeLabel.implicitWidth + 30)
                         Layout.preferredHeight: 32
@@ -89,8 +90,8 @@ Rectangle {
                             radius: 7
                             color: "transparent"
                             border.color: "transparent"
-                            Rectangle { anchors.fill: parent; radius: 7; color: modeButton.checked ? settingsController.accentColor : settingsController.scrimColor; opacity: modeButton.checked ? 1.0 : 0.3 }
-                            Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: modeButton.checked ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: modeButton.checked ? 2 : 1 }
+                            Rectangle { anchors.fill: parent; radius: 7; color: modeButton.checked ? settingsController.accentColor : settingsController.scrimColor; opacity: modeButton.checked ? 1.0 : (modeButton.hovered ? 0.55 : 0.3); Behavior on opacity { NumberAnimation { duration: 120 } } }
+                            Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: modeButton.checked || modeButton.hovered ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: modeButton.checked || modeButton.hovered ? 2 : 1; opacity: modeButton.checked ? 1.0 : (modeButton.hovered ? 0.75 : 1.0) }
                         }
                     }
                 }
@@ -131,6 +132,7 @@ Rectangle {
                         id: factionButton
                         text: modelData.label
                         checkable: true
+                        hoverEnabled: true
                         checked: productionController.faction === modelData.value
                         Layout.preferredWidth: Math.max(92, factionLabel.implicitWidth + 30)
                         Layout.preferredHeight: 32
@@ -150,8 +152,8 @@ Rectangle {
                             radius: 7
                             color: "transparent"
                             border.color: "transparent"
-                            Rectangle { anchors.fill: parent; radius: 7; color: factionButton.checked ? settingsController.accentColor : settingsController.scrimColor; opacity: factionButton.checked ? 1.0 : 0.3 }
-                            Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: factionButton.checked ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: factionButton.checked ? 2 : 1 }
+                            Rectangle { anchors.fill: parent; radius: 7; color: factionButton.checked ? settingsController.accentColor : settingsController.scrimColor; opacity: factionButton.checked ? 1.0 : (factionButton.hovered ? 0.55 : 0.3); Behavior on opacity { NumberAnimation { duration: 120 } } }
+                            Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: factionButton.checked || factionButton.hovered ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: factionButton.checked || factionButton.hovered ? 2 : 1; opacity: factionButton.checked ? 1.0 : (factionButton.hovered ? 0.75 : 1.0) }
                         }
                     }
                 }
@@ -160,28 +162,30 @@ Rectangle {
             Item { Layout.fillWidth: true } // Spacer
         }
 
-        ScrollView {
+        Item {
             id: categories
             Layout.fillWidth: true
-            Layout.preferredHeight: 54
-            clip: true
-            ScrollBar.vertical.policy: ScrollBar.AlwaysOff
-            background: Rectangle { color: "transparent" }
+            Layout.preferredHeight: 72
+            clip: false
 
-            Row {
+            RowLayout {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
                 Repeater {
                     model: productionController.categoriesModel
                     delegate: Button {
-                        width: 76
-                        height: 76
+                        id: categoryButton
+                        hoverEnabled: true
+                        Layout.preferredWidth: 76
+                        Layout.preferredHeight: 64
                         onClicked: productionController.setCategory(String(model.name || ""))
                         background: Rectangle {
                             radius: 4
                             color: "transparent"
                             border.color: "transparent"
-                            Rectangle { anchors.fill: parent; radius: 4; color: model.active ? settingsController.accentColor : settingsController.scrimColor; opacity: model.active ? 0.3 : 0.2; Behavior on opacity { NumberAnimation { duration: 120 } } }
-                            Rectangle { anchors.fill: parent; radius: 4; color: "transparent"; border.color: settingsController.accentColor; opacity: model.active ? 1.0 : 0.2; border.width: 1; Behavior on opacity { NumberAnimation { duration: 120 } } }
+                            Rectangle { anchors.fill: parent; radius: 4; color: model.active ? settingsController.accentColor : settingsController.scrimColor; opacity: model.active ? 0.32 : (categoryButton.hovered ? 0.38 : 0.2); Behavior on opacity { NumberAnimation { duration: 120 } } }
+                            Rectangle { anchors.fill: parent; radius: 4; color: "transparent"; border.color: settingsController.accentColor; opacity: model.active ? 1.0 : (categoryButton.hovered ? 0.65 : 0.2); border.width: model.active || categoryButton.hovered ? 2 : 1; Behavior on opacity { NumberAnimation { duration: 120 } } }
                         }
                         contentItem: ColumnLayout {
                             spacing: 4
@@ -211,11 +215,12 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 12
+            spacing: 8
 
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.minimumWidth: 620
                 radius: 8
                 color: "transparent"
                 border.color: "transparent"
@@ -255,13 +260,14 @@ Rectangle {
                         Layout.fillHeight: true
                         clip: true
                         reuseItems: true
-                        cellWidth: 116
+                        property int columnCount: Math.max(1, Math.floor(width / 118))
+                        cellWidth: Math.max(112, Math.floor(width / columnCount))
                         cellHeight: 92
                         model: productionController.availableItemsModel
                         ScrollBar.vertical: ScrollBar { active: productGrid.moving }
 
                         delegate: Rectangle {
-                            width: 108
+                            width: Math.max(104, productGrid.cellWidth - 10)
                             height: 84
                             radius: 8
                             color: "transparent"
@@ -327,7 +333,9 @@ Rectangle {
             }
 
             Rectangle {
-                Layout.preferredWidth: 390
+                Layout.preferredWidth: Math.min(520, Math.max(440, root.width * 0.32))
+                Layout.minimumWidth: 420
+                Layout.maximumWidth: 540
                 Layout.fillHeight: true
                 radius: 8
                 color: "transparent"
