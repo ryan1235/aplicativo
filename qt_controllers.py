@@ -958,22 +958,34 @@ def parse_stockpile_datetime(value: Any) -> datetime | None:
     return parsed.astimezone()
 
 
-def format_relative_time(value: Any) -> str:
+def format_relative_time(value: Any, translator: Translator | None = None) -> str:
     parsed = parse_stockpile_datetime(value)
     if parsed is None:
         return ""
     seconds = max(0, int((datetime.now().astimezone() - parsed).total_seconds()))
+
+    def relative_text(key: str, **kwargs: Any) -> str:
+        if translator is not None:
+            return translator.t(key, **kwargs)
+        return Translator("pt").t(key, **kwargs)
+
     if seconds < 60:
-        return "Agora"
+        return relative_text("time.now")
     minutes = seconds // 60
+    if minutes == 1:
+        return relative_text("time.minute_ago")
     if minutes < 60:
-        return f"Há {minutes}m"
+        return relative_text("time.minutes_ago", count=minutes)
     hours = minutes // 60
+    if hours == 1:
+        return relative_text("time.hour_ago")
     if hours < 24:
-        return f"Há {hours}h"
+        return relative_text("time.hours_ago", count=hours)
     days = hours // 24
+    if days == 1:
+        return relative_text("time.day_ago")
     if days < 30:
-        return f"Há {days}d"
+        return relative_text("time.days_ago", count=days)
     return parsed.strftime("%d/%m/%Y")
 
 
@@ -3328,6 +3340,12 @@ class StockpileController(QObject):
     def visualGroupRows(self) -> list[dict[str, Any]]:
         return self._cached_visual_groups
 
+    @Slot()
+    def refreshLocalizedTimes(self) -> None:
+        if self._visual_warehouses:
+            self._visual_warehouse_options = self._build_visual_warehouse_options(self._visual_warehouses)
+        self.changed.emit()
+
     @Slot(str)
     def setVisualWarehouse(self, value: str) -> None:
         value = str(value or "")
@@ -3637,6 +3655,7 @@ class StockpileController(QObject):
             grouped.setdefault(group_label, []).append(warehouse)
 
         options: list[dict[str, Any]] = []
+        translator = Translator(selected_language(self.settings))
         for region in sorted(grouped, key=lambda value: value.lower()):
             options.append({"text": region, "type": "header"})
             for warehouse in grouped[region]:
@@ -3646,7 +3665,7 @@ class StockpileController(QObject):
                     {
                         "text": str(warehouse.get("code") or warehouse.get("name") or "-"),
                         "subText": str(warehouse.get("optionSubText") or warehouse.get("placePath") or ""),
-                        "sideText": "" if inactive else format_relative_time(updated_raw),
+                        "sideText": "" if inactive else format_relative_time(updated_raw, translator),
                         "sideTextKey": "stockpile.visual_depot_inactive_badge" if inactive else "",
                         "sideColor": "#ef4444" if inactive else "",
                         "id": str(warehouse.get("name") or ""),
@@ -3655,11 +3674,10 @@ class StockpileController(QObject):
                 )
         return options
 
-    @staticmethod
-    def _visual_update_label(item: dict[str, Any]) -> str:
+    def _visual_update_label(self, item: dict[str, Any]) -> str:
         updated_raw = str(item.get("last_update") or item.get("updatedAt") or "")
         absolute = format_to_local_pc_time(updated_raw)
-        relative = format_relative_time(updated_raw)
+        relative = format_relative_time(updated_raw, Translator(selected_language(self.settings)))
         place = str(item.get("placePath") or item.get("name") or "-")
         if absolute and absolute != "-" and relative:
             return f"{place} - {absolute} ({relative})"
@@ -6058,6 +6076,12 @@ class ItemSearchController(QObject):
         return self._wiki_source_url
 
     @Slot()
+    def refreshLocalizedTimes(self) -> None:
+        if self._loaded:
+            self._update_search_models()
+        self.changed.emit()
+
+    @Slot()
     def refresh(self) -> None:
         if self._loading:
             return
@@ -6458,6 +6482,7 @@ class ItemSearchController(QObject):
             grouped.setdefault(region, []).append((item, meta))
 
         result_rows: list[dict[str, Any]] = []
+        translator = Translator(selected_language(self.settings))
         for region in sorted(grouped):
             region_rows = sorted(
                 grouped[region],
@@ -6497,7 +6522,7 @@ class ItemSearchController(QObject):
                         "place": place,
                         "quantity": max(0, int(item.get("quantity", 0) or 0)),
                         "updatedAt": format_to_local_pc_time(updated_raw),
-                        "updatedAgo": format_relative_time(updated_raw),
+                        "updatedAgo": format_relative_time(updated_raw, translator),
                         "icon": file_url(icon_path) if icon_path and Path(icon_path).exists() else "",
                         "total": 0,
                     }
@@ -9810,6 +9835,8 @@ class ControllerRegistry(QObject):
         self.notificationsController = NotificationsController(self.settings_data, self)
         self.updateController = UpdateController(self.i18nController, self)
         self.i18nController.changed.connect(self.settingsController.notifyExternalChange)
+        self.i18nController.changed.connect(self.stockpileController.refreshLocalizedTimes)
+        self.i18nController.changed.connect(self.itemSearchController.refreshLocalizedTimes)
         self.settingsController.changed.connect(self.notificationsController.refresh)
         self.autoClickerController.orderRequested.connect(lambda _order: self.notificationsController.startSquadlock())
         if self.settings_data.get("stockpile", {}).get("enabled", True):
