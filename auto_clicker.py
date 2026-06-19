@@ -204,6 +204,8 @@ class AutoClicker:
         self.key_was_down: dict[int, bool] = {}
         self.foxhole_hotkey_context_cache_until = 0.0
         self.foxhole_hotkey_context_cache_active = False
+        self.foxhole_target_context_cache_until = 0.0
+        self.foxhole_target_context_cache_active = False
         self.keyboard_hook_handle = 0
         self.keyboard_hook_proc = None
         self.keyboard_hook_thread_id = 0
@@ -570,10 +572,10 @@ class AutoClicker:
             if self.mode_is_enabled("pilot"):
                 self.handle_key_press(self.pilot_hotkey_vk, self.toggle_pilot)
             if self.mode_is_enabled("right_hold"):
-                self.handle_key_press(self.right_hold_hotkey_vk, self.toggle_right_hold)
+                self.handle_key_press(self.right_hold_hotkey_vk, self.toggle_right_hold, require_foreground=True)
             if self.mode_is_enabled("artillery"):
                 self.handle_key_press(self.artillery_hotkey_vk, self.toggle_artillery)
-            self.handle_key_press(HOTKEYS["F5"], self.open_orders_menu)
+            self.handle_key_press(HOTKEYS["F5"], self.open_orders_menu, require_foreground=True)
 
             if self.fixed_click_enabled and self.mode_is_enabled("fixed"):
                 self.handle_key_press(VK_1, lambda: self.trigger_slot_click(1))
@@ -585,11 +587,16 @@ class AutoClicker:
             self.refresh_shift_state()
             time.sleep(0.015)
 
-    def handle_key_press(self, vk: int, callback) -> None:
+    def handle_key_press(self, vk: int, callback, *, require_foreground: bool = False) -> None:
         is_down = bool(self.user32.GetAsyncKeyState(vk) & 0x8000)
         was_down = self.key_was_down.get(vk, False)
         if is_down and not was_down:
-            if not self.foxhole_hotkey_context_active():
+            context_active = (
+                self.foxhole_hotkey_context_active()
+                if require_foreground
+                else self.foxhole_target_context_active()
+            )
+            if not context_active:
                 self.key_was_down[vk] = is_down
                 return
             try:
@@ -628,7 +635,7 @@ class AutoClicker:
         return bool(
             self.shift_enabled
             and self.mode_is_enabled("auto")
-            and self.foxhole_hotkey_context_active()
+            and self.foxhole_target_context_active()
             and self.user32.GetAsyncKeyState(VK_SHIFT) & 0x8000
         )
 
@@ -982,12 +989,23 @@ class AutoClicker:
         self.w_hold_worker_running = True
         prev_s = False
         last_reassert = 0.0
+        last_target_check = 0.0
         try:
             while self.w_hold_enabled and not self.stop_event.is_set():
-                if not self.mode_is_enabled("pilot") or not self.foxhole_hotkey_context_active():
+                hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
+                now = time.monotonic()
+                if not self.mode_is_enabled("pilot"):
                     prev_s = False
                     time.sleep(0.03)
                     continue
+                if not hwnd or not self.user32.IsWindow(hwnd):
+                    self.disable_w_hold("janela perdida")
+                    break
+                if now - last_target_check >= 0.50:
+                    last_target_check = now
+                    if not self.is_foxhole_window(hwnd):
+                        self.disable_w_hold("janela perdida")
+                        break
 
                 s_down = bool(self.user32.GetAsyncKeyState(VK_S) & 0x8000)
 
@@ -1003,7 +1021,6 @@ class AutoClicker:
                     self.log("W-Hold: retomado (S solto)")
                     self.status_callback(self.status_text())
 
-                now = time.monotonic()
                 if self.w_hold_enabled and not self.pilot_w_paused and now - last_reassert >= 0.20:
                     last_reassert = now
                     hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
@@ -1181,6 +1198,24 @@ class AutoClicker:
             active = False
         self.foxhole_hotkey_context_cache_active = active
         self.foxhole_hotkey_context_cache_until = now + 0.05
+        return active
+
+    def foxhole_target_context_active(self) -> bool:
+        now = time.monotonic()
+        if now < self.foxhole_target_context_cache_until:
+            return self.foxhole_target_context_cache_active
+
+        active = False
+        try:
+            hwnd = self.click_hwnd or self.target_hwnd
+            if not hwnd or not self.user32.IsWindow(hwnd) or not self.is_foxhole_window(hwnd):
+                self.use_foxhole_window(quiet=True)
+                hwnd = self.click_hwnd or self.target_hwnd
+            active = bool(hwnd and self.user32.IsWindow(hwnd) and self.is_foxhole_window(hwnd))
+        except Exception:
+            active = False
+        self.foxhole_target_context_cache_active = active
+        self.foxhole_target_context_cache_until = now + 0.15
         return active
 
     def is_foxhole_foreground_window(self) -> bool:
