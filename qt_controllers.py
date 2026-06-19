@@ -6086,7 +6086,12 @@ class ItemSearchController(QObject):
             self._status_message = error
             self.changed.emit()
             return
-        self._all_rows = list(rows) if isinstance(rows, list) else []
+        raw_rows = list(rows) if isinstance(rows, list) else []
+        self._all_rows = [
+            item
+            for item in raw_rows
+            if isinstance(item, dict) and self._is_searchable_stockpile_item(item)
+        ]
         self._cached_item_names = sorted(
             {str(item.get("display_name") or "-") for item in self._all_rows if item.get("display_name")},
             key=str.lower,
@@ -6231,6 +6236,26 @@ class ItemSearchController(QObject):
 
     def _item_names(self) -> list[str]:
         return self._cached_item_names
+
+    @staticmethod
+    def _row_quantity(item: dict[str, Any]) -> int:
+        try:
+            return int(item.get("quantity", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @classmethod
+    def _is_searchable_stockpile_item(cls, item: dict[str, Any]) -> bool:
+        if cls._row_quantity(item) <= 0:
+            return False
+        return StockpileController._has_gg_stockpile_prefix(
+            {
+                "name": item.get("warehouse"),
+                "warehouse_name": item.get("warehouse_name"),
+                "stockpile_name": item.get("stockpile_name"),
+                "neme": item.get("neme"),
+            }
+        )
 
     @staticmethod
     def _normalize_search_text(value: Any) -> str:
