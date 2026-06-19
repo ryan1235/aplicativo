@@ -424,7 +424,7 @@ Flickable {
 
                                     Text {
                                         visible: model.rowType !== "region"
-                                        text: (model.warehouse || "-") + " | " + tr("item_search.last_update").replace("{value}", model.updatedAt || "-")
+                                        text: (model.place || model.warehouse || "-") + " | " + tr("item_search.last_update").replace("{value}", model.updatedAt || "-")
                                         color: settingsController.mutedTextColor
                                         font.family: "Segoe UI"
                                         font.pixelSize: 10

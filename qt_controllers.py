@@ -5922,7 +5922,7 @@ class ItemSearchController(QObject):
         self._total = 0
         self._last_update = "-"
         self.items = DictListModel(
-            ["rowType", "region", "code", "warehouse", "quantity", "updatedAt", "icon", "total"],
+            ["rowType", "region", "code", "warehouse", "place", "quantity", "updatedAt", "icon", "total"],
             self,
         )
         self.suggestions = DictListModel(["name", "alias", "detail", "source"], self)
@@ -6419,6 +6419,17 @@ class ItemSearchController(QObject):
         value = parts[0] if parts else "-"
         return value, value, value
 
+    @staticmethod
+    def _location_meta_for_row(item: dict[str, Any]) -> dict[str, str]:
+        return StockpileController._warehouse_meta(
+            {
+                "name": item.get("warehouse"),
+                "map_name": item.get("map_name"),
+                "town": item.get("town"),
+                "warehouse_name": item.get("warehouse_name"),
+            }
+        )
+
     def _update_search_models(self) -> None:
         suggestions = self._suggestions_for_query(self._query)
         self.suggestions.set_items(suggestions)
@@ -6439,29 +6450,41 @@ class ItemSearchController(QObject):
             self._total = 0
             self._status_key = "item_search.best_match_empty"
 
-        grouped: dict[str, list[dict[str, Any]]] = {}
+        grouped: dict[str, list[tuple[dict[str, Any], dict[str, str]]]] = {}
         for item in rows:
-            region, _name, _code = self._split_location(str(item.get("warehouse") or "-"))
-            grouped.setdefault(region, []).append(item)
+            meta = self._location_meta_for_row(item)
+            fallback_region, _name, _code = self._split_location(str(item.get("warehouse") or "-"))
+            region = str(meta.get("groupLabel") or meta.get("mapName") or meta.get("region") or fallback_region)
+            grouped.setdefault(region, []).append((item, meta))
 
         result_rows: list[dict[str, Any]] = []
         for region in sorted(grouped):
-            region_rows = sorted(grouped[region], key=lambda item: str(item.get("warehouse") or ""))
-            region_total = sum(max(0, int(item.get("quantity", 0) or 0)) for item in region_rows)
+            region_rows = sorted(
+                grouped[region],
+                key=lambda entry: (
+                    str(entry[1].get("town") or "").lower(),
+                    str(entry[1].get("code") or "").lower(),
+                    str(entry[0].get("warehouse") or "").lower(),
+                ),
+            )
+            region_total = sum(max(0, int(item.get("quantity", 0) or 0)) for item, _meta in region_rows)
             result_rows.append(
                 {
                     "rowType": "region",
                     "region": region,
                     "code": "",
                     "warehouse": "",
+                    "place": "",
                     "quantity": 0,
                     "updatedAt": "",
                     "icon": "",
                     "total": region_total,
                 }
             )
-            for item in region_rows:
-                _region, _name, code = self._split_location(str(item.get("warehouse") or "-"))
+            for item, meta in region_rows:
+                _region, _name, fallback_code = self._split_location(str(item.get("warehouse") or "-"))
+                code = str(meta.get("code") or fallback_code or "-")
+                place = str(meta.get("placePath") or item.get("warehouse") or "-")
                 icon_path = str(item.get("icon_path") or "")
                 result_rows.append(
                     {
@@ -6469,6 +6492,7 @@ class ItemSearchController(QObject):
                         "region": region,
                         "code": code,
                         "warehouse": str(item.get("warehouse") or "-"),
+                        "place": place,
                         "quantity": max(0, int(item.get("quantity", 0) or 0)),
                         "updatedAt": format_to_local_pc_time(str(item.get("warehouse_last_update") or "-")),
                         "icon": file_url(icon_path) if icon_path and Path(icon_path).exists() else "",
