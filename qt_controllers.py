@@ -2578,7 +2578,8 @@ class AutoClickerController(QObject):
     statusFromWorker = Signal(str)
     menuRequested = Signal()
     orderRequested = Signal(str)
-    DEFAULT_INTERVAL = 0.5
+    DEFAULT_INTERVAL = 0.05
+    LEGACY_DEFAULT_INTERVAL = 0.5
     MODE_KEYS = ("auto", "move", "pilot", "right_hold", "fixed", "artillery")
 
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
@@ -2632,6 +2633,8 @@ class AutoClickerController(QObject):
         try:
             value = float(data.get("interval", self.DEFAULT_INTERVAL))
         except (TypeError, ValueError):
+            value = self.DEFAULT_INTERVAL
+        if abs(value - self.LEGACY_DEFAULT_INTERVAL) < 0.0001:
             value = self.DEFAULT_INTERVAL
         value = round(max(0.03, min(5.0, value)), 2)
         data["interval"] = value
@@ -2871,7 +2874,7 @@ class AutoClickerController(QObject):
             return f"Fixo {self.fixedHotkey}: clique + slots 1-4"
         if getattr(self.clicker, "enabled", False):
             shift = " + Shift" if getattr(self.clicker, "shift_pressed", False) else ""
-            return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.1f}s{shift}"
+            return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.2f}s{shift}"
         # Use dynamic W/Z label (respecting FR override)
         wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
         return f"{self.hotkey} auto | {self.pilotHotkey} {wlabel} | {self.rightHoldHotkey} direito"

@@ -43,7 +43,7 @@ Flickable {
         property bool modeEnabled: true
         property color accent: settingsController.accentColor
         property string buttonText: root.actionLabel(active)
-        property int fixedHeight: 236
+        property int fixedHeight: 212
         default property alias extraContent: extraBox.data
         signal action()
         signal hotkeySelected(string key)
@@ -85,17 +85,20 @@ Flickable {
             opacity: !card.modeEnabled ? 0.22 : (card.active ? 1 : 0.45)
         }
 
-        ColumnLayout {
+        Item {
             id: cardContent
             anchors.fill: parent
             anchors.leftMargin: 16
             anchors.rightMargin: 14
             anchors.topMargin: 14
             anchors.bottomMargin: 14
-            spacing: 10
 
             RowLayout {
-                Layout.fillWidth: true
+                id: headerRow
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                height: 28
                 spacing: 10
 
                 Rectangle {
@@ -153,12 +156,20 @@ Flickable {
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
                 elide: Text.ElideRight
-                Layout.fillWidth: true
-                Layout.preferredHeight: 34
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: headerRow.bottom
+                anchors.topMargin: 7
+                height: 32
             }
 
             RowLayout {
-                Layout.fillWidth: true
+                id: actionRow
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: headerRow.bottom
+                anchors.topMargin: 47
+                height: 42
                 spacing: 10
 
                 HotkeyPicker {
@@ -183,8 +194,11 @@ Flickable {
 
             ColumnLayout {
                 id: extraBox
-                Layout.fillWidth: true
-                spacing: 8
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: implicitHeight
+                spacing: 6
             }
         }
     }
@@ -288,7 +302,7 @@ Flickable {
 
             ModeCard {
                 title: tr("clicker.auto_clicker_label").replace(":", "")
-                detail: tr("clicker.button") + " " + tr(autoClickerController.mouseButtonLabel(autoClickerController.mouseButton)) + " | " + autoClickerController.interval.toFixed(1) + "s"
+                detail: tr("clicker.button") + " " + tr(autoClickerController.mouseButtonLabel(autoClickerController.mouseButton)) + " | " + autoClickerController.interval.toFixed(2) + "s"
                 hotkey: autoClickerController.hotkey
                 active: autoClickerController.running
                 modeEnabled: autoClickerController.autoModeEnabled
