@@ -8,6 +8,7 @@ Item {
     clip: true
 
     property bool wide: width >= 1120
+    property int scrollBarContentPadding: 14
 
     Component.onCompleted: itemSearchController.ensureLoaded()
 
@@ -411,6 +412,7 @@ Item {
 
                     ListView {
                         id: results
+                        property int rowWidth: Math.max(0, width - root.scrollBarContentPadding)
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
@@ -421,7 +423,7 @@ Item {
                         ScrollBar.vertical: ScrollBar { active: results.moving }
 
                         delegate: Rectangle {
-                            width: results.width
+                            width: results.rowWidth
                             height: model.rowType === "region" ? 42 : 62
                             radius: settingsController.cardRadius
                             color: model.rowType === "region"
@@ -483,7 +485,7 @@ Item {
 
                                 ColumnLayout {
                                     visible: model.rowType !== "region"
-                                    Layout.preferredWidth: Math.min(390, Math.max(285, results.width * 0.31))
+                                    Layout.preferredWidth: Math.min(390, Math.max(285, results.rowWidth * 0.31))
                                     Layout.minimumWidth: 250
                                     Layout.alignment: Qt.AlignVCenter
                                     spacing: 0
@@ -537,7 +539,7 @@ Item {
 
                         Text {
                             anchors.centerIn: parent
-                            width: parent.width - 36
+                            width: parent.width - 36 - root.scrollBarContentPadding
                             height: 120
                             text: tr("item_search.empty")
                             color: settingsController.mutedTextColor
@@ -567,14 +569,14 @@ Item {
                     anchors.fill: parent
                     anchors.margins: 14
                     clip: true
-                    contentWidth: width
+                    contentWidth: Math.max(0, width - root.scrollBarContentPadding)
                     contentHeight: wikiColumn.implicitHeight
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollBar { active: wikiScroller.moving }
 
                     ColumnLayout {
                         id: wikiColumn
-                        width: parent.width
+                        width: wikiScroller.contentWidth
                         spacing: 12
 
                         RowLayout {
