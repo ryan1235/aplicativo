@@ -83,7 +83,7 @@ def quote_inno(value: str | Path) -> str:
 
 
 def app_version() -> str:
-    for source in ("qt_controllers.py", "felb_app.py"):
+    for source in ("app_metadata.py", "qt_controllers.py", "felb_app.py"):
         text = (ROOT / source).read_text(encoding="utf-8-sig")
         match = re.search(r'^APP_VERSION\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
         if match:
@@ -138,7 +138,8 @@ def remove_tree(path: Path) -> None:
     for attempt in range(3):
         try:
             shutil.rmtree(path)
-            return
+            if not path.exists():
+                return
         except PermissionError as exc:
             if attempt < 2:
                 time.sleep(0.6)
@@ -148,6 +149,13 @@ def remove_tree(path: Path) -> None:
                 "Feche o GG Coalition, feche o GG Updater e confira se eles nao estao na bandeja do Windows.\n"
                 f"Detalhe: {exc}"
             ) from exc
+        if attempt < 2:
+            time.sleep(0.6)
+            continue
+        raise SystemExit(
+            f"Nao consegui limpar {path}.\n"
+            "Apague essa pasta gerada ou feche qualquer build ainda rodando antes de tentar novamente."
+        )
 
 
 def ensure_icon() -> Path | None:

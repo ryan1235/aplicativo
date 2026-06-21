@@ -18,6 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
 
+from app_metadata import APP_TITLE, APP_USER_AGENT, APP_VERSION
 from app_paths import extracted_dir, resource_dir
 
 
@@ -276,6 +277,8 @@ def _build_api_report(
     return {
         "metadata": {
             "source": "python/stockpiler.py",
+            "app": APP_TITLE,
+            "app_version": APP_VERSION,
             "extracted_at": extracted_at,
             "last_updated": entry.get("LastUpdated"),
             "map_id": map_id,
@@ -325,6 +328,8 @@ def convert_to_api_payload(entries: list[Any], source_file: Path) -> dict[str, A
     return {
         "metadata": {
             "source": "python/stockpiler.py",
+            "app": APP_TITLE,
+            "app_version": APP_VERSION,
             "extracted_at": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
             "report_count": len(reports),
             "scope": "private_stockpiles",
@@ -846,6 +851,8 @@ def filter_payload_reports_newer_than_api(
 
 
 def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST") -> dict[str, Any]:
+    if isinstance(data, dict):
+        data = {**data, "app": APP_TITLE, "app_version": APP_VERSION}
     body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     log_upload = purpose == "upload" and method.upper() == "POST"
     log = _debug_log if log_upload else _runtime_log
@@ -857,6 +864,8 @@ def request_json(api_url: str, data: Any, *, purpose: str, method: str = "POST")
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "User-Agent": APP_USER_AGENT,
+        "X-App-Version": APP_VERSION,
         "X-API-Key": DEFAULT_API_KEY,
     }
     request = urllib.request.Request(

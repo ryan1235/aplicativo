@@ -39,6 +39,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QDesktopServices, QGuiApplication, QIcon
 from PySide6.QtWidgets import QApplication, QFileDialog, QMenu, QMessageBox, QSystemTrayIcon
 
+from app_metadata import APP_TITLE, APP_USER_AGENT, APP_VERSION
 from app_paths import extracted_dir, resolve_writable_path, resource_dir, settings_path, user_data_dir
 from app_update import UpdateInfo, check_latest_release, download_update, launch_updater
 from auto_clicker import ACTION_KEYS, HOTKEYS, MOUSE_BUTTONS, POINT, RECT, AutoClicker
@@ -89,8 +90,6 @@ from stockpiler import (
 )
 
 
-APP_TITLE = "GG Coalition"
-APP_VERSION = "2.0.3"
 UPDATE_REPO = "ryan1235/aplicativo"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
@@ -1529,7 +1528,44 @@ class AppController(QObject):
                 print(f"Failed to start admin server: {e}")
             import urllib.parse
             api_hint = base64.urlsafe_b64encode(CHAT_API_BASE.encode("utf-8")).decode("ascii")
-            params = urllib.parse.urlencode({"token": token or "", "api": api_hint})
+            theme_hint = ""
+            try:
+                personalization = load_personalization_settings(
+                    legacy_theme=self.settings.get("app", {}).get("theme"),
+                    legacy_colorblind=self.settings.get("app", {}).get("colorblind_mode_enabled"),
+                )
+                theme_settings = personalization.get("theme") if isinstance(personalization, dict) else {}
+                theme_settings = theme_settings if isinstance(theme_settings, dict) else {}
+                preset = str(theme_settings.get("preset") or "coalition")
+                if bool(personalization.get("colorblind_mode_enabled", False)):
+                    preset = "accessible"
+                if preset == "custom":
+                    custom = theme_settings.get("custom") if isinstance(theme_settings.get("custom"), dict) else {}
+                    palette = {
+                        key: SettingsController._sanitize_hex_color(custom.get(key), str(UI_THEME_CUSTOM_DEFAULT[key]))
+                        for key in UI_THEME_COLOR_KEYS
+                    }
+                    palette["gradient_enabled"] = bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"]))
+                    palette["card_radius"] = SettingsController._sanitize_card_radius(custom.get("card_radius"))
+                else:
+                    source = UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"])
+                    palette = {key: source.get(key, fallback) for key, fallback in UI_THEME_CUSTOM_DEFAULT.items()}
+                    if preset == "accessible":
+                        profile = str(personalization.get("colorblind_profile") or "unsure")
+                        palette.update(COLORBLIND_THEME_OVERRIDES.get(profile, COLORBLIND_THEME_OVERRIDES["unsure"]))
+                theme_hint = base64.urlsafe_b64encode(
+                    json.dumps(palette, separators=(",", ":")).encode("utf-8")
+                ).decode("ascii").rstrip("=")
+            except Exception as exc:
+                print(f"Failed to prepare admin panel theme: {exc}")
+            params = urllib.parse.urlencode(
+                {
+                    "token": token or "",
+                    "api": api_hint,
+                    "lang": normalize_language(getattr(self.i18n, "language", selected_language(self.settings))),
+                    "theme": theme_hint,
+                }
+            )
             url_str = f"http://localhost:3334/?{params}"
             success = QDesktopServices.openUrl(QUrl(url_str))
             if not success:
@@ -9471,8 +9507,10 @@ def http_json(
     timeout: int = 15,
 ) -> dict[str, Any]:
     data = None
-    headers = {"Accept": "application/json", "User-Agent": "GG Coalition/1.0"}
+    headers = {"Accept": "application/json", "User-Agent": APP_USER_AGENT, "X-App-Version": APP_VERSION}
     if payload is not None:
+        if isinstance(payload, dict):
+            payload = {**payload, "app": APP_TITLE, "appVersion": APP_VERSION, "app_version": APP_VERSION}
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
     if token:
@@ -9502,7 +9540,7 @@ def http_json_url(
     timeout: int = 15,
 ) -> dict[str, Any]:
     data = None
-    headers = {"Accept": "application/json", "User-Agent": "GG Coalition/1.0"}
+    headers = {"Accept": "application/json", "User-Agent": APP_USER_AGENT, "X-App-Version": APP_VERSION}
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
