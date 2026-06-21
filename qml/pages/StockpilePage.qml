@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -28,7 +28,7 @@ Flickable {
                 spacing: 3
                 Text {
                     text: tr("stockpile.title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 26
                     font.bold: true
@@ -36,7 +36,7 @@ Flickable {
                 }
                 Text {
                     text: tr("stockpile.subtitle")
-                    color: "#8ab4ff"
+                    color: settingsController.infoColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
                     font.bold: true
@@ -47,9 +47,9 @@ Flickable {
             }
             PrimaryButton {
                 text: "Atualizar"
-                fill: "#5eead4"
-                hoverFill: "#2dd4bf"
-                textFill: "#022c22"
+                fill: settingsController.accentColor
+                hoverFill: settingsController.accentHoverColor
+                textFill: settingsController.textInverseColor
                 onClicked: stockpileController.refreshApiSnapshot()
             }
             Item { Layout.fillWidth: true }
@@ -57,7 +57,7 @@ Flickable {
                 spacing: 8
                 Text {
                     text: "HUD:"
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     font.bold: true
@@ -67,12 +67,15 @@ Flickable {
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
                     radius: 4
-                    color: minusMouse.containsMouse ? "#1d3353" : "transparent"
-                    border.color: "#24486d"
+                    color: "transparent"
+                    border.color: "transparent"
+                    border.width: 0
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: minusMouse.containsMouse ? 0.15 : 0.0 }
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
                     Text {
                         anchors.centerIn: parent
                         text: "-"
-                        color: stockpileController.hudScale > 0.5 ? "#edf6ff" : "#4a6282"
+                        color: stockpileController.hudScale > 0.5 ? settingsController.textColor : settingsController.disabledTextColor
                         font.pixelSize: 16
                         font.bold: true
                         anchors.verticalCenterOffset: -1
@@ -91,7 +94,7 @@ Flickable {
 
                 Text {
                     text: Math.round(stockpileController.hudScale * 100) + "%"
-                    color: "#5eead4"
+                    color: settingsController.accentColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     font.bold: true
@@ -103,12 +106,15 @@ Flickable {
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
                     radius: 4
-                    color: plusMouse.containsMouse ? "#1d3353" : "transparent"
-                    border.color: "#24486d"
+                    color: "transparent"
+                    border.color: "transparent"
+                    border.width: 0
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: plusMouse.containsMouse ? 0.15 : 0.0 }
+                    Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
                     Text {
                         anchors.centerIn: parent
                         text: "+"
-                        color: stockpileController.hudScale < 3.0 ? "#edf6ff" : "#4a6282"
+                        color: stockpileController.hudScale < 3.0 ? settingsController.textColor : settingsController.disabledTextColor
                         font.pixelSize: 16
                         font.bold: true
                         anchors.verticalCenterOffset: -1
@@ -132,8 +138,12 @@ Flickable {
             Layout.fillWidth: true
             implicitHeight: stockpileController.apiLoading ? 200 : visualContent.implicitHeight + 24
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: "transparent"
+            border.color: "transparent"
+            border.width: 0
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: 0.035 }
+            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
 
             ColumnLayout {
                 anchors.centerIn: parent
@@ -152,13 +162,13 @@ Flickable {
                             ctx.clearRect(0, 0, width, height);
                             ctx.beginPath();
                             ctx.arc(width / 2, height / 2, width / 2 - 4, 0, Math.PI * 2);
-                            ctx.strokeStyle = "#1d3353";
+                            ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
                             ctx.lineWidth = 4;
                             ctx.stroke();
 
                             ctx.beginPath();
                             ctx.arc(width / 2, height / 2, width / 2 - 4, -Math.PI / 2, Math.PI * 0.7);
-                            ctx.strokeStyle = "#5eead4";
+                            ctx.strokeStyle = settingsController.accentColor;
                             ctx.lineWidth = 4;
                             ctx.lineCap = "round";
                             ctx.stroke();
@@ -175,8 +185,8 @@ Flickable {
                 }
 
                 Text {
-                    text: "Puxando estoques..."
-                    color: "#5eead4"
+                    text: tr("stockpile.refreshing")
+                    color: settingsController.accentColor
                     font.family: "Segoe UI"
                     font.pixelSize: 16
                     font.bold: true
@@ -198,7 +208,7 @@ Flickable {
                         spacing: 2
                         Text {
                             text: tr("stockpile.visual_title")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 17
                             font.bold: true
@@ -207,20 +217,32 @@ Flickable {
                         }
                         Text {
                             text: tr("stockpile.visual_updated").replace("{value}", stockpileController.visualWarehouseUpdatedAt)
-                            color: "#99abc4"
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 10
                             font.bold: true
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
+                        Text {
+                            visible: stockpileController.visualWarehouseInactive
+                            text: tr("stockpile.visual_depot_inactive_warning")
+                            color: settingsController.dangerColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            font.bold: true
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
                     }
                     PrimaryComboBox {
                         id: visualWarehouseBox
-                        Layout.preferredWidth: Math.min(300, Math.max(210, root.width * 0.25))
+                        Layout.preferredWidth: Math.min(380, Math.max(240, root.width * 0.34))
                         Layout.preferredHeight: 32
                         enabled: stockpileController.visualWarehouseOptions.length > 0
                         textRole: "text"
+                        popupStartsAtTop: true
+                        popupScrollbarTextPadding: 14
                         model: stockpileController.visualWarehouseOptions
                         currentIndex: {
                             var opts = stockpileController.visualWarehouseOptions;
@@ -237,7 +259,7 @@ Flickable {
                         }
                         contentItem: Text {
                             text: visualWarehouseBox.displayText
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 11
                             font.bold: true
@@ -247,8 +269,11 @@ Flickable {
                         }
                         background: Rectangle {
                             radius: 6
-                            color: "#0e1a2d"
-                            border.color: visualWarehouseBox.activeFocus ? "#5eead4" : "#2d496f"
+                            color: "transparent"
+                            border.color: "transparent"
+                            border.width: 0
+                            Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.4 }
+                            Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: visualWarehouseBox.activeFocus ? settingsController.accentColor : settingsController.accentColor; opacity: visualWarehouseBox.activeFocus ? 1.0 : 0.2; border.width: 1 }
                         }
                     }
                 }
@@ -257,7 +282,7 @@ Flickable {
                     Layout.fillWidth: true
                     visible: stockpileController.visualGroupRows.length === 0
                     text: tr("stockpile.visual_empty")
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     font.bold: true
@@ -285,11 +310,11 @@ Flickable {
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 1
-                                color: "#1f324b"
+                                color: Qt.rgba(1, 1, 1, 0.1)
                             }
                             Text {
                                 text: tr(groupRow.titleKey || "")
-                                color: groupRow.accent || "#aeb7c2"
+                                color: settingsController.accentColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 9
                                 font.bold: true
@@ -308,9 +333,12 @@ Flickable {
                                         width: 72 * scaleFactor
                                         height: 27 * scaleFactor
                                         radius: 2
-                                        color: tileMouse.containsMouse ? "#1d3353" : "#0f1d32"
-                                        border.color: "#2b4565"
-                                        Behavior on color { ColorAnimation { duration: 100 } }
+                                        color: "transparent"
+                                        border.color: "transparent"
+                                        border.width: 0
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.3 }
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.15 : 0.03; Behavior on opacity { NumberAnimation { duration: 100 } } }
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.8 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 100 } } }
                                         Behavior on width { NumberAnimation { duration: 100 } }
                                         Behavior on height { NumberAnimation { duration: 100 } }
 
@@ -328,12 +356,16 @@ Flickable {
                                             anchors.top: parent.top
                                             anchors.bottom: parent.bottom
                                             width: 37 * scaleFactor
-                                            color: "#172943"
-                                            border.color: "#2b4565"
+                                            color: "transparent"
+                                            border.color: "transparent"
+                                            border.width: 0
+                                            Rectangle { anchors.fill: parent; color: settingsController.scrimColor; opacity: 0.2 }
+                                            Rectangle { anchors.fill: parent; color: settingsController.accentColor; opacity: 0.05 }
+                                            Rectangle { anchors.fill: parent; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.15; border.width: 1 }
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: String(itemRow.quantity || 0)
-                                                color: "#edf6ff"
+                                                color: settingsController.textColor
                                                 font.family: "Segoe UI"
                                                 font.pixelSize: Math.max(9, 10 * scaleFactor)
                                                 font.bold: true
@@ -356,3 +388,5 @@ Flickable {
         }
     }
 }
+
+

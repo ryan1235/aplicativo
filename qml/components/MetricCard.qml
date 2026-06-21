@@ -6,7 +6,7 @@ Rectangle {
     property string title: ""
     property string value: ""
     property string detail: ""
-    property color accent: "#5eead4"
+    property color accent: settingsController.accentColor
     property int contentMargins: 14
     property int contentSpacing: 5
     property int titlePixelSize: 11
@@ -15,9 +15,9 @@ Rectangle {
     property int valueMaximumLineCount: 1
     property int detailMaximumLineCount: 1
 
-    radius: 8
-    color: "#111c31"
-    border.color: "#24486d"
+    radius: settingsController.cardRadius
+    color: settingsController.surfaceColor
+    border.color: settingsController.borderColor
     border.width: 1
     implicitHeight: 104
 
@@ -40,7 +40,7 @@ Rectangle {
 
         Text {
             text: root.title
-            color: "#99abc4"
+            color: settingsController.mutedTextColor
             font.family: "Segoe UI"
             font.pixelSize: root.titlePixelSize
             font.bold: true
@@ -62,7 +62,7 @@ Rectangle {
 
         Text {
             text: root.detail
-            color: "#edf6ff"
+            color: settingsController.textColor
             opacity: 0.82
             font.family: "Segoe UI"
             font.pixelSize: root.detailPixelSize
@@ -73,3 +73,5 @@ Rectangle {
         }
     }
 }
+
+

@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -13,7 +13,7 @@ ColumnLayout {
 
     Text {
         text: root.label
-        color: "#99abc4"
+        color: settingsController.mutedTextColor
         font.family: "Segoe UI"
         font.pixelSize: 11
         font.bold: true
@@ -23,20 +23,27 @@ ColumnLayout {
 
     TextField {
         id: input
+        Layout.fillWidth: true
+        Layout.preferredHeight: 40
         placeholderText: root.placeholder
-        color: "#edf6ff"
-        selectedTextColor: "#041014"
-        selectionColor: "#5eead4"
+        placeholderTextColor: settingsController.disabledTextColor
+        color: settingsController.textColor
+        selectedTextColor: settingsController.backgroundColor
+        selectionColor: settingsController.accentColor
         font.family: "Segoe UI"
         font.pixelSize: 13
-        Layout.fillWidth: true
+        leftPadding: 12
+        rightPadding: 12
+        verticalAlignment: TextInput.AlignVCenter
         onAccepted: root.accepted(text)
         background: Rectangle {
-            radius: 7
-            color: "#0e1a2d"
-            border.color: input.activeFocus ? "#5eead4" : "#2d496f"
-            border.width: 1
+            radius: settingsController.cardRadius
+            color: input.hovered || input.activeFocus ? settingsController.accentPanelColor : settingsController.backgroundColor
+            border.color: input.activeFocus ? settingsController.accentColor : settingsController.borderColor
+            border.width: input.activeFocus ? 1.5 : 1
+            Behavior on color { ColorAnimation { duration: 120 } }
             Behavior on border.color { ColorAnimation { duration: 120 } }
         }
     }
 }
+

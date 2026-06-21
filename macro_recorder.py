@@ -219,8 +219,15 @@ class MacroRecorder:
         if not safe_name:
             safe_name = time.strftime("macro-%Y%m%d-%H%M%S")
         target = path or (MACRO_DIR / f"{safe_name}.json")
+        if path is None:
+            base_target = target
+            counter = 2
+            while target.exists():
+                target = base_target.with_name(f"{base_target.stem} ({counter}){base_target.suffix}")
+                counter += 1
+        display_name = target.stem if path is None else safe_name
         payload = {
-            "name": safe_name,
+            "name": display_name,
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "duration": round(events[-1]["t"], 3) if events else 0,
             "events": events,

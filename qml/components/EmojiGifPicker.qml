@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
@@ -23,19 +23,19 @@ Popup {
     }
     
     property var allEmojis: [
-        {char: "😀", name: "smile feliz"}, {char: "😁", name: "smile feliz"}, {char: "😂", name: "laugh rir chorando"},
-        {char: "🤣", name: "laugh rir chorando rofl"}, {char: "😊", name: "smile feliz"}, {char: "😍", name: "love amor apaixonado"},
-        {char: "🥰", name: "love amor"}, {char: "😎", name: "cool oculos"}, {char: "🤔", name: "think pensando"},
-        {char: "😐", name: "neutral serio"}, {char: "🙄", name: "roll eyes revirando"}, {char: "😥", name: "sad triste chorando"},
-        {char: "😭", name: "cry chorando"}, {char: "😡", name: "angry irritado raiva"}, {char: "👍", name: "like joinha ok yes"},
-        {char: "👎", name: "dislike nao no"}, {char: "👏", name: "clap palmas"}, {char: "🙌", name: "hands maos amem"},
-        {char: "🦊", name: "fox raposa foxhole"}, {char: "💣", name: "bomb bomba"}, {char: "🔫", name: "gun arma tiro"},
-        {char: "🔪", name: "knife faca"}, {char: "🛡️", name: "shield escudo def"}, {char: "⚔️", name: "sword espada ataque"},
-        {char: "🪖", name: "helmet capacete soldado"}, {char: "🏥", name: "hospital medic"}, {char: "🚑", name: "ambulance ambulancia"},
-        {char: "🔥", name: "fire fogo chama"}, {char: "✨", name: "sparkles brilho"}, {char: "❤️", name: "heart coracao amor"},
-        {char: "💀", name: "skull caveira morte dead"}, {char: "👽", name: "alien"}, {char: "💩", name: "poop coco"},
-        {char: "🤡", name: "clown palhaco"}, {char: "🐶", name: "dog cachorro"}, {char: "🐱", name: "cat gato"},
-        {char: "🚗", name: "car carro logi"}, {char: "🚚", name: "truck caminhao logi"}, {char: "📦", name: "box caixa logi supplies"}
+        {char: "ðŸ˜€", name: "smile feliz"}, {char: "ðŸ˜", name: "smile feliz"}, {char: "ðŸ˜‚", name: "laugh rir chorando"},
+        {char: "ðŸ¤£", name: "laugh rir chorando rofl"}, {char: "ðŸ˜Š", name: "smile feliz"}, {char: "ðŸ˜", name: "love amor apaixonado"},
+        {char: "ðŸ¥°", name: "love amor"}, {char: "ðŸ˜Ž", name: "cool oculos"}, {char: "ðŸ¤”", name: "think pensando"},
+        {char: "ðŸ˜", name: "neutral serio"}, {char: "ðŸ™„", name: "roll eyes revirando"}, {char: "ðŸ˜¥", name: "sad triste chorando"},
+        {char: "ðŸ˜­", name: "cry chorando"}, {char: "ðŸ˜¡", name: "angry irritado raiva"}, {char: "ðŸ‘", name: "like joinha ok yes"},
+        {char: "ðŸ‘Ž", name: "dislike nao no"}, {char: "ðŸ‘", name: "clap palmas"}, {char: "ðŸ™Œ", name: "hands maos amem"},
+        {char: "ðŸ¦Š", name: "fox raposa foxhole"}, {char: "ðŸ’£", name: "bomb bomba"}, {char: "ðŸ”«", name: "gun arma tiro"},
+        {char: "ðŸ”ª", name: "knife faca"}, {char: "ðŸ›¡ï¸", name: "shield escudo def"}, {char: "âš”ï¸", name: "sword espada ataque"},
+        {char: "ðŸª–", name: "helmet capacete soldado"}, {char: "ðŸ¥", name: "hospital medic"}, {char: "ðŸš‘", name: "ambulance ambulancia"},
+        {char: "ðŸ”¥", name: "fire fogo chama"}, {char: "âœ¨", name: "sparkles brilho"}, {char: "â¤ï¸", name: "heart coracao amor"},
+        {char: "ðŸ’€", name: "skull caveira morte dead"}, {char: "ðŸ‘½", name: "alien"}, {char: "ðŸ’©", name: "poop coco"},
+        {char: "ðŸ¤¡", name: "clown palhaco"}, {char: "ðŸ¶", name: "dog cachorro"}, {char: "ðŸ±", name: "cat gato"},
+        {char: "ðŸš—", name: "car carro logi"}, {char: "ðŸšš", name: "truck caminhao logi"}, {char: "ðŸ“¦", name: "box caixa logi supplies"}
     ]
     
     function filterEmojis(query) {
@@ -83,8 +83,8 @@ Popup {
     
     background: Rectangle {
         radius: 12
-        color: "#111c31"
-        border.color: "#24486d"
+        color: settingsController.surfaceColor
+        border.color: settingsController.borderColor
         border.width: 1
     }
     
@@ -100,12 +100,12 @@ Popup {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
                 background: Rectangle {
-                    color: root.currentTab === 0 ? "#1d3353" : "transparent"
+                    color: root.currentTab === 0 ? settingsController.controlColor : "transparent"
                     radius: 6
                 }
                 contentItem: Text {
                     text: tr("home.chat.emoji")
-                    color: root.currentTab === 0 ? "#5eead4" : "#99abc4"
+                    color: root.currentTab === 0 ? settingsController.accentColor : settingsController.mutedTextColor
                     font.bold: root.currentTab === 0
                     font.pixelSize: 13
                     horizontalAlignment: Text.AlignHCenter
@@ -117,12 +117,12 @@ Popup {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 32
                 background: Rectangle {
-                    color: root.currentTab === 1 ? "#1d3353" : "transparent"
+                    color: root.currentTab === 1 ? settingsController.controlColor : "transparent"
                     radius: 6
                 }
                 contentItem: Text {
                     text: tr("home.chat.gifs")
-                    color: root.currentTab === 1 ? "#5eead4" : "#99abc4"
+                    color: root.currentTab === 1 ? settingsController.accentColor : settingsController.mutedTextColor
                     font.bold: root.currentTab === 1
                     font.pixelSize: 13
                     horizontalAlignment: Text.AlignHCenter
@@ -145,8 +145,8 @@ Popup {
                 id: emojiSearch
                 Layout.fillWidth: true
                 placeholderText: tr("home.chat.search_emojis")
-                color: "#edf6ff"
-                background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
+                color: settingsController.textColor
+                background: Rectangle { radius: 7; color: settingsController.surfaceAltColor; border.color: settingsController.controlHoverColor }
                 onTextChanged: root.filterEmojis(text)
             }
 
@@ -160,7 +160,7 @@ Popup {
                 delegate: Rectangle {
                     width: 36
                     height: 36
-                    color: mouseEmoji.containsMouse ? "#1d3353" : "transparent"
+                    color: mouseEmoji.containsMouse ? settingsController.controlColor : "transparent"
                     radius: 6
                     Text {
                         anchors.centerIn: parent
@@ -190,8 +190,8 @@ Popup {
                 id: gifSearch
                 Layout.fillWidth: true
                 placeholderText: tr("home.chat.search_gifs_tenor")
-                color: "#edf6ff"
-                background: Rectangle { radius: 7; color: "#0e1a2d"; border.color: "#2d496f" }
+                color: settingsController.textColor
+                background: Rectangle { radius: 7; color: settingsController.surfaceAltColor; border.color: settingsController.controlHoverColor }
                 onAccepted: root.searchGifs(text)
             }
             
@@ -206,7 +206,7 @@ Popup {
                 delegate: Rectangle {
                     width: 136
                     height: 104
-                    color: "#0e1a2d"
+                    color: settingsController.surfaceAltColor
                     radius: 8
                     clip: true
                     
@@ -229,7 +229,7 @@ Popup {
                         }
                         Rectangle {
                             anchors.fill: parent
-                            color: "#ffffff"
+                            color: settingsController.textColor
                             opacity: parent.containsMouse ? 0.1 : 0
                         }
                     }
@@ -241,3 +241,5 @@ Popup {
         }
     }
 }
+
+

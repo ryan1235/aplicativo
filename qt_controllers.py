@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import colorsys
+import csv
 import ctypes
 from datetime import datetime, timezone
 import hashlib
@@ -17,6 +19,7 @@ import sys
 import threading
 import time
 from typing import Any
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -42,13 +45,10 @@ from auto_clicker import ACTION_KEYS, HOTKEYS, MOUSE_BUTTONS, POINT, RECT, AutoC
 import identify_service
 from identify_service import (
     dependencies_status as identify_dependencies_status,
+    detect_stockpile_item_regions,
+    prepare_detection_template,
+    prepare_detection_template_path,
     grab_clipboard_image,
-    grab_screen_image,
-    index_icon_templates,
-    prepare_image,
-    prepare_image_path,
-    scan_image,
-    scan_image_path,
 )
 from i18n import SUPPORTED_LANGUAGES, Translator, normalize_language
 from production_service import (
@@ -69,6 +69,7 @@ from production_service import (
     load_production_items,
     plan_transport_routes,
 )
+from personalization_store import DEFAULT_THEME_CUSTOM, load_personalization_settings, save_personalization_settings
 from settings_store import load_settings, save_settings, selected_language
 from steam_profile import SteamProfile, get_local_steam_profile
 from stockpiler import (
@@ -89,7 +90,7 @@ from stockpiler import (
 
 
 APP_TITLE = "GG Coalition"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.0.3"
 UPDATE_REPO = "ryan1235/aplicativo"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
@@ -107,6 +108,8 @@ DISCORD_API_BASE = "https://discord.com/api/v10"
 DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
 DISCORD_TOKEN_URL = f"{DISCORD_API_BASE}/oauth2/token"
 DISCORD_USER_URL = f"{DISCORD_API_BASE}/users/@me"
+FOXHOLE_WIKI_BASE_URL = "https://foxhole.wiki.gg"
+FOXHOLE_WIKI_API_URL = f"{FOXHOLE_WIKI_BASE_URL}/api.php"
 DISCORD_DEFAULT_REDIRECT_PORT = 53624
 DISCORD_DEFAULT_REDIRECT_PATH = "/discord/callback"
 DISCORD_DEFAULT_CLIENT_ID = "1512509453067358489"
@@ -116,18 +119,389 @@ QUICK_EMOJIS = ("👍", "❤️", "😂", "🔥", "✅", "🫡", "👀", "🚚",
 SOUND_DIRS = (BASE_DIR / "efeitos sonoros", BASE_DIR / "audio")
 SOUND_EXTENSIONS = (".wav", ".mp3", ".wma")
 VALID_CLOSE_ACTIONS = ("ask", "tray", "exit")
+UI_THEME_CUSTOM_DEFAULT = DEFAULT_THEME_CUSTOM
+UI_THEME_COLOR_KEYS = (
+    "accent",
+    "accent_hover",
+    "accent_panel",
+    "success",
+    "warning",
+    "warning_text",
+    "background",
+    "surface",
+    "text",
+    "text_inverse",
+    "secondary_text",
+    "muted_text",
+    "disabled_text",
+    "border",
+    "surface_alt",
+    "surface_raised",
+    "control",
+    "control_hover",
+    "danger",
+    "danger_hover",
+    "danger_panel",
+    "info",
+    "scrim",
+    "gradient_start",
+    "gradient_end",
+)
+UI_THEME_PRESETS = {
+    "coalition": {
+        "labelKey": "settings.theme_coalition",
+        "descriptionKey": "settings.theme_coalition_detail",
+        "accent": "#5eead4",
+        "accent_hover": "#34d399",
+        "accent_panel": "#123b34",
+        "success": "#62d7a4",
+        "warning": "#f59e0b",
+        "warning_text": "#ffedd5",
+        "background": "#070b16",
+        "surface": "#111c31",
+        "text": "#edf6ff",
+        "muted_text": "#9fb3c8",
+        "border": "#2b4b68",
+        "gradient_start": "#070b16",
+        "gradient_end": "#12243a",
+        "gradient_enabled": False,
+        "button_style": "solid",
+        "card_radius": 8,
+    },
+    "warden": {
+        "labelKey": "settings.theme_warden",
+        "descriptionKey": "settings.theme_warden_detail",
+        "accent": "#93c5fd",
+        "accent_hover": "#facc15",
+        "accent_panel": "#172554",
+        "success": "#7dd3fc",
+        "warning": "#facc15",
+        "warning_text": "#422006",
+        "background": "#07111d",
+        "surface": "#101827",
+        "text": "#edf6ff",
+        "muted_text": "#b6c7d9",
+        "border": "#2e4b68",
+        "gradient_start": "#07111d",
+        "gradient_end": "#1b2a3e",
+        "gradient_enabled": True,
+        "button_style": "soft",
+        "card_radius": 8,
+    },
+    "ember": {
+        "labelKey": "settings.theme_ember",
+        "descriptionKey": "settings.theme_ember_detail",
+        "accent": "#fb7185",
+        "accent_hover": "#f97316",
+        "accent_panel": "#3a1827",
+        "success": "#34d399",
+        "warning": "#f59e0b",
+        "warning_text": "#ffedd5",
+        "background": "#170b12",
+        "surface": "#26151f",
+        "text": "#fff1f2",
+        "muted_text": "#e7b5c2",
+        "border": "#713247",
+        "gradient_start": "#170b12",
+        "gradient_end": "#3a1827",
+        "gradient_enabled": True,
+        "button_style": "glass",
+        "card_radius": 10,
+    },
+    "light": {
+        "labelKey": "settings.theme_light",
+        "descriptionKey": "settings.theme_light_detail",
+        "accent": "#2563eb",
+        "accent_hover": "#1d4ed8",
+        "accent_panel": "#dbeafe",
+        "success": "#059669",
+        "warning": "#d97706",
+        "warning_text": "#7c2d12",
+        "background": "#eef4fb",
+        "surface": "#ffffff",
+        "text": "#0f172a",
+        "muted_text": "#475569",
+        "border": "#b9c8dc",
+        "gradient_start": "#f8fbff",
+        "gradient_end": "#dceafe",
+        "gradient_enabled": True,
+        "button_style": "solid",
+        "card_radius": 8,
+    },
+    "midnight": {
+        "labelKey": "settings.theme_midnight",
+        "descriptionKey": "settings.theme_midnight_detail",
+        "accent": "#38bdf8",
+        "accent_hover": "#22d3ee",
+        "accent_panel": "#0f2d3f",
+        "success": "#22c55e",
+        "warning": "#eab308",
+        "warning_text": "#fef9c3",
+        "background": "#020617",
+        "surface": "#0b1224",
+        "text": "#f8fafc",
+        "muted_text": "#94a3b8",
+        "border": "#1e3a5f",
+        "gradient_start": "#020617",
+        "gradient_end": "#111827",
+        "gradient_enabled": True,
+        "button_style": "outline",
+        "card_radius": 6,
+    },
+    "verdant": {
+        "labelKey": "settings.theme_verdant",
+        "descriptionKey": "settings.theme_verdant_detail",
+        "accent": "#84cc16",
+        "accent_hover": "#bef264",
+        "accent_panel": "#1f3515",
+        "success": "#22c55e",
+        "warning": "#fbbf24",
+        "warning_text": "#422006",
+        "background": "#07120b",
+        "surface": "#101d15",
+        "text": "#f2ffe8",
+        "muted_text": "#b4c9aa",
+        "border": "#355430",
+        "gradient_start": "#07120b",
+        "gradient_end": "#172812",
+        "gradient_enabled": True,
+        "button_style": "soft",
+        "card_radius": 8,
+    },
+    "signal": {
+        "labelKey": "settings.theme_signal",
+        "descriptionKey": "settings.theme_signal_detail",
+        "accent": "#f97316",
+        "accent_hover": "#38bdf8",
+        "accent_panel": "#3b2212",
+        "success": "#10b981",
+        "warning": "#facc15",
+        "warning_text": "#422006",
+        "background": "#11100b",
+        "surface": "#1d1a14",
+        "text": "#fff7ed",
+        "muted_text": "#d7c6a8",
+        "border": "#60412b",
+        "gradient_start": "#11100b",
+        "gradient_end": "#2a1a12",
+        "gradient_enabled": True,
+        "button_style": "solid",
+        "card_radius": 6,
+    },
+    "aurora": {
+        "labelKey": "settings.theme_aurora",
+        "descriptionKey": "settings.theme_aurora_detail",
+        "accent": "#a78bfa",
+        "accent_hover": "#5eead4",
+        "accent_panel": "#281f45",
+        "success": "#5eead4",
+        "warning": "#f0abfc",
+        "warning_text": "#fae8ff",
+        "background": "#0f1020",
+        "surface": "#181827",
+        "text": "#f8f7ff",
+        "muted_text": "#c8bddc",
+        "border": "#4b3d71",
+        "gradient_start": "#0f1020",
+        "gradient_end": "#17233b",
+        "gradient_enabled": True,
+        "button_style": "glass",
+        "card_radius": 12,
+    },
+    "accessible": {
+        "labelKey": "settings.theme_accessible",
+        "descriptionKey": "settings.theme_accessible_detail",
+        "accent": "#8ab4ff",
+        "accent_hover": "#f0abfc",
+        "accent_panel": "#13243d",
+        "success": "#8ab4ff",
+        "warning": "#f0abfc",
+        "warning_text": "#fce7f3",
+        "background": "#050b16",
+        "surface": "#101b2f",
+        "text": "#f8fafc",
+        "muted_text": "#bfdbfe",
+        "border": "#3b82f6",
+        "gradient_start": "#050b16",
+        "gradient_end": "#1b2240",
+        "gradient_enabled": False,
+        "button_style": "outline",
+        "card_radius": 8,
+    },
+    "custom": {
+        "labelKey": "settings.theme_custom",
+        "descriptionKey": "settings.theme_custom_detail",
+        **UI_THEME_CUSTOM_DEFAULT,
+    },
+}
+UI_THEME_ORDER = ("coalition", "warden", "ember", "verdant", "signal", "aurora", "light", "midnight", "accessible", "custom")
+UI_THEME_COLOR_FIELDS = {
+    "accent": "settings.theme_color_accent",
+    "accent_panel": "settings.theme_color_panel",
+    "background": "settings.theme_color_background",
+    "surface": "settings.theme_color_surface",
+    "text": "settings.theme_color_text",
+    "text_inverse": "settings.theme_color_text_inverse",
+    "secondary_text": "settings.theme_color_secondary_text",
+    "muted_text": "settings.theme_color_muted_text",
+    "disabled_text": "settings.theme_color_disabled_text",
+    "border": "settings.theme_color_border",
+    "surface_alt": "settings.theme_color_surface_alt",
+    "surface_raised": "settings.theme_color_surface_raised",
+    "control": "settings.theme_color_control",
+    "control_hover": "settings.theme_color_control_hover",
+    "danger": "settings.theme_color_danger",
+    "danger_panel": "settings.theme_color_danger_panel",
+    "info": "settings.theme_color_info",
+    "scrim": "settings.theme_color_scrim",
+    "gradient_start": "settings.theme_color_gradient_start",
+    "gradient_end": "settings.theme_color_gradient_end",
+    "success": "settings.theme_color_success",
+    "warning": "settings.theme_color_warning",
+}
+UI_THEME_BUTTON_STYLES = {
+    "solid": "settings.button_style_solid",
+    "soft": "settings.button_style_soft",
+    "outline": "settings.button_style_outline",
+    "glass": "settings.button_style_glass",
+}
+UI_THEME_CARD_RADIUS_OPTIONS = {
+    "4": "settings.card_radius_sharp",
+    "6": "settings.card_radius_compact",
+    "8": "settings.card_radius_standard",
+    "12": "settings.card_radius_round",
+    "16": "settings.card_radius_pill",
+}
+UI_THEME_ACCENT_PALETTES = {
+    "teal": {"label": "Teal", "accent": "#5eead4", "support": "#34d399", "warm": "#f59e0b"},
+    "sky": {"label": "Sky", "accent": "#38bdf8", "support": "#818cf8", "warm": "#facc15"},
+    "lime": {"label": "Lime", "accent": "#84cc16", "support": "#22c55e", "warm": "#fbbf24"},
+    "amber": {"label": "Amber", "accent": "#f59e0b", "support": "#ef4444", "warm": "#fde047"},
+    "rose": {"label": "Rose", "accent": "#fb7185", "support": "#f97316", "warm": "#facc15"},
+    "violet": {"label": "Violet", "accent": "#a78bfa", "support": "#5eead4", "warm": "#f0abfc"},
+    "steel": {"label": "Steel", "accent": "#93c5fd", "support": "#64748b", "warm": "#facc15"},
+    "white": {"label": "White", "accent": "#e5e7eb", "support": "#38bdf8", "warm": "#fbbf24"},
+}
+COLORBLIND_PROFILE_ORDER = ("none", "unsure", "deuteranopia", "protanopia", "tritanopia", "achromatopsia")
+COLORBLIND_PROFILE_OPTIONS = {
+    "none": {
+        "labelKey": "settings.colorblind_profile_none",
+        "descriptionKey": "settings.colorblind_profile_none_detail",
+    },
+    "unsure": {
+        "labelKey": "settings.colorblind_profile_unsure",
+        "descriptionKey": "settings.colorblind_profile_unsure_detail",
+    },
+    "deuteranopia": {
+        "labelKey": "settings.colorblind_profile_deuteranopia",
+        "descriptionKey": "settings.colorblind_profile_deuteranopia_detail",
+    },
+    "protanopia": {
+        "labelKey": "settings.colorblind_profile_protanopia",
+        "descriptionKey": "settings.colorblind_profile_protanopia_detail",
+    },
+    "tritanopia": {
+        "labelKey": "settings.colorblind_profile_tritanopia",
+        "descriptionKey": "settings.colorblind_profile_tritanopia_detail",
+    },
+    "achromatopsia": {
+        "labelKey": "settings.colorblind_profile_achromatopsia",
+        "descriptionKey": "settings.colorblind_profile_achromatopsia_detail",
+    },
+}
+COLORBLIND_THEME_OVERRIDES = {
+    "unsure": {
+        "accent": "#3b82f6",
+        "accent_hover": "#ec4899",
+        "accent_panel": "#162a4a",
+        "success": "#38bdf8",
+        "warning": "#f97316",
+        "warning_text": "#fff7ed",
+        "danger": "#ec4899",
+        "danger_hover": "#be185d",
+        "danger_panel": "#3b1730",
+        "info": "#a78bfa",
+        "border": "#3b82f6",
+        "control": "#1d3353",
+        "control_hover": "#375f8f",
+    },
+    "deuteranopia": {
+        "accent": "#2563eb",
+        "accent_hover": "#f97316",
+        "accent_panel": "#132a4f",
+        "success": "#06b6d4",
+        "warning": "#f59e0b",
+        "warning_text": "#fff7ed",
+        "danger": "#db2777",
+        "danger_hover": "#be185d",
+        "danger_panel": "#38162b",
+        "info": "#7c3aed",
+        "border": "#3b82f6",
+        "control": "#1d3353",
+        "control_hover": "#365d8d",
+    },
+    "protanopia": {
+        "accent": "#1d4ed8",
+        "accent_hover": "#f59e0b",
+        "accent_panel": "#13264a",
+        "success": "#0891b2",
+        "warning": "#fbbf24",
+        "warning_text": "#422006",
+        "danger": "#c026d3",
+        "danger_hover": "#a21caf",
+        "danger_panel": "#321636",
+        "info": "#9333ea",
+        "border": "#3b82f6",
+        "control": "#1d3353",
+        "control_hover": "#365d8d",
+    },
+    "tritanopia": {
+        "accent": "#ec4899",
+        "accent_hover": "#14b8a6",
+        "accent_panel": "#3a1730",
+        "success": "#14b8a6",
+        "warning": "#f97316",
+        "warning_text": "#fff7ed",
+        "danger": "#f43f5e",
+        "danger_hover": "#e11d48",
+        "danger_panel": "#3b1624",
+        "info": "#a855f7",
+        "border": "#ec4899",
+        "control": "#3a2145",
+        "control_hover": "#58356e",
+    },
+    "achromatopsia": {
+        "accent": "#f8fafc",
+        "accent_hover": "#cbd5e1",
+        "accent_panel": "#263241",
+        "success": "#f8fafc",
+        "warning": "#e2e8f0",
+        "warning_text": "#020617",
+        "danger": "#ffffff",
+        "danger_hover": "#cbd5e1",
+        "danger_panel": "#334155",
+        "info": "#e2e8f0",
+        "border": "#f8fafc",
+        "control": "#334155",
+        "control_hover": "#475569",
+        "text_inverse": "#020617",
+        "scrim": "#000000",
+    },
+}
 STARTUP_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 OVERLAY_PALETTES = {
     "Azul": {"bg": "#071426", "panel": "#12233d", "accent": "#8ab4ff"},
     "Verde": {"bg": "#071a18", "panel": "#10342e", "accent": "#5eead4"},
     "Roxo": {"bg": "#141125", "panel": "#2a214b", "accent": "#c4b5fd"},
     "Vermelho": {"bg": "#211016", "panel": "#431926", "accent": "#ff8aa0"},
+    "Acessivel": {"bg": "#050b16", "panel": "#162a4a", "accent": "#f97316"},
 }
 OVERLAY_COLOR_LABEL_KEYS = {
     "Azul": "overlay.color_blue",
     "Verde": "overlay.color_green",
     "Roxo": "overlay.color_purple",
     "Vermelho": "overlay.color_red",
+    "Acessivel": "overlay.color_accessible",
 }
 
 PANEL_REQUIRED_ACCESS_LEVEL = 2
@@ -261,6 +635,275 @@ def debug_login_response(label: str, result: dict[str, Any]) -> None:
 def file_url(path: str | Path) -> str:
     return QUrl.fromLocalFile(str(Path(path).resolve())).toString()
 
+
+def markdown_inline_html(value: object) -> str:
+    text = html.escape(str(value or ""))
+    text = re.sub(
+        r"@\[video\]\((https?://[^)\s]+)\)",
+        r'<a href="\1">video</a>',
+        text,
+    )
+    text = re.sub(
+        r"!\[([^\]]*)\]\((https?://[^)\s]+)\)",
+        r'<img src="\2" alt="\1" />',
+        text,
+    )
+    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", text)
+    text = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r'<a href="\2">\1</a>', text)
+    return text
+
+
+def markdown_table_html(rows: list[str]) -> str:
+    parsed: list[list[str]] = []
+    for index, row in enumerate(rows):
+        if index == 1:
+            continue
+        cells = [markdown_inline_html(cell.strip()) for cell in row.strip().strip("|").split("|")]
+        parsed.append(cells)
+    if not parsed:
+        return ""
+    headers = "".join(f"<th>{cell}</th>" for cell in parsed[0])
+    body_rows = "".join(
+        f"<tr>{''.join(f'<td>{cell}</td>' for cell in row)}</tr>"
+        for row in parsed[1:]
+    )
+    return f"<table><thead><tr>{headers}</tr></thead><tbody>{body_rows}</tbody></table>"
+
+
+def markdown_is_table_start(lines: list[str], index: int) -> bool:
+    current = lines[index] if index < len(lines) else ""
+    next_line = lines[index + 1] if index + 1 < len(lines) else ""
+    return bool(
+        re.match(r"^\s*\|.+\|\s*$", current)
+        and re.match(r"^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$", next_line)
+    )
+
+
+def markdown_to_html(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    lines = text.splitlines()
+    output: list[str] = []
+    list_tag = ""
+
+    def close_list() -> None:
+        nonlocal list_tag
+        if list_tag:
+            output.append(f"</{list_tag}>")
+            list_tag = ""
+
+    index = 0
+    while index < len(lines):
+        raw = lines[index]
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            close_list()
+            index += 1
+            continue
+        if re.match(r"^(-{3,}|\*{3,})$", stripped):
+            close_list()
+            output.append("<hr />")
+            index += 1
+            continue
+        if markdown_is_table_start(lines, index):
+            close_list()
+            table_rows: list[str] = []
+            while index < len(lines) and re.match(r"^\s*\|.+\|\s*$", lines[index]):
+                table_rows.append(lines[index])
+                index += 1
+            output.append(markdown_table_html(table_rows))
+            continue
+        heading = re.match(r"^(#{1,3})\s+(.+)$", line)
+        if heading:
+            close_list()
+            level = len(heading.group(1))
+            output.append(f"<h{level}>{markdown_inline_html(heading.group(2))}</h{level}>")
+            index += 1
+            continue
+        unordered = re.match(r"^[-*]\s+(.+)$", line)
+        ordered = re.match(r"^\d+\.\s+(.+)$", line)
+        if unordered or ordered:
+            tag = "ul" if unordered else "ol"
+            if list_tag != tag:
+                close_list()
+                list_tag = tag
+                output.append(f"<{tag}>")
+            output.append(f"<li>{markdown_inline_html((unordered or ordered).group(1))}</li>")
+            index += 1
+            continue
+        if line.startswith("> "):
+            close_list()
+            output.append(f"<blockquote>{markdown_inline_html(line[2:])}</blockquote>")
+            index += 1
+            continue
+        close_list()
+        output.append(f"<p>{markdown_inline_html(line)}</p>")
+        index += 1
+
+    close_list()
+    return "".join(output)
+
+
+def markdown_to_news_blocks(value: object) -> list[dict[str, Any]]:
+    html_value = markdown_to_html(value)
+    return [{"type": "rich", "html": html_value}] if html_value else []
+
+
+def news_image_url(item: dict[str, Any]) -> str:
+    for key in (
+        "thumbnailUrl",
+        "thumbnail",
+        "coverImageUrl",
+        "coverImage",
+        "imageUrl",
+        "image",
+        "bannerUrl",
+        "banner",
+    ):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    media = item.get("media") if isinstance(item.get("media"), dict) else {}
+    for key in ("thumbnailUrl", "url", "imageUrl", "src"):
+        value = str(media.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+_LOCATION_INDEX: dict[tuple[str, str], dict[str, str]] | None = None
+_LOCATION_CODE_INDEX: dict[tuple[str, str], dict[str, str]] | None = None
+
+
+def _compact_location_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _strip_hex_suffix(value: str) -> str:
+    text = str(value or "").strip()
+    return text[:-3] if text.lower().endswith("hex") else text
+
+
+def stockpile_map_name(value: str) -> str:
+    text = _strip_hex_suffix(value).strip()
+    if not text:
+        return ""
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _first_mapping_text(mapping: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = mapping.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _warehouse_nested(warehouse: dict[str, Any]) -> dict[str, Any]:
+    nested = warehouse.get("warehouse")
+    return nested if isinstance(nested, dict) else {}
+
+
+def _warehouse_text(warehouse: dict[str, Any], *keys: str) -> str:
+    return _first_mapping_text(warehouse, *keys) or _first_mapping_text(_warehouse_nested(warehouse), *keys)
+
+
+def _town_code_candidates(town: str, code: str = "") -> list[str]:
+    candidates: list[str] = []
+    code_text = re.sub(r"[^A-Z0-9]", "", str(code or "").upper())
+    if len(code_text) >= 2:
+        candidates.append(code_text[-2:])
+
+    normalized = re.sub(r"['’]", "", str(town or ""))
+    words = re.findall(r"[A-Za-z0-9]+", normalized)
+    if words:
+        candidates.append("".join(word[0].upper() for word in words))
+        main_words = [word for word in words if word.lower() not in {"a", "an", "of", "the"}]
+        if main_words:
+            candidates.append("".join(word[0].upper() for word in main_words))
+
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def _stockpile_town_code(value: str) -> str:
+    parts = [part.strip() for part in str(value or "").upper().split("-") if part.strip()]
+    if len(parts) >= 2 and parts[0] == "GG":
+        return re.sub(r"[^A-Z0-9]", "", parts[1])
+    return ""
+
+
+def _location_index() -> dict[tuple[str, str], dict[str, str]]:
+    global _LOCATION_INDEX
+    if _LOCATION_INDEX is not None:
+        return _LOCATION_INDEX
+
+    index: dict[tuple[str, str], dict[str, str]] = {}
+    for csv_path in (resource_dir() / "locations.csv", BASE_DIR / "locations.csv"):
+        if not csv_path.exists():
+            continue
+        try:
+            with csv_path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    region = str(row.get("Hex") or "").strip()
+                    town = str(row.get("Loc") or "").strip()
+                    if not region or not town:
+                        continue
+                    index[(_compact_location_key(region), town.lower())] = {
+                        "region": region,
+                        "town": town,
+                        "mapName": stockpile_map_name(region),
+                        "code": str(row.get("Code") or "").strip(),
+                    }
+        except OSError:
+            continue
+        if index:
+            break
+    _LOCATION_INDEX = index
+    return index
+
+
+def _location_code_index() -> dict[tuple[str, str], dict[str, str]]:
+    global _LOCATION_CODE_INDEX
+    if _LOCATION_CODE_INDEX is not None:
+        return _LOCATION_CODE_INDEX
+
+    index: dict[tuple[str, str], dict[str, str]] = {}
+    for location in _location_index().values():
+        map_key = _compact_location_key(location.get("region", ""))
+        if not map_key:
+            continue
+        for code in _town_code_candidates(location.get("town", ""), location.get("code", "")):
+            index.setdefault((map_key, code), location)
+    _LOCATION_CODE_INDEX = index
+    return index
+
+
+def _location_from_stockpile_code(map_key: str, *values: str) -> dict[str, str] | None:
+    if not map_key:
+        return None
+    locations = _location_code_index()
+    for value in values:
+        town_code = _stockpile_town_code(value)
+        if not town_code:
+            continue
+        matched = locations.get((map_key, town_code))
+        if matched:
+            return matched
+    return None
+
+
 def obfuscate_string(text: str) -> str:
     if not text:
         return text
@@ -280,6 +923,70 @@ def now_milliseconds() -> int:
 
 def now_label() -> str:
     return datetime.now().strftime("%H:%M:%S")
+
+
+def parse_stockpile_datetime(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number > 10_000_000_000:
+            number /= 1000.0
+        try:
+            return datetime.fromtimestamp(number, tz=timezone.utc).astimezone()
+        except (OSError, OverflowError, ValueError):
+            return None
+    text = str(value).strip()
+    if not text or text == "-":
+        return None
+    if text.isdigit():
+        return parse_stockpile_datetime(int(text))
+    normalized = text.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                break
+            except ValueError:
+                continue
+        else:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone()
+
+
+def format_relative_time(value: Any, translator: Translator | None = None) -> str:
+    parsed = parse_stockpile_datetime(value)
+    if parsed is None:
+        return ""
+    seconds = max(0, int((datetime.now().astimezone() - parsed).total_seconds()))
+
+    def relative_text(key: str, **kwargs: Any) -> str:
+        if translator is not None:
+            return translator.t(key, **kwargs)
+        return Translator("pt").t(key, **kwargs)
+
+    if seconds < 60:
+        return relative_text("time.now")
+    minutes = seconds // 60
+    if minutes == 1:
+        return relative_text("time.minute_ago")
+    if minutes < 60:
+        return relative_text("time.minutes_ago", count=minutes)
+    hours = minutes // 60
+    if hours == 1:
+        return relative_text("time.hour_ago")
+    if hours < 24:
+        return relative_text("time.hours_ago", count=hours)
+    days = hours // 24
+    if days == 1:
+        return relative_text("time.day_ago")
+    if days < 30:
+        return relative_text("time.days_ago", count=days)
+    return parsed.strftime("%d/%m/%Y")
 
 
 def debug_memory(label: str) -> None:
@@ -604,6 +1311,11 @@ class DictListModel(QAbstractListModel):
     def set_items(self, items: list[dict[str, Any]]) -> None:
         if items == self._items:
             return
+        if len(items) == len(self._items):
+            self._items = items
+            if items:
+                self.dataChanged.emit(self.index(0, 0), self.index(len(items) - 1, 0), list(self._role_names.keys()))
+            return
         self.beginResetModel()
         self._items = items
         self.endResetModel()
@@ -683,6 +1395,8 @@ class AppController(QObject):
     startupDialogChanged = Signal()
     tutorialDialogChanged = Signal()
     panelAccessResult = Signal(str, str)
+    sidebarChanged = Signal()
+    sidebarSectionsChanged = Signal()
 
     def __init__(self, i18n: I18nController, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -702,6 +1416,11 @@ class AppController(QObject):
         self._tutorial_dialog_body = ""
         self._pending_admin_panel_token = ""
         self._panel_access_check_running = False
+        app_settings = self._app_settings()
+        self._sidebar_open = bool(app_settings.get("sidebar_open", True))
+        self._sidebar_sections_revision = 0
+        self._sidebar_sections = self._normalized_sidebar_sections(app_settings.get("sidebar_sections"))
+        save_settings(self.settings)
         self._tutorial_key_by_page = {
             "home": "inicio",
             "chat": "chat",
@@ -713,23 +1432,10 @@ class AppController(QObject):
             "identifyItem": "identify_item",
             "notifications": "notificacoes",
             "settings": "configuracoes",
+            "personalization": "configuracoes",
         }
-        self.navItems = DictListModel(["key", "labelKey", "icon", "section"], self)
-        self.navItems.set_items(
-            [
-                {"key": "home", "labelKey": "nav.home", "icon": "home", "section": "core"},
-
-                {"key": "chat", "labelKey": "home.chat.title", "icon": "chat", "section": "core"},
-                {"key": "autoClicker", "labelKey": "nav.auto_clicker", "icon": "bolt", "section": "automation"},
-                {"key": "timeTask", "labelKey": "timetask.nav", "icon": "timer", "section": "automation"},
-                {"key": "stockpile", "labelKey": "stockpile.nav", "icon": "database", "section": "logistics"},
-                {"key": "production", "labelKey": "production.nav", "icon": "factory", "section": "logistics"},
-                {"key": "itemSearch", "labelKey": "item_search.nav", "icon": "search", "section": "tools"},
-                {"key": "identifyItem", "labelKey": "identify.nav", "icon": "target", "section": "tools"},
-                {"key": "notifications", "labelKey": "notifications.nav", "icon": "bell", "section": "tools"},
-                {"key": "settings", "labelKey": "nav.settings", "icon": "settings", "section": "config"},
-            ]
-        )
+        self.navItems = DictListModel(["key", "labelKey", "icon", "section", "searchText"], self)
+        self.navItems.set_items(self._nav_items())
         self._foxhole_timer = QTimer(self)
         self._foxhole_timer.timeout.connect(self.refreshFoxholeStatus)
         self._foxhole_timer.start(5000)
@@ -883,6 +1589,14 @@ class AppController(QObject):
     def hasTutorial(self) -> bool:
         return self._tutorial_key_for_page(self._current_page) is not None
 
+    @Property(bool, notify=sidebarChanged)
+    def sidebarOpen(self) -> bool:
+        return self._sidebar_open
+
+    @Property(int, notify=sidebarSectionsChanged)
+    def sidebarSectionsRevision(self) -> int:
+        return self._sidebar_sections_revision
+
     @Property(bool, notify=tutorialDialogChanged)
     def tutorialDialogVisible(self) -> bool:
         return self._tutorial_dialog_visible
@@ -901,6 +1615,36 @@ class AppController(QObject):
             return
         self._current_page = page
         self.currentPageChanged.emit()
+
+    @Slot(bool)
+    def setSidebarOpen(self, open_: bool) -> None:
+        open_ = bool(open_)
+        if open_ == self._sidebar_open:
+            return
+        self._sidebar_open = open_
+        self._app_settings()["sidebar_open"] = open_
+        save_settings(self.settings)
+        self.sidebarChanged.emit()
+
+    @Slot(str, result=bool)
+    def sidebarSectionExpanded(self, section: str) -> bool:
+        return bool(self._sidebar_sections.get(str(section or ""), True))
+
+    @Slot(str, bool)
+    def setSidebarSectionExpanded(self, section: str, expanded: bool) -> None:
+        section = str(section or "").strip()
+        if section not in self._sidebar_sections:
+            return
+        expanded = bool(expanded)
+        if self._sidebar_sections.get(section) == expanded:
+            return
+        if not expanded and sum(1 for value in self._sidebar_sections.values() if value) <= 1:
+            return
+        self._sidebar_sections[section] = expanded
+        self._app_settings()["sidebar_sections"] = dict(self._sidebar_sections)
+        save_settings(self.settings)
+        self._sidebar_sections_revision += 1
+        self.sidebarSectionsChanged.emit()
 
     @Slot(str, result=str)
     def assetUrl(self, relative: str) -> str:
@@ -925,6 +1669,60 @@ class AppController(QObject):
 
     def _app_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("app", {})
+
+    def _nav_items(self) -> list[dict[str, str]]:
+        items = [
+            {"key": "home", "labelKey": "nav.home", "icon": "home", "section": "core"},
+            {"key": "chat", "labelKey": "home.chat.title", "icon": "chat", "section": "core"},
+            {"key": "autoClicker", "labelKey": "nav.auto_clicker", "icon": "bolt", "section": "automation"},
+            {"key": "timeTask", "labelKey": "timetask.nav", "icon": "timer", "section": "automation"},
+            {"key": "stockpile", "labelKey": "stockpile.nav", "icon": "database", "section": "logistics"},
+            {"key": "production", "labelKey": "production.nav", "icon": "factory", "section": "logistics"},
+            {"key": "itemSearch", "labelKey": "item_search.nav", "icon": "search", "section": "tools"},
+            {"key": "identifyItem", "labelKey": "identify.nav", "icon": "target", "section": "tools"},
+            {"key": "notifications", "labelKey": "notifications.nav", "icon": "bell", "section": "tools"},
+            {"key": "settings", "labelKey": "nav.settings", "icon": "settings", "section": "config"},
+            {"key": "personalization", "labelKey": "nav.personalization", "icon": "palette", "section": "config"},
+        ]
+        catalogs = {language: Translator._load_catalog(language) for language in SUPPORTED_LANGUAGES}
+        fallback = Translator._load_catalog("pt")
+        for item in items:
+            terms = [item["key"], item["labelKey"], item["section"]]
+            for catalog in catalogs.values():
+                terms.append(catalog.get(item["labelKey"], fallback.get(item["labelKey"], "")))
+            item["searchText"] = self._nav_search_text(terms)
+        return items
+
+    @staticmethod
+    def _nav_search_text(values: list[str]) -> str:
+        terms = []
+        for value in values:
+            text = str(value or "").strip().lower()
+            if not text:
+                continue
+            normalized = "".join(
+                char for char in unicodedata.normalize("NFKD", text)
+                if not unicodedata.combining(char)
+            )
+            terms.append(text)
+            terms.append(normalized)
+        return " ".join(dict.fromkeys(terms))
+
+    def _normalized_sidebar_sections(self, value: Any) -> dict[str, bool]:
+        defaults = {
+            "core": True,
+            "automation": True,
+            "logistics": True,
+            "tools": True,
+            "config": True,
+        }
+        if isinstance(value, dict):
+            for key in defaults:
+                defaults[key] = bool(value.get(key, defaults[key]))
+        if not any(defaults.values()):
+            defaults = {key: True for key in defaults}
+        self._app_settings()["sidebar_sections"] = dict(defaults)
+        return defaults
 
     def _tutorial_key_for_page(self, page: str) -> str | None:
         key = self._tutorial_key_by_page.get(page)
@@ -979,16 +1777,12 @@ class AppController(QObject):
     @Slot()
     def showReleaseNotesIfNeeded(self) -> None:
         app_settings = self._app_settings()
-        if app_settings.get("last_release_notes_version") == APP_VERSION:
-            self._startup_dialog_visible = False
-            self.startupDialogChanged.emit()
-            return
-        self._set_startup_dialog(
-            kind="release",
-            title=self._t("release.heading", version=APP_VERSION),
-            subtitle=self._t("release.subtitle"),
-            body=self._t("release.body"),
-        )
+        if app_settings.get("last_release_notes_version") != APP_VERSION:
+            app_settings["last_release_notes_version"] = APP_VERSION
+            save_settings(self.settings)
+        self._startup_dialog_visible = False
+        self._startup_dialog_kind = ""
+        self.startupDialogChanged.emit()
 
     @Slot()
     def acceptStartupDialog(self) -> None:
@@ -1058,6 +1852,10 @@ class SettingsController(QObject):
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
+        self.personalization = load_personalization_settings(
+            legacy_theme=self.settings.get("app", {}).get("theme"),
+            legacy_colorblind=self.settings.get("app", {}).get("colorblind_mode_enabled"),
+        )
         self._revision = 0
         self._status = ""
 
@@ -1069,13 +1867,185 @@ class SettingsController(QObject):
     def _notification_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("notifications", {})
 
+    def _personalization_settings(self) -> dict[str, Any]:
+        if not isinstance(self.personalization, dict):
+            self.personalization = load_personalization_settings()
+        self.personalization.setdefault("colorblind_mode_enabled", False)
+        self.personalization.setdefault("colorblind_profile", "none")
+        self.personalization.setdefault("sidebar_width", 286)
+        return self.personalization
+
+    def _theme_settings(self) -> dict[str, Any]:
+        personalization = self._personalization_settings()
+        theme = personalization.setdefault("theme", {})
+        if not isinstance(theme, dict):
+            theme = {}
+            personalization["theme"] = theme
+        theme.setdefault("preset", "coalition")
+        custom = theme.setdefault("custom", {})
+        if not isinstance(custom, dict):
+            custom = {}
+            theme["custom"] = custom
+        for key, value in UI_THEME_CUSTOM_DEFAULT.items():
+            custom.setdefault(key, value)
+        return theme
+
     def _save(self) -> None:
         save_settings(self.settings)
         self._revision += 1
         self.changed.emit()
 
+    def _save_personalization(self) -> None:
+        save_personalization_settings(self.personalization)
+        self._revision += 1
+        self.changed.emit()
+
     def _app_bool(self, key: str, default: bool = True) -> bool:
         return bool(self._app_settings().get(key, default))
+
+    def _ui_palette(self) -> dict[str, str]:
+        preset = self.themePreset
+        colorblind_profile = self.colorblindProfile
+        if bool(self._personalization_settings().get("colorblind_mode_enabled", False)):
+            preset = "accessible"
+        if preset == "custom":
+            custom = self._theme_settings().get("custom", {})
+            palette = {
+                key: self._sanitize_hex_color(custom.get(key), str(UI_THEME_CUSTOM_DEFAULT[key]))
+                for key in UI_THEME_COLOR_KEYS
+            }
+            palette["gradient_enabled"] = bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"]))
+            palette["button_style"] = self._sanitize_button_style(custom.get("button_style"))
+            palette["card_radius"] = self._sanitize_card_radius(custom.get("card_radius"))
+            return palette
+        source = UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"])
+        palette = {key: source.get(key, fallback) for key, fallback in UI_THEME_CUSTOM_DEFAULT.items()}
+        if preset == "accessible":
+            palette.update(COLORBLIND_THEME_OVERRIDES.get(colorblind_profile, COLORBLIND_THEME_OVERRIDES["unsure"]))
+        return palette
+
+    @staticmethod
+    def _sanitize_hex_color(value: Any, fallback: str) -> str:
+        text = str(value or "").strip()
+        if re.fullmatch(r"#[0-9a-fA-F]{6}", text):
+            return text.lower()
+        if re.fullmatch(r"[0-9a-fA-F]{6}", text):
+            return f"#{text.lower()}"
+        return fallback
+
+    @staticmethod
+    def _sanitize_button_style(value: Any) -> str:
+        text = str(value or "").strip()
+        return text if text in UI_THEME_BUTTON_STYLES else "solid"
+
+    @staticmethod
+    def _sanitize_card_radius(value: Any) -> int:
+        try:
+            radius = int(value)
+        except (TypeError, ValueError):
+            return 8
+        return radius if str(radius) in UI_THEME_CARD_RADIUS_OPTIONS else 8
+
+    @staticmethod
+    def _hex_to_rgb(value: Any, fallback: str = "#5eead4") -> tuple[int, int, int]:
+        text = SettingsController._sanitize_hex_color(value, fallback).lstrip("#")
+        return int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16)
+
+    @staticmethod
+    def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+        return "#{:02x}{:02x}{:02x}".format(
+            max(0, min(255, int(rgb[0]))),
+            max(0, min(255, int(rgb[1]))),
+            max(0, min(255, int(rgb[2]))),
+        )
+
+    @classmethod
+    def _mix_color(cls, left: Any, right: Any, amount: float) -> str:
+        amount = max(0.0, min(1.0, float(amount)))
+        left_rgb = cls._hex_to_rgb(left)
+        right_rgb = cls._hex_to_rgb(right)
+        return cls._rgb_to_hex(tuple(round(left_rgb[i] * (1.0 - amount) + right_rgb[i] * amount) for i in range(3)))
+
+    @classmethod
+    def _shift_color(cls, value: Any, hue_shift: float = 0.0, saturation: float = 1.0, lightness: float = 1.0) -> str:
+        r, g, b = cls._hex_to_rgb(value)
+        hue, lum, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        hue = (hue + hue_shift) % 1.0
+        lum = max(0.03, min(0.96, lum * lightness))
+        sat = max(0.08, min(1.0, sat * saturation))
+        nr, ng, nb = colorsys.hls_to_rgb(hue, lum, sat)
+        return cls._rgb_to_hex((round(nr * 255), round(ng * 255), round(nb * 255)))
+
+    @classmethod
+    def _theme_from_accent(cls, accent: Any, support: Any | None = None, warm: Any | None = None) -> dict[str, Any]:
+        accent_color = cls._sanitize_hex_color(accent, UI_THEME_CUSTOM_DEFAULT["accent"])
+        support_color = cls._sanitize_hex_color(support, cls._shift_color(accent_color, 0.28, 0.9, 0.95))
+        warm_color = cls._sanitize_hex_color(warm, cls._shift_color(accent_color, 0.12, 1.05, 1.08))
+        background = cls._shift_color(accent_color, -0.03, 0.45, 0.18)
+        surface = cls._mix_color(background, "#ffffff", 0.055)
+        panel = cls._mix_color(background, accent_color, 0.24)
+        return {
+            "accent": accent_color,
+            "accent_hover": support_color,
+            "accent_panel": panel,
+            "success": support_color,
+            "warning": warm_color,
+            "warning_text": "#fff7ed",
+            "background": background,
+            "surface": surface,
+            "text": "#f8fafc",
+            "text_inverse": "#041014",
+            "secondary_text": "#c7d7ed",
+            "muted_text": cls._mix_color("#94a3b8", accent_color, 0.14),
+            "disabled_text": "#7f93ad",
+            "border": cls._mix_color(surface, accent_color, 0.36),
+            "surface_alt": cls._mix_color(background, "#ffffff", 0.04),
+            "surface_raised": cls._mix_color(background, accent_color, 0.14),
+            "control": cls._mix_color(background, accent_color, 0.28),
+            "control_hover": cls._mix_color(background, accent_color, 0.42),
+            "danger": "#fb7185",
+            "danger_hover": "#e11d48",
+            "danger_panel": cls._mix_color(background, "#fb7185", 0.22),
+            "info": cls._shift_color(accent_color, 0.08, 0.95, 1.1),
+            "scrim": "#000000",
+            "gradient_start": background,
+            "gradient_end": cls._mix_color(background, support_color, 0.18),
+            "gradient_enabled": True,
+            "button_style": secrets.choice(tuple(UI_THEME_BUTTON_STYLES.keys())),
+            "card_radius": secrets.choice(tuple(int(key) for key in UI_THEME_CARD_RADIUS_OPTIONS.keys())),
+        }
+
+    def _palette_for_preview(self, preset: str) -> dict[str, str]:
+        if preset == "custom":
+            custom = self._theme_settings().get("custom", {})
+            palette = {
+                key: self._sanitize_hex_color(custom.get(key), str(UI_THEME_CUSTOM_DEFAULT[key]))
+                for key in UI_THEME_COLOR_KEYS
+            }
+            palette["gradient_enabled"] = bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"]))
+            palette["button_style"] = self._sanitize_button_style(custom.get("button_style"))
+            palette["card_radius"] = self._sanitize_card_radius(custom.get("card_radius"))
+            return palette
+        palette = UI_THEME_PRESETS.get(preset, UI_THEME_PRESETS["coalition"])
+        return {key: palette.get(key, fallback) for key, fallback in UI_THEME_CUSTOM_DEFAULT.items()}
+
+    def _activate_custom_from_current_palette(self) -> tuple[dict[str, Any], bool]:
+        theme = self._theme_settings()
+        custom = theme.setdefault("custom", {})
+        changed = theme.get("preset") != "custom" or bool(self._personalization_settings().get("colorblind_mode_enabled", False))
+        if theme.get("preset") != "custom":
+            current = self._ui_palette()
+            custom = {
+                key: current.get(key, UI_THEME_CUSTOM_DEFAULT[key])
+                for key in UI_THEME_COLOR_KEYS
+            }
+            custom["gradient_enabled"] = bool(current.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"]))
+            custom["button_style"] = self._sanitize_button_style(current.get("button_style"))
+            custom["card_radius"] = self._sanitize_card_radius(current.get("card_radius"))
+            theme["custom"] = custom
+        theme["preset"] = "custom"
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        return custom, changed
 
     @Property(int, notify=changed)
     def revision(self) -> int:
@@ -1099,6 +2069,213 @@ class SettingsController(QObject):
     @Property(str, notify=changed)
     def status(self) -> str:
         return self._status
+
+    @Property("QVariant", notify=changed)
+    def themePresets(self) -> list[dict[str, Any]]:
+        current = self.themePreset
+        return [
+            {
+                "key": key,
+                "labelKey": str(UI_THEME_PRESETS[key]["labelKey"]),
+                "descriptionKey": str(UI_THEME_PRESETS[key]["descriptionKey"]),
+                "accent": str(self._palette_for_preview(key)["accent"]),
+                "accentPanel": str(self._palette_for_preview(key)["accent_panel"]),
+                "success": str(self._palette_for_preview(key)["success"]),
+                "warning": str(self._palette_for_preview(key)["warning"]),
+                "background": str(self._palette_for_preview(key)["background"]),
+                "surface": str(self._palette_for_preview(key)["surface"]),
+                "border": str(self._palette_for_preview(key)["border"]),
+                "active": key == current,
+            }
+            for key in UI_THEME_ORDER
+        ]
+
+    @Property("QVariant", constant=True)
+    def accentPaletteOptions(self) -> list[dict[str, str]]:
+        return [
+            {
+                "key": key,
+                "label": str(value["label"]),
+                "accent": str(value["accent"]),
+                "support": str(value["support"]),
+                "warm": str(value["warm"]),
+            }
+            for key, value in UI_THEME_ACCENT_PALETTES.items()
+        ]
+
+    @Property("QVariant", notify=changed)
+    def colorblindProfileOptions(self) -> list[dict[str, Any]]:
+        current = self.colorblindProfile
+        return [
+            {
+                "key": key,
+                "labelKey": str(COLORBLIND_PROFILE_OPTIONS[key]["labelKey"]),
+                "descriptionKey": str(COLORBLIND_PROFILE_OPTIONS[key]["descriptionKey"]),
+                "active": key == current and (key == "none" or self.colorblindModeEnabled),
+            }
+            for key in COLORBLIND_PROFILE_ORDER
+        ]
+
+    @Property("QVariant", constant=True)
+    def themeColorFields(self) -> list[dict[str, str]]:
+        return [{"key": key, "labelKey": label_key} for key, label_key in UI_THEME_COLOR_FIELDS.items()]
+
+    @Property("QVariant", constant=True)
+    def buttonStyleOptions(self) -> list[dict[str, str]]:
+        return [{"key": key, "labelKey": label_key} for key, label_key in UI_THEME_BUTTON_STYLES.items()]
+
+    @Property("QVariant", constant=True)
+    def cardRadiusOptions(self) -> list[dict[str, str]]:
+        return [{"key": key, "labelKey": label_key} for key, label_key in UI_THEME_CARD_RADIUS_OPTIONS.items()]
+
+    @Property(str, notify=changed)
+    def themePreset(self) -> str:
+        preset = str(self._theme_settings().get("preset") or "coalition")
+        if bool(self._personalization_settings().get("colorblind_mode_enabled", False)):
+            return "accessible"
+        return preset if preset in UI_THEME_PRESETS else "coalition"
+
+    @Property(str, notify=changed)
+    def colorblindProfile(self) -> str:
+        profile = str(self._personalization_settings().get("colorblind_profile") or "none").strip()
+        return profile if profile in COLORBLIND_PROFILE_OPTIONS else "none"
+
+    @Property(bool, notify=changed)
+    def customThemeEnabled(self) -> bool:
+        return self.themePreset == "custom"
+
+    @Property(str, notify=changed)
+    def accentColor(self) -> str:
+        return self._ui_palette()["accent"]
+
+    @Property(str, notify=changed)
+    def accentHoverColor(self) -> str:
+        return self._ui_palette()["accent_hover"]
+
+    @Property(str, notify=changed)
+    def accentPanelColor(self) -> str:
+        return self._ui_palette()["accent_panel"]
+
+    @Property(str, notify=changed)
+    def successColor(self) -> str:
+        return self._ui_palette()["success"]
+
+    @Property(str, notify=changed)
+    def warningColor(self) -> str:
+        return self._ui_palette()["warning"]
+
+    @Property(str, notify=changed)
+    def warningTextColor(self) -> str:
+        return self._ui_palette()["warning_text"]
+
+    @Property(str, notify=changed)
+    def backgroundColor(self) -> str:
+        return str(self._ui_palette()["background"])
+
+    @Property(str, notify=changed)
+    def surfaceColor(self) -> str:
+        return str(self._ui_palette()["surface"])
+
+    @Property(str, notify=changed)
+    def textColor(self) -> str:
+        return str(self._ui_palette()["text"])
+
+    @Property(str, notify=changed)
+    def textInverseColor(self) -> str:
+        return str(self._ui_palette()["text_inverse"])
+
+    @Property(str, notify=changed)
+    def secondaryTextColor(self) -> str:
+        return str(self._ui_palette()["secondary_text"])
+
+    @Property(str, notify=changed)
+    def mutedTextColor(self) -> str:
+        return str(self._ui_palette()["muted_text"])
+
+    @Property(str, notify=changed)
+    def disabledTextColor(self) -> str:
+        return str(self._ui_palette()["disabled_text"])
+
+    @Property(str, notify=changed)
+    def borderColor(self) -> str:
+        return str(self._ui_palette()["border"])
+
+    @Property(str, notify=changed)
+    def surfaceAltColor(self) -> str:
+        return str(self._ui_palette()["surface_alt"])
+
+    @Property(str, notify=changed)
+    def surfaceRaisedColor(self) -> str:
+        return str(self._ui_palette()["surface_raised"])
+
+    @Property(str, notify=changed)
+    def controlColor(self) -> str:
+        return str(self._ui_palette()["control"])
+
+    @Property(str, notify=changed)
+    def controlHoverColor(self) -> str:
+        return str(self._ui_palette()["control_hover"])
+
+    @Property(str, notify=changed)
+    def dangerColor(self) -> str:
+        return str(self._ui_palette()["danger"])
+
+    @Property(str, notify=changed)
+    def dangerHoverColor(self) -> str:
+        return str(self._ui_palette()["danger_hover"])
+
+    @Property(str, notify=changed)
+    def dangerPanelColor(self) -> str:
+        return str(self._ui_palette()["danger_panel"])
+
+    @Property(str, notify=changed)
+    def infoColor(self) -> str:
+        return str(self._ui_palette()["info"])
+
+    @Property(str, notify=changed)
+    def scrimColor(self) -> str:
+        return str(self._ui_palette()["scrim"])
+
+    @Property(str, notify=changed)
+    def gradientStartColor(self) -> str:
+        return str(self._ui_palette()["gradient_start"])
+
+    @Property(str, notify=changed)
+    def gradientEndColor(self) -> str:
+        return str(self._ui_palette()["gradient_end"])
+
+    @Property(bool, notify=changed)
+    def gradientEnabled(self) -> bool:
+        return bool(self._ui_palette()["gradient_enabled"])
+
+    @Property(str, notify=changed)
+    def buttonStyle(self) -> str:
+        return self._sanitize_button_style(self._ui_palette()["button_style"])
+
+    @Property(int, notify=changed)
+    def buttonRadius(self) -> int:
+        radius = self.cardRadius
+        if self.buttonStyle == "outline":
+            return max(4, min(10, radius))
+        if self.buttonStyle == "glass":
+            return max(8, radius)
+        return max(4, min(16, radius))
+
+    @Property(int, notify=changed)
+    def cardRadius(self) -> int:
+        return self._sanitize_card_radius(self._ui_palette()["card_radius"])
+
+    @Property(bool, notify=changed)
+    def colorblindModeEnabled(self) -> bool:
+        return bool(self._personalization_settings().get("colorblind_mode_enabled", False))
+
+    @Property(int, notify=changed)
+    def sidebarWidth(self) -> int:
+        try:
+            width = int(self._personalization_settings().get("sidebar_width", 286))
+        except (TypeError, ValueError):
+            width = 286
+        return max(240, min(340, width))
 
     @Property(bool, notify=changed)
     def stockpileSoundEnabled(self) -> bool:
@@ -1165,6 +2342,162 @@ class SettingsController(QObject):
         self._status = ""
         self._save()
 
+    @Slot(bool)
+    def setColorblindModeEnabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self.colorblindModeEnabled == enabled:
+            return
+        self._personalization_settings()["colorblind_mode_enabled"] = enabled
+        if enabled:
+            if self.colorblindProfile == "none":
+                self._personalization_settings()["colorblind_profile"] = "unsure"
+            self._theme_settings()["preset"] = "accessible"
+        self._save_personalization()
+
+    @Slot(str)
+    def setColorblindProfile(self, profile: str) -> None:
+        profile = str(profile or "").strip()
+        if profile not in COLORBLIND_PROFILE_OPTIONS:
+            return
+        personalization = self._personalization_settings()
+        enabled = profile != "none"
+        if personalization.get("colorblind_profile") == profile and bool(personalization.get("colorblind_mode_enabled", False)) == enabled:
+            return
+        personalization["colorblind_profile"] = profile
+        personalization["colorblind_mode_enabled"] = enabled
+        if enabled:
+            self._theme_settings()["preset"] = "accessible"
+        self._save_personalization()
+
+    @Slot(int)
+    def setSidebarWidth(self, width: int) -> None:
+        try:
+            value = int(width)
+        except (TypeError, ValueError):
+            return
+        value = max(240, min(340, value))
+        personalization = self._personalization_settings()
+        if int(personalization.get("sidebar_width", 286)) == value:
+            return
+        personalization["sidebar_width"] = value
+        self._save_personalization()
+
+    @Slot(str)
+    def setThemePreset(self, preset: str) -> None:
+        preset = str(preset or "").strip()
+        if preset not in UI_THEME_PRESETS:
+            return
+        self._personalization_settings()["colorblind_mode_enabled"] = preset == "accessible"
+        if preset == "accessible" and self.colorblindProfile == "none":
+            self._personalization_settings()["colorblind_profile"] = "unsure"
+        theme = self._theme_settings()
+        if theme.get("preset") == preset and self.themePreset == preset:
+            return
+        theme["preset"] = preset
+        self._save_personalization()
+
+    @Slot(str, result=str)
+    def customThemeColor(self, key: str) -> str:
+        key = str(key or "").strip()
+        if key not in UI_THEME_COLOR_FIELDS:
+            return ""
+        fallback = UI_THEME_CUSTOM_DEFAULT.get(key, "#5eead4")
+        return self._sanitize_hex_color(self._theme_settings().get("custom", {}).get(key), fallback)
+
+    @Slot(str, str)
+    def setCustomThemeColor(self, key: str, value: str) -> None:
+        key = str(key or "").strip()
+        if key not in UI_THEME_COLOR_FIELDS:
+            return
+        fallback = UI_THEME_CUSTOM_DEFAULT.get(key, "#5eead4")
+        color = self._sanitize_hex_color(value, fallback)
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        custom = theme.setdefault("custom", {})
+        if custom.get(key) == color and self.themePreset == "custom":
+            return
+        custom[key] = color
+        if key == "accent":
+            custom["accent_hover"] = color
+        if key == "warning":
+            custom["warning_text"] = "#fef3c7"
+        self._save_personalization()
+
+    @Slot(bool)
+    def setThemeGradientEnabled(self, enabled: bool) -> None:
+        custom, activated = self._activate_custom_from_current_palette()
+        enabled = bool(enabled)
+        if bool(custom.get("gradient_enabled", UI_THEME_CUSTOM_DEFAULT["gradient_enabled"])) == enabled and not activated:
+            return
+        custom["gradient_enabled"] = enabled
+        self._save_personalization()
+
+    @Slot(str)
+    def setThemeButtonStyle(self, style: str) -> None:
+        style = self._sanitize_button_style(style)
+        custom, activated = self._activate_custom_from_current_palette()
+        if self._sanitize_button_style(custom.get("button_style")) == style and not activated:
+            return
+        custom["button_style"] = style
+        self._save_personalization()
+
+    @Slot(str)
+    def setThemeCardRadius(self, radius: str) -> None:
+        value = self._sanitize_card_radius(radius)
+        custom, activated = self._activate_custom_from_current_palette()
+        if self._sanitize_card_radius(custom.get("card_radius")) == value and not activated:
+            return
+        custom["card_radius"] = value
+        self._save_personalization()
+
+    @Slot(str)
+    def applyAccentPalette(self, key: str) -> None:
+        key = str(key or "").strip()
+        option = UI_THEME_ACCENT_PALETTES.get(key)
+        if not option:
+            return
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        theme["custom"] = self._theme_from_accent(option["accent"], option["support"], option["warm"])
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
+
+    @Slot(str)
+    def generateThemeFromAccent(self, value: str) -> None:
+        accent = self._sanitize_hex_color(value, UI_THEME_CUSTOM_DEFAULT["accent"])
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        theme["custom"] = self._theme_from_accent(accent)
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
+
+    @Slot()
+    def randomizeCustomTheme(self) -> None:
+        option = secrets.choice(tuple(UI_THEME_ACCENT_PALETTES.values()))
+        hue_shift = (secrets.randbelow(41) - 20) / 360.0
+        accent = self._shift_color(option["accent"], hue_shift, 1.0, 1.0)
+        support = self._shift_color(option["support"], hue_shift / 2.0, 1.0, 1.0)
+        warm = self._shift_color(option["warm"], -hue_shift / 3.0, 1.0, 1.0)
+        custom = self._theme_from_accent(accent, support, warm)
+        custom["button_style"] = secrets.choice(("solid", "soft", "outline", "glass"))
+        custom["card_radius"] = secrets.choice((4, 6, 8, 12, 16))
+        custom["gradient_enabled"] = secrets.choice((True, True, False))
+
+        theme = self._theme_settings()
+        theme["preset"] = "custom"
+        theme["custom"] = custom
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
+
+    @Slot()
+    def resetCustomTheme(self) -> None:
+        theme = self._theme_settings()
+        theme["custom"] = dict(UI_THEME_CUSTOM_DEFAULT)
+        theme["preset"] = "custom"
+        self._personalization_settings()["colorblind_mode_enabled"] = False
+        self._save_personalization()
+
     @Slot(str, bool)
     def setNotificationEnabled(self, key: str, enabled: bool) -> None:
         enabled = bool(enabled)
@@ -1184,6 +2517,16 @@ class SettingsController(QObject):
     @Slot(result=str)
     def settingsPath(self) -> str:
         return str(settings_path())
+
+    @Slot(result=str)
+    def personalizationPath(self) -> str:
+        from personalization_store import PERSONALIZATION_PATH
+
+        return str(PERSONALIZATION_PATH)
+
+    @Slot(result=str)
+    def personalizationJson(self) -> str:
+        return json.dumps(self.personalization, indent=2, ensure_ascii=False)
 
     @Slot(result=str)
     def settingsJson(self) -> str:
@@ -1235,6 +2578,9 @@ class AutoClickerController(QObject):
     statusFromWorker = Signal(str)
     menuRequested = Signal()
     orderRequested = Signal(str)
+    DEFAULT_INTERVAL = 0.05
+    LEGACY_DEFAULT_INTERVAL = 0.5
+    MODE_KEYS = ("auto", "move", "pilot", "right_hold", "fixed", "artillery")
 
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -1282,6 +2628,29 @@ class AutoClickerController(QObject):
         orders = [str(item).strip() for item in self._clicker_settings().get("f5_orders", []) if str(item).strip()]
         return orders or ["Diesel", "Cmats", "Bmats", "Emats"]
 
+    def _click_interval(self) -> float:
+        data = self._clicker_settings()
+        try:
+            value = float(data.get("interval", self.DEFAULT_INTERVAL))
+        except (TypeError, ValueError):
+            value = self.DEFAULT_INTERVAL
+        if abs(value - self.LEGACY_DEFAULT_INTERVAL) < 0.0001:
+            value = self.DEFAULT_INTERVAL
+        value = round(max(0.03, min(5.0, value)), 2)
+        data["interval"] = value
+        return value
+
+    def _mode_enabled_settings(self) -> dict[str, bool]:
+        data = self._clicker_settings()
+        raw = data.get("modes_enabled", {})
+        raw = raw if isinstance(raw, dict) else {}
+        modes = {key: bool(raw.get(key, True)) for key in self.MODE_KEYS}
+        data["modes_enabled"] = modes
+        return modes
+
+    def _mode_enabled(self, key: str) -> bool:
+        return bool(self._mode_enabled_settings().get(key, True))
+
     def _refresh_models(self) -> None:
         data = self._clicker_settings()
         self.slots.set_items(
@@ -1303,8 +2672,9 @@ class AutoClickerController(QObject):
         self.clicker.configure(
             str(data.get("hotkey", "F3")),
             str(data.get("mouse_button", "Esquerdo")),
-            0.3,
+            self._click_interval(),
         )
+        self.clicker.configure_modes_enabled(self._mode_enabled_settings())
         self.clicker.configure_action_hotkeys(
             str(data.get("move_hotkey", "F2")),
             str(data.get("fixed_hotkey", "F6")),
@@ -1313,7 +2683,7 @@ class AutoClickerController(QObject):
             str(data.get("right_hold_hotkey", "F9")),
         )
         self.clicker.shift_enabled = bool(data.get("shift_enabled", False))
-        self.clicker.w_doubletap_enabled = bool(data.get("w_doubletap_enabled", True))
+        self.clicker.w_doubletap_enabled = bool(data.get("w_doubletap_enabled", False))
         self.clicker.right_doubletap_enabled = bool(data.get("right_doubletap_enabled", False))
         self.clicker.set_slot_positions(
             {
@@ -1429,7 +2799,35 @@ class AutoClickerController(QObject):
 
     @Property(float, notify=changed)
     def interval(self) -> float:
-        return 0.3
+        return self._click_interval()
+
+    @Property(bool, notify=changed)
+    def autoModeEnabled(self) -> bool:
+        return self._mode_enabled("auto")
+
+    @Property(bool, notify=changed)
+    def moveModeEnabled(self) -> bool:
+        return self._mode_enabled("move")
+
+    @Property(bool, notify=changed)
+    def pilotModeEnabled(self) -> bool:
+        return self._mode_enabled("pilot")
+
+    @Property(bool, notify=changed)
+    def rightHoldModeEnabled(self) -> bool:
+        return self._mode_enabled("right_hold")
+
+    @Property(bool, notify=changed)
+    def fixedModeEnabled(self) -> bool:
+        return self._mode_enabled("fixed")
+
+    @Property(bool, notify=changed)
+    def artilleryModeEnabled(self) -> bool:
+        return self._mode_enabled("artillery")
+
+    @Property(bool, notify=changed)
+    def allModesEnabled(self) -> bool:
+        return all(self._mode_enabled(key) for key in self.MODE_KEYS)
 
     @Property(str, notify=changed)
     def targetTitle(self) -> str:
@@ -1447,7 +2845,7 @@ class AutoClickerController(QObject):
         if self.clicker.enabled:
             items.append(f"AUTO {self.hotkey} ({self.interval:.2f}s)")
         if self.clicker.move_click_enabled:
-            items.append(f"MOVE {self.moveHotkey}")
+            items.append(f"LEFT HOLD {self.moveHotkey}")
         if self.clicker.fixed_click_enabled:
             items.append(f"FIXED {self.fixedHotkey}")
             items.append("SLOTS 1-4")
@@ -1475,12 +2873,12 @@ class AutoClickerController(QObject):
         if getattr(self.clicker, "artillery_enabled", False):
             return f"Artilharia {self.artilleryHotkey}: R + clique"
         if getattr(self.clicker, "move_click_enabled", False):
-            return f"Move-click {self.moveHotkey}: segurando clique"
+            return f"Left Hold {self.moveHotkey}: segurando esquerdo"
         if getattr(self.clicker, "fixed_click_enabled", False):
             return f"Fixo {self.fixedHotkey}: clique + slots 1-4"
         if getattr(self.clicker, "enabled", False):
             shift = " + Shift" if getattr(self.clicker, "shift_pressed", False) else ""
-            return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.1f}s{shift}"
+            return f"Auto {self.hotkey}: {self.mouseButton} | {self.interval:.2f}s{shift}"
         # Use dynamic W/Z label (respecting FR override)
         wlabel = getattr(self.clicker, "w_hold_label", lambda: "W")()
         return f"{self.hotkey} auto | {self.pilotHotkey} {wlabel} | {self.rightHoldHotkey} direito"
@@ -1550,7 +2948,7 @@ class AutoClickerController(QObject):
         if getattr(self.clicker, "right_hold_enabled", False):
             return f"Esc ou {self.rightHoldHotkey} para soltar"
         if getattr(self.clicker, "artillery_enabled", False):
-            return "Esc ou clique direito para parar"
+            return f"{self.artilleryHotkey} ou clique esquerdo para parar"
         if getattr(self.clicker, "move_click_enabled", False):
             return f"Esc ou {self.moveHotkey} para soltar"
         if getattr(self.clicker, "fixed_click_enabled", False):
@@ -1588,7 +2986,7 @@ class AutoClickerController(QObject):
         return "\n".join(
             [
                 f"{self.hotkey}: default Auto Clicker toggle",
-                f"{self.moveHotkey}: Move-Click hold",
+                f"{self.moveHotkey}: Left Hold",
                 f"{self.fixedHotkey}: fixed double-click and slots 1-4",
                 f"{self.pilotHotkey}: pilot sequence",
                 f"{self.rightHoldHotkey}: right mouse hold",
@@ -1601,6 +2999,41 @@ class AutoClickerController(QObject):
     def toggle(self) -> None:
         if self.clicker:
             self.clicker.toggle()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def toggleMoveClick(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_move_click()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def togglePilot(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_pilot()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def toggleRightHold(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_right_hold()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def toggleFixedClick(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_fixed_click()
+            self._status = self.clicker.status_text()
+            self.changed.emit()
+
+    @Slot()
+    def toggleArtillery(self) -> None:
+        if self.clicker:
+            self.clicker.toggle_artillery()
             self._status = self.clicker.status_text()
             self.changed.emit()
 
@@ -1666,7 +3099,7 @@ class AutoClickerController(QObject):
 
     @Property(bool, notify=changed)
     def wDoubleTapEnabled(self) -> bool:
-        return bool(self._clicker_settings().get("w_doubletap_enabled", True))
+        return bool(self._clicker_settings().get("w_doubletap_enabled", False))
 
     @Slot(bool)
     def setWDoubleTapEnabled(self, value: bool) -> None:
@@ -1688,9 +3121,41 @@ class AutoClickerController(QObject):
             self.clicker.right_doubletap_enabled = bool(value)
         self.changed.emit()
 
+    @Slot(str, bool)
+    def setModeEnabled(self, key: str, enabled: bool) -> None:
+        key = str(key or "")
+        if key not in self.MODE_KEYS:
+            return
+        modes = self._mode_enabled_settings()
+        enabled = bool(enabled)
+        if modes.get(key, True) == enabled:
+            return
+        modes[key] = enabled
+        self._clicker_settings()["modes_enabled"] = modes
+        save_settings(self.settings)
+        if self.clicker:
+            self.clicker.configure_modes_enabled(modes)
+            self._status = self.clicker.status_text()
+        self.changed.emit()
+
+    @Slot()
+    def toggleAllModes(self) -> None:
+        enabled = not all(self._mode_enabled(key) for key in self.MODE_KEYS)
+        modes = {key: enabled for key in self.MODE_KEYS}
+        self._clicker_settings()["modes_enabled"] = modes
+        save_settings(self.settings)
+        if self.clicker:
+            self.clicker.configure_modes_enabled(modes, stop_disabled=False)
+            self._status = self.clicker.status_text()
+        self.changed.emit()
+
     @Slot(float)
     def setInterval(self, value: float) -> None:
-        pass
+        try:
+            interval = float(value)
+        except (TypeError, ValueError):
+            interval = self.DEFAULT_INTERVAL
+        self._clicker_settings()["interval"] = round(max(0.03, min(5.0, interval)), 2)
         self._save_and_apply()
 
     @Slot(int, int, int)
@@ -1748,6 +3213,7 @@ class AutoClickerController(QObject):
         save_settings(self.settings)
         self._apply_settings()
         self._refresh_models()
+        self.changed.emit()
     @Slot()
     def shutdown(self) -> None:
         if self.clicker:
@@ -1782,6 +3248,9 @@ class StockpileController(QObject):
         self._visual_items: list[dict[str, Any]] = []
         self._visual_warehouses: list[dict[str, Any]] = []
         self._visual_warehouse = ""
+        self._visual_items_by_warehouse: dict[str, list[dict[str, Any]]] = {}
+        self._visual_warehouse_lookup: dict[str, dict[str, Any]] = {}
+        self._visual_warehouse_options: list[dict[str, Any]] = []
         self._cached_visual_groups: list[dict[str, Any]] = []
         self._watcher: StockpileWatcher | None = None
         self._api_loading = False
@@ -1902,25 +3371,7 @@ class StockpileController(QObject):
 
     @Property("QVariantList", notify=changed)
     def visualWarehouseOptions(self) -> list[dict[str, Any]]:
-        options = []
-        groups = {}
-        for item in self._visual_warehouses:
-            name = str(item.get("name") or "")
-            if not name:
-                continue
-            parts = name.split("/", 1)
-            if len(parts) == 2:
-                hex_name = parts[0]
-                if hex_name.endswith("Hex"):
-                    hex_name = hex_name[:-3]
-                groups.setdefault(hex_name, []).append({"text": parts[1], "id": name, "type": "item"})
-            else:
-                groups.setdefault("Outros", []).append({"text": name, "id": name, "type": "item"})
-                
-        for h, items in groups.items():
-            options.append({"text": h, "type": "header"})
-            options.extend(items)
-        return options
+        return list(self._visual_warehouse_options)
 
     @Property(str, notify=changed)
     def visualWarehouse(self) -> str:
@@ -1928,14 +3379,25 @@ class StockpileController(QObject):
 
     @Property(str, notify=changed)
     def visualWarehouseUpdatedAt(self) -> str:
-        for item in self._visual_warehouses:
-            if str(item.get("name") or "") == self._visual_warehouse:
-                return format_to_local_pc_time(str(item.get("last_update") or item.get("updatedAt") or "-"))
+        item = self._visual_warehouse_lookup.get(self._visual_warehouse)
+        if item:
+            return self._visual_update_label(item)
         return "-"
+
+    @Property(bool, notify=changed)
+    def visualWarehouseInactive(self) -> bool:
+        item = self._visual_warehouse_lookup.get(self._visual_warehouse)
+        return self._depot_state(item) == "inactive" if item else False
 
     @Property("QVariantList", notify=visualGroupRowsChanged)
     def visualGroupRows(self) -> list[dict[str, Any]]:
         return self._cached_visual_groups
+
+    @Slot()
+    def refreshLocalizedTimes(self) -> None:
+        if self._visual_warehouses:
+            self._visual_warehouse_options = self._build_visual_warehouse_options(self._visual_warehouses)
+        self.changed.emit()
 
     @Slot(str)
     def setVisualWarehouse(self, value: str) -> None:
@@ -2096,6 +3558,186 @@ class StockpileController(QObject):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _apply_visual_data(
+        self,
+        rows: list[dict[str, Any]],
+        warehouses: list[dict[str, Any]],
+        stockpiles: list[str],
+    ) -> None:
+        raw_items_by_warehouse: dict[str, list[dict[str, Any]]] = {}
+        for item in rows:
+            warehouse = str(item.get("warehouse") or "")
+            if warehouse:
+                raw_items_by_warehouse.setdefault(warehouse, []).append(item)
+
+        enriched_warehouses: list[dict[str, Any]] = []
+        self._visual_warehouse_lookup = {}
+        for warehouse in warehouses:
+            name = str(warehouse.get("name") or "")
+            if not name:
+                continue
+            enriched = dict(warehouse)
+            for row in raw_items_by_warehouse.get(name, []):
+                if not enriched.get("map_name") and row.get("map_name"):
+                    enriched["map_name"] = row.get("map_name")
+                if not enriched.get("town") and row.get("town"):
+                    enriched["town"] = row.get("town")
+                if enriched.get("map_name") and enriched.get("town"):
+                    break
+            enriched.update(self._warehouse_meta(enriched))
+            if not self._is_visual_stockpile_visible(enriched):
+                continue
+            enriched_warehouses.append(enriched)
+            self._visual_warehouse_lookup[name] = enriched
+
+        visible_names = set(self._visual_warehouse_lookup)
+        self._visual_items_by_warehouse = {
+            name: raw_items_by_warehouse.get(name, [])
+            for name in visible_names
+        }
+        self._visual_items = [
+            item
+            for item in rows
+            if str(item.get("warehouse") or "") in visible_names
+        ]
+        self._visual_warehouses = enriched_warehouses
+        self._visual_warehouse_options = self._build_visual_warehouse_options(enriched_warehouses)
+
+        available = [name for name in stockpiles if name in self._visual_warehouse_lookup] or [
+            str(item.get("name") or "") for item in enriched_warehouses
+        ]
+        available = [name for name in available if name]
+        if available and self._visual_warehouse not in self._visual_warehouse_lookup:
+            self._visual_warehouse = available[0]
+        elif not available:
+            self._visual_warehouse = ""
+
+        self._cached_visual_groups = self._visual_groups()
+        self.visualGroupRowsChanged.emit()
+
+    @staticmethod
+    def _warehouse_parts(name: str) -> tuple[str, str, str]:
+        parts = [part.strip() for part in str(name or "").split("/") if part.strip()]
+        if len(parts) >= 3:
+            return parts[0], parts[-2], parts[-1]
+        if len(parts) == 2:
+            second = parts[1]
+            if re.match(r"^[A-Z]{1,4}[-_]", second, re.IGNORECASE):
+                return parts[0], "", second
+            return parts[0], second, second
+        value = parts[0] if parts else "-"
+        return "", "", value
+
+    @staticmethod
+    def _depot_state(warehouse: dict[str, Any] | None) -> str:
+        if not isinstance(warehouse, dict):
+            return ""
+        return _warehouse_text(warehouse, "depot_state", "DepotState", "depotState", "state", "State").lower()
+
+    @staticmethod
+    def _has_gg_stockpile_prefix(warehouse: dict[str, Any]) -> bool:
+        name = str(warehouse.get("name") or "")
+        _map_part, _town, name_code = StockpileController._warehouse_parts(name)
+        candidates = [
+            warehouse.get("code"),
+            warehouse.get("display_name"),
+            warehouse.get("warehouse_name"),
+            warehouse.get("stockpile_name"),
+            warehouse.get("neme"),
+            name_code,
+        ]
+        return any(str(value or "").strip().upper().startswith("GG-") for value in candidates)
+
+    @classmethod
+    def _is_visual_stockpile_visible(cls, warehouse: dict[str, Any]) -> bool:
+        return cls._has_gg_stockpile_prefix(warehouse) and cls._depot_state(warehouse) != "lost"
+
+    @staticmethod
+    def _warehouse_meta(warehouse: dict[str, Any] | str) -> dict[str, str]:
+        if isinstance(warehouse, dict):
+            name = str(warehouse.get("name") or "")
+            explicit_title = str(
+                warehouse.get("display_name")
+                or warehouse.get("warehouse_name")
+                or warehouse.get("stockpile_name")
+                or warehouse.get("neme")
+                or ""
+            ).strip()
+            explicit_map = _warehouse_text(warehouse, "map_name", "MapName", "mapName", "map", "Map", "region", "Region")
+            explicit_town = _warehouse_text(warehouse, "town", "Town", "town_name", "TownName", "townName", "location", "Location")
+        else:
+            name = str(warehouse or "")
+            explicit_title = ""
+            explicit_map = ""
+            explicit_town = ""
+        map_part, town, code = StockpileController._warehouse_parts(name)
+        lookup_map = explicit_map or map_part
+        lookup_town = explicit_town or town
+        map_key = _compact_location_key(_strip_hex_suffix(lookup_map))
+        matched = _location_index().get((map_key, lookup_town.lower())) if map_key and lookup_town else None
+        if not matched:
+            matched = _location_from_stockpile_code(map_key, explicit_title, code, name)
+
+        region = str((matched or {}).get("region") or _strip_hex_suffix(lookup_map) or "Outros")
+        display_town = str(explicit_town or (matched or {}).get("town") or town)
+        map_name = explicit_map or stockpile_map_name(str((matched or {}).get("mapName") or "") or map_part or region)
+        place_path = f"{map_name} - {display_town}" if map_name and display_town else map_name or display_town or name
+        title = explicit_title or (code if code and code != display_town else name)
+        return {
+            "region": map_name or region,
+            "town": display_town,
+            "code": title,
+            "mapName": map_name,
+            "placePath": place_path,
+            "optionSubText": display_town or place_path,
+            "groupLabel": map_name or region or place_path,
+        }
+
+    @staticmethod
+    def _warehouse_option_sort_key(item: dict[str, Any]) -> tuple[str, str, str]:
+        return (
+            str(item.get("groupLabel") or item.get("region") or "").lower(),
+            str(item.get("town") or "").lower(),
+            str(item.get("code") or item.get("name") or "").lower(),
+        )
+
+    def _build_visual_warehouse_options(self, warehouses: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for warehouse in sorted(warehouses, key=self._warehouse_option_sort_key):
+            group_label = str(warehouse.get("groupLabel") or warehouse.get("placePath") or warehouse.get("region") or "Outros")
+            grouped.setdefault(group_label, []).append(warehouse)
+
+        options: list[dict[str, Any]] = []
+        translator = Translator(selected_language(self.settings))
+        for region in sorted(grouped, key=lambda value: value.lower()):
+            options.append({"text": region, "type": "header"})
+            for warehouse in grouped[region]:
+                updated_raw = str(warehouse.get("last_update") or warehouse.get("updatedAt") or "")
+                inactive = self._depot_state(warehouse) == "inactive"
+                options.append(
+                    {
+                        "text": str(warehouse.get("code") or warehouse.get("name") or "-"),
+                        "subText": str(warehouse.get("optionSubText") or warehouse.get("placePath") or ""),
+                        "sideText": "" if inactive else format_relative_time(updated_raw, translator),
+                        "sideTextKey": "stockpile.visual_depot_inactive_badge" if inactive else "",
+                        "sideColor": "#ef4444" if inactive else "",
+                        "id": str(warehouse.get("name") or ""),
+                        "type": "item",
+                    }
+                )
+        return options
+
+    def _visual_update_label(self, item: dict[str, Any]) -> str:
+        updated_raw = str(item.get("last_update") or item.get("updatedAt") or "")
+        absolute = format_to_local_pc_time(updated_raw)
+        relative = format_relative_time(updated_raw, Translator(selected_language(self.settings)))
+        place = str(item.get("placePath") or item.get("name") or "-")
+        if absolute and absolute != "-" and relative:
+            return f"{place} - {absolute} ({relative})"
+        if absolute and absolute != "-":
+            return f"{place} - {absolute}"
+        return place
+
     @Slot(object)
     def _handle_status(self, message: object) -> None:
         if isinstance(message, dict):
@@ -2125,16 +3767,7 @@ class StockpileController(QObject):
             self._stockpile_list = ", ".join(stockpiles[:6]) if stockpiles else "-"
             if len(stockpiles) > 6:
                 self._stockpile_list = f"{self._stockpile_list} +{len(stockpiles) - 6}"
-            self._visual_items = rows
-            self._visual_warehouses = warehouses
-            if stockpiles and self._visual_warehouse not in stockpiles:
-                self._visual_warehouse = stockpiles[0]
-            elif not stockpiles:
-                self._visual_warehouse = ""
-            
-            # Update cache since items or warehouse might have changed
-            self._cached_visual_groups = self._visual_groups()
-            self.visualGroupRowsChanged.emit()
+            self._apply_visual_data(rows, warehouses, stockpiles)
             
             self._last_response = str(message.get("api_response") or message.get("message") or "OK")
             self._last_update = str(message.get("api_last_update") or api_last_update(message) or now_label())
@@ -2310,7 +3943,7 @@ class StockpileController(QObject):
 
     def _visual_groups(self) -> list[dict[str, Any]]:
         warehouse = self._visual_warehouse
-        rows = [item for item in self._visual_items if str(item.get("warehouse") or "") == warehouse]
+        rows = list(self._visual_items_by_warehouse.get(warehouse, []))
         positive_rows = [item for item in rows if int(item.get("quantity", 0) or 0) > 0]
         rows = positive_rows or rows
         ordered_keys = [
@@ -2504,6 +4137,7 @@ class ChatController(QObject):
         )
         self.onlineUsers = DictListModel(["name", "detail", "avatar", "mention", "discordId", "connectedAt", "regiment", "role"], self)
         self.mentionSuggestions = DictListModel(["name", "detail", "avatar", "mention", "discordId"], self)
+        self.i18n.changed.connect(self._refresh_room_labels)
         self.resultFromWorker.connect(self._apply_result)
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(15000)
@@ -2572,24 +4206,19 @@ class ChatController(QObject):
 
 
 
-    @Slot(str)
-    def fetchProfile(self, user_id: str = "") -> None:
+    @Slot()
+    def fetchProfile(self) -> None:
         if not self._token:
             return
-        is_current_user = not str(user_id or "").strip()
-        if is_current_user:
-            if self._profile_loading:
-                return
-            self._profile_loading = True
-            self._status = self._t("status.checking_user")
-            self.changed.emit()
+        if self._profile_loading:
+            return
+        self._profile_loading = True
+        self.changed.emit()
+
         def run():
             try:
-                if user_id:
-                    res = http_json("GET", f"/chat/users/{user_id}/profile", token=self._token)
-                else:
-                    res = http_json("GET", "/chat/profile", token=self._token)
-                profile = res.get("profile") if isinstance(res.get("profile"), dict) else res
+                res = http_json("GET", "/chat/profile", token=self._token)
+                profile = res.get("profile") if isinstance(res.get("profile"), dict) else {}
                 if isinstance(profile, dict) and isinstance(res.get("panelAccess"), dict):
                     profile = dict(profile)
                     profile["panelAccess"] = res.get("panelAccess")
@@ -3562,6 +5191,8 @@ class ChatController(QObject):
             rooms = payload.get("chats") or payload.get("rooms") or []
             self.rooms.set_items([self._room_to_row(room) for room in rooms])
             self._status = f"{len(rooms)} chat rooms loaded"
+            if self._selected_room:
+                self._selected_room_label = self._room_label(self._selected_room)
             if not self._selected_room and rooms:
                 first = self._room_to_row(rooms[0])
                 self.selectRoom(str(first["slug"]))
@@ -3671,9 +5302,11 @@ class ChatController(QObject):
 
     def _room_to_row(self, room: dict[str, Any]) -> dict[str, Any]:
         slug = str(room.get("slug") or room.get("id") or "")
+        raw_label = str(room.get("name") or room.get("label") or slug or "Room")
         return {
             "slug": slug,
-            "label": str(room.get("name") or room.get("label") or slug or "Room"),
+            "label": self._translated_room_label(slug, raw_label),
+            "rawLabel": raw_label,
             "unread": int(room.get("unreadCount") or room.get("unread") or 0),
         }
 
@@ -3683,6 +5316,46 @@ class ChatController(QObject):
             if row.get("slug") == slug:
                 return str(row.get("label") or slug)
         return slug
+
+    def _room_translation_key(self, slug: str, label: str = "") -> str:
+        value = f"{slug} {label}".strip().casefold()
+        normalized = unicodedata.normalize("NFKD", value)
+        normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+        normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+        tokens = set(normalized.split())
+        if "global" in tokens:
+            return "home.chat.room_global"
+        if tokens & {"discussion", "discusion", "discussao", "discussaoo", "discussione", "debate"}:
+            return "home.chat.room_discussion"
+        if tokens & {"logi", "logistica", "logistics", "logistique", "logisticaa"}:
+            return "home.chat.room_logi"
+        if tokens & {"faci", "facility", "facilities", "instalacoes", "instalaciones", "installations"}:
+            return "home.chat.room_faci"
+        if tokens & {"front", "frente", "linha", "frontline"}:
+            return "home.chat.room_front"
+        return ""
+
+    def _translated_room_label(self, slug: str, label: str = "") -> str:
+        key = self._room_translation_key(slug, label)
+        return self._t(key) if key else (label or slug or "Room")
+
+    @Slot()
+    def _refresh_room_labels(self) -> None:
+        rows = []
+        for row in self.rooms.items():
+            raw_label = str(row.get("rawLabel") or row.get("label") or row.get("slug") or "")
+            rows.append(
+                {
+                    **row,
+                    "label": self._translated_room_label(str(row.get("slug") or ""), raw_label),
+                    "rawLabel": raw_label,
+                }
+            )
+        if rows:
+            self.rooms.set_items(rows)
+        if self._selected_room:
+            self._selected_room_label = self._room_label(self._selected_room)
+        self.changed.emit()
 
     @staticmethod
     def _merge_user_rows(primary: list[dict[str, Any]], secondary: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -3959,9 +5632,352 @@ class ChatController(QObject):
         self._close_ws()
 
 
+WIKI_KEY_LABELS = {
+    "class": "Classe",
+    "health": "Vida",
+    "resistance": "Resistencia",
+    "armour": "Blindagem",
+    "disable_threshold": "Limite de desativacao",
+    "repair_cost": "Custo de reparo",
+    "crew": "Tripulacao",
+    "inventory_slots": "Espacos no inventario",
+    "armament": "Armamento",
+    "ammo": "Municao",
+    "production_site": "Local de producao",
+    "production_cost_raw": "Custo de producao",
+    "package_size": "Tamanho do pacote",
+    "fuel_capacity": "Capacidade de combustivel",
+    "intel_icon": "Icone de inteligencia",
+}
+
+WIKI_VALUE_TRANSLATIONS = {
+    "Armored Car": "Carro blindado",
+    "Battle Tank": "Tanque de batalha",
+    "Emplacement": "Emplacement",
+    "Field Weapon": "Arma de campo",
+    "Flatbed Truck": "Caminhao prancha",
+    "Heavy Artillery": "Artilharia pesada",
+    "Infantry Weapon": "Arma de infantaria",
+    "Large Item": "Item grande",
+    "Logistics Structure": "Estrutura logistica",
+    "Material": "Material",
+    "Refined Material": "Material refinado",
+    "Resource": "Recurso",
+    "Small Arms": "Armas leves",
+    "Small Item": "Item pequeno",
+    "Structure": "Estrutura",
+    "Vehicle": "Veiculo",
+    "Warden": "Warden",
+    "Colonial": "Colonial",
+    "Both": "Ambos",
+    "Factory": "Fabrica",
+    "Garage": "Garagem",
+    "Mass Production Factory": "Fabrica de producao em massa",
+    "Construction Yard": "Patio de construcao",
+    "Unpackageable": "Nao empacotavel",
+    "None": "Nenhum",
+}
+
+
+def clean_wiki_text(text: Any) -> str:
+    value = html.unescape(str(text or "").replace("\xa0", " "))
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
+def strip_wiki_html(value: str) -> str:
+    value = re.sub(r"<!--.*?-->", " ", value, flags=re.S)
+    value = re.sub(r"<(script|style)\b.*?</\1>", " ", value, flags=re.S | re.I)
+    value = re.sub(r"<sup\b.*?</sup>", " ", value, flags=re.S | re.I)
+    value = re.sub(r"<br\s*/?>", " / ", value, flags=re.I)
+    value = re.sub(r"<[^>]+>", " ", value)
+    return clean_wiki_text(value)
+
+
+def normalize_wiki_key(label: str) -> str:
+    mapping = {
+        "Class": "class",
+        "Health": "health",
+        "Resistance": "resistance",
+        "Armour": "armour",
+        "Disable Threshold": "disable_threshold",
+        "Repair Cost": "repair_cost",
+        "Crew": "crew",
+        "Inventory Slots": "inventory_slots",
+        "Armament": "armament",
+        "Ammo": "ammo",
+        "Production Site": "production_site",
+        "Production Cost": "production_cost_raw",
+        "Package Size": "package_size",
+        "Fuel Capacity": "fuel_capacity",
+        "Intel Icon": "intel_icon",
+    }
+    return mapping.get(label, re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_"))
+
+
+def wiki_field_label(key: str) -> str:
+    if key in WIKI_KEY_LABELS:
+        return WIKI_KEY_LABELS[key]
+    return " ".join(part.capitalize() for part in str(key or "").split("_") if part)
+
+
+def translate_wiki_value(value: Any) -> str:
+    text = clean_wiki_text(value)
+    if not text:
+        return ""
+    if text in WIKI_VALUE_TRANSLATIONS:
+        return WIKI_VALUE_TRANSLATIONS[text]
+    translated = text
+    for source, target in sorted(WIKI_VALUE_TRANSLATIONS.items(), key=lambda item: -len(item[0])):
+        translated = re.sub(rf"\b{re.escape(source)}\b", target, translated)
+    translated = re.sub(r"\bbelow\b", "abaixo de", translated, flags=re.I)
+    translated = re.sub(r"\bhealth\b", "vida", translated, flags=re.I)
+    return translated
+
+
+def wiki_title_candidates(page_title: str) -> list[str]:
+    raw = clean_wiki_text(page_title)
+    candidates = [raw]
+    cleaned = raw
+    patterns = (
+        r"\s+stock$",
+        r"\s+stockpile$",
+        r"\s+crated\s+stock$",
+        r"\s+crate\s+stock$",
+        r"\s+crated$",
+        r"\s+crate$",
+        r"\s+crates$",
+        r"\s+packed$",
+        r"\s+packaged$",
+    )
+    changed = True
+    while changed:
+        changed = False
+        for pattern in patterns:
+            next_value = re.sub(pattern, "", cleaned, flags=re.I).strip()
+            if next_value != cleaned:
+                cleaned = next_value
+                changed = True
+    if cleaned and cleaned != raw:
+        candidates.append(cleaned)
+    no_parentheses = re.sub(r"\s*\([^)]*\)\s*", " ", cleaned).strip()
+    if no_parentheses and no_parentheses not in candidates:
+        candidates.append(no_parentheses)
+    return list(dict.fromkeys(candidate for candidate in candidates if candidate))
+
+
+def cache_wiki_image(image_url: str, page_title: str) -> str:
+    url = clean_wiki_text(image_url)
+    if not url:
+        return ""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        suffix = Path(parsed.path).suffix.lower()
+        if suffix not in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+            suffix = ".png"
+        cache_dir = user_data_dir() / "wiki_images"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        digest = hashlib.sha1(f"{page_title}|{url}".encode("utf-8", errors="ignore")).hexdigest()[:16]
+        target = cache_dir / f"{digest}{suffix}"
+        if not target.exists() or target.stat().st_size <= 0:
+            request = urllib.request.Request(url, headers={"User-Agent": "FELBApp/1.0"})
+            with urllib.request.urlopen(request, timeout=20) as response:
+                target.write_bytes(response.read())
+        return file_url(target)
+    except Exception:
+        return url
+
+
+def extract_wiki_infobox(page_html: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    aside_match = re.search(
+        r"<aside\b(?=[^>]*\bportable-infobox\b)[^>]*>(.*?)</aside>",
+        page_html,
+        flags=re.S | re.I,
+    )
+    if not aside_match:
+        return result
+    infobox = aside_match.group(1)
+
+    title_match = re.search(
+        r"<[^>]*class=(?:\"[^\"]*\bpi-title\b[^\"]*\"|'[^']*\bpi-title\b[^']*'|[^\s>]*\bpi-title\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
+        infobox,
+        flags=re.S | re.I,
+    )
+    if title_match:
+        result["name"] = strip_wiki_html(title_match.group(1))
+
+    image_match = re.search(
+        r"<img\b[^>]*\b(?:data-src|src)=(?:\"([^\"]+)\"|'([^']+)'|([^\s>]+))",
+        infobox,
+        flags=re.S | re.I,
+    )
+    if image_match:
+        src = next((group for group in image_match.groups() if group), "")
+        result["image"] = urllib.parse.urljoin(FOXHOLE_WIKI_BASE_URL, html.unescape(src))
+    else:
+        srcset_match = re.search(r"<img\b[^>]*\bsrcset=(?:\"([^\"]+)\"|'([^']+)')", infobox, flags=re.S | re.I)
+        if srcset_match:
+            srcset = next((group for group in srcset_match.groups() if group), "")
+            src = clean_wiki_text(srcset.split(",", 1)[0].split(" ", 1)[0])
+            result["image"] = urllib.parse.urljoin(FOXHOLE_WIKI_BASE_URL, html.unescape(src))
+
+    label_pattern = re.compile(
+        r"<[^>]*class=(?:\"[^\"]*\bpi-data-label\b[^\"]*\"|'[^']*\bpi-data-label\b[^']*'|[^\s>]*\bpi-data-label\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
+        flags=re.S | re.I,
+    )
+    value_pattern = re.compile(
+        r"<[^>]*class=(?:\"[^\"]*\bpi-data-value\b[^\"]*\"|'[^']*\bpi-data-value\b[^']*'|[^\s>]*\bpi-data-value\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
+        flags=re.S | re.I,
+    )
+    for label_match in label_pattern.finditer(infobox):
+        block = infobox[label_match.end() : label_match.end() + 1800]
+        value_match = re.search(
+            value_pattern,
+            block,
+        )
+        if not value_match:
+            continue
+        label = strip_wiki_html(label_match.group(1))
+        value = strip_wiki_html(value_match.group(1))
+        if label and value:
+            result[normalize_wiki_key(label)] = value
+    return result
+
+
+def extract_wiki_intro(page_html: str) -> str:
+    cleaned = re.sub(r"<aside\b.*?</aside>", " ", page_html, flags=re.S | re.I)
+    cleaned = re.sub(r"<table\b.*?</table>", " ", cleaned, flags=re.S | re.I)
+    cleaned = re.sub(r"<div\b[^>]*(?:id=\"toc\"|class=\"[^\"]*toc[^\"]*\")[^>]*>.*?</div>", " ", cleaned, flags=re.S | re.I)
+    cleaned = re.sub(r"<span\b[^>]*class=\"[^\"]*\bmw-editsection\b[^\"]*\"[^>]*>.*?</span>", " ", cleaned, flags=re.S | re.I)
+    for paragraph in re.findall(r"<p\b[^>]*>(.*?)</p>", cleaned, flags=re.S | re.I):
+        text = strip_wiki_html(paragraph)
+        if len(text) > 24:
+            return text
+    return ""
+
+
+def extract_wiki_production(page_html: str) -> list[dict[str, str]]:
+    production_pos = page_html.find('id="Production"')
+    if production_pos < 0:
+        production_pos = page_html.find("id='Production'")
+    if production_pos < 0:
+        production_pos = page_html.find("id=Production")
+    if production_pos < 0:
+        return []
+
+    table_match = re.search(
+        r"<table\b(?=[^>]*\bwikitable\b)[^>]*>(.*?)</table>",
+        page_html[production_pos:],
+        flags=re.S | re.I,
+    )
+    if not table_match:
+        return []
+
+    rows: list[dict[str, str]] = []
+    for row_match in re.finditer(r"<tr\b[^>]*>(.*?)</tr>", table_match.group(1), flags=re.S | re.I):
+        cells = re.findall(r"<td\b[^>]*>(.*?)</td>", row_match.group(1), flags=re.S | re.I)
+        if len(cells) < 4:
+            continue
+        site = strip_wiki_html(cells[0])
+        input_text = strip_wiki_html(cells[1])
+        output = strip_wiki_html(cells[2])
+        time_text = strip_wiki_html(cells[-1])
+        if site or input_text or output or time_text:
+            rows.append({"site": site, "input": input_text, "output": output, "time": time_text})
+    return rows[:8]
+
+
+def fetch_wiki_page_html(page_title: str) -> str:
+    params = urllib.parse.urlencode(
+        {
+            "action": "parse",
+            "page": page_title,
+            "prop": "text",
+            "format": "json",
+            "formatversion": "2",
+            "origin": "*",
+        }
+    )
+    request = urllib.request.Request(
+        f"{FOXHOLE_WIKI_API_URL}?{params}",
+        headers={"User-Agent": "FELBApp/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="replace"))
+
+    if isinstance(payload, dict) and payload.get("error"):
+        info = payload.get("error") or {}
+        raise RuntimeError(str(info.get("info") or info.get("code") or "Wiki page not found."))
+
+    page = payload.get("parse") if isinstance(payload, dict) else {}
+    page_html = str((page or {}).get("text") or "")
+    if not page_html:
+        raise RuntimeError("Wiki page returned no content.")
+    return page_html
+
+
+def search_wiki_page_title(query: str) -> str:
+    params = urllib.parse.urlencode(
+        {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": "1",
+            "format": "json",
+            "formatversion": "2",
+            "origin": "*",
+        }
+    )
+    request = urllib.request.Request(
+        f"{FOXHOLE_WIKI_API_URL}?{params}",
+        headers={"User-Agent": "FELBApp/1.0"},
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    rows = ((payload.get("query") or {}).get("search") or []) if isinstance(payload, dict) else []
+    if rows and isinstance(rows[0], dict):
+        return clean_wiki_text(rows[0].get("title"))
+    return ""
+
+
+def fetch_wiki_item_info(page_title: str) -> dict[str, Any]:
+    original_title = clean_wiki_text(page_title)
+    candidates = wiki_title_candidates(original_title)
+    last_error: Exception | None = None
+    resolved_title = candidates[0] if candidates else original_title
+    page_html = ""
+    for candidate in candidates:
+        try:
+            resolved_title = candidate
+            page_html = fetch_wiki_page_html(candidate)
+            break
+        except Exception as exc:
+            last_error = exc
+    if not page_html:
+        search_query = candidates[-1] if candidates else original_title
+        fallback_title = search_wiki_page_title(search_query)
+        if not fallback_title:
+            if last_error:
+                raise last_error
+            raise RuntimeError("Wiki page not found.")
+        resolved_title = fallback_title
+        page_html = fetch_wiki_page_html(resolved_title)
+
+    item = extract_wiki_infobox(page_html)
+    item["description"] = extract_wiki_intro(page_html)
+    item["production"] = extract_wiki_production(page_html)
+    item["source_url"] = f"{FOXHOLE_WIKI_BASE_URL}/wiki/{urllib.parse.quote(resolved_title.replace(' ', '_'))}"
+    if item.get("image"):
+        item["remote_image"] = item["image"]
+        item["image"] = cache_wiki_image(str(item.get("image") or ""), resolved_title)
+    return item
+
+
 class ItemSearchController(QObject):
     changed = Signal()
     rowsLoaded = Signal(object, str, str)
+    wikiLoaded = Signal(object, str, int)
 
     def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -3977,13 +5993,33 @@ class ItemSearchController(QObject):
         self._total = 0
         self._last_update = "-"
         self.items = DictListModel(
-            ["rowType", "region", "code", "warehouse", "quantity", "updatedAt", "icon", "total"],
+            ["rowType", "region", "code", "warehouse", "place", "quantity", "updatedAt", "updatedAgo", "icon", "total"],
             self,
         )
-        self.suggestions = DictListModel(["name"], self)
+        self.suggestions = DictListModel(["name", "alias", "detail", "source"], self)
+        self.wiki_fields = DictListModel(["label", "value"], self)
+        self.wiki_production_rows = DictListModel(["site", "input", "output", "time"], self)
         self._all_rows: list[dict[str, Any]] = []
         self._cached_item_names: list[str] = []
+        self._name_norm_by_name: dict[str, str] = {}
+        self._slang_terms = self._load_slang_terms()
+        self._slang_resolved_names: dict[int, list[str]] = {}
+        self._wiki_title = ""
+        self._wiki_name = ""
+        self._wiki_description = ""
+        self._wiki_image = ""
+        self._wiki_source_url = ""
+        self._wiki_status_key = "item_search.wiki_empty"
+        self._wiki_status_message = ""
+        self._wiki_loading = False
+        self._wiki_request_token = 0
+        self._pending_wiki_title = ""
+        self._wiki_timer = QTimer(self)
+        self._wiki_timer.setSingleShot(True)
+        self._wiki_timer.setInterval(500)
+        self._wiki_timer.timeout.connect(self._run_pending_wiki_lookup)
         self.rowsLoaded.connect(self._apply_loaded_rows)
+        self.wikiLoaded.connect(self._apply_wiki_result)
 
     @Slot()
     def ensureLoaded(self) -> None:
@@ -4048,6 +6084,14 @@ class ItemSearchController(QObject):
     def suggestionRows(self) -> QObject:
         return self.suggestions
 
+    @Property(QObject, constant=True)
+    def wikiFields(self) -> QObject:
+        return self.wiki_fields
+
+    @Property(QObject, constant=True)
+    def wikiProduction(self) -> QObject:
+        return self.wiki_production_rows
+
     @Property("QVariantList", notify=changed)
     def resultRowItems(self) -> list[dict[str, Any]]:
         return self.items.items()
@@ -4055,6 +6099,40 @@ class ItemSearchController(QObject):
     @Property("QVariantList", notify=changed)
     def suggestionRowItems(self) -> list[dict[str, Any]]:
         return self.suggestions.items()
+
+    @Property(bool, notify=changed)
+    def wikiLoading(self) -> bool:
+        return self._wiki_loading
+
+    @Property(str, notify=changed)
+    def wikiStatusKey(self) -> str:
+        return self._wiki_status_key
+
+    @Property(str, notify=changed)
+    def wikiStatusMessage(self) -> str:
+        return self._wiki_status_message
+
+    @Property(str, notify=changed)
+    def wikiName(self) -> str:
+        return self._wiki_name
+
+    @Property(str, notify=changed)
+    def wikiDescription(self) -> str:
+        return self._wiki_description
+
+    @Property(str, notify=changed)
+    def wikiImage(self) -> str:
+        return self._wiki_image
+
+    @Property(str, notify=changed)
+    def wikiSourceUrl(self) -> str:
+        return self._wiki_source_url
+
+    @Slot()
+    def refreshLocalizedTimes(self) -> None:
+        if self._loaded:
+            self._update_search_models()
+        self.changed.emit()
 
     @Slot()
     def refresh(self) -> None:
@@ -4085,11 +6163,18 @@ class ItemSearchController(QObject):
             self._status_message = error
             self.changed.emit()
             return
-        self._all_rows = list(rows) if isinstance(rows, list) else []
+        raw_rows = list(rows) if isinstance(rows, list) else []
+        self._all_rows = [
+            item
+            for item in raw_rows
+            if isinstance(item, dict) and self._is_searchable_stockpile_item(item)
+        ]
         self._cached_item_names = sorted(
             {str(item.get("display_name") or "-") for item in self._all_rows if item.get("display_name")},
             key=str.lower,
         )
+        self._name_norm_by_name = {name: self._normalize_search_text(name) for name in self._cached_item_names}
+        self._slang_resolved_names = {}
         self._last_update = last_update or "-"
         self._loaded = True
         self._status_key = "item_search.loaded"
@@ -4109,30 +6194,297 @@ class ItemSearchController(QObject):
         self._update_search_models()
         self.changed.emit()
 
+    @Slot(str)
+    def fetchWikiInfo(self, title: str) -> None:
+        self._start_wiki_lookup(str(title or "").strip())
+
+    @Slot()
+    def openWikiPage(self) -> None:
+        if self._wiki_source_url:
+            QDesktopServices.openUrl(QUrl(self._wiki_source_url))
+
+    @Slot()
+    def _run_pending_wiki_lookup(self) -> None:
+        self._start_wiki_lookup(self._pending_wiki_title)
+
+    def _clear_wiki_info(self) -> None:
+        self._wiki_timer.stop()
+        self._pending_wiki_title = ""
+        self._wiki_title = ""
+        self._wiki_name = ""
+        self._wiki_description = ""
+        self._wiki_image = ""
+        self._wiki_source_url = ""
+        self._wiki_status_key = "item_search.wiki_empty"
+        self._wiki_status_message = ""
+        self._wiki_loading = False
+        self.wiki_fields.set_items([])
+        self.wiki_production_rows.set_items([])
+
+    def _schedule_wiki_lookup(self) -> None:
+        if not self._query.strip():
+            if self._wiki_title or self._wiki_loading or self._wiki_name:
+                self._clear_wiki_info()
+            return
+        title = (self._best_match or self._selected_name or self._query).strip()
+        if not title:
+            self._clear_wiki_info()
+            return
+        if title == self._wiki_title and (self._wiki_loading or self._wiki_name or self._wiki_status_key != "item_search.wiki_empty"):
+            return
+        self._pending_wiki_title = title
+        self._wiki_timer.start()
+
+    def _start_wiki_lookup(self, title: str) -> None:
+        title = str(title or "").strip()
+        if not title:
+            self._clear_wiki_info()
+            self.changed.emit()
+            return
+        if title == self._wiki_title and self._wiki_loading:
+            return
+
+        self._wiki_request_token += 1
+        token = self._wiki_request_token
+        self._wiki_title = title
+        self._wiki_name = title
+        self._wiki_description = ""
+        self._wiki_image = ""
+        self._wiki_source_url = f"{FOXHOLE_WIKI_BASE_URL}/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+        self._wiki_status_key = "item_search.wiki_loading"
+        self._wiki_status_message = ""
+        self._wiki_loading = True
+        self.wiki_fields.set_items([])
+        self.wiki_production_rows.set_items([])
+        self.changed.emit()
+
+        def worker() -> None:
+            try:
+                self.wikiLoaded.emit(fetch_wiki_item_info(title), "", token)
+            except Exception as exc:
+                self.wikiLoaded.emit({}, str(exc), token)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    @Slot(object, str, int)
+    def _apply_wiki_result(self, data: object, error: str, token: int) -> None:
+        if token != self._wiki_request_token:
+            return
+        self._wiki_loading = False
+        if error:
+            self._wiki_status_key = "item_search.wiki_error"
+            self._wiki_status_message = error
+            self.wiki_fields.set_items([])
+            self.wiki_production_rows.set_items([])
+            self.changed.emit()
+            return
+
+        item = data if isinstance(data, dict) else {}
+        production = item.get("production") if isinstance(item.get("production"), list) else []
+        excluded = {"name", "image", "remote_image", "description", "production", "source_url"}
+        fields = [
+            {"label": wiki_field_label(str(key)), "value": translate_wiki_value(value)}
+            for key, value in item.items()
+            if key not in excluded and translate_wiki_value(value)
+        ]
+        fields.sort(key=lambda row: row["label"].lower())
+        has_data = bool(item.get("name") or item.get("description") or item.get("image") or fields or production)
+
+        self._wiki_name = clean_wiki_text(item.get("name") or self._wiki_title)
+        self._wiki_description = clean_wiki_text(item.get("description") or "")
+        self._wiki_image = str(item.get("image") or "")
+        self._wiki_source_url = str(item.get("source_url") or self._wiki_source_url)
+        self._wiki_status_key = "item_search.wiki_loaded" if has_data else "item_search.wiki_empty"
+        self._wiki_status_message = ""
+        self.wiki_fields.set_items(fields[:12])
+        self.wiki_production_rows.set_items(
+            [
+                {
+                    "site": clean_wiki_text(row.get("site")),
+                    "input": clean_wiki_text(row.get("input")),
+                    "output": clean_wiki_text(row.get("output")),
+                    "time": clean_wiki_text(row.get("time")),
+                }
+                for row in production[:8]
+                if isinstance(row, dict)
+            ]
+        )
+        self.changed.emit()
+
     def _item_names(self) -> list[str]:
         return self._cached_item_names
 
-    def _suggestions_for_query(self, query: str) -> list[str]:
-        lower = query.strip().lower()
-        if not lower:
+    @staticmethod
+    def _row_quantity(item: dict[str, Any]) -> int:
+        try:
+            return int(item.get("quantity", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @classmethod
+    def _is_searchable_stockpile_item(cls, item: dict[str, Any]) -> bool:
+        if cls._row_quantity(item) <= 0:
+            return False
+        return StockpileController._has_gg_stockpile_prefix(
+            {
+                "name": item.get("warehouse"),
+                "warehouse_name": item.get("warehouse_name"),
+                "stockpile_name": item.get("stockpile_name"),
+                "neme": item.get("neme"),
+            }
+        )
+
+    @staticmethod
+    def _normalize_search_text(value: Any) -> str:
+        text = str(value or "").casefold()
+        text = "".join(char for char in unicodedata.normalize("NFKD", text) if not unicodedata.combining(char))
+        return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+    @staticmethod
+    def _load_slang_terms() -> list[dict[str, Any]]:
+        path = BASE_DIR / "slang_terms.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        raw_terms = data.get("slang_terms", []) if isinstance(data, dict) else []
+        terms: list[dict[str, Any]] = []
+        for index, item in enumerate(raw_terms):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("nome") or "").strip()
+            aliases = [str(alias).strip() for alias in item.get("apelidos", []) if str(alias).strip()]
+            if not name and not aliases:
+                continue
+            terms.append(
+                {
+                    "index": index,
+                    "name": name,
+                    "aliases": aliases,
+                    "category": str(item.get("categoria") or "").strip(),
+                    "kind": str(item.get("tipo") or "").strip(),
+                    "faction": str(item.get("faccao") or "").strip(),
+                }
+            )
+        return terms
+
+    def _resolve_slang_names(self, term: dict[str, Any]) -> list[str]:
+        term_index = int(term.get("index", -1))
+        if term_index in self._slang_resolved_names:
+            return self._slang_resolved_names[term_index]
+
+        target_norm = self._normalize_search_text(term.get("name"))
+        alias_norms = [self._normalize_search_text(alias) for alias in term.get("aliases", [])]
+        target_tokens = set(target_norm.split())
+        resolved: list[str] = []
+        for name, norm in self._name_norm_by_name.items():
+            if not norm:
+                continue
+            if target_norm and (norm == target_norm or target_norm in norm or norm in target_norm):
+                resolved.append(name)
+                continue
+            if target_tokens and len(target_tokens) <= 4 and target_tokens.issubset(set(norm.split())):
+                resolved.append(name)
+                continue
+            if any(alias_norm and (alias_norm == norm or f" {alias_norm} " in f" {norm} ") for alias_norm in alias_norms):
+                resolved.append(name)
+
+        unique = sorted(dict.fromkeys(resolved), key=str.lower)
+        self._slang_resolved_names[term_index] = unique[:16]
+        return self._slang_resolved_names[term_index]
+
+    def _slang_matches_for_query(self, query_norm: str) -> list[dict[str, Any]]:
+        if not query_norm:
+            return []
+        scored: list[tuple[int, dict[str, Any]]] = []
+        for term in self._slang_terms:
+            name_norm = self._normalize_search_text(term.get("name"))
+            alias_norms = [self._normalize_search_text(alias) for alias in term.get("aliases", [])]
+            score = 0
+            if any(alias == query_norm for alias in alias_norms):
+                score = 100
+            elif name_norm == query_norm:
+                score = 95
+            elif any(alias.startswith(query_norm) for alias in alias_norms):
+                score = 82
+            elif name_norm.startswith(query_norm):
+                score = 76
+            elif any(query_norm in alias for alias in alias_norms):
+                score = 62
+            elif query_norm in name_norm:
+                score = 55
+            if score:
+                scored.append((score, term))
+        scored.sort(key=lambda item: (-item[0], str(item[1].get("name") or "").lower()))
+        return [term for _score, term in scored[:12]]
+
+    def _suggestions_for_query(self, query: str) -> list[dict[str, str]]:
+        query_norm = self._normalize_search_text(query)
+        if not query_norm:
             return []
         names = self._item_names()
-        starts = [name for name in names if name.lower().startswith(lower)]
-        contains = [name for name in names if lower in name.lower() and name not in starts]
-        return (starts + contains)[:8]
+        starts = [name for name in names if self._name_norm_by_name.get(name, "").startswith(query_norm)]
+        contains = [name for name in names if query_norm in self._name_norm_by_name.get(name, "") and name not in starts]
+
+        rows: list[dict[str, str]] = [
+            {"name": name, "alias": "", "detail": "", "source": "item"}
+            for name in (starts + contains)
+        ]
+
+        seen = {row["name"] for row in rows}
+        for term in self._slang_matches_for_query(query_norm):
+            alias = next(
+                (
+                    str(alias)
+                    for alias in term.get("aliases", [])
+                    if query_norm in self._normalize_search_text(alias)
+                ),
+                str((term.get("aliases") or [""])[0] or ""),
+            )
+            detail_parts = [part for part in (alias, str(term.get("name") or ""), str(term.get("kind") or "")) if part]
+            for name in self._resolve_slang_names(term):
+                if name in seen:
+                    continue
+                rows.append(
+                    {
+                        "name": name,
+                        "alias": alias,
+                        "detail": " -> ".join(detail_parts[:3]),
+                        "source": "slang",
+                    }
+                )
+                seen.add(name)
+                if len(rows) >= 10:
+                    return rows
+
+        return rows[:10]
+
+    def _rows_for_name(self, name: str) -> list[dict[str, Any]]:
+        target = self._normalize_search_text(name)
+        return [item for item in self._all_rows if self._normalize_search_text(item.get("display_name")) == target]
 
     def _matching_rows(self) -> list[dict[str, Any]]:
-        query = self._query.strip().lower()
-        if not query:
-            return []
-        exact = [item for item in self._all_rows if str(item.get("display_name") or "").lower() == query]
+        query_norm = self._normalize_search_text(self._query)
+        if not query_norm:
+            return self._all_rows
+        exact = [item for item in self._all_rows if self._normalize_search_text(item.get("display_name")) == query_norm]
         if exact:
             return exact
         suggestions = self._suggestions_for_query(self._query)
         if suggestions:
-            selected = suggestions[0].lower()
-            return [item for item in self._all_rows if str(item.get("display_name") or "").lower() == selected]
-        return [item for item in self._all_rows if query in str(item.get("display_name") or "").lower()]
+            selected = suggestions[0].get("name", "")
+            selected_rows = self._rows_for_name(selected)
+            if selected_rows:
+                return selected_rows
+
+        slang_rows: list[dict[str, Any]] = []
+        for term in self._slang_matches_for_query(query_norm):
+            for name in self._resolve_slang_names(term):
+                slang_rows.extend(self._rows_for_name(name))
+        if slang_rows:
+            return slang_rows
+
+        return [item for item in self._all_rows if query_norm in self._normalize_search_text(item.get("display_name"))]
 
     @staticmethod
     def _split_location(warehouse: str) -> tuple[str, str, str]:
@@ -4144,21 +6496,29 @@ class ItemSearchController(QObject):
         value = parts[0] if parts else "-"
         return value, value, value
 
+    @staticmethod
+    def _location_meta_for_row(item: dict[str, Any]) -> dict[str, str]:
+        return StockpileController._warehouse_meta(
+            {
+                "name": item.get("warehouse"),
+                "map_name": item.get("map_name"),
+                "town": item.get("town"),
+                "warehouse_name": item.get("warehouse_name"),
+            }
+        )
+
     def _update_search_models(self) -> None:
         suggestions = self._suggestions_for_query(self._query)
-        self.suggestions.set_items([{"name": name} for name in suggestions])
-        self._best_match = suggestions[0] if suggestions else ""
+        self.suggestions.set_items(suggestions)
+        self._best_match = suggestions[0].get("name", "") if suggestions else ""
 
         rows = self._matching_rows()
         if not self._query.strip():
-            self.items.set_items([])
             self._selected_name = ""
-            self._total = 0
+            self._total = sum(max(0, int(item.get("quantity", 0) or 0)) for item in rows)
             self._status_key = "item_search.loaded" if self._loaded else "item_search.loading"
             self._status_count = len(self._all_rows)
-            return
-
-        if rows:
+        elif rows:
             self._selected_name = str(rows[0].get("display_name") or self._query)
             self._total = sum(max(0, int(item.get("quantity", 0) or 0)) for item in rows)
             self._status_key = "item_search.best_match" if self._best_match else "item_search.loaded"
@@ -4167,29 +6527,44 @@ class ItemSearchController(QObject):
             self._total = 0
             self._status_key = "item_search.best_match_empty"
 
-        grouped: dict[str, list[dict[str, Any]]] = {}
+        grouped: dict[str, list[tuple[dict[str, Any], dict[str, str]]]] = {}
         for item in rows:
-            region, _name, _code = self._split_location(str(item.get("warehouse") or "-"))
-            grouped.setdefault(region, []).append(item)
+            meta = self._location_meta_for_row(item)
+            fallback_region, _name, _code = self._split_location(str(item.get("warehouse") or "-"))
+            region = str(meta.get("groupLabel") or meta.get("mapName") or meta.get("region") or fallback_region)
+            grouped.setdefault(region, []).append((item, meta))
 
         result_rows: list[dict[str, Any]] = []
+        translator = Translator(selected_language(self.settings))
         for region in sorted(grouped):
-            region_rows = sorted(grouped[region], key=lambda item: str(item.get("warehouse") or ""))
-            region_total = sum(max(0, int(item.get("quantity", 0) or 0)) for item in region_rows)
+            region_rows = sorted(
+                grouped[region],
+                key=lambda entry: (
+                    str(entry[1].get("town") or "").lower(),
+                    str(entry[1].get("code") or "").lower(),
+                    str(entry[0].get("warehouse") or "").lower(),
+                ),
+            )
+            region_total = sum(max(0, int(item.get("quantity", 0) or 0)) for item, _meta in region_rows)
             result_rows.append(
                 {
                     "rowType": "region",
                     "region": region,
                     "code": "",
                     "warehouse": "",
+                    "place": "",
                     "quantity": 0,
                     "updatedAt": "",
+                    "updatedAgo": "",
                     "icon": "",
                     "total": region_total,
                 }
             )
-            for item in region_rows:
-                _region, _name, code = self._split_location(str(item.get("warehouse") or "-"))
+            for item, meta in region_rows:
+                _region, _name, fallback_code = self._split_location(str(item.get("warehouse") or "-"))
+                code = str(meta.get("code") or fallback_code or "-")
+                place = str(meta.get("placePath") or item.get("warehouse") or "-")
+                updated_raw = str(item.get("warehouse_last_update") or "-")
                 icon_path = str(item.get("icon_path") or "")
                 result_rows.append(
                     {
@@ -4197,60 +6572,69 @@ class ItemSearchController(QObject):
                         "region": region,
                         "code": code,
                         "warehouse": str(item.get("warehouse") or "-"),
+                        "place": place,
                         "quantity": max(0, int(item.get("quantity", 0) or 0)),
-                        "updatedAt": format_to_local_pc_time(str(item.get("warehouse_last_update") or "-")),
+                        "updatedAt": format_to_local_pc_time(updated_raw),
+                        "updatedAgo": format_relative_time(updated_raw, translator),
                         "icon": file_url(icon_path) if icon_path and Path(icon_path).exists() else "",
                         "total": 0,
                     }
                 )
         self.items.set_items(result_rows)
+        self._schedule_wiki_lookup()
 
 
 class IdentifyItemController(QObject):
+    MONITOR_SOUND_RESET_MISS_TICKS = 4
+
     changed = Signal()
     scanFinished = Signal(list, str)
     monitorFinished = Signal(object, str, bool)
+    selectionFinished = Signal(object, str)
 
     def __init__(self, item_search: ItemSearchController, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self.item_search = item_search
         self.results = DictListModel(["name", "score", "scoreText", "icon", "path"], self)
-        self.monitorMatches = DictListModel(["matchX", "matchY", "matchW", "matchH"], self)
-        self._templates: list[Any] = []
-        self._templates_loaded = False
+        self.monitorMatches = DictListModel(["matchX", "matchY", "matchW", "matchH", "matchScore", "scoreText"], self)
+        self.selectionCandidates = DictListModel(["candidateIndex", "selectX", "selectY", "selectW", "selectH", "cropX", "cropY", "cropW", "cropH"], self)
         self._status = "Ready."
         self._selected_path: Path | None = None
         self._selected_image_url = ""
-        self._mode = "Hybrid"
-        self._threshold = 0.85
+        self._reference_preview_revision = 0
+        self._mode = "Color"
+        self._threshold = 0.86
         self._scanning = False
         self._clipboard_image = None
+        self._detection_template: Any | None = None
         self._last_result_rows: list[dict[str, Any]] = []
         self._monitoring = False
         self._monitor_dependencies_checked = False
         self._monitor_available = True
-        self._monitor_target_name = ""
         self._monitor_overlay_visible = False
+        self._monitor_control_visible = False
         self._monitor_worker_active = False
         self._monitor_hwnd = 0
-        self._monitor_tick = 0
+        self._monitor_match_count = 0
+        self._monitor_best_score = 0.0
+        self._monitor_summary = "Detection off."
+        self._monitor_last_rows: list[dict[str, Any]] = []
+        self._monitor_miss_count = 0
+        self._monitor_sound_played = False
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_screenshot = None
+        self._selection_candidate_rows: list[dict[str, Any]] = []
+        self._selection_request_id = 0
         self._monitor_timer = QTimer(self)
-        self._monitor_timer.setInterval(280)
+        self._monitor_timer.setInterval(200)
         self._monitor_timer.timeout.connect(self._run_monitor_tick)
         self.scanFinished.connect(self._apply_scan_result)
         self.monitorFinished.connect(self._apply_monitor_result)
+        self.selectionFinished.connect(self._apply_selection_result)
 
     @Slot()
     def ensureLoaded(self) -> None:
-        self.changed.emit()
-
-    def _ensure_templates_loaded(self) -> None:
-        """Load icon templates lazily on first use to avoid spending 50-80MB at startup."""
-        if self._templates_loaded:
-            return
-        self._templates, load_status = index_icon_templates()
-        self._templates_loaded = True
-        self._status = f"{load_status} | {identify_dependencies_status()}"
         self.changed.emit()
 
     @Property(str, notify=changed)
@@ -4287,15 +6671,49 @@ class IdentifyItemController(QObject):
 
     @Property(str, notify=changed)
     def monitorTarget(self) -> str:
-        return self._monitor_target_name
+        if self._detection_template is not None:
+            return str(getattr(self._detection_template, "name", "") or "selected image")
+        if self._selected_path:
+            return self._selected_path.name
+        if self._clipboard_image is not None:
+            return "clipboard image"
+        return ""
 
     @Property(bool, notify=changed)
     def monitorOverlayVisible(self) -> bool:
         return self._monitor_overlay_visible
 
+    @Property(bool, notify=changed)
+    def monitorControlVisible(self) -> bool:
+        return self._monitor_control_visible
+
+    @Property(bool, notify=changed)
+    def selectionOverlayVisible(self) -> bool:
+        return self._selection_overlay_visible
+
+    @Property(bool, notify=changed)
+    def selectionBusy(self) -> bool:
+        return self._selection_busy
+
+    @Property(int, notify=changed)
+    def monitorMatchCount(self) -> int:
+        return self._monitor_match_count
+
+    @Property(float, notify=changed)
+    def monitorBestScore(self) -> float:
+        return self._monitor_best_score
+
+    @Property(str, notify=changed)
+    def monitorBestScoreText(self) -> str:
+        return f"{self._monitor_best_score:.3f}" if self._monitor_best_score > 0 else "-"
+
+    @Property(str, notify=changed)
+    def monitorSummary(self) -> str:
+        return self._monitor_summary
+
     @Property(int, notify=changed)
     def indexedCount(self) -> int:
-        return len(self._templates)
+        return 0
 
     @Property(QObject, constant=True)
     def resultsModel(self) -> QObject:
@@ -4305,36 +6723,31 @@ class IdentifyItemController(QObject):
     def monitorMatchesModel(self) -> QObject:
         return self.monitorMatches
 
+    @Property(QObject, constant=True)
+    def selectionCandidatesModel(self) -> QObject:
+        return self.selectionCandidates
+
     @Property("QStringList", constant=True)
     def modes(self) -> list[str]:
-        return ["Gray", "Color", "Hybrid"]
+        return ["Color"]
 
     @Slot()
     def reindex(self) -> None:
-        self._templates, load_status = index_icon_templates()
-        self._templates_loaded = True
-        self._status = f"{load_status} | {identify_dependencies_status()}"
+        self._status = f"Direct OpenCV detection | {identify_dependencies_status()}"
         self.changed.emit()
 
     @Slot(str)
     def setMode(self, mode: str) -> None:
-        if mode not in {"Gray", "Color", "Hybrid"}:
-            return
-        self._mode = mode
+        self._mode = "Color"
         self.changed.emit()
 
     @Slot(float)
     def setThreshold(self, value: float) -> None:
-        self._threshold = max(0.5, min(0.99, float(value)))
+        self._threshold = 0.86
         self.changed.emit()
 
     @Slot(int)
     def selectResult(self, index: int) -> None:
-        if index < 0 or index >= len(self._last_result_rows):
-            return
-        self._monitor_target_name = str(self._last_result_rows[index].get("name") or "")
-        if self._monitoring and self._monitor_target_name:
-            self._status = f"Monitoring: {self._monitor_target_name}"
         self.changed.emit()
 
     @Slot()
@@ -4358,29 +6771,170 @@ class IdentifyItemController(QObject):
     def _set_selected_path(self, path: Path) -> None:
         self._selected_path = path
         self._clipboard_image = None
-        self._selected_image_url = file_url(path)
-        self._status = f"Selected: {path.name}"
+        self._prepare_reference_from_path(path)
+        if self._detection_template is not None:
+            self._set_reference_preview_url(path)
+            self._reset_monitor_tracking(clear_visible_matches=True)
+            self._status = f"Reference selected: {path.name}"
+            if self._monitor_control_visible and not self._monitoring:
+                self.startMonitor()
+                return
         self.changed.emit()
 
     @Slot()
     def scanSelected(self) -> None:
-        if self._scanning:
+        self.showMonitorOverlay()
+
+    @Slot()
+    def showMonitorOverlay(self) -> None:
+        self._monitor_control_visible = True
+        if self._monitoring:
+            self._monitor_summary = f"Detection active: {self.monitorTarget or 'selected image'}"
+            self._status = self._monitor_summary
+        elif self._detection_template is not None:
+            self.startMonitor()
             return
-        if not self._selected_path and self._clipboard_image is None:
-            self._status = "Select, paste, or capture an image first."
+        else:
+            self._monitor_summary = "Select an item from stockpile or paste a reference image."
+            self._status = self._monitor_summary
+        self.changed.emit()
+
+    @Slot()
+    def hideMonitorOverlay(self) -> None:
+        if self._monitoring:
+            self.stopMonitor()
+        self._selection_request_id += 1
+        self._monitor_control_visible = False
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        self.changed.emit()
+
+    @Slot()
+    def clearReference(self) -> None:
+        was_monitoring = self._monitoring
+        if was_monitoring:
+            self.stopMonitor()
+        self._selected_path = None
+        self._selected_image_url = ""
+        self._reference_preview_revision += 1
+        self._clipboard_image = None
+        self._detection_template = None
+        self._last_result_rows = []
+        self.results.set_items([])
+        self._selection_request_id += 1
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        self._reset_monitor_tracking(clear_visible_matches=True)
+        self._monitor_summary = "No reference selected."
+        self._status = "Reference cleared."
+        self.changed.emit()
+
+    @Slot()
+    def beginStockpileItemSelection(self) -> None:
+        if self._selection_busy:
+            return
+        np_module, cv2_module, image_grab = identify_service.monitor_dependencies()
+        self._monitor_available = bool(np_module is not None and cv2_module is not None and image_grab is not None)
+        if not self._monitor_available:
+            self._status = "Install numpy and opencv-python for stockpile item selection."
             self.changed.emit()
             return
-        self._ensure_templates_loaded()
-        self._begin_scan()
+        if not self._is_foxhole_focused():
+            self._status = "Focus Foxhole with the stockpile panel open first."
+            self.changed.emit()
+            return
+        bbox = self._window_client_rect()
+        offset_x = int(bbox[0]) if bbox else 0
+        offset_y = int(bbox[1]) if bbox else 0
+        self._selection_busy = True
+        self._selection_overlay_visible = False
+        self.selectionCandidates.set_items([])
+        self._status = "Scanning stockpile panel..."
+        self._selection_request_id += 1
+        request_id = self._selection_request_id
+        self.changed.emit()
 
         def worker() -> None:
-            if self._clipboard_image is not None:
-                matches, status = scan_image(self._clipboard_image, self._templates, mode=self._mode)
-            else:
-                matches, status = scan_image_path(Path(self._selected_path), self._templates, mode=self._mode)
-            self.scanFinished.emit([match_to_dict(match) for match in matches], status)
+            try:
+                _np_module, _cv2_module, grabber = identify_service.monitor_dependencies()
+                if grabber is None:
+                    self.selectionFinished.emit({"rows": [], "image": None, "requestId": request_id}, "Screen capture is unavailable.")
+                    return
+                screenshot = grabber.grab(bbox=bbox) if bbox else grabber.grab()
+                regions, status = detect_stockpile_item_regions(screenshot)
+                scale_x, scale_y = self._qt_screen_scale(screenshot.width, screenshot.height)
+                rows: list[dict[str, Any]] = []
+                for region in regions:
+                    row = dict(region)
+                    row["candidateIndex"] = len(rows)
+                    display_x = int(row["selectX"]) + offset_x
+                    display_y = int(row["selectY"]) + offset_y
+                    row["selectX"] = int(round(display_x * scale_x))
+                    row["selectY"] = int(round(display_y * scale_y))
+                    row["selectW"] = max(8, int(round(int(row["selectW"]) * scale_x)))
+                    row["selectH"] = max(8, int(round(int(row["selectH"]) * scale_y)))
+                    rows.append(row)
+                self.selectionFinished.emit({"rows": rows, "image": screenshot, "requestId": request_id}, status)
+            except Exception as exc:
+                self.selectionFinished.emit({"rows": [], "image": None, "requestId": request_id}, f"Stockpile selection error: {exc}")
 
         threading.Thread(target=worker, daemon=True).start()
+
+    @Slot()
+    def cancelStockpileItemSelection(self) -> None:
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_request_id += 1
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        self._status = "Stockpile item selection canceled."
+        self.changed.emit()
+
+    @Slot(int)
+    def selectStockpileCandidate(self, index: int) -> None:
+        if index < 0 or index >= len(self._selection_candidate_rows) or self._selection_screenshot is None:
+            return
+        row = self._selection_candidate_rows[index]
+        try:
+            crop_x = int(row.get("cropX", 0))
+            crop_y = int(row.get("cropY", 0))
+            crop_w = int(row.get("cropW", 0))
+            crop_h = int(row.get("cropH", 0))
+            crop = self._selection_screenshot.crop((crop_x, crop_y, crop_x + crop_w, crop_y + crop_h)).convert("RGBA")
+        except Exception as exc:
+            self._status = f"Could not crop selected item: {exc}"
+            self.changed.emit()
+            return
+
+        self._clipboard_image = crop
+        self._selected_path = None
+        self._prepare_reference_from_image(crop, "stockpile item")
+        preview_path = identify_preview_path()
+        try:
+            crop.save(preview_path)
+            self._set_reference_preview_url(preview_path)
+        except Exception:
+            self._selected_image_url = ""
+        self._selection_overlay_visible = False
+        self._selection_busy = False
+        self._selection_candidate_rows = []
+        self._selection_screenshot = None
+        self.selectionCandidates.set_items([])
+        if self._detection_template is not None:
+            self._reset_monitor_tracking(clear_visible_matches=True)
+            self._monitor_summary = "Reference selected from stockpile."
+            self._status = "Reference selected from stockpile."
+            if self._monitor_control_visible and not self._monitoring:
+                self.startMonitor()
+                return
+        self.changed.emit()
 
     @Slot()
     def pasteClipboard(self) -> None:
@@ -4391,50 +6945,116 @@ class IdentifyItemController(QObject):
             return
         self._clipboard_image = image
         self._selected_path = None
+        self._prepare_reference_from_image(image, "clipboard image")
         preview_path = identify_preview_path()
         try:
             image.save(preview_path)
-            self._selected_image_url = file_url(preview_path)
+            self._set_reference_preview_url(preview_path)
         except Exception:
             self._selected_image_url = ""
-        self._status = status
+        if self._detection_template is not None:
+            self._reset_monitor_tracking(clear_visible_matches=True)
+            self._status = f"{status} Reference ready."
+            if self._monitor_control_visible and not self._monitoring:
+                self.startMonitor()
+                return
         self.changed.emit()
-        self.scanSelected()
 
-    @Slot()
-    def captureScreen(self) -> None:
-        image, status = grab_screen_image()
-        if image is None:
+    def _prepare_reference_from_path(self, path: Path) -> None:
+        template, status = prepare_detection_template_path(path)
+        self._detection_template = template
+        self._monitor_summary = status
+        if template is None:
             self._status = status
-            self.changed.emit()
-            return
-        self._clipboard_image = image
-        self._selected_path = None
-        preview_path = identify_preview_path()
-        try:
-            image.save(preview_path)
-            self._selected_image_url = file_url(preview_path)
-        except Exception:
-            self._selected_image_url = ""
-        self._status = status
-        self.changed.emit()
-        self.scanSelected()
+
+    def _prepare_reference_from_image(self, image, name: str) -> None:
+        template, status = prepare_detection_template(image, name=name)
+        self._detection_template = template
+        self._monitor_summary = status
+        if template is None:
+            self._status = status
+
+    def _set_reference_preview_url(self, path: Path) -> None:
+        self._reference_preview_revision += 1
+        self._selected_image_url = f"{file_url(path)}?v={self._reference_preview_revision}"
+
+    def _reset_monitor_tracking(self, *, clear_visible_matches: bool = False) -> None:
+        self._monitor_last_rows = []
+        self._monitor_miss_count = 0
+        self._monitor_sound_played = False
+        if clear_visible_matches:
+            self.monitorMatches.set_items([])
+            self._monitor_match_count = 0
+            self._monitor_best_score = 0.0
+
+    def _held_monitor_rows(self) -> list[dict[str, Any]]:
+        return [dict(item) for item in self._monitor_last_rows if isinstance(item, dict)]
+
+    def _register_monitor_miss(self) -> None:
+        self._monitor_miss_count += 1
+        self._monitor_last_rows = []
+        if self._monitor_miss_count >= self.MONITOR_SOUND_RESET_MISS_TICKS:
+            self._monitor_sound_played = False
+
+    def _stabilize_monitor_scores(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not self._monitor_last_rows:
+            return [dict(item) for item in rows]
+        stable_rows: list[dict[str, Any]] = []
+        used_indexes: set[int] = set()
+        previous_rows = [dict(item) for item in self._monitor_last_rows if isinstance(item, dict)]
+        for row in rows:
+            stable = dict(row)
+            row_center_x = int(stable.get("matchX", 0)) + (int(stable.get("matchW", 0)) // 2)
+            row_center_y = int(stable.get("matchY", 0)) + (int(stable.get("matchH", 0)) // 2)
+            best_index = -1
+            best_distance = 999999
+            for index, previous in enumerate(previous_rows):
+                if index in used_indexes:
+                    continue
+                previous_center_x = int(previous.get("matchX", 0)) + (int(previous.get("matchW", 0)) // 2)
+                previous_center_y = int(previous.get("matchY", 0)) + (int(previous.get("matchH", 0)) // 2)
+                distance = abs(row_center_x - previous_center_x) + abs(row_center_y - previous_center_y)
+                if distance < best_distance:
+                    best_distance = distance
+                    best_index = index
+            if best_index >= 0 and best_distance <= 6:
+                previous = previous_rows[best_index]
+                stable["matchScore"] = previous.get("matchScore", stable.get("matchScore", 0.0))
+                stable["scoreText"] = previous.get("scoreText", stable.get("scoreText", ""))
+                used_indexes.add(best_index)
+            stable_rows.append(stable)
+        return stable_rows
 
     def _begin_scan(self) -> None:
         self._scanning = True
-        self._status = f"Scanning {len(self._templates)} templates with {self._mode.lower()} mode..."
+        self._status = "Starting direct detection..."
         self.changed.emit()
 
     @Slot(list, str)
     def _apply_scan_result(self, matches: list[dict[str, Any]], status: str) -> None:
-        visible = [match for match in matches if float(match.get("score", 0.0)) >= self._threshold]
-        rows = visible or matches
-        self._last_result_rows = rows
-        self.results.set_items(rows)
-        if rows and not self._monitor_target_name:
-            self._monitor_target_name = str(rows[0].get("name") or "")
-        self._status = f"{status}; showing {len(rows)} result(s)"
+        self._last_result_rows = matches
+        self.results.set_items(matches)
+        self._status = status
         self._scanning = False
+        self.changed.emit()
+
+    @Slot(object, str)
+    def _apply_selection_result(self, payload: object, status: str) -> None:
+        rows: list[dict[str, Any]] = []
+        image = None
+        if isinstance(payload, dict):
+            request_id = payload.get("requestId")
+            if request_id is not None and int(request_id) != self._selection_request_id:
+                return
+            raw_rows = payload.get("rows", [])
+            rows = list(raw_rows) if isinstance(raw_rows, list) else []
+            image = payload.get("image")
+        self._selection_busy = False
+        self._selection_candidate_rows = rows
+        self._selection_screenshot = image
+        self.selectionCandidates.set_items(rows)
+        self._selection_overlay_visible = bool(rows)
+        self._status = status
         self.changed.emit()
 
     @Slot()
@@ -4453,16 +7073,20 @@ class IdentifyItemController(QObject):
             self._status = "Install numpy and opencv-python for on-screen monitoring."
             self.changed.emit()
             return
-        if not self._monitor_target_name and self._last_result_rows:
-            self._monitor_target_name = str(self._last_result_rows[0].get("name") or "")
-        if not self._monitor_target_name and self._current_target_gray() is None:
-            self._status = "Run an identification first."
+        if self._detection_template is None:
+            self._monitor_control_visible = True
+            self._monitor_summary = "Select an item from stockpile or paste a reference image first."
+            self._status = self._monitor_summary
             self.changed.emit()
             return
-        self._ensure_templates_loaded()
+        self._monitor_control_visible = True
         self._monitoring = True
-        self._monitor_tick = 0
-        self._status = f"Monitoring: {self._monitor_target_name or 'selected image'}"
+        self._monitor_overlay_visible = True
+        self._monitor_match_count = 0
+        self._monitor_best_score = 0.0
+        self._monitor_summary = "Detection active. Waiting for Foxhole focus."
+        self._reset_monitor_tracking(clear_visible_matches=True)
+        self._status = f"Detection active: {self.monitorTarget or 'selected image'}"
         self._monitor_timer.start()
         self.changed.emit()
 
@@ -4473,34 +7097,12 @@ class IdentifyItemController(QObject):
         self._monitor_overlay_visible = False
         self._monitor_timer.stop()
         self.monitorMatches.set_items([])
+        self._monitor_match_count = 0
+        self._monitor_best_score = 0.0
+        self._monitor_summary = "Detection off."
+        self._reset_monitor_tracking(clear_visible_matches=False)
         self._status = "Monitoring stopped."
         self.changed.emit()
-
-    def _current_target_gray(self):
-        if self._selected_path and self._selected_path.exists():
-            gray, _color = prepare_image_path(self._selected_path)
-            return gray
-        if self._clipboard_image is not None:
-            gray, _color = prepare_image(self._clipboard_image)
-            return gray
-        return None
-
-    def _monitor_templates(self) -> list[Any]:
-        templates: list[Any] = []
-        current_gray = self._current_target_gray()
-        if current_gray is not None:
-            templates.append(current_gray)
-        if self._monitor_target_name:
-            templates.extend(template.gray for template in self._templates if template.name == self._monitor_target_name)
-        deduped: list[Any] = []
-        seen: set[int] = set()
-        for template in templates:
-            identity = id(template)
-            if identity in seen:
-                continue
-            seen.add(identity)
-            deduped.append(template)
-        return deduped
 
     def _is_foxhole_focused(self) -> bool:
         try:
@@ -4541,22 +7143,61 @@ class IdentifyItemController(QObject):
         except Exception:
             return None
 
+    def _qt_screen_scale(self, image_width: int | None = None, image_height: int | None = None) -> tuple[float, float]:
+        try:
+            screen = QGuiApplication.primaryScreen()
+            geometry = screen.geometry() if screen is not None else None
+            logical_width = float(geometry.width()) if geometry is not None and geometry.width() > 0 else 0.0
+            logical_height = float(geometry.height()) if geometry is not None and geometry.height() > 0 else 0.0
+        except Exception:
+            logical_width = 0.0
+            logical_height = 0.0
+        try:
+            user32 = ctypes.windll.user32
+            physical_width = float(user32.GetSystemMetrics(0))
+            physical_height = float(user32.GetSystemMetrics(1))
+        except Exception:
+            physical_width = float(image_width or 0)
+            physical_height = float(image_height or 0)
+        if image_width and image_height and (physical_width <= 0 or physical_height <= 0):
+            physical_width = float(image_width)
+            physical_height = float(image_height)
+        scale_x = logical_width / physical_width if logical_width > 0 and physical_width > 0 else 1.0
+        scale_y = logical_height / physical_height if logical_height > 0 and physical_height > 0 else 1.0
+        if not 0.25 <= scale_x <= 4.0:
+            scale_x = 1.0
+        if not 0.25 <= scale_y <= 4.0:
+            scale_y = 1.0
+        return scale_x, scale_y
+
+    def _play_detection_alert(self) -> None:
+        def worker() -> None:
+            try:
+                import winsound
+
+                winsound.Beep(500, 180)
+            except Exception:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
     @Slot()
     def _run_monitor_tick(self) -> None:
         if not self._monitoring or self._monitor_worker_active:
             return
-        self._monitor_tick += 1
-        templates = self._monitor_templates()
-        if not templates:
-            self._status = "Run an identification first."
-            self._monitor_overlay_visible = False
-            self.monitorMatches.set_items([])
+        template = self._detection_template
+        if template is None:
+            self._status = "Select, paste, or choose a stockpile item first."
+            self._monitor_summary = "No reference selected."
+            self._reset_monitor_tracking(clear_visible_matches=True)
             self.changed.emit()
             return
         if not self._is_foxhole_focused():
-            self._status = f"Monitoring: {self._monitor_target_name or 'selected image'} | waiting for Foxhole focus"
-            self._monitor_overlay_visible = False
-            self.monitorMatches.set_items([])
+            self._status = f"Detection active: {self.monitorTarget or 'selected image'} | waiting for Foxhole focus"
+            self._monitor_summary = "Waiting for Foxhole focus."
+            rows = self._held_monitor_rows()
+            self._monitor_match_count = len(rows)
+            self.monitorMatches.set_items(rows)
             self.changed.emit()
             return
         bbox = self._window_client_rect()
@@ -4570,37 +7211,72 @@ class IdentifyItemController(QObject):
                     self.monitorFinished.emit([], "Monitor dependencies are unavailable.", False)
                     return
                 screenshot = image_grab.grab(bbox=bbox) if bbox else image_grab.grab()
-                screen_np = np_module.array(screenshot)
+                screen_np = np_module.array(screenshot.convert("RGB"), dtype=np_module.uint8)
                 gray = cv2_module.cvtColor(screen_np, cv2_module.COLOR_RGB2GRAY)
-                matches: list[dict[str, int]] = []
+                base_template = template.gray
+                scale_x, scale_y = self._qt_screen_scale(screenshot.width, screenshot.height)
+                if self._monitor_control_visible:
+                    mask_w = min(gray.shape[1], max(1, int(round(420 / max(scale_x, 0.01)))))
+                    mask_h = min(gray.shape[0], max(1, int(round(300 / max(scale_y, 0.01)))))
+                    gray[:mask_h, gray.shape[1] - mask_w :] = 0
+                matches: list[dict[str, Any]] = []
                 best_score = -1.0
-                for template in templates:
-                    for scale in (0.85, 1.0, 1.15):
-                        th = max(12, int(template.shape[0] * scale))
-                        tw = max(12, int(template.shape[1] * scale))
-                        if th >= gray.shape[0] or tw >= gray.shape[1]:
-                            continue
-                        interpolation = cv2_module.INTER_AREA if scale < 1 else cv2_module.INTER_CUBIC
-                        resized = cv2_module.resize(template, (tw, th), interpolation=interpolation)
-                        result = cv2_module.matchTemplate(gray, resized, cv2_module.TM_CCOEFF_NORMED)
-                        _min_val, max_val, _min_loc, _max_loc = cv2_module.minMaxLoc(result)
-                        best_score = max(best_score, float(max_val))
-                        ys, xs = np_module.where(result >= threshold)
-                        for x, y in zip(xs.tolist(), ys.tolist()):
-                            gx = int(x + (bbox[0] if bbox else 0))
-                            gy = int(y + (bbox[1] if bbox else 0))
-                            if all(abs(gx - item["matchX"]) > 20 or abs(gy - item["matchY"]) > 20 for item in matches):
-                                matches.append({"matchX": gx, "matchY": gy, "matchW": tw, "matchH": th})
-                            if len(matches) >= 10:
+                th, tw = int(base_template.shape[0]), int(base_template.shape[1])
+                if th < gray.shape[0] and tw < gray.shape[1]:
+                    result = cv2_module.matchTemplate(gray, base_template, cv2_module.TM_CCOEFF_NORMED)
+                    _min_val, max_val, _min_loc, max_loc = cv2_module.minMaxLoc(result)
+                    best_score = max(best_score, float(max_val))
+                    if max_val >= threshold:
+                        mask = (result >= threshold).astype(np_module.uint8) * 255
+                        contours, _hierarchy = cv2_module.findContours(mask, cv2_module.RETR_EXTERNAL, cv2_module.CHAIN_APPROX_SIMPLE)
+                        ranked: list[tuple[float, int, int]] = []
+                        for contour in contours:
+                            rx, ry, rw, rh = cv2_module.boundingRect(contour)
+                            roi = result[ry : ry + rh, rx : rx + rw]
+                            if roi.size == 0:
+                                continue
+                            _roi_min, roi_max, _roi_min_loc, roi_max_loc = cv2_module.minMaxLoc(roi)
+                            ranked.append((float(roi_max), int(rx + roi_max_loc[0]), int(ry + roi_max_loc[1])))
+                        if not ranked:
+                            ranked.append((float(max_val), int(max_loc[0]), int(max_loc[1])))
+                        ranked.sort(reverse=True)
+                        min_distance = max(12, int(max(tw, th) * 0.65))
+                        for score, x, y in ranked:
+                            physical_x = int(x + (bbox[0] if bbox else 0))
+                            physical_y = int(y + (bbox[1] if bbox else 0))
+                            display_x = int(round(physical_x * scale_x))
+                            display_y = int(round(physical_y * scale_y))
+                            display_w = max(8, int(round(tw * scale_x)))
+                            display_h = max(8, int(round(th * scale_y)))
+                            center_x = display_x + (display_w // 2)
+                            center_y = display_y + (display_h // 2)
+                            duplicate = False
+                            for item in matches:
+                                item_center_x = int(item["matchX"]) + (int(item["matchW"]) // 2)
+                                item_center_y = int(item["matchY"]) + (int(item["matchH"]) // 2)
+                                if abs(center_x - item_center_x) < min_distance and abs(center_y - item_center_y) < min_distance:
+                                    duplicate = True
+                                    break
+                            if duplicate:
+                                continue
+                            matches.append(
+                                {
+                                    "matchX": display_x,
+                                    "matchY": display_y,
+                                    "matchW": display_w,
+                                    "matchH": display_h,
+                                    "matchScore": score,
+                                    "scoreText": f"{score:.3f}",
+                                }
+                            )
+                            if len(matches) >= 12:
                                 break
-                        if len(matches) >= 10:
-                            break
-                    if len(matches) >= 10:
-                        break
                 if matches:
-                    self.monitorFinished.emit(matches, f"Found: {len(matches)}", True)
+                    matches.sort(key=lambda item: float(item.get("matchScore", 0.0)), reverse=True)
+                    self.monitorFinished.emit(matches[:12], f"Detected: {len(matches[:12])}", True)
                 else:
-                    self.monitorFinished.emit([], f"Searching... score {best_score:.3f}", False)
+                    score_text = f"{best_score:.3f}" if best_score >= 0 else "-"
+                    self.monitorFinished.emit([], f"Searching... best confidence {score_text}", True)
             except Exception as exc:
                 self.monitorFinished.emit([], f"Monitor error: {exc}", False)
 
@@ -4615,14 +7291,43 @@ class IdentifyItemController(QObject):
             self.changed.emit()
             return
         rows = list(matches) if isinstance(matches, list) else []
+        if rows:
+            if not self._monitor_sound_played:
+                self._play_detection_alert()
+                self._monitor_sound_played = True
+            rows = self._stabilize_monitor_scores([dict(item) for item in rows if isinstance(item, dict)])
+            self._monitor_last_rows = [dict(item) for item in rows]
+            self._monitor_miss_count = 0
+        else:
+            if visible:
+                self._register_monitor_miss()
+                rows = []
+            else:
+                rows = self._held_monitor_rows()
+            if rows:
+                status = "Detected: held"
+
         self.monitorMatches.set_items(rows)
-        self._monitor_overlay_visible = bool(visible and rows and self._monitoring)
+        self._monitor_overlay_visible = bool((visible or rows) and self._monitoring)
+        self._monitor_match_count = len(rows)
+        scores = [float(item.get("matchScore", 0.0)) for item in rows if isinstance(item, dict)]
+        if scores:
+            self._monitor_best_score = max(scores)
+        elif match := re.search(r"(?:confidence|score)\s+([0-9.]+)", status, flags=re.IGNORECASE):
+            try:
+                self._monitor_best_score = float(match.group(1))
+            except ValueError:
+                self._monitor_best_score = 0.0
+        elif "confidence" not in status.lower() and "score" not in status.lower():
+            self._monitor_best_score = 0.0
+        self._monitor_summary = status
         self._status = status
         self.changed.emit()
 
     @Slot()
     def shutdown(self) -> None:
         self.stopMonitor()
+        self.cancelStockpileItemSelection()
 
 
 class ProductionController(QObject):
@@ -6437,7 +9142,7 @@ class OverlayController(QObject):
         if time.monotonic() <= self._preview_until:
             self._set_visible(True)
             return
-        # Also show overlay when background hold modes are active.
+        # Also show overlay when hold modes are active.
         clicker = self.auto_clicker.clicker
         if clicker and (
             getattr(clicker, "move_click_enabled", False)
@@ -6535,16 +9240,6 @@ def identify_preview_path() -> Path:
     path = extracted_dir() / "identify-preview.png"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def match_to_dict(match) -> dict[str, Any]:
-    return {
-        "name": str(match.name),
-        "score": float(match.score),
-        "scoreText": f"{float(match.score):.3f}",
-        "icon": file_url(match.path) if match.path and Path(match.path).exists() else "",
-        "path": str(match.path),
-    }
 
 
 def load_item_index() -> list[dict[str, str]]:
@@ -7049,6 +9744,128 @@ def wait_for_discord_oauth_code(expected_state: str, port: int, timeout: int = 1
     return code
 
 
+class NewsController(QObject):
+    changed = Signal()
+    fetchResultFromWorker = Signal(object, str)
+    LOCALE_BY_LANGUAGE = {"pt": "pt-BR", "en": "en-US", "es": "es-ES", "fr": "fr-FR"}
+
+    def __init__(self, chat: ChatController, i18n: I18nController, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.chat = chat
+        self.i18n = i18n
+        self._loading = False
+        self._error = ""
+        self._news: list[dict[str, Any]] = []
+        self.fetchResultFromWorker.connect(self._handle_fetch_result)
+        self.i18n.changed.connect(self._handle_language_changed)
+
+    @Property(bool, notify=changed)
+    def loading(self) -> bool:
+        return self._loading
+
+    @Property(str, notify=changed)
+    def error(self) -> str:
+        return self._error
+
+    @Property("QVariantList", notify=changed)
+    def newsModel(self) -> list[dict[str, Any]]:
+        return self._news
+
+    @Slot()
+    def fetchNews(self) -> None:
+        if self._loading:
+            return
+        token = str(getattr(self.chat, "_token", "") or "")
+        if not token:
+            self._news = []
+            self._error = ""
+            self.changed.emit()
+            return
+        self._loading = True
+        self._error = ""
+        self.changed.emit()
+        threading.Thread(target=self._fetch_worker, args=(token,), daemon=True).start()
+
+    def _fetch_worker(self, token: str) -> None:
+        try:
+            locale = self.LOCALE_BY_LANGUAGE.get(normalize_language(self.i18n.language), "pt-BR")
+            query = urllib.parse.urlencode({"locale": locale})
+            result = http_json("GET", f"/news?{query}", token=token, timeout=12)
+            raw_news = result.get("news", []) if isinstance(result, dict) else result
+            if not isinstance(raw_news, list):
+                raw_news = []
+            self.fetchResultFromWorker.emit(self._normalize_news_items(raw_news), "")
+        except Exception as exc:
+            self.fetchResultFromWorker.emit([], str(exc))
+
+    def _normalize_news_items(self, news: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
+        for item in news:
+            if not isinstance(item, dict):
+                continue
+            body = str(item.get("bodyMarkdown") or item.get("body") or item.get("content") or "").strip()
+            title = str(item.get("title") or "").strip()
+            type_value = str(item.get("type") or item.get("category") or "general").strip() or "general"
+            date_value = item.get("publishedAt") or item.get("startsAt") or item.get("createdAt") or ""
+            author = item.get("author") if isinstance(item.get("author"), dict) else {}
+            body_html = str(item.get("bodyHtml") or item.get("html") or "").strip() or markdown_to_html(body)
+            content_blocks = item.get("contentBlocks") if isinstance(item.get("contentBlocks"), list) else []
+            if not content_blocks:
+                content_blocks = markdown_to_news_blocks(body)
+            plain_body = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", body)
+            plain_body = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", plain_body)
+            plain_body = re.sub(r"^[#>*\-\s]+", "", plain_body, flags=re.MULTILINE).strip()
+            image_url = news_image_url(item)
+            items.append(
+                {
+                    **item,
+                    "title": title,
+                    "body": plain_body,
+                    "bodyMarkdown": body,
+                    "bodyMarkdownNoImages": plain_body,
+                    "bodyHtml": body_html,
+                    "contentBlocks": content_blocks,
+                    "excerpt": " ".join(plain_body.split())[:220],
+                    "image": image_url,
+                    "thumbnail": str(item.get("thumbnailUrl") or item.get("thumbnail") or image_url),
+                    "category": type_value.replace("-", " ").replace("_", " ").title(),
+                    "date": str(date_value or ""),
+                    "viewCount": int_or_none(item.get("viewCount")) or 0,
+                    "locale": str(item.get("locale") or ""),
+                    "authorName": str(author.get("name") or author.get("email") or "GG Coalition"),
+                }
+            )
+        return items
+
+    @Slot(object, str)
+    def _handle_fetch_result(self, news: list[dict[str, Any]], error: str) -> None:
+        self._loading = False
+        self._error = error
+        self._news = news
+        self.changed.emit()
+
+    @Slot()
+    def _handle_language_changed(self) -> None:
+        if getattr(self.chat, "_token", ""):
+            self.fetchNews()
+
+    @Slot(str)
+    def registerView(self, news_id: str) -> None:
+        token = str(getattr(self.chat, "_token", "") or "")
+        if not token or not news_id:
+            return
+        threading.Thread(
+            target=lambda: self._register_view_worker(token, news_id),
+            daemon=True,
+        ).start()
+
+    def _register_view_worker(self, token: str, news_id: str) -> None:
+        try:
+            http_json("POST", f"/news/{urllib.parse.quote(news_id)}/view", token=token, timeout=8)
+        except Exception:
+            pass
+
+
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
         super().__init__()
@@ -7063,6 +9880,7 @@ class ControllerRegistry(QObject):
         self.overlayController = OverlayController(self.settings_data, self.autoClickerController, self)
         self.stockpileController = StockpileController(self.settings_data, self)
         self.chatController = ChatController(self.steamController, self.settings_data, self.i18nController, self)
+        self.newsController = NewsController(self.chatController, self.i18nController, self)
         self.itemSearchController = ItemSearchController(self.settings_data, self)
         self.identifyItemController = IdentifyItemController(self.itemSearchController, self)
         self.productionController = ProductionController(self.i18nController, self)
@@ -7070,6 +9888,8 @@ class ControllerRegistry(QObject):
         self.notificationsController = NotificationsController(self.settings_data, self)
         self.updateController = UpdateController(self.i18nController, self)
         self.i18nController.changed.connect(self.settingsController.notifyExternalChange)
+        self.i18nController.changed.connect(self.stockpileController.refreshLocalizedTimes)
+        self.i18nController.changed.connect(self.itemSearchController.refreshLocalizedTimes)
         self.settingsController.changed.connect(self.notificationsController.refresh)
         self.autoClickerController.orderRequested.connect(lambda _order: self.notificationsController.startSquadlock())
         if self.settings_data.get("stockpile", {}).get("enabled", True):
@@ -7090,6 +9910,7 @@ class ControllerRegistry(QObject):
             "overlayController",
             "stockpileController",
             "chatController",
+            "newsController",
             "itemSearchController",
             "identifyItemController",
             "productionController",

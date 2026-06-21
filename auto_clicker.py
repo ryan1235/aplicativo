@@ -1,6 +1,7 @@
 import ctypes
 from ctypes import wintypes
 import os
+import queue
 import random
 from pathlib import Path
 import threading
@@ -33,6 +34,8 @@ MOUSE_BUTTONS = {
     "Direito": {"down": 0x0204, "up": 0x0205, "mk": 0x0002},
     "Meio": {"down": 0x0207, "up": 0x0208, "mk": 0x0010},
 }
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
 FOXHOLE_PATH_HINTS = ("\\steamapps\\common\\foxhole\\", "/steamapps/common/foxhole/")
 IGNORED_PROCESS_HINTS = ("discord", "chrome", "msedge", "firefox", "opera", "steam", "python")
@@ -41,9 +44,12 @@ WM_MOUSEMOVE = 0x0200
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
 WM_SYSKEYDOWN = 0x0104
+WM_SYSKEYUP = 0x0105
 WM_QUIT = 0x0012
 WH_KEYBOARD_LL = 13
+WH_MOUSE_LL = 14
 LLKHF_INJECTED = 0x00000010
+LLMHF_INJECTED = 0x00000001
 CWP_SKIPINVISIBLE = 0x0001
 CWP_SKIPDISABLED = 0x0002
 
@@ -85,13 +91,31 @@ class KBDLLHOOKSTRUCT(ctypes.Structure):
     ]
 
 
+class MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("pt", POINT),
+        ("mouseData", wintypes.DWORD),
+        ("flags", wintypes.DWORD),
+        ("time", wintypes.DWORD),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
 class AutoClicker:
     def __init__(self, status_callback) -> None:
         self.status_callback = status_callback
         self.hotkey_name = "F3"
         self.hotkey_vk = HOTKEYS[self.hotkey_name]
         self.mouse_button = "Esquerdo"
-        self.interval = 0.1
+        self.interval = 0.5
+        self.modes_enabled: dict[str, bool] = {
+            "auto": True,
+            "move": True,
+            "pilot": True,
+            "right_hold": True,
+            "fixed": True,
+            "artillery": True,
+        }
 
         self.target_hwnd = 0
         self.click_hwnd = 0
@@ -136,16 +160,18 @@ class AutoClicker:
         self.w_hold_hwnd = 0
         self.w_last_tap = 0.0
         self.w_double_tap_threshold = 0.35  # seconds between taps
-        self.w_doubletap_enabled = True  # can be toggled from UI
+        self.w_doubletap_enabled = False  # can be toggled from UI
 
-        # Right mouse hold: background RMB hold for Foxhole.
+        # Right mouse hold: physical RMB hold, only while Foxhole is focused.
         self.right_hold_enabled = False
         self.right_hold_hwnd = 0
-        self.right_hold_lparam = 0
         self.right_hold_worker_running = False
         self.right_hold_button_down = False
         self.right_double_tap_threshold = 0.35
         self.right_doubletap_enabled = False
+        self.right_last_tap = 0.0
+        self.right_suppress_next_up = False
+        self.right_mouse_action_queue = queue.SimpleQueue()
 
         # Shift hold with autoclick
         self.shift_enabled = False
@@ -177,13 +203,22 @@ class AutoClicker:
 
         self.stop_event = threading.Event()
         self.key_was_down: dict[int, bool] = {}
+        self.foxhole_hotkey_context_cache_until = 0.0
+        self.foxhole_hotkey_context_cache_active = False
+        self.foxhole_target_context_cache_until = 0.0
+        self.foxhole_target_context_cache_active = False
+        self.esc_suppress_next_up = False
         self.keyboard_hook_handle = 0
         self.keyboard_hook_proc = None
         self.keyboard_hook_thread_id = 0
+        self.mouse_hook_handle = 0
+        self.mouse_hook_proc = None
+        self.mouse_hook_thread_id = 0
         self.user32 = ctypes.windll.user32
         self.kernel32 = ctypes.windll.kernel32
         self.user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_size_t]
         self.user32.PostMessageW.restype = ctypes.c_bool
+        self.user32.GetForegroundWindow.restype = ctypes.c_void_p
         self.user32.WindowFromPoint.argtypes = [POINT]
         self.user32.WindowFromPoint.restype = ctypes.c_void_p
         self.user32.ChildWindowFromPointEx.argtypes = [ctypes.c_void_p, POINT, ctypes.c_uint]
@@ -201,13 +236,19 @@ class AutoClicker:
         self.user32.GetMessageW.restype = ctypes.c_int
         self.user32.TranslateMessage.argtypes = [ctypes.POINTER(wintypes.MSG)]
         self.user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
+        self.user32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.c_size_t]
+        self.user32.mouse_event.restype = None
 
         self.monitor_thread = threading.Thread(target=self.monitor_hotkeys, daemon=True)
         self.click_thread = threading.Thread(target=self.click_loop, daemon=True)
         self.keyboard_hook_thread = threading.Thread(target=self._keyboard_hook_loop, daemon=True)
+        self.mouse_hook_thread = threading.Thread(target=self._mouse_hook_loop, daemon=True)
+        self.right_mouse_action_thread = threading.Thread(target=self._right_mouse_action_loop, daemon=True)
         self.monitor_thread.start()
         self.click_thread.start()
         self.keyboard_hook_thread.start()
+        self.mouse_hook_thread.start()
+        self.right_mouse_action_thread.start()
         self.log("AutoClicker iniciado")
 
     def set_language(self, language: str) -> None:
@@ -258,6 +299,37 @@ class AutoClicker:
         self.interval = max(0.03, interval)
         self.log(f"Config: hotkey={self.hotkey_name} botao={self.mouse_button} intervalo={self.interval:.2f}s")
         self.status_callback(self.status_text())
+
+    def configure_modes_enabled(self, modes: dict[str, bool], *, stop_disabled: bool = True) -> None:
+        defaults = {
+            "auto": True,
+            "move": True,
+            "pilot": True,
+            "right_hold": True,
+            "fixed": True,
+            "artillery": True,
+        }
+        defaults.update({key: bool(value) for key, value in modes.items() if key in defaults})
+        self.modes_enabled = defaults
+        if not stop_disabled:
+            self.status_callback(self.status_text())
+            return
+        if not self.mode_is_enabled("auto"):
+            self.pause()
+        if not self.mode_is_enabled("move"):
+            self.disable_move_click("modo desativado")
+        if not self.mode_is_enabled("pilot"):
+            self.disable_w_hold("modo desativado")
+        if not self.mode_is_enabled("right_hold"):
+            self.disable_right_hold("modo desativado")
+        if not self.mode_is_enabled("fixed"):
+            self.disable_fixed_click("modo desativado")
+        if not self.mode_is_enabled("artillery"):
+            self.disable_artillery("modo desativado")
+        self.status_callback(self.status_text())
+
+    def mode_is_enabled(self, mode: str) -> bool:
+        return bool(self.modes_enabled.get(mode, True))
 
     def configure_action_hotkeys(
         self,
@@ -390,6 +462,10 @@ class AutoClicker:
             self.start()
 
     def start(self) -> None:
+        if not self.mode_is_enabled("auto"):
+            self.log("Auto Clicker ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.disable_fixed_click("auto on")
         self.use_foxhole_window()
         self.enabled = True
@@ -422,6 +498,21 @@ class AutoClicker:
                 self.user32.PostThreadMessageW(self.keyboard_hook_thread_id, WM_QUIT, 0, 0)
             except Exception:
                 pass
+        if self.mouse_hook_handle:
+            try:
+                self.user32.UnhookWindowsHookEx(self.mouse_hook_handle)
+            except Exception:
+                pass
+            self.mouse_hook_handle = 0
+        if self.mouse_hook_thread_id:
+            try:
+                self.user32.PostThreadMessageW(self.mouse_hook_thread_id, WM_QUIT, 0, 0)
+            except Exception:
+                pass
+        try:
+            self.right_mouse_action_queue.put(None)
+        except Exception:
+            pass
         self.log("Parando AutoClicker")
 
     def status_text(self) -> str:
@@ -470,20 +561,25 @@ class AutoClicker:
         for vk in watch_keys:
             self.key_was_down[vk] = False
 
-        # Double-tap monitoring runs in background threads.
+        # Double-tap W monitoring runs in a background thread.
         threading.Thread(target=self._w_doubletap_monitor, daemon=True).start()
-        threading.Thread(target=self._right_doubletap_monitor, daemon=True).start()
 
         while not self.stop_event.is_set():
-            self.handle_key_press(self.move_hotkey_vk, self.toggle_move_click)
-            self.handle_key_press(self.hotkey_vk, self.toggle)
-            self.handle_key_press(self.fixed_hotkey_vk, self.toggle_fixed_click)
-            self.handle_key_press(self.pilot_hotkey_vk, self.toggle_pilot)
-            self.handle_key_press(self.right_hold_hotkey_vk, self.toggle_right_hold)
-            self.handle_key_press(self.artillery_hotkey_vk, self.toggle_artillery)
-            self.handle_key_press(HOTKEYS["F5"], self.open_orders_menu)
+            if self.mode_is_enabled("move"):
+                self.handle_key_press(self.move_hotkey_vk, self.toggle_move_click)
+            if self.mode_is_enabled("auto"):
+                self.handle_key_press(self.hotkey_vk, self.toggle)
+            if self.mode_is_enabled("fixed"):
+                self.handle_key_press(self.fixed_hotkey_vk, self.toggle_fixed_click)
+            if self.mode_is_enabled("pilot"):
+                self.handle_key_press(self.pilot_hotkey_vk, self.toggle_pilot)
+            if self.mode_is_enabled("right_hold"):
+                self.handle_key_press(self.right_hold_hotkey_vk, self.toggle_right_hold, require_foreground=True)
+            if self.mode_is_enabled("artillery"):
+                self.handle_key_press(self.artillery_hotkey_vk, self.toggle_artillery)
+            self.handle_key_press(HOTKEYS["F5"], self.open_orders_menu, require_foreground=True)
 
-            if self.fixed_click_enabled:
+            if self.fixed_click_enabled and self.mode_is_enabled("fixed"):
                 self.handle_key_press(VK_1, lambda: self.trigger_slot_click(1))
                 self.handle_key_press(VK_2, lambda: self.trigger_slot_click(2))
                 self.handle_key_press(VK_3, lambda: self.trigger_slot_click(3))
@@ -491,12 +587,20 @@ class AutoClicker:
 
             self.check_cancel_shortcuts()
             self.refresh_shift_state()
-            time.sleep(0.03)
+            time.sleep(0.015)
 
-    def handle_key_press(self, vk: int, callback) -> None:
+    def handle_key_press(self, vk: int, callback, *, require_foreground: bool = False) -> None:
         is_down = bool(self.user32.GetAsyncKeyState(vk) & 0x8000)
         was_down = self.key_was_down.get(vk, False)
         if is_down and not was_down:
+            context_active = (
+                self.foxhole_hotkey_context_active()
+                if require_foreground
+                else self.foxhole_target_context_active()
+            )
+            if not context_active:
+                self.key_was_down[vk] = is_down
+                return
             try:
                 callback()
             except Exception as exc:
@@ -504,32 +608,55 @@ class AutoClicker:
         self.key_was_down[vk] = is_down
 
     def check_cancel_shortcuts(self) -> None:
+        if not self.foxhole_hotkey_context_active():
+            return
+
         esc = bool(self.user32.GetAsyncKeyState(VK_ESC) & 0x8000)
+        if esc and self.any_autoclicker_active():
+            self.cancel_all_autoclickers("cancel: esc")
+            return
+
         lbtn = bool(self.user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
         rbtn = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
         mbtn = bool(self.user32.GetAsyncKeyState(VK_MBUTTON) & 0x8000)
-        wasd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (self._w_hold_vk, VK_A, VK_S, VK_D))
-
-        if self.move_click_enabled and esc:
-            self.disable_move_click("cancel: esc")
-
-        # Double-click fixo cancela com mouse/asd/esc (W excludido pois w_hold usa W)
+        # Double-click fixo cancela com mouse/asd (W excludido pois w_hold usa W)
         asd = any(bool(self.user32.GetAsyncKeyState(vk) & 0x8000) for vk in (VK_A, VK_S, VK_D))
-        if self.fixed_click_enabled and (esc or lbtn or rbtn or mbtn or asd):
-            self.disable_fixed_click("cancel: mouse/asd/esc")
+        if self.fixed_click_enabled and self.mode_is_enabled("fixed") and (lbtn or rbtn or mbtn or asd):
+            self.disable_fixed_click("cancel: mouse/asd")
 
-        if self.artillery_enabled and (esc or rbtn or mbtn):
-            self.disable_artillery("cancel: esc")
-
-        # W-hold cancels on Esc only (not on W press — that would cancel itself)
-        if self.w_hold_enabled and esc:
-            self.disable_w_hold("cancel: esc")
-
-        if self.right_hold_enabled and esc:
-            self.disable_right_hold("cancel: esc")
+        if self.artillery_enabled and self.mode_is_enabled("artillery") and lbtn:
+            self.disable_artillery("cancel: left click")
 
     def shift_modifier_active(self) -> bool:
-        return bool(self.shift_enabled and self.user32.GetAsyncKeyState(VK_SHIFT) & 0x8000)
+        return bool(
+            self.shift_enabled
+            and self.mode_is_enabled("auto")
+            and self.foxhole_target_context_active()
+            and self.user32.GetAsyncKeyState(VK_SHIFT) & 0x8000
+        )
+
+    def any_autoclicker_active(self) -> bool:
+        return bool(
+            self.enabled
+            or self.move_click_enabled
+            or self.move_click_holding
+            or self.fixed_click_enabled
+            or self.artillery_enabled
+            or self.w_hold_enabled
+            or self.w_hold_key_down
+            or self.right_hold_enabled
+            or self.right_hold_button_down
+        )
+
+    def cancel_all_autoclickers(self, reason: str) -> None:
+        if not self.any_autoclicker_active():
+            return
+        self.pause()
+        self.disable_move_click(reason)
+        self.disable_fixed_click(reason)
+        self.disable_artillery(reason)
+        self.disable_w_hold(reason)
+        self.disable_right_hold(reason)
 
     def refresh_shift_state(self) -> None:
         current = self.shift_modifier_active()
@@ -599,6 +726,10 @@ class AutoClicker:
             self.enable_fixed_click()
 
     def enable_fixed_click(self) -> None:
+        if not self.mode_is_enabled("fixed"):
+            self.log(f"{self.fixed_hotkey_name} ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.use_foxhole_window()
         self.fixed_click_enabled = True
@@ -621,6 +752,10 @@ class AutoClicker:
             self.enable_move_click()
 
     def enable_move_click(self) -> None:
+        if not self.mode_is_enabled("move"):
+            self.log(f"{self.move_hotkey_name} ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("move click on")
         self.disable_artillery("move click on")
@@ -673,13 +808,13 @@ class AutoClicker:
                     self.disable_move_click("janela perdida")
                     break
                 now = time.monotonic()
-                if now - last_reassert >= 0.35:
+                if now - last_reassert >= 0.20:
                     last_reassert = now
                     button = MOUSE_BUTTONS["Esquerdo"]
                     lparam = self.move_click_lparam or self.make_lparam(self.click_x, self.click_y)
                     self.user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
                     self.user32.PostMessageW(hwnd, button["down"], button["mk"], lparam)
-                time.sleep(0.04)
+                time.sleep(0.025)
         finally:
             self.move_click_worker_running = False
             if not self.move_click_enabled:
@@ -694,9 +829,12 @@ class AutoClicker:
             self.enable_artillery()
 
     def enable_artillery(self) -> None:
+        if not self.mode_is_enabled("artillery"):
+            self.log(f"{self.artillery_hotkey_name} ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("artillery on")
-        self.disable_move_click("artillery on")
         self.disable_w_hold("artillery on")
         self.disable_right_hold("artillery on")
         self.use_foxhole_window()
@@ -732,9 +870,16 @@ class AutoClicker:
     def enable_right_hold(self) -> None:
         if self.right_hold_enabled:
             return
+        if not self.mode_is_enabled("right_hold"):
+            self.log("Right Hold ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
+        if not self.is_foxhole_foreground_window():
+            self.log("Right Hold abortado: Foxhole precisa estar em foco")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("right hold on")
-        self.disable_move_click("right hold on")
         self.disable_artillery("right hold on")
         self.disable_w_hold("right hold on")
         self.use_foxhole_window(quiet=True)
@@ -745,7 +890,6 @@ class AutoClicker:
             return
         self.right_hold_enabled = True
         self.right_hold_hwnd = hwnd
-        self.right_hold_lparam = self.make_lparam(self.click_x, self.click_y)
         self._set_right_hold_button(True)
         self.log(f"Right Hold ON ({self.right_hold_hotkey_name}): Esc/hotkey para parar")
         self.status_callback(self.status_text())
@@ -758,36 +902,27 @@ class AutoClicker:
         self.right_hold_enabled = False
         self._set_right_hold_button(False)
         self.right_hold_hwnd = 0
-        self.right_hold_lparam = 0
         self.log(f"Right Hold OFF: {reason}")
         self.status_callback(self.status_text())
 
     def _set_right_hold_button(self, down: bool) -> None:
         if down == self.right_hold_button_down:
             return
-        hwnd = self.right_hold_hwnd or self.click_hwnd or self.target_hwnd
-        button = MOUSE_BUTTONS["Direito"]
-        lparam = self.right_hold_lparam or self.make_lparam(self.click_x, self.click_y)
-        if hwnd:
-            self.user32.PostMessageW(hwnd, WM_MOUSEMOVE, 0, lparam)
-            self.user32.PostMessageW(hwnd, button["down" if down else "up"], button["mk"] if down else 0, lparam)
+        self.user32.mouse_event(MOUSEEVENTF_RIGHTDOWN if down else MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
         self.right_hold_button_down = down
 
     def _right_hold_worker(self) -> None:
         self.right_hold_worker_running = True
-        last_reassert = 0.0
         try:
             while self.right_hold_enabled and not self.stop_event.is_set():
                 hwnd = self.right_hold_hwnd or self.click_hwnd or self.target_hwnd
                 if not hwnd or not self.user32.IsWindow(hwnd):
                     self.disable_right_hold("janela perdida")
                     break
-                now = time.monotonic()
-                if now - last_reassert >= 0.35:
-                    last_reassert = now
-                    self.right_hold_button_down = False
-                    self._set_right_hold_button(True)
-                time.sleep(0.04)
+                if not self.is_foxhole_foreground_window():
+                    self.disable_right_hold("Foxhole fora de foco")
+                    break
+                time.sleep(0.05)
         finally:
             self.right_hold_worker_running = False
             if not self.right_hold_enabled:
@@ -825,15 +960,23 @@ class AutoClicker:
     def enable_w_hold(self) -> None:
         if self.w_hold_enabled:
             return
+        if not self.mode_is_enabled("pilot"):
+            self.log("W-Hold ignorado: modo desativado")
+            self.status_callback(self.status_text())
+            return
         self.pause()
         self.disable_fixed_click("pilot on")
-        self.disable_move_click("pilot on")
         self.disable_artillery("pilot on")
         self.disable_right_hold("pilot on")
         self.use_foxhole_window(quiet=True)
+        hwnd = self.click_hwnd or self.target_hwnd
+        if not hwnd:
+            self.log("W-Hold abortado: sem janela alvo")
+            self.status_callback(self.status_text())
+            return
         self.w_hold_enabled = True
         self.pilot_w_paused = False
-        self.w_hold_hwnd = self.click_hwnd or self.target_hwnd
+        self.w_hold_hwnd = hwnd
         self._set_w_hold_key(True)
         self.log(f"W-Hold ON ({self.pilot_hotkey_name}): F4/Esc para parar, S pausa")
         self.status_callback(self.status_text())
@@ -854,33 +997,50 @@ class AutoClicker:
         if down == self.w_hold_key_down:
             return
         hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
-        if hwnd:
-            self._post_key(hwnd, self._w_hold_vk, down=down)
-        self.user32.keybd_event(self._w_hold_vk, 0, 0 if down else 0x0002, 0)
+        if not hwnd:
+            if not down:
+                self.w_hold_key_down = False
+            return
+        self._post_key(hwnd, self._w_hold_vk, down=down)
         self.w_hold_key_down = down
 
     def _w_hold_worker(self) -> None:
         self.w_hold_worker_running = True
         prev_s = False
         last_reassert = 0.0
+        last_target_check = 0.0
         try:
             while self.w_hold_enabled and not self.stop_event.is_set():
+                hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
+                now = time.monotonic()
+                if not self.mode_is_enabled("pilot"):
+                    prev_s = False
+                    time.sleep(0.03)
+                    continue
+                if not hwnd or not self.user32.IsWindow(hwnd):
+                    self.disable_w_hold("janela perdida")
+                    break
+                if now - last_target_check >= 0.50:
+                    last_target_check = now
+                    if not self.is_foxhole_window(hwnd):
+                        self.disable_w_hold("janela perdida")
+                        break
+
                 s_down = bool(self.user32.GetAsyncKeyState(VK_S) & 0x8000)
 
-                if s_down and not prev_s and not self.pilot_w_paused:
+                if s_down and not self.pilot_w_paused:
                     self.pilot_w_paused = True
                     self._set_w_hold_key(False)
                     self.log("W-Hold: pausado (S pressionado)")
                     self.status_callback(self.status_text())
 
-                if not s_down and prev_s and self.pilot_w_paused and self.w_hold_enabled:
+                if not s_down and self.pilot_w_paused and self.w_hold_enabled:
                     self.pilot_w_paused = False
                     self._set_w_hold_key(True)
                     self.log("W-Hold: retomado (S solto)")
                     self.status_callback(self.status_text())
 
-                now = time.monotonic()
-                if self.w_hold_enabled and not self.pilot_w_paused and now - last_reassert >= 0.35:
+                if self.w_hold_enabled and not self.pilot_w_paused and now - last_reassert >= 0.20:
                     last_reassert = now
                     hwnd = self.w_hold_hwnd or self.click_hwnd or self.target_hwnd
                     if hwnd:
@@ -895,27 +1055,31 @@ class AutoClicker:
 
     def _w_doubletap_monitor(self) -> None:
         """Background thread: detects W double-tap.
-        NOTE: Cannot use GetAsyncKeyState(VK_W) when w_hold is active via keybd_event,
-        because keybd_event itself sets the async key state. Instead, we track rising
-        edges of VK_W only when w_hold is NOT active.
+        Rising edges are only considered while Foxhole is the foreground window.
         """
         prev_w = False
         last_tap = 0.0
         while not self.stop_event.is_set():
             if self.w_hold_enabled:
-                # While holding W via keybd_event, skip detection to avoid false triggers
+                # While W-Hold owns the key state, skip physical double-tap detection.
                 prev_w = True  # treat as "held" so we don't see a false rising edge after disable
-                time.sleep(0.05)
+                time.sleep(0.02)
                 continue
 
             w_down = bool(self.user32.GetAsyncKeyState(self._w_hold_vk) & 0x8000)
+            if not self.foxhole_hotkey_context_active():
+                prev_w = w_down
+                last_tap = 0.0
+                time.sleep(0.02)
+                continue
+
             if w_down and not prev_w:
                 now = time.monotonic()
-                if self.w_doubletap_enabled and (now - last_tap) <= self.w_double_tap_threshold:
+                if self.mode_is_enabled("pilot") and self.w_doubletap_enabled and (now - last_tap) <= self.w_double_tap_threshold:
                     self.enable_w_hold()
                 last_tap = now
             prev_w = w_down
-            time.sleep(0.03)
+            time.sleep(0.01)
 
     def _keyboard_hook_loop(self) -> None:
         self.keyboard_hook_thread_id = int(self.kernel32.GetCurrentThreadId() or 0)
@@ -923,10 +1087,30 @@ class AutoClicker:
 
         def hook_proc(code: int, w_param: int, l_param: int) -> int:
             try:
-                if code >= 0 and int(w_param) in (WM_KEYDOWN, WM_SYSKEYDOWN):
+                message = int(w_param)
+                if code >= 0 and message in (WM_KEYDOWN, WM_SYSKEYDOWN, WM_KEYUP, WM_SYSKEYUP):
                     event = ctypes.cast(l_param, ctypes.POINTER(KBDLLHOOKSTRUCT)).contents
                     is_injected = bool(event.flags & LLKHF_INJECTED)
-                    if event.vkCode == int(self._w_hold_vk) and not is_injected and self.w_hold_enabled:
+                    if event.vkCode == VK_ESC and not is_injected:
+                        if message in (WM_KEYUP, WM_SYSKEYUP) and self.esc_suppress_next_up:
+                            self.esc_suppress_next_up = False
+                            return 1
+                        if (
+                            message in (WM_KEYDOWN, WM_SYSKEYDOWN)
+                            and self.any_autoclicker_active()
+                            and self.foxhole_hotkey_context_active()
+                        ):
+                            self.esc_suppress_next_up = True
+                            self.cancel_all_autoclickers("cancel: esc")
+                            return 1
+                    if (
+                        message in (WM_KEYDOWN, WM_SYSKEYDOWN)
+                        and event.vkCode == int(self._w_hold_vk)
+                        and not is_injected
+                        and self.w_hold_enabled
+                        and self.mode_is_enabled("pilot")
+                        and self.foxhole_hotkey_context_active()
+                    ):
                         self.disable_w_hold("cancel: W")
             except Exception:
                 pass
@@ -935,7 +1119,7 @@ class AutoClicker:
         self.keyboard_hook_proc = hook_proc_type(hook_proc)
         self.keyboard_hook_handle = int(self.user32.SetWindowsHookExW(WH_KEYBOARD_LL, self.keyboard_hook_proc, 0, 0) or 0)
         if not self.keyboard_hook_handle:
-            self.log("Keyboard hook indisponivel; W-Hold ainda cancela por F4/Esc/S")
+            self.log("Keyboard hook indisponivel; Esc cancela por polling, sem absorver a tecla")
             return
 
         message = wintypes.MSG()
@@ -947,23 +1131,129 @@ class AutoClicker:
             self.user32.DispatchMessageW(ctypes.byref(message))
         self.keyboard_hook_thread_id = 0
 
-    def _right_doubletap_monitor(self) -> None:
-        prev_down = False
-        last_tap = 0.0
+    def _right_mouse_action_loop(self) -> None:
         while not self.stop_event.is_set():
-            is_down = bool(self.user32.GetAsyncKeyState(VK_RBUTTON) & 0x8000)
-            if is_down and not prev_down:
-                now = time.monotonic()
-                if self.right_hold_enabled:
-                    self.disable_right_hold("cancel: right click")
-                    last_tap = 0.0
-                elif self.right_doubletap_enabled and (now - last_tap) <= self.right_double_tap_threshold:
+            action = self.right_mouse_action_queue.get()
+            if action is None:
+                break
+            try:
+                if action == "enable":
                     self.enable_right_hold()
-                    last_tap = 0.0
-                else:
-                    last_tap = now
-            prev_down = is_down
-            time.sleep(0.03)
+                elif action == "cancel":
+                    self.disable_right_hold("cancel: right click")
+            except Exception as exc:
+                self.log(f"Erro na acao do botao direito: {exc}")
+
+    def _queue_right_mouse_action(self, action: str) -> None:
+        try:
+            self.right_mouse_action_queue.put(action)
+        except Exception:
+            pass
+
+    def _mouse_hook_loop(self) -> None:
+        self.mouse_hook_thread_id = int(self.kernel32.GetCurrentThreadId() or 0)
+        hook_proc_type = ctypes.WINFUNCTYPE(wintypes.LPARAM, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+
+        def hook_proc(code: int, w_param: int, l_param: int) -> int:
+            try:
+                if code >= 0:
+                    event = ctypes.cast(l_param, ctypes.POINTER(MSLLHOOKSTRUCT)).contents
+                    is_injected = bool(event.flags & LLMHF_INJECTED)
+                    if not is_injected and self._handle_right_mouse_hook_message(int(w_param)):
+                        return 1
+            except Exception:
+                pass
+            return self.user32.CallNextHookEx(self.mouse_hook_handle, code, w_param, l_param)
+
+        self.mouse_hook_proc = hook_proc_type(hook_proc)
+        self.mouse_hook_handle = int(self.user32.SetWindowsHookExW(WH_MOUSE_LL, self.mouse_hook_proc, 0, 0) or 0)
+        if not self.mouse_hook_handle:
+            self.log("Mouse hook indisponivel; duplo RMB nao consegue absorver o segundo clique")
+            return
+
+        message = wintypes.MSG()
+        while not self.stop_event.is_set():
+            result = self.user32.GetMessageW(ctypes.byref(message), 0, 0, 0)
+            if result <= 0:
+                break
+            self.user32.TranslateMessage(ctypes.byref(message))
+            self.user32.DispatchMessageW(ctypes.byref(message))
+        self.mouse_hook_thread_id = 0
+
+    def _handle_right_mouse_hook_message(self, message: int) -> bool:
+        right_down = MOUSE_BUTTONS["Direito"]["down"]
+        right_up = MOUSE_BUTTONS["Direito"]["up"]
+
+        if message == right_up and self.right_suppress_next_up:
+            self.right_suppress_next_up = False
+            return True
+
+        if message != right_down:
+            return False
+
+        if self.right_hold_enabled:
+            self.right_last_tap = 0.0
+            if self.mode_is_enabled("right_hold") and self.foxhole_hotkey_context_active():
+                self.right_suppress_next_up = True
+                self._queue_right_mouse_action("cancel")
+                return True
+            return False
+
+        if not self._right_doubletap_context_active():
+            self.right_last_tap = 0.0
+            return False
+
+        now = time.monotonic()
+        if self.right_last_tap and (now - self.right_last_tap) <= self.right_double_tap_threshold:
+            self.right_last_tap = 0.0
+            self.right_suppress_next_up = True
+            self._queue_right_mouse_action("enable")
+            return True
+
+        self.right_last_tap = now
+        return False
+
+    def _right_doubletap_context_active(self) -> bool:
+        return bool(
+            self.mode_is_enabled("right_hold")
+            and self.right_doubletap_enabled
+            and self.foxhole_hotkey_context_active()
+        )
+
+    def foxhole_hotkey_context_active(self) -> bool:
+        now = time.monotonic()
+        if now < self.foxhole_hotkey_context_cache_until:
+            return self.foxhole_hotkey_context_cache_active
+
+        try:
+            active = self.is_foxhole_foreground_window()
+        except Exception:
+            active = False
+        self.foxhole_hotkey_context_cache_active = active
+        self.foxhole_hotkey_context_cache_until = now + 0.05
+        return active
+
+    def foxhole_target_context_active(self) -> bool:
+        now = time.monotonic()
+        if now < self.foxhole_target_context_cache_until:
+            return self.foxhole_target_context_cache_active
+
+        active = False
+        try:
+            hwnd = self.click_hwnd or self.target_hwnd
+            if not hwnd or not self.user32.IsWindow(hwnd) or not self.is_foxhole_window(hwnd):
+                self.use_foxhole_window(quiet=True)
+                hwnd = self.click_hwnd or self.target_hwnd
+            active = bool(hwnd and self.user32.IsWindow(hwnd) and self.is_foxhole_window(hwnd))
+        except Exception:
+            active = False
+        self.foxhole_target_context_cache_active = active
+        self.foxhole_target_context_cache_until = now + 0.15
+        return active
+
+    def is_foxhole_foreground_window(self) -> bool:
+        hwnd = int(self.user32.GetForegroundWindow() or 0)
+        return bool(hwnd and self.is_foxhole_window(hwnd))
 
 
     # -----------------------------------------------------------------------

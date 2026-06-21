@@ -6,35 +6,84 @@ ComboBox {
     id: control
 
     // Properties for theming
-    property color bgNormal: "#07111f"
-    property color bgHover: "#0a1526"
-    property color borderNormal: "#24486d"
-    property color borderFocus: "#5eead4"
-    property color textNormal: "#edf6ff"
-    property color popupBg: "#0c1524"
-    property color popupBorder: "#1d3353"
-    property color itemHover: "#1d3353"
+    property color bgNormal: settingsController.backgroundColor
+    property color bgHover: settingsController.surfaceColor
+    property color borderNormal: settingsController.borderColor
+    property color borderFocus: settingsController.accentColor
+    property color textNormal: settingsController.textColor
+    property color popupBg: settingsController.surfaceColor
+    property color popupBorder: settingsController.borderColor
+    property color itemHover: settingsController.accentPanelColor
+    property bool popupStartsAtTop: false
+    property int popupScrollbarTextPadding: 0
+
+    function tr(key) {
+        i18nController.revision
+        return key ? i18nController.t(key) : ""
+    }
 
     implicitWidth: 140
-    implicitHeight: 40
+    implicitHeight: 42
 
     delegate: ItemDelegate {
         id: delegateItem
-        width: control.popup.width
-        height: typeof modelData === "object" && modelData.type === "header" ? 28 : 36
-        enabled: typeof modelData === "object" ? modelData.type !== "header" : true
+        property bool isObjectRow: typeof modelData === "object"
+        property bool isHeaderRow: isObjectRow && modelData.type === "header"
+        property string primaryText: isObjectRow ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
+        property string secondaryText: isObjectRow ? (modelData.subText || "") : ""
+        property string trailingText: isObjectRow ? (modelData.sideTextKey ? control.tr(modelData.sideTextKey) : (modelData.sideText || "")) : ""
+        property color trailingColor: isObjectRow && modelData.sideColor ? modelData.sideColor : settingsController.accentColor
+
+        width: ListView.view ? ListView.view.width : control.popup.width
+        height: isHeaderRow ? 28 : (secondaryText !== "" || trailingText !== "" ? 44 : 36)
+        enabled: isObjectRow ? modelData.type !== "header" : true
         
-        text: typeof modelData === "object" ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
+        text: primaryText
         
-        contentItem: Text {
-            text: delegateItem.text
-            color: (typeof modelData === "object" && modelData.type === "header") ? "#5eead4" : (control.highlightedIndex === index ? control.borderFocus : control.textNormal)
-            font.family: "Segoe UI"
-            font.pixelSize: (typeof modelData === "object" && modelData.type === "header") ? 11 : 13
-            font.bold: typeof modelData === "object" && modelData.type === "header"
-            elide: Text.ElideRight
-            verticalAlignment: Text.AlignVCenter
-            leftPadding: (typeof modelData === "object" && modelData.type === "item") ? 12 : 0
+        contentItem: Item {
+            Text {
+                id: primaryLabel
+                anchors.left: parent.left
+                anchors.leftMargin: delegateItem.isObjectRow && modelData.type === "item" ? 12 : 0
+                anchors.right: trailingLabel.visible ? trailingLabel.left : parent.right
+                anchors.rightMargin: trailingLabel.visible ? 8 : control.popupScrollbarTextPadding
+                y: delegateItem.secondaryText !== "" ? 5 : Math.round((parent.height - height) / 2)
+                text: delegateItem.primaryText
+                color: delegateItem.isHeaderRow ? settingsController.accentColor : (control.highlightedIndex === index ? control.borderFocus : control.textNormal)
+                font.family: "Segoe UI"
+                font.pixelSize: delegateItem.isHeaderRow ? 11 : 13
+                font.bold: delegateItem.isHeaderRow
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            Text {
+                anchors.left: primaryLabel.left
+                anchors.right: parent.right
+                anchors.rightMargin: 8 + control.popupScrollbarTextPadding
+                anchors.top: primaryLabel.bottom
+                anchors.topMargin: 1
+                visible: delegateItem.secondaryText !== ""
+                text: delegateItem.secondaryText
+                color: settingsController.mutedTextColor
+                font.family: "Segoe UI"
+                font.pixelSize: 10
+                elide: Text.ElideRight
+            }
+
+            Text {
+                id: trailingLabel
+                anchors.right: parent.right
+                anchors.rightMargin: 4 + control.popupScrollbarTextPadding
+                anchors.verticalCenter: parent.verticalCenter
+                visible: delegateItem.trailingText !== ""
+                text: delegateItem.trailingText
+                color: delegateItem.trailingColor
+                font.family: "Segoe UI"
+                font.pixelSize: 10
+                font.bold: true
+                horizontalAlignment: Text.AlignRight
+            }
         }
         background: Rectangle {
             color: delegateItem.hovered && delegateItem.enabled ? control.itemHover : "transparent"
@@ -51,14 +100,15 @@ ComboBox {
         id: canvas
         x: control.width - width - control.rightPadding
         y: control.topPadding + (control.availableHeight - height) / 2
-        width: 10
-        height: 6
+        width: 12
+        height: 7
         contextType: "2d"
 
         Connections {
             target: control
             function onPressedChanged() { canvas.requestPaint(); }
             function onActiveFocusChanged() { canvas.requestPaint(); }
+            function onHoveredChanged() { canvas.requestPaint(); }
         }
 
         onPaint: {
@@ -66,18 +116,19 @@ ComboBox {
             context.moveTo(0, 0);
             context.lineTo(width / 2, height);
             context.lineTo(width, 0);
-            context.strokeStyle = control.activeFocus || control.pressed ? control.borderFocus : "#99abc4";
-            context.lineWidth = 1.5;
+            context.strokeStyle = control.activeFocus || control.pressed || control.hovered ? control.borderFocus : settingsController.mutedTextColor;
+            context.lineWidth = 1.8;
             context.stroke();
         }
     }
 
     contentItem: Text {
-        leftPadding: 12
-        rightPadding: control.indicator.width + control.spacing
+        leftPadding: 14
+        rightPadding: 30
         text: control.displayText
         font.family: "Segoe UI"
-        font.pixelSize: 14
+        font.pixelSize: 13
+        font.bold: true
         color: control.textNormal
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
@@ -89,7 +140,7 @@ ComboBox {
         color: control.hovered ? control.bgHover : control.bgNormal
         border.color: control.activeFocus || control.pressed ? control.borderFocus : control.borderNormal
         border.width: control.activeFocus || control.pressed ? 1.5 : 1
-        radius: 8
+        radius: settingsController.cardRadius
         
         Behavior on border.color { ColorAnimation { duration: 150 } }
         Behavior on color { ColorAnimation { duration: 150 } }
@@ -98,8 +149,17 @@ ComboBox {
     popup: Popup {
         y: control.height + 6
         width: control.width
-        implicitHeight: Math.min(contentItem.implicitHeight + 8, 240)
-        padding: 4
+        implicitHeight: Math.min(contentItem.implicitHeight + 10, 280)
+        padding: 5
+
+        onOpened: {
+            if (control.popupStartsAtTop) {
+                Qt.callLater(function() {
+                    popupList.positionViewAtBeginning();
+                    popupList.contentY = 0;
+                });
+            }
+        }
 
         enter: Transition {
             NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 150; easing.type: Easing.OutQuad }
@@ -112,10 +172,11 @@ ComboBox {
         }
 
         contentItem: ListView {
+            id: popupList
             clip: true
             implicitHeight: contentHeight
             model: control.popup.visible ? control.delegateModel : null
-            currentIndex: control.highlightedIndex
+            currentIndex: control.popupStartsAtTop ? -1 : control.highlightedIndex
 
             ScrollBar.vertical: ScrollBar {
                 active: true
@@ -123,7 +184,7 @@ ComboBox {
                 contentItem: Rectangle {
                     implicitWidth: 4
                     radius: 2
-                    color: parent.pressed ? control.borderFocus : "#2d496f"
+                    color: parent.pressed ? control.borderFocus : settingsController.borderColor
                 }
             }
         }
@@ -132,7 +193,8 @@ ComboBox {
             color: control.popupBg
             border.color: control.popupBorder
             border.width: 1
-            radius: 8
+            radius: settingsController.cardRadius
         }
     }
 }
+

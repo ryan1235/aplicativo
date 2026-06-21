@@ -5,6 +5,7 @@ from typing import Any
 
 from app_paths import extracted_dir, settings_path
 from i18n import detect_user_language
+from personalization_store import load_personalization_settings
 from stockpiler import DEFAULT_WATCH_FILE, discover_map_data_file
 
 
@@ -20,8 +21,16 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "pilot_hotkey": "F4",
         "right_hold_hotkey": "F9",
         "mouse_button": "Esquerdo",
-        "interval": 0.05,
+        "interval": 0.5,
         "mode": "Foxhole",
+        "modes_enabled": {
+            "auto": True,
+            "move": True,
+            "pilot": True,
+            "right_hold": True,
+            "fixed": True,
+            "artillery": True,
+        },
         "slot_1_x": 40,
         "slot_1_y": 80,
         "slot_2_x": 95,
@@ -47,6 +56,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "overlay_panel_y": None,
         "overlay_notification_x": None,
         "overlay_notification_y": None,
+        "w_doubletap_enabled": False,
         "right_doubletap_enabled": False,
     },
     "stockpile": {
@@ -81,6 +91,15 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "squadlock_sound_enabled": True,
         "chat_mention_overlay_enabled": True,
         "chat_mention_sound_enabled": True,
+        "chat_show_translated_messages": True,
+        "sidebar_open": True,
+        "sidebar_sections": {
+            "core": True,
+            "automation": True,
+            "logistics": True,
+            "tools": True,
+            "config": True,
+        },
     },
     "time_task": {
         "overlay_record_x": None,
@@ -108,6 +127,11 @@ def load_settings() -> dict[str, Any]:
         **DEFAULT_SETTINGS["auto_clicker"],
         **loaded.get("auto_clicker", {}),
     }
+    try:
+        if float(settings["auto_clicker"].get("interval", 0.5)) < 0.5:
+            settings["auto_clicker"]["interval"] = 0.5
+    except (TypeError, ValueError):
+        settings["auto_clicker"]["interval"] = 0.5
     settings["stockpile"] = {
         **DEFAULT_SETTINGS["stockpile"],
         **loaded.get("stockpile", {}),
@@ -132,6 +156,13 @@ def load_settings() -> dict[str, Any]:
         **DEFAULT_SETTINGS["app"],
         **loaded.get("app", {}),
     }
+    legacy_app_settings = loaded.get("app", {})
+    load_personalization_settings(
+        legacy_theme=legacy_app_settings.get("theme"),
+        legacy_colorblind=legacy_app_settings.get("colorblind_mode_enabled"),
+    )
+    settings["app"].pop("theme", None)
+    settings["app"].pop("colorblind_mode_enabled", None)
     settings["app"]["chat_discord"] = {
         **DEFAULT_SETTINGS["app"]["chat_discord"],
         **loaded.get("app", {}).get("chat_discord", {}),

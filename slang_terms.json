@@ -1,0 +1,813 @@
+{
+  "slang_terms": [
+    {
+      "apelidos": ["AC"],
+      "nome": "Armored Car",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["AI"],
+      "nome": "Artificial Intelligence",
+      "categoria": "game_mechanic",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ALUV", "AUV"],
+      "nome": "Amphibious Light Utility Vehicle",
+      "categoria": "vehicle",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["APC"],
+      "nome": "Armored Personnel Carrier",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Armor"],
+      "nome": "Tank Armor",
+      "categoria": "vehicle_mechanic",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Arty"],
+      "nome": "Artillery",
+      "categoria": "artillery",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["AT"],
+      "nome": "Anti-Tank",
+      "categoria": "anti_tank",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ATAC"],
+      "nome": "Anti-Tank Armored Car",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["ATG"],
+      "nome": "Anti-Tank Garrison",
+      "categoria": "defense_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ATHT"],
+      "nome": "Anti-Tank Half-track",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["ATP"],
+      "nome": "Anti-Tank Pillbox",
+      "categoria": "defense_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ATR"],
+      "nome": "Anti-Tank Rifle",
+      "categoria": "weapon",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ATT"],
+      "nome": "Anti-Tank Turret",
+      "categoria": "defense_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral",
+      "observacao": "Termo antigo/depreciado segundo a wiki."
+    },
+    {
+      "apelidos": ["Baby Ballista"],
+      "nome": "Field Mortar",
+      "categoria": "field_weapon",
+      "tipo": "apelido",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["BB"],
+      "nome": "Border Base",
+      "categoria": "garrison_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["BEL"],
+      "nome": "Behind Enemy Lines",
+      "categoria": "location_term",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Binos", "Binocs"],
+      "nome": "Binoculars",
+      "categoria": "equipment",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Blues", "Blueberries"],
+      "nome": "Wardens",
+      "categoria": "faction",
+      "tipo": "slang",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["BP"],
+      "nome": "Blueprint",
+      "categoria": "construction",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Bmats"],
+      "nome": "Basic Materials",
+      "categoria": "refined_resource",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["BoB", "BB"],
+      "nome": "Bunker Base",
+      "categoria": "garrison_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Bonecar", "Bonewagon"],
+      "nome": "O’Brien V.113 Gravekeeper",
+      "categoria": "combat_vehicle",
+      "tipo": "apelido",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["Booster"],
+      "nome": "Rocket Booster",
+      "categoria": "rocket_part",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Booze", "Flask"],
+      "nome": "BF5 White Ash Flask Grenade",
+      "categoria": "anti_tank_grenade",
+      "tipo": "apelido",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["BS", "Bsups"],
+      "nome": "Bunker Supplies",
+      "categoria": "decay_prevention_supply",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["MBT", "BT"],
+      "nome": "Main Battle Tank",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Builder"],
+      "nome": "Builder",
+      "categoria": "player_role",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["CG"],
+      "nome": "Coastal Gun",
+      "categoria": "naval_defense_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Collies", "Goblins"],
+      "nome": "Colonials",
+      "categoria": "faction",
+      "tipo": "slang",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["Cmats"],
+      "nome": "Concrete Materials",
+      "categoria": "refined_resource",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["CV"],
+      "nome": "Construction Vehicle",
+      "categoria": "logistics_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Doru"],
+      "nome": "AB-11 \"Doru\"",
+      "categoria": "armored_personnel_carrier",
+      "tipo": "apelido",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["EAT"],
+      "nome": "Emplaced Anti-Tank",
+      "categoria": "deployable_combat_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Emats"],
+      "nome": "Explosive Materials",
+      "categoria": "refined_resource",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["EMG"],
+      "nome": "Emplaced Machine Gun",
+      "categoria": "deployable_combat_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["EST"],
+      "nome": "Estimated Time",
+      "categoria": "time",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ETA"],
+      "nome": "Estimated Time of Arrival",
+      "categoria": "time",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["FA"],
+      "nome": "Field Artillery",
+      "categoria": "artillery",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Fac"],
+      "nome": "Factory",
+      "categoria": "logistics_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Falchion", "Falc"],
+      "nome": "85K-b \"Falchion\"",
+      "categoria": "assault_tank",
+      "tipo": "apelido",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["FAT"],
+      "nome": "Field AT Gun",
+      "categoria": "field_weapon",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["FMG"],
+      "nome": "Field Machine Gun",
+      "categoria": "field_weapon",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Flat", "Flatbed"],
+      "nome": "Flatbed Truck",
+      "categoria": "logistics_vehicle",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["FM"],
+      "nome": "Field Mortar",
+      "categoria": "field_weapon",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["FOB"],
+      "nome": "Forward Operations Base",
+      "categoria": "garrison_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["FOD"],
+      "nome": "Foxhole Official Discord",
+      "categoria": "community",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Front"],
+      "nome": "Frontlines",
+      "categoria": "location_term",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Fuel"],
+      "nome": "Diesel / Petrol",
+      "categoria": "refined_resource",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["GAC"],
+      "nome": "Grenade Armored Car",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["Garry"],
+      "nome": "Garrison",
+      "categoria": "bunker_emplacement",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["GB"],
+      "nome": "Gunboat",
+      "categoria": "naval_combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Ghouse"],
+      "nome": "Garrisoned House",
+      "categoria": "garrison_structure",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["GS", "Gsupps"],
+      "nome": "Garrison Supplies",
+      "categoria": "decay_prevention_supply",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Green Ash", "Gas"],
+      "nome": "Gas Grenade",
+      "categoria": "grenade",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["HAC"],
+      "nome": "Heavy Armored Car",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["HE"],
+      "nome": "High Explosive",
+      "categoria": "damage_type",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Hemats", "Hmats"],
+      "nome": "Heavy Explosive Materials",
+      "categoria": "refined_resource",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Hex"],
+      "nome": "Hexagonal Region",
+      "categoria": "world_region",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["HMG"],
+      "nome": "Heavy Machine Gun",
+      "categoria": "weapon",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Howi"],
+      "nome": "Howitzer Garrison",
+      "categoria": "defense_structure",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["HT"],
+      "nome": "Half-Track",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["HTD"],
+      "nome": "Heavy Destroyer Tank",
+      "categoria": "tank_destroyer",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["HWM"],
+      "nome": "Cruiser Tank",
+      "categoria": "tank",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["HV"],
+      "nome": "High Velocity",
+      "categoria": "weapon_modifier",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["HVFAT"],
+      "nome": "High Velocity Field Anti-Tank Gun",
+      "categoria": "field_weapon",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["IC"],
+      "nome": "Intelligence Center",
+      "categoria": "defense_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ISG"],
+      "nome": "Infantry Support Gun",
+      "categoria": "tripod_weapon",
+      "tipo": "abreviacao",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["IST"],
+      "nome": "Infantry Support Tank / Light Infantry Tank",
+      "categoria": "tank",
+      "tipo": "abreviacao",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["LK"],
+      "nome": "Listening Kit",
+      "categoria": "equipment",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Logi"],
+      "nome": "Logistics",
+      "categoria": "player_role",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["LT"],
+      "nome": "Light Tank",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["LTD"],
+      "nome": "Light Tank Destroyer",
+      "categoria": "tank_destroyer",
+      "tipo": "abreviacao",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["LUV"],
+      "nome": "Light Utility Vehicle",
+      "categoria": "vehicle",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["MG"],
+      "nome": "Machine Gun",
+      "categoria": "weapon",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["MGP"],
+      "nome": "Machine Gun Pillbox",
+      "categoria": "defense_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["MHT", "MTHT"],
+      "nome": "Mortar Half-Track",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "colonial"
+    },
+    {
+      "apelidos": ["Mixer"],
+      "nome": "Concrete Mixer",
+      "categoria": "deployable_structure",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["MLT", "MT"],
+      "nome": "Mortar Light Tank",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["MPF"],
+      "nome": "Mass Production Factory",
+      "categoria": "logistics_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["MPT"],
+      "nome": "Mass Production Tank",
+      "categoria": "assault_tank",
+      "tipo": "abreviacao",
+      "faccao": "colonial",
+      "observacao": "Normalmente se refere ao Falchion."
+    },
+    {
+      "apelidos": ["Nade"],
+      "nome": "Grenade",
+      "categoria": "throwable",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Node"],
+      "nome": "Resource Node",
+      "categoria": "resource",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Noot"],
+      "nome": "Neutral",
+      "categoria": "player_role",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Nebelwerfer"],
+      "nome": "Field Launcher",
+      "categoria": "field_launcher",
+      "tipo": "apelido",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["Nuke", "V2"],
+      "nome": "Ballistic Rocket",
+      "categoria": "ballistic_rocket",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["OBS", "Obs"],
+      "nome": "Observation Tower",
+      "categoria": "intel_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Partisan"],
+      "nome": "Partisan",
+      "categoria": "player_role",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Push"],
+      "nome": "Concentrated Attack",
+      "categoria": "tactic",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["QM"],
+      "nome": "Quarter Master",
+      "categoria": "player_role",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["QRF"],
+      "nome": "Quick Reaction Force",
+      "categoria": "player_team_role",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["RB"],
+      "nome": "Relic Base",
+      "categoria": "garrison_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["RP"],
+      "nome": "Rifle Pillbox",
+      "categoria": "defense_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["RDZ"],
+      "nome": "Rapid Decay Zone",
+      "categoria": "game_mechanic",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Remats"],
+      "nome": "Relic Materials",
+      "categoria": "rare_resource",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Reset", "Tap", "Tapping"],
+      "nome": "Resetting a base blueprint",
+      "categoria": "tactic",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Rmats"],
+      "nome": "Refined Materials",
+      "categoria": "refined_resource",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Satchels"],
+      "nome": "Alligator / Satchel Charge",
+      "categoria": "explosive_device",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["SC"],
+      "nome": "Storm Cannon",
+      "categoria": "artillery",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["SD", "Depot"],
+      "nome": "Storage Depot",
+      "categoria": "structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Scrap", "Scroop"],
+      "nome": "Salvage",
+      "categoria": "raw_resource",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Scrapper"],
+      "nome": "Raw Resources Miner",
+      "categoria": "player_role",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Shirts", "SS"],
+      "nome": "Soldier Supplies",
+      "categoria": "spawn_supply",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["SH"],
+      "nome": "Safe House / Silverhand",
+      "categoria": "ambiguous",
+      "tipo": "abreviacao",
+      "faccao": "neutral",
+      "observacao": "Pode significar Safe House ou Silverhand dependendo do contexto."
+    },
+    {
+      "apelidos": ["SR", "AR"],
+      "nome": "Assault Rifle",
+      "categoria": "weapon",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Sticky"],
+      "nome": "Sticky Bomb",
+      "categoria": "throwable",
+      "tipo": "apelido",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["ST"],
+      "nome": "Scout Tank",
+      "categoria": "combat_vehicle",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["SV", "SVH"],
+      "nome": "Silverhand",
+      "categoria": "assault_tank",
+      "tipo": "abreviacao",
+      "faccao": "warden"
+    },
+    {
+      "apelidos": ["T1", "T2", "T3"],
+      "nome": "Tier 1 / Tier 2 / Tier 3",
+      "categoria": "structure_mechanic",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["TH"],
+      "nome": "Town Hall",
+      "categoria": "garrison_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Tmats"],
+      "nome": "Iron or Aluminum Tech Resources",
+      "categoria": "tech_resource",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Vic"],
+      "nome": "Vehicle",
+      "categoria": "vehicle",
+      "tipo": "slang",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["VP"],
+      "nome": "Victory Point",
+      "categoria": "garrison_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["WC"],
+      "nome": "World Conquest",
+      "categoria": "game_mode",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["WT"],
+      "nome": "Watchtower",
+      "categoria": "intel_structure",
+      "tipo": "abreviacao",
+      "faccao": "neutral"
+    },
+    {
+      "apelidos": ["Fire Truck"],
+      "nome": "Fire Truck",
+      "categoria": "vehicle",
+      "tipo": "slang",
+      "faccao": "neutral",
+      "observacao": "Pode se referir ao R-12b Salva Colonial ou ao Dunne Dousing Engine 3r Warden."
+    }
+  ]
+}

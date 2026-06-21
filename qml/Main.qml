@@ -12,15 +12,16 @@ ApplicationWindow {
     minimumWidth: 920
     minimumHeight: 600
     visible: true
+    visibility: Window.Maximized
     title: appController.appTitle
-    color: "#070b16"
-    flags: Qt.Window | Qt.FramelessWindowHint
+    color: settingsController.backgroundColor
+    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint
 
     header: Rectangle {
         id: customTitleBar
         width: parent.width
         height: 32
-        color: "#0a1020"
+        color: settingsController.surfaceColor
         z: 9999
 
         MouseArea {
@@ -38,7 +39,7 @@ ApplicationWindow {
             
             Text {
                 text: window.title
-                color: "#99abc4"
+                color: settingsController.mutedTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 font.bold: true
@@ -50,58 +51,124 @@ ApplicationWindow {
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
-            spacing: 0
+            anchors.rightMargin: 8
+            spacing: 4
 
             Button {
-                Layout.preferredWidth: 46
-                Layout.fillHeight: true
+                id: minBtn
+                Layout.preferredWidth: 34
+                Layout.preferredHeight: 24
+                Layout.alignment: Qt.AlignVCenter
                 background: Rectangle {
-                    color: parent.hovered ? "#1d3353" : "transparent"
+                    radius: 4
+                    color: minBtn.hovered ? settingsController.controlColor : "transparent"
+                    Behavior on color { ColorAnimation { duration: 150 } }
                 }
-                contentItem: Text {
-                    text: "—"
-                    color: "#edf6ff"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                contentItem: Item {
+                    Rectangle {
+                        width: 12
+                        height: 1.5
+                        radius: 1
+                        color: minBtn.hovered ? settingsController.textColor : settingsController.mutedTextColor
+                        anchors.centerIn: parent
+                        anchors.verticalCenterOffset: 3
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
                 }
                 onClicked: window.showMinimized()
             }
 
             Button {
-                Layout.preferredWidth: 46
-                Layout.fillHeight: true
+                id: maxBtn
+                Layout.preferredWidth: 34
+                Layout.preferredHeight: 24
+                Layout.alignment: Qt.AlignVCenter
                 background: Rectangle {
-                    color: parent.hovered ? "#1d3353" : "transparent"
+                    radius: 4
+                    color: maxBtn.hovered ? settingsController.controlColor : "transparent"
+                    Behavior on color { ColorAnimation { duration: 150 } }
                 }
-                contentItem: Text {
-                    text: window.visibility === Window.Maximized ? "❐" : "☐"
-                    color: "#edf6ff"
-                    font.pixelSize: 14
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                contentItem: Item {
+                    Rectangle {
+                        width: 11
+                        height: 11
+                        radius: 2
+                        color: "transparent"
+                        border.color: maxBtn.hovered ? settingsController.textColor : settingsController.mutedTextColor
+                        border.width: 1.5
+                        anchors.centerIn: parent
+                        visible: window.visibility !== Window.Maximized
+                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                    }
+                    Item {
+                        width: 11
+                        height: 11
+                        anchors.centerIn: parent
+                        visible: window.visibility === Window.Maximized
+                        Rectangle {
+                            width: 8
+                            height: 8
+                            radius: 1.5
+                            x: 3
+                            y: 0
+                            color: "transparent"
+                            border.color: maxBtn.hovered ? settingsController.textColor : settingsController.mutedTextColor
+                            border.width: 1.5
+                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                        }
+                        Rectangle {
+                            width: 8
+                            height: 8
+                            radius: 1.5
+                            x: 0
+                            y: 3
+                            color: maxBtn.hovered ? settingsController.controlColor : settingsController.backgroundColor
+                            border.color: maxBtn.hovered ? settingsController.textColor : settingsController.mutedTextColor
+                            border.width: 1.5
+                            Behavior on color { ColorAnimation { duration: 150 } }
+                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                        }
+                    }
                 }
                 onClicked: window.visibility === Window.Maximized ? window.showNormal() : window.showMaximized()
             }
 
             Button {
-                Layout.preferredWidth: 46
-                Layout.fillHeight: true
+                id: clsBtn
+                Layout.preferredWidth: 34
+                Layout.preferredHeight: 24
+                Layout.alignment: Qt.AlignVCenter
                 background: Rectangle {
-                    color: parent.hovered ? "#e81123" : "transparent"
+                    radius: 4
+                    color: clsBtn.hovered ? settingsController.dangerHoverColor : "transparent"
+                    Behavior on color { ColorAnimation { duration: 150 } }
                 }
-                contentItem: Text {
-                    text: "✕"
-                    color: "#edf6ff"
-                    font.pixelSize: 12
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                contentItem: Item {
+                    Rectangle {
+                        width: 12
+                        height: 1.5
+                        radius: 1
+                        color: clsBtn.hovered ? settingsController.textColor : settingsController.mutedTextColor
+                        anchors.centerIn: parent
+                        rotation: 45
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+                    Rectangle {
+                        width: 12
+                        height: 1.5
+                        radius: 1
+                        color: clsBtn.hovered ? settingsController.textColor : settingsController.mutedTextColor
+                        anchors.centerIn: parent
+                        rotation: -45
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
                 }
                 onClicked: window.close()
             }
         }
     }
 
-    property bool sidebarOpen: true
+    property bool sidebarOpen: appController.sidebarOpen
     property bool exiting: false
     property int interactiveOverlayFlags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus
     property int passiveOverlayFlags: interactiveOverlayFlags
@@ -112,7 +179,11 @@ ApplicationWindow {
         return i18nController.t(key)
     }
 
-    Component.onCompleted: chatController.autoConnectWithSavedDiscord()
+    Component.onCompleted: {
+        if (visible)
+            showMaximized()
+        chatController.autoConnectWithSavedDiscord()
+    }
 
     function pageSource(page) {
         if (page === "home") return "pages/HomePage.qml"
@@ -127,12 +198,21 @@ ApplicationWindow {
         if (page === "timeTask") return "pages/TimeTaskPage.qml"
         if (page === "notifications") return "pages/NotificationsPage.qml"
         if (page === "settings") return "pages/SettingsPage.qml"
+        if (page === "personalization") return "pages/PersonalizationPage.qml"
         return "pages/HomePage.qml"
     }
 
     function hideToTray() {
         window.visible = false
         trayController.showMessage(appController.appTitle, tr("tray.running"))
+    }
+
+    function restoreMainWindow() {
+        window.visible = true
+        if (window.visibility !== Window.Maximized && window.visibility !== Window.FullScreen)
+            window.showMaximized()
+        window.raise()
+        window.requestActivate()
     }
 
     function exitApplication() {
@@ -163,9 +243,7 @@ ApplicationWindow {
     Connections {
         target: trayController
         function onRestoreRequested() {
-            window.visible = true
-            window.raise()
-            window.requestActivate()
+            restoreMainWindow()
         }
         function onQuitRequested() {
             exitApplication()
@@ -195,9 +273,7 @@ ApplicationWindow {
     Connections {
         target: timeTaskController
         function onRestoreAppRequested() {
-            window.visible = true
-            window.raise()
-            window.requestActivate()
+            restoreMainWindow()
         }
     }
 
@@ -220,15 +296,15 @@ ApplicationWindow {
 
         background: Rectangle {
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
         }
 
         contentItem: ColumnLayout {
             spacing: 12
             Text {
                 text: tr("close.heading")
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 19
                 font.bold: true
@@ -237,7 +313,7 @@ ApplicationWindow {
             }
             Text {
                 text: tr("close.body")
-                color: "#99abc4"
+                color: settingsController.mutedTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 Layout.fillWidth: true
@@ -253,7 +329,7 @@ ApplicationWindow {
                 }
                 Text {
                     text: tr("close.remember")
-                    color: "#c7d7ed"
+                    color: settingsController.secondaryTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     verticalAlignment: Text.AlignVCenter
@@ -284,9 +360,9 @@ ApplicationWindow {
                 PrimaryButton {
                     text: tr("close.exit")
                     Layout.fillWidth: true
-                    fill: "#1d3353"
-                    hoverFill: "#2d496f"
-                    textFill: "#edf6ff"
+                    fill: settingsController.controlColor
+                    hoverFill: settingsController.controlHoverColor
+                    textFill: settingsController.textColor
                     onClicked: {
                         if (closeDialog.rememberChoice)
                             settingsController.setCloseAction("exit")
@@ -317,7 +393,7 @@ ApplicationWindow {
         background: Rectangle {
             radius: 16
             color: Qt.rgba(0.04, 0.08, 0.15, 0.97)
-            border.color: appController.startupDialogKind === "error" ? "#ff6b6b" : "#2d6f8f"
+            border.color: appController.startupDialogKind === "error" ? settingsController.dangerColor : settingsController.infoColor
             border.width: 1
             layer.enabled: true
             layer.effect: DropShadow {
@@ -341,8 +417,8 @@ ApplicationWindow {
                     Layout.preferredHeight: appController.startupDialogImageUrl !== "" ? 86 : 0
                     visible: appController.startupDialogImageUrl !== ""
                     radius: 18
-                    color: "#071426"
-                    border.color: "#24486d"
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
                     border.width: 1
                     clip: true
 
@@ -368,7 +444,7 @@ ApplicationWindow {
                     spacing: 5
                     Text {
                         text: appController.startupDialogTitle
-                        color: appController.startupDialogKind === "error" ? "#ff6b6b" : "#5eead4"
+                        color: appController.startupDialogKind === "error" ? settingsController.dangerColor : settingsController.accentColor
                         font.family: "Segoe UI"
                         font.pixelSize: 24
                         font.bold: true
@@ -378,7 +454,7 @@ ApplicationWindow {
                     Text {
                         text: appController.startupDialogSubtitle
                         visible: text !== ""
-                        color: "#8ab4ff"
+                        color: settingsController.infoColor
                         font.family: "Segoe UI"
                         font.pixelSize: 12
                         font.bold: true
@@ -395,14 +471,14 @@ ApplicationWindow {
                 textFormat: TextEdit.MarkdownText
                 readOnly: true
                 selectByMouse: true
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 13
                 wrapMode: TextArea.Wrap
                 background: Rectangle {
                     radius: 8
-                    color: "#07111f"
-                    border.color: "#27587d"
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
                     border.width: 1
                 }
             }
@@ -420,9 +496,9 @@ ApplicationWindow {
                     text: tr("release.ok")
                     Layout.preferredWidth: 140
                     Layout.preferredHeight: 38
-                    fill: "#5eead4"
-                    hoverFill: "#2dd4bf"
-                    textFill: "#022c22"
+                    fill: settingsController.accentColor
+                    hoverFill: settingsController.accentHoverColor
+                    textFill: settingsController.textInverseColor
                     onClicked: appController.acceptStartupDialog()
                 }
             }
@@ -441,8 +517,10 @@ ApplicationWindow {
 
         background: Rectangle {
             radius: 16
-            color: Qt.rgba(0.04, 0.08, 0.15, 0.96)
-            border.color: "#5eead4"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 16; color: settingsController.scrimColor; opacity: 0.9 }
+            Rectangle { anchors.fill: parent; radius: 16; color: "transparent"; border.color: settingsController.accentColor; border.width: 1 }
             border.width: 1
             layer.enabled: true
             layer.effect: DropShadow {
@@ -463,8 +541,8 @@ ApplicationWindow {
                     Layout.preferredWidth: 58
                     Layout.preferredHeight: 58
                     radius: 12
-                    color: "#071426"
-                    border.color: "#24486d"
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
                     clip: true
                     AnimatedImage {
                         anchors.fill: parent
@@ -478,7 +556,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Text {
                         text: tr("update.available_title")
-                        color: "#5eead4"
+                        color: settingsController.accentColor
                         font.family: "Segoe UI"
                         font.pixelSize: 22
                         font.bold: true
@@ -487,7 +565,7 @@ ApplicationWindow {
                     }
                     Text {
                         text: updateController.updateName + " - " + updateController.updateAssetName
-                        color: "#8ab4ff"
+                        color: settingsController.infoColor
                         font.family: "Segoe UI"
                         font.pixelSize: 12
                         font.bold: true
@@ -499,7 +577,7 @@ ApplicationWindow {
 
             Text {
                 text: updateController.updateAvailableBody
-                color: "#a4b9d6"
+                color: settingsController.secondaryTextColor
                 font.family: "Segoe UI"
                 font.pixelSize: 14
                 Layout.fillWidth: true
@@ -509,8 +587,10 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.preferredHeight: updateNoticeText.implicitHeight + 24
                 radius: 10
-                color: Qt.rgba(0.06, 0.12, 0.20, 0.6)
-                border.color: "#24486d"
+                color: "transparent"
+                border.color: "transparent"
+                Rectangle { anchors.fill: parent; radius: 10; color: settingsController.scrimColor; opacity: 0.3 }
+                Rectangle { anchors.fill: parent; radius: 10; color: "transparent"; border.color: settingsController.accentColor; border.width: 1; opacity: 0.3 }
                 border.width: 1
 
                 Text {
@@ -518,7 +598,7 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.margins: 12
                     text: tr("update.offer_notice")
-                    color: "#a4b9d6"
+                    color: settingsController.secondaryTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     lineHeight: 1.4
@@ -534,8 +614,10 @@ ApplicationWindow {
                 
                 background: Rectangle {
                     radius: 10
-                    color: Qt.rgba(0.04, 0.06, 0.1, 0.8)
-                    border.color: "#1e3554"
+                    color: "transparent"
+                    border.color: "transparent"
+                    Rectangle { anchors.fill: parent; radius: 10; color: settingsController.scrimColor; opacity: 0.4 }
+                    Rectangle { anchors.fill: parent; radius: 10; color: "transparent"; border.color: Qt.rgba(1,1,1,0.1); border.width: 1 }
                     border.width: 1
                 }
 
@@ -544,7 +626,7 @@ ApplicationWindow {
                     textFormat: TextEdit.MarkdownText
                     readOnly: true
                     selectByMouse: true
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 14
                     wrapMode: TextArea.Wrap
@@ -569,18 +651,18 @@ ApplicationWindow {
                     text: tr("update.later")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
-                    fill: "#111c31"
-                    hoverFill: "#1d3353"
-                    textFill: "#99abc4"
+                    fill: Qt.rgba(0,0,0,0.4)
+                    hoverFill: Qt.rgba(1,1,1,0.1)
+                    textFill: settingsController.accentColor
                     onClicked: updateController.dismissOffer()
                 }
                 PrimaryButton {
                     text: tr("update.install_now")
                     Layout.fillWidth: true
                     Layout.preferredHeight: 40
-                    fill: "#5eead4"
-                    hoverFill: "#2dd4bf"
-                    textFill: "#022c22"
+                    fill: settingsController.accentColor
+                    hoverFill: settingsController.accentHoverColor
+                    textFill: settingsController.textInverseColor
                     onClicked: updateController.installAvailableUpdate()
                 }
             }
@@ -598,8 +680,10 @@ ApplicationWindow {
 
         background: Rectangle {
             radius: 16
-            color: Qt.rgba(0.04, 0.08, 0.15, 0.96)
-            border.color: updateController.progressAccent
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 16; color: settingsController.scrimColor; opacity: 0.9 }
+            Rectangle { anchors.fill: parent; radius: 16; color: "transparent"; border.color: updateController.progressAccent; border.width: 1 }
             border.width: 1
             layer.enabled: true
             layer.effect: DropShadow {
@@ -625,7 +709,7 @@ ApplicationWindow {
                         width: 58
                         height: 58
                         radius: 29
-                        color: "#071426"
+                        color: settingsController.backgroundColor
                         border.color: updateController.progressAccent
                         border.width: 1
                     }
@@ -650,7 +734,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Text {
                         text: tr("update.progress_title")
-                        color: "#edf6ff"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 20
                         font.bold: true
@@ -659,7 +743,7 @@ ApplicationWindow {
                     }
                     Text {
                         text: updateController.progressText
-                        color: "#a4b9d6"
+                        color: settingsController.secondaryTextColor
                         font.family: "Segoe UI"
                         font.pixelSize: 14
                         Layout.fillWidth: true
@@ -701,7 +785,7 @@ ApplicationWindow {
                     spacing: 16
                     Text {
                         text: updateController.restartCountdown
-                        color: "#ffd166"
+                        color: settingsController.warningColor
                         font.family: "Segoe UI"
                         font.pixelSize: 42
                         font.bold: true
@@ -710,7 +794,7 @@ ApplicationWindow {
                     }
                     Text {
                         text: tr("update.restart_notice")
-                        color: "#fef3c7"
+                        color: settingsController.warningTextColor
                         font.family: "Segoe UI"
                         font.pixelSize: 15
                         lineHeight: 1.4
@@ -727,8 +811,8 @@ ApplicationWindow {
                 background: Rectangle {
                     implicitHeight: 18
                     radius: 9
-                    color: "#070b16"
-                    border.color: "#1e3554"
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
                     border.width: 1
                 }
                 contentItem: Item {
@@ -747,7 +831,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Text {
                     text: updateController.progressDetail
-                    color: "#8ab4ff"
+                    color: settingsController.infoColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     wrapMode: Text.WordWrap
@@ -776,8 +860,10 @@ ApplicationWindow {
 
         background: Rectangle {
             radius: 16
-            color: Qt.rgba(0.04, 0.08, 0.15, 0.96)
-            border.color: "#ff3366"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 16; color: settingsController.scrimColor; opacity: 0.9 }
+            Rectangle { anchors.fill: parent; radius: 16; color: "transparent"; border.color: settingsController.dangerColor; border.width: 1 }
             border.width: 1
             layer.enabled: true
             layer.effect: DropShadow {
@@ -794,7 +880,7 @@ ApplicationWindow {
 
             Text {
                 text: tr("update.error_title")
-                color: "#ff3366"
+                color: settingsController.dangerColor
                 font.family: "Segoe UI"
                 font.pixelSize: 20
                 font.bold: true
@@ -809,14 +895,15 @@ ApplicationWindow {
                 textFormat: TextEdit.PlainText
                 readOnly: true
                 selectByMouse: true
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 13
                 wrapMode: TextArea.Wrap
                 background: Rectangle {
                     radius: 8
-                    color: "#07111f"
-                    border.color: "#4b1d31"
+                    color: "transparent"
+                    Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.3 }
+                    border.color: settingsController.dangerPanelColor
                     border.width: 1
                 }
             }
@@ -834,9 +921,9 @@ ApplicationWindow {
                     text: tr("release.ok")
                     Layout.preferredWidth: 128
                     Layout.preferredHeight: 40
-                    fill: "#ff3366"
-                    hoverFill: "#e62e5c"
-                    textFill: "#ffffff"
+                    fill: settingsController.dangerColor
+                    hoverFill: settingsController.dangerHoverColor
+                    textFill: settingsController.textColor
                     onClicked: updateController.dismissError()
                 }
             }
@@ -857,15 +944,15 @@ ApplicationWindow {
 
         background: Rectangle {
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
         }
 
         contentItem: ColumnLayout {
             spacing: 12
             Text {
                 text: appController.tutorialDialogTitle
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 19
                 font.bold: true
@@ -879,14 +966,14 @@ ApplicationWindow {
                 textFormat: TextEdit.MarkdownText
                 readOnly: true
                 selectByMouse: true
-                color: "#edf6ff"
+                color: settingsController.textColor
                 font.family: "Segoe UI"
                 font.pixelSize: 12
                 wrapMode: TextArea.Wrap
                 background: Rectangle {
                     radius: 7
-                    color: "#07111f"
-                    border.color: "#24486d"
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
                 }
             }
         }
@@ -910,7 +997,17 @@ ApplicationWindow {
 
     Rectangle {
         anchors.fill: parent
-        color: "#070b16"
+        color: settingsController.backgroundColor
+        gradient: Gradient {
+            GradientStop {
+                position: 0.0
+                color: settingsController.gradientEnabled ? settingsController.gradientStartColor : settingsController.backgroundColor
+            }
+            GradientStop {
+                position: 1.0
+                color: settingsController.gradientEnabled ? settingsController.gradientEndColor : settingsController.backgroundColor
+            }
+        }
 
         RowLayout {
             id: mainLayout
@@ -920,9 +1017,10 @@ ApplicationWindow {
             Rectangle {
                 id: sidebar
                 Layout.fillHeight: true
-                Layout.preferredWidth: window.sidebarOpen ? 286 : 72
-                color: "#0a1020"
-                clip: true
+                Layout.preferredWidth: window.sidebarOpen ? settingsController.sidebarWidth : 72
+                color: settingsController.surfaceColor
+                clip: window.sidebarOpen
+                z: 5
                 Behavior on Layout.preferredWidth { NumberAnimation { duration: 190; easing.type: Easing.OutCubic } }
 
                 ColumnLayout {
@@ -939,7 +1037,7 @@ ApplicationWindow {
                             Layout.preferredWidth: 44
                             Layout.preferredHeight: 44
                             radius: 8
-                            color: "#111c31"
+                            color: settingsController.surfaceColor
                             AnimatedImage {
                                 anchors.centerIn: parent
                                 width: 36
@@ -957,7 +1055,7 @@ ApplicationWindow {
                             Behavior on opacity { NumberAnimation { duration: 120 } }
                             Text {
                                 text: appController.appTitle
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 17
                                 font.bold: true
@@ -966,7 +1064,7 @@ ApplicationWindow {
                             }
                             Text {
                                 text: tr("app.subtitle")
-                                color: "#99abc4"
+                                color: settingsController.mutedTextColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 11
                                 Layout.fillWidth: true
@@ -979,11 +1077,26 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: window.sidebarOpen ? 86 : 54
                         radius: 8
-                        color: profileMouseArea.containsMouse ? "#172943" : "#0e1a2d"
-                        border.color: "#1e3554"
-                        border.width: 1
-                        Behavior on color { ColorAnimation { duration: 150 } }
+                        color: "transparent"
+                        border.color: "transparent"
                         Behavior on Layout.preferredHeight { NumberAnimation { duration: 160 } }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: settingsController.accentColor
+                            opacity: profileMouseArea.containsMouse ? 0.12 : 0.05
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                        }
+                        
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: "transparent"
+                            border.color: settingsController.accentColor
+                            opacity: 0.3
+                            border.width: 1
+                        }
 
                         MouseArea {
                             id: profileMouseArea
@@ -1013,7 +1126,7 @@ ApplicationWindow {
                                     height: 42
                                     anchors.centerIn: parent
                                     radius: 21
-                                    color: "#1d3353"
+                                    color: settingsController.controlColor
 
                                     Image {
                                         id: profileImage
@@ -1034,7 +1147,7 @@ ApplicationWindow {
                                         anchors.centerIn: parent
                                         text: chatController.currentUserName !== "" ? chatController.currentUserName.charAt(0).toUpperCase() : "GG"
                                         visible: chatController.currentUserAvatar === ""
-                                        color: "#5eead4"
+                                        color: settingsController.accentColor
                                         font.bold: true
                                     }
                                 }
@@ -1051,9 +1164,9 @@ ApplicationWindow {
                                     text: {
                                         var p = chatController.userProfile;
                                         var reg = (p && p.regiment) ? "[" + p.regiment + "] " : "";
-                                        return reg + (chatController.currentUserName || "Usuário");
+                                        return reg + (chatController.currentUserName || "UsuÃ¡rio");
                                     }
-                                    color: "#edf6ff"
+                                    color: settingsController.textColor
                                     font.family: "Segoe UI"
                                     font.bold: true
                                     font.pixelSize: 14
@@ -1067,11 +1180,11 @@ ApplicationWindow {
                                         width: 8
                                         height: 8
                                         radius: 4
-                                        color: chatController.currentProvider === "discord" ? "#5865F2" : "#5eead4"
+                                        color: chatController.currentProvider === "discord" ? settingsController.infoColor : settingsController.accentColor
                                     }
                                     Text {
                                         text: chatController.currentProvider === "discord" ? "Discord Online" : steamController.status
-                                        color: "#99abc4"
+                                        color: settingsController.mutedTextColor
                                         font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         Layout.fillWidth: true
@@ -1082,27 +1195,305 @@ ApplicationWindow {
                         }
                     }
 
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: window.sidebarOpen ? 42 : 0
+                        visible: window.sidebarOpen
+                        opacity: window.sidebarOpen ? 1 : 0
+                        radius: 8
+                        color: "transparent"
+                        border.color: "transparent"
+                        clip: true
+                        Behavior on Layout.preferredHeight { NumberAnimation { duration: 170; easing.type: Easing.OutCubic } }
+                        Behavior on opacity { NumberAnimation { duration: 130 } }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: settingsController.accentColor
+                            opacity: 0.05
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 8
+                            color: "transparent"
+                            border.color: settingsController.accentColor
+                            opacity: navSearchInput.activeFocus ? 1.0 : 0.3
+                            border.width: 1
+                            Behavior on opacity { NumberAnimation { duration: 130 } }
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 8
+                            spacing: 8
+
+                            Item {
+                                Layout.preferredWidth: 18
+                                Layout.preferredHeight: 18
+                                Layout.alignment: Qt.AlignVCenter
+
+                                Rectangle {
+                                    width: 10
+                                    height: 10
+                                    radius: 5
+                                    x: 2
+                                    y: 2
+                                    color: "transparent"
+                                    border.color: navSearchInput.activeFocus ? settingsController.accentColor : settingsController.disabledTextColor
+                                    border.width: 1.6
+                                    Behavior on border.color { ColorAnimation { duration: 130 } }
+                                }
+
+                                Rectangle {
+                                    width: 7
+                                    height: 1.8
+                                    radius: 1
+                                    x: 10
+                                    y: 12
+                                    rotation: 45
+                                    color: navSearchInput.activeFocus ? settingsController.accentColor : settingsController.disabledTextColor
+                                    Behavior on color { ColorAnimation { duration: 130 } }
+                                }
+                            }
+
+                            TextField {
+                                id: navSearchInput
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                placeholderText: tr("sidebar.search_page")
+                                placeholderTextColor: settingsController.disabledTextColor
+                                color: settingsController.textColor
+                                selectedTextColor: settingsController.textInverseColor
+                                selectionColor: settingsController.accentColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 12
+                                background: Item {}
+                            }
+
+                            Rectangle {
+                                visible: navSearchInput.text !== ""
+                                Layout.preferredWidth: 24
+                                Layout.preferredHeight: 24
+                                radius: 6
+                                color: clearNavSearch.containsMouse ? settingsController.controlColor : "transparent"
+                                Behavior on color { ColorAnimation { duration: 120 } }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "x"
+                                    color: clearNavSearch.containsMouse ? settingsController.textColor : settingsController.disabledTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: clearNavSearch
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: navSearchInput.clear()
+                                }
+                            }
+                        }
+                    }
+
                     ListView {
                         id: navList
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         model: navItems
-                        clip: true
-                        spacing: 6
+                        clip: window.sidebarOpen
+                        spacing: window.sidebarOpen ? 3 : 6
+                        property string searchTerm: window.sidebarOpen ? navSearchInput.text.toLowerCase().trim() : ""
                         delegate: Rectangle {
                             id: navRow
                             width: navList.width
-                            height: 48
+                            height: window.sidebarOpen ? ((showSectionHeader ? 34 : 0) + (itemVisible ? 48 : 0)) : 48
+                            property bool selected: appController.currentPage === key
+                            property bool searchActive: navList.searchTerm !== ""
+                            property bool matchesSearch: window.navMatchesSearch(searchText, navList.searchTerm)
+                            property bool showSectionHeader: window.sidebarOpen && window.isFirstVisibleInSection(index, section, navList.searchTerm) && (!searchActive || window.sectionMatchesSearch(section, navList.searchTerm))
+                            property bool sectionExpanded: appController.sidebarSectionsRevision >= 0 && appController.sidebarSectionExpanded(section)
+                            property bool itemVisible: !window.sidebarOpen || (searchActive ? matchesSearch : sectionExpanded)
+                            property int animationDuration: window.sidebarOpen ? 190 : 0
                             radius: 8
-                            color: appController.currentPage === key ? "#1d3353" : mouse.containsMouse ? "#172943" : "transparent"
-                            border.color: appController.currentPage === key ? "#2d496f" : "transparent"
+                            color: "transparent"
+                            border.color: "transparent"
+                            Behavior on height { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutCubic } }
                             Behavior on color { ColorAnimation { duration: 130 } }
 
+                            Item {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                height: navRow.showSectionHeader ? 30 : 0
+                                visible: navRow.showSectionHeader
+                                enabled: true
+                                opacity: navRow.showSectionHeader ? 1 : 0
+                                clip: true
+                                Behavior on height { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutCubic } }
+                                Behavior on opacity { NumberAnimation { duration: navRow.animationDuration } }
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 4
+                                    anchors.rightMargin: 4
+                                    anchors.topMargin: 2
+                                    anchors.bottomMargin: 3
+                                    radius: 6
+                                    color: "transparent"
+
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 6
+                                        color: settingsController.accentColor
+                                        opacity: sectionMouse.containsMouse ? 0.1 : 0
+                                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                                    }
+                                    
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 1
+                                        anchors.top: parent.top
+                                        color: Qt.rgba(1, 1, 1, 0.03)
+                                        visible: index > 0
+                                    }
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    spacing: 8
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 4
+                                        Layout.preferredHeight: 4
+                                        radius: 2
+                                        color: navRow.sectionExpanded ? settingsController.accentColor : settingsController.disabledTextColor
+                                        Layout.alignment: Qt.AlignVCenter
+                                        layer.enabled: navRow.sectionExpanded
+                                        layer.effect: DropShadow {
+                                            transparentBorder: true
+                                            color: settingsController.accentColor
+                                            radius: 6
+                                            samples: 13
+                                        }
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+
+                                    Text {
+                                        text: tr(sectionTitleKey(section))
+                                        color: sectionMouse.containsMouse ? settingsController.textColor : (navRow.sectionExpanded ? settingsController.accentColor : settingsController.disabledTextColor)
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                        font.letterSpacing: 0.5
+                                        font.capitalization: Font.AllUppercase
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+
+                                    Text {
+                                        text: navRow.sectionExpanded ? "v" : ">"
+                                        color: navRow.sectionExpanded ? settingsController.accentColor : settingsController.disabledTextColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                        Layout.preferredWidth: 14
+                                        horizontalAlignment: Text.AlignRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: sectionMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: appController.setSidebarSectionExpanded(section, !navRow.sectionExpanded)
+                                }
+                            }
+
+                            Rectangle {
+                                visible: navRow.itemVisible
+                                x: window.sidebarOpen && mouse.containsMouse ? 5 : 0
+                                width: parent.width - (window.sidebarOpen && mouse.containsMouse ? 10 : 0)
+                                anchors.bottom: parent.bottom
+                                height: 48
+                                radius: 8
+                                color: "transparent"
+                                border.color: "transparent"
+                                border.width: 1
+                                Behavior on x { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
+                                Behavior on width { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
+                                
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 8
+                                    color: settingsController.accentColor
+                                    opacity: navRow.selected ? 0.15 : (mouse.containsMouse ? 0.06 : 0)
+                                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                                }
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 8
+                                    color: "transparent"
+                                    border.color: settingsController.accentColor
+                                    opacity: navRow.selected ? 0.4 : 0
+                                    border.width: 1
+                                    Behavior on opacity { NumberAnimation { duration: 150 } }
+                                }
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 8
+                                    color: "transparent"
+                                    border.color: Qt.rgba(1, 1, 1, 0.05)
+                                    border.width: 1
+                                    visible: navRow.selected
+                                }
+                            }
+
+                            Rectangle {
+                                visible: window.sidebarOpen && navRow.itemVisible
+                                x: window.sidebarOpen && mouse.containsMouse ? 9 : 4
+                                anchors.bottom: parent.bottom
+                                anchors.bottomMargin: 9
+                                width: 4
+                                height: navRow.selected ? 30 : (mouse.containsMouse ? 22 : 0)
+                                radius: 2
+                                color: settingsController.accentColor
+                                opacity: navRow.selected ? 1 : (mouse.containsMouse ? 0.5 : 0)
+                                layer.enabled: navRow.selected
+                                layer.effect: DropShadow {
+                                    transparentBorder: true
+                                    color: settingsController.accentColor
+                                    radius: 8
+                                    samples: 17
+                                }
+                                Behavior on x { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutBack } }
+                                Behavior on height { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutCubic } }
+                                Behavior on opacity { NumberAnimation { duration: navRow.animationDuration } }
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                            }
+
                             RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: window.sidebarOpen ? 12 : 0
+                                visible: navRow.itemVisible
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 48
+                                anchors.leftMargin: window.sidebarOpen ? 18 : 0
                                 anchors.rightMargin: window.sidebarOpen ? 12 : 0
                                 spacing: window.sidebarOpen ? 12 : 0
+
 
                                 Item {
                                     visible: !window.sidebarOpen
@@ -1123,21 +1514,26 @@ ApplicationWindow {
                                             "search": "buscar.png",
                                             "target": "buscariten.png",
                                             "bell": "notificação.png",
-                                            "settings": "config.png"
+                                            "settings": "config.png",
+                                            "palette": "config.png",
+                                            "personalizacao.png": "personalizacao.png"
                                         }
+                                        if (icon.indexOf(".png") !== -1) return appController.assetUrl("img/iconmenu/" + icon)
                                         return map[icon] ? appController.assetUrl("img/iconmenu/" + map[icon]) : ""
                                     }
                                     visible: source != ""
-                                    Layout.preferredWidth: 32
-                                    Layout.preferredHeight: 32
+                                    Layout.preferredWidth: 42
+                                    Layout.preferredHeight: 42
                                     Layout.alignment: Qt.AlignVCenter
                                     fillMode: Image.PreserveAspectFit
                                     mipmap: true
                                     smooth: true
+                                    scale: window.sidebarOpen && mouse.containsMouse ? 1.06 : 1
+                                    Behavior on scale { NumberAnimation { duration: navRow.animationDuration; easing.type: Easing.OutCubic } }
                                 }
                                 Text {
                                     text: icon.length > 0 ? icon.substring(0, 1).toUpperCase() : "-"
-                                    color: appController.currentPage === key ? "#5eead4" : "#8ab4ff"
+                                    color: navRow.selected ? settingsController.accentColor : settingsController.mutedTextColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 14
                                     font.bold: true
@@ -1151,28 +1547,111 @@ ApplicationWindow {
                                 }
                                 Text {
                                     text: tr(labelKey)
-                                    color: appController.currentPage === key ? "#edf6ff" : "#99abc4"
+                                    color: navRow.selected ? settingsController.textColor : (mouse.containsMouse ? settingsController.textColor : settingsController.mutedTextColor)
                                     font.family: "Segoe UI"
                                     font.pixelSize: 13
-                                    font.bold: appController.currentPage === key
+                                    font.bold: navRow.selected
                                     visible: window.sidebarOpen
+                                    opacity: window.sidebarOpen ? 1 : 0
                                     Layout.fillWidth: true
                                     elide: Text.ElideRight
+                                    Behavior on opacity { NumberAnimation { duration: navRow.animationDuration } }
+                                    Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                             }
 
                             MouseArea {
                                 id: mouse
-                                anchors.fill: parent
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                height: 48
+                                enabled: navRow.itemVisible
                                 hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
                                 onClicked: appController.setCurrentPage(key)
                             }
+
+                            Rectangle {
+                                id: compactTooltip
+                                visible: !window.sidebarOpen && navRow.itemVisible && mouse.containsMouse
+                                opacity: visible ? 1 : 0
+                                x: parent.width + 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.min(230, Math.max(150, compactTooltipTitle.implicitWidth + 28, compactTooltipLabel.implicitWidth + 28))
+                                height: 50
+                                radius: 9
+                                color: settingsController.surfaceAltColor
+                                border.color: navRow.selected ? settingsController.accentColor : settingsController.controlHoverColor
+                                border.width: 1
+                                z: 90
+                                scale: visible ? 1 : 0.96
+                                Behavior on opacity { NumberAnimation { duration: 110 } }
+                                Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutCubic } }
+
+                                Rectangle {
+                                    width: 10
+                                    height: 10
+                                    radius: 2
+                                    color: compactTooltip.color
+                                    border.color: compactTooltip.border.color
+                                    border.width: 1
+                                    x: -5
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    rotation: 45
+                                }
+
+                                Column {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 14
+                                    anchors.rightMargin: 12
+                                    anchors.topMargin: 7
+                                    spacing: 2
+
+                                    Text {
+                                        id: compactTooltipTitle
+                                        width: parent.width
+                                        text: tr(sectionTitleKey(section))
+                                        color: settingsController.accentColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        font.capitalization: Font.AllUppercase
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        id: compactTooltipLabel
+                                        width: parent.width
+                                        text: tr(labelKey)
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            width: parent.width - 24
+                            visible: navList.searchTerm !== "" && window.navSearchResultCount(navList.searchTerm) === 0
+                            text: tr("sidebar.search_empty")
+                            color: settingsController.disabledTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            z: 50
                         }
                     }
 
                     Text {
                         text: "v" + appController.version
-                        color: "#60728c"
+                        color: settingsController.disabledTextColor
                         font.family: "Segoe UI"
                         font.pixelSize: 11
                         horizontalAlignment: Text.AlignHCenter
@@ -1189,7 +1668,7 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 72
-                    color: "#070b16"
+                    color: settingsController.backgroundColor
 
                     RowLayout {
                         anchors.fill: parent
@@ -1199,10 +1678,13 @@ ApplicationWindow {
 
                         PrimaryButton {
                             text: window.sidebarOpen ? "<" : ">"
-                            fill: "#111c31"
-                            hoverFill: "#1d3353"
-                            textFill: "#edf6ff"
-                            onClicked: window.sidebarOpen = !window.sidebarOpen
+                            fill: settingsController.surfaceColor
+                            hoverFill: settingsController.controlColor
+                            textFill: settingsController.textColor
+                            onClicked: {
+                                window.sidebarOpen = !window.sidebarOpen
+                                appController.setSidebarOpen(window.sidebarOpen)
+                            }
                         }
 
                         ColumnLayout {
@@ -1210,7 +1692,7 @@ ApplicationWindow {
                             spacing: 2
                             Text {
                                 text: tr(navTitleKey())
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 20
                                 font.bold: true
@@ -1219,7 +1701,7 @@ ApplicationWindow {
                             }
                             Text {
                                 text: appController.foxholeStatus
-                                color: "#99abc4"
+                                color: settingsController.mutedTextColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 12
                                 Layout.fillWidth: true
@@ -1231,9 +1713,9 @@ ApplicationWindow {
                             text: "?"
                             visible: appController.hasTutorial
                             Layout.preferredWidth: 42
-                            fill: "#111c31"
-                            hoverFill: "#1d3353"
-                            textFill: "#5eead4"
+                            fill: settingsController.surfaceColor
+                            hoverFill: settingsController.controlColor
+                            textFill: settingsController.accentColor
                             onClicked: appController.showTutorial()
                             ToolTip.visible: hovered
                             ToolTip.text: tr("tutorial.help")
@@ -1244,7 +1726,7 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#070b16"
+                    color: "transparent"
 
                     Loader {
                         id: pageLoader
@@ -1288,7 +1770,7 @@ ApplicationWindow {
 
             Rectangle {
                 anchors.fill: parent
-                color: "#040810"
+                color: settingsController.backgroundColor
                 opacity: 0.40 // Make it very transparent to see the blur
             }
 
@@ -1297,8 +1779,10 @@ ApplicationWindow {
                 width: Math.min(500, parent.width - 48)
                 height: Math.min(520, parent.height - 64)
                 radius: 18
-                color: Qt.rgba(0.045, 0.08, 0.14, 0.94)
-                border.color: discordLoginOverlay.accessDenied ? "#ff3366" : (discordLoginOverlay.awaitingDiscordLogin ? "#5865F2" : "#1e3554")
+                color: "transparent"
+                border.color: "transparent"
+                Rectangle { anchors.fill: parent; radius: 18; color: settingsController.scrimColor; opacity: 0.9 }
+                Rectangle { anchors.fill: parent; radius: 18; color: "transparent"; border.color: discordLoginOverlay.accessDenied ? settingsController.dangerColor : (discordLoginOverlay.awaitingDiscordLogin ? settingsController.infoColor : settingsController.accentColor); border.width: 1 }
                 border.width: 1
 
                 layer.enabled: true
@@ -1328,7 +1812,7 @@ ApplicationWindow {
                             height: 126
                             radius: 63
                             color: "transparent"
-                            border.color: discordLoginOverlay.accessDenied ? "#ff3366" : (discordLoginOverlay.awaitingDiscordLogin ? "#5865F2" : "#2d496f")
+                            border.color: discordLoginOverlay.accessDenied ? settingsController.dangerColor : (discordLoginOverlay.awaitingDiscordLogin ? settingsController.infoColor : settingsController.controlHoverColor)
                             border.width: 2
                             opacity: 0.85
                         }
@@ -1355,7 +1839,7 @@ ApplicationWindow {
                                 width: 10
                                 height: 10
                                 radius: 5
-                                color: "#8ab4ff"
+                                color: settingsController.infoColor
                             }
 
                             Rectangle {
@@ -1364,7 +1848,7 @@ ApplicationWindow {
                                 width: 10
                                 height: 10
                                 radius: 5
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                             }
                         }
 
@@ -1373,7 +1857,7 @@ ApplicationWindow {
                             width: 94
                             height: 94
                             radius: 47
-                            color: "#071426"
+                            color: settingsController.backgroundColor
                             opacity: 0.55
                             layer.enabled: true
                             layer.effect: DropShadow {
@@ -1391,8 +1875,8 @@ ApplicationWindow {
                             width: 92
                             height: 92
                             radius: 46
-                            color: "#040810"
-                            border.color: "#2d496f"
+                            color: settingsController.backgroundColor
+                            border.color: settingsController.controlHoverColor
                             border.width: 1
                             clip: true
 
@@ -1429,7 +1913,7 @@ ApplicationWindow {
 
                         Text {
                             text: discordLoginOverlay.accessDenied ? tr("loading.access_denied_title") : (discordLoginOverlay.awaitingDiscordLogin ? tr("loading.discord_wait_title") : (discordLoginOverlay.validatingProfile ? tr("loading.profile_title") : (discordLoginOverlay.profileNeedsRetry ? tr("loading.profile_retry_title") : tr("loading.discord_title"))))
-                            color: discordLoginOverlay.accessDenied ? "#ff6b8a" : "#edf6ff"
+                            color: discordLoginOverlay.accessDenied ? settingsController.dangerColor : settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 27
                             font.bold: true
@@ -1440,7 +1924,7 @@ ApplicationWindow {
                         }
                         Text {
                             text: discordLoginOverlay.accessDenied ? tr("loading.access_denied_body") : (discordLoginOverlay.awaitingDiscordLogin ? tr("loading.discord_wait_body") : (discordLoginOverlay.validatingProfile ? (chatController.status || tr("loading.profile_body")) : (discordLoginOverlay.profileNeedsRetry ? (chatController.status || tr("loading.profile_retry_body")) : tr("loading.discord_body"))))
-                            color: discordLoginOverlay.accessDenied ? "#ffc0cb" : "#99abc4"
+                            color: discordLoginOverlay.accessDenied ? settingsController.dangerColor : settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 15
                             lineHeight: 1.4
@@ -1456,8 +1940,10 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 76
                         radius: 10
-                        color: Qt.rgba(0.06, 0.11, 0.19, 0.88)
-                        border.color: "#223b5d"
+                        color: "transparent"
+                        border.color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 10; color: settingsController.scrimColor; opacity: 0.4 }
+                        Rectangle { anchors.fill: parent; radius: 10; color: "transparent"; border.color: Qt.rgba(1,1,1,0.1); border.width: 1 }
                         border.width: 1
 
                         RowLayout {
@@ -1480,7 +1966,7 @@ ApplicationWindow {
                                         Layout.preferredWidth: 9
                                         Layout.preferredHeight: 9
                                         radius: 5
-                                        color: modelData.active ? "#5eead4" : (modelData.done ? "#8ab4ff" : "#334761")
+                                        color: modelData.active ? settingsController.accentColor : (modelData.done ? settingsController.infoColor : settingsController.borderColor)
                                         opacity: modelData.active ? 1 : 0.68
 
                                         SequentialAnimation on opacity {
@@ -1493,7 +1979,7 @@ ApplicationWindow {
 
                                     Text {
                                         text: modelData.label
-                                        color: modelData.active ? "#edf6ff" : "#7f93ad"
+                                        color: modelData.active ? settingsController.textColor : settingsController.disabledTextColor
                                         font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         font.bold: modelData.active
@@ -1510,8 +1996,10 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Math.max(86, loginHelpText.implicitHeight + 28)
                         radius: 10
-                        color: discordLoginOverlay.accessDenied ? Qt.rgba(0.20, 0.05, 0.10, 0.92) : Qt.rgba(0.035, 0.075, 0.13, 0.9)
-                        border.color: discordLoginOverlay.accessDenied ? "#ff3366" : "#1d3353"
+                        color: "transparent"
+                        border.color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 10; color: settingsController.scrimColor; opacity: 0.5 }
+                        Rectangle { anchors.fill: parent; radius: 10; color: "transparent"; border.color: discordLoginOverlay.accessDenied ? settingsController.dangerColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
                         border.width: 1
 
                         Text {
@@ -1519,7 +2007,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             anchors.margins: 14
                             text: discordLoginOverlay.accessDenied ? tr("loading.access_denied_help") : (discordLoginOverlay.awaitingDiscordLogin ? tr("loading.discord_wait_help") : tr("loading.profile_verify_help"))
-                            color: discordLoginOverlay.accessDenied ? "#ffd6df" : "#93a9c4"
+                            color: discordLoginOverlay.accessDenied ? settingsController.dangerColor : settingsController.secondaryTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 12
                             lineHeight: 1.32
@@ -1534,9 +2022,9 @@ ApplicationWindow {
                     PrimaryButton {
                         visible: !discordLoginOverlay.waitingForProfile
                         text: discordLoginOverlay.profileNeedsRetry ? tr("loading.retry") : tr("loading.login_discord")
-                        fill: discordLoginOverlay.accessDenied ? "#ff3366" : "#5865F2"
-                        hoverFill: discordLoginOverlay.accessDenied ? "#e62e5c" : "#4752C4"
-                        textFill: "#ffffff"
+                        fill: discordLoginOverlay.accessDenied ? settingsController.dangerColor : settingsController.infoColor
+                        hoverFill: discordLoginOverlay.accessDenied ? settingsController.dangerHoverColor : settingsController.controlHoverColor
+                        textFill: settingsController.textColor
                         enabled: visible
                         Layout.preferredHeight: 52
                         Layout.fillWidth: true
@@ -1551,8 +2039,8 @@ ApplicationWindow {
 
     Window {
         id: overlayWindow
-        width: 260
-        height: Math.max(78, overlayContent.implicitHeight + 20)
+        width: 310
+        height: Math.max(96, overlayContent.implicitHeight + 30)
         visible: overlayController.visible
         color: "transparent"
         transientParent: null
@@ -1587,13 +2075,39 @@ ApplicationWindow {
         Rectangle {
             id: overlayPanel
             anchors.fill: parent
+            anchors.margins: 4
             radius: 8
-            color: overlayController.backgroundColor
-            border.color: overlayController.accentColor
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.6 }
+            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: Qt.rgba(1,1,1,0.1); border.width: 1 }
             border.width: 1
-            opacity: 0.94
-            Behavior on color { ColorAnimation { duration: 160 } }
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.42)
+                radius: 18
+                samples: 37
+                verticalOffset: 6
+            }
             Behavior on border.color { ColorAnimation { duration: 160 } }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: overlayController.accentColor
+                opacity: autoClickerController.active ? 0.12 : 0.07
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 4
+                radius: 2
+                color: overlayController.accentColor
+                opacity: autoClickerController.active ? 0.95 : 0.55
+            }
 
             MouseArea {
                 anchors.fill: parent
@@ -1620,82 +2134,166 @@ ApplicationWindow {
             ColumnLayout {
                 id: overlayContent
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 5
+                anchors.leftMargin: 16
+                anchors.rightMargin: 12
+                anchors.topMargin: 12
+                anchors.bottomMargin: 12
+                spacing: 8
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: 8
+
+                    Rectangle {
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
+                        radius: 8
+                        color: Qt.rgba(1, 1, 1, 0.08)
+                        border.color: overlayController.accentColor
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: autoClickerController.active ? "ON" : "II"
+                            color: autoClickerController.active ? overlayController.accentColor : settingsController.warningColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            font.bold: true
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+
+                        Text {
+                            text: autoClickerController.active ? tr("overlay.clicker_active") : tr("overlay.clicker_paused")
+                            color: autoClickerController.active ? overlayController.accentColor : settingsController.warningColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            font.bold: true
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            visible: overlayController.showTarget
+                            text: autoClickerController.targetTitle !== "" ? autoClickerController.targetTitle : tr("overlay.target_default")
+                            color: settingsController.secondaryTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: Math.max(42, overlayHotkeyText.implicitWidth + 16)
+                        Layout.preferredHeight: 24
+                        radius: 7
+                        color: Qt.rgba(1, 1, 1, 0.07)
+                        border.color: Qt.rgba(1, 1, 1, 0.10)
+
+                        Text {
+                            id: overlayHotkeyText
+                            anchors.centerIn: parent
+                            text: overlayController.hotkey
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            font.bold: true
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        radius: 12
+                        color: closeAutoClickerMouse.containsMouse ? settingsController.dangerColor : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "X"
+                            color: closeAutoClickerMouse.containsMouse ? settingsController.textColor : settingsController.disabledTextColor
+                            font.pixelSize: 14
+                            font.family: "Segoe UI"
+                            font.bold: true
+                            anchors.verticalCenterOffset: -1
+                        }
+                        MouseArea {
+                            id: closeAutoClickerMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: overlayController.setEnabled(false)
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: Qt.rgba(1, 1, 1, 0.10)
+                }
+
+                RowLayout {
+                    visible: overlayController.showProfile
+                    Layout.fillWidth: true
+                    spacing: 8
+
                     Text {
-                        text: autoClickerController.active ? tr("overlay.clicker_active") : tr("overlay.clicker_paused")
-                        color: autoClickerController.active ? "#62d7a4" : "#ffd166"
+                        text: tr("overlay.profile")
+                        color: settingsController.disabledTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 10
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        text: steamController.personaName !== "" ? steamController.personaName : tr("user.unknown")
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 11
                         font.bold: true
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
-                    Button {
-                        Layout.preferredWidth: 24
-                        Layout.preferredHeight: 22
-                        text: "X"
-                        onClicked: overlayController.setEnabled(false)
-                        contentItem: Text {
-                            text: parent.text
-                            color: "#edf6ff"
+                }
+
+                Rectangle {
+                    visible: overlayController.showClicker
+                    Layout.fillWidth: true
+                    implicitHeight: clickerOverlayText.implicitHeight + (overlayHintText.visible ? overlayHintText.implicitHeight + 19 : 16)
+                    radius: 8
+                    color: Qt.rgba(0, 0, 0, 0.18)
+                    border.color: Qt.rgba(1, 1, 1, 0.08)
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 8
+                        spacing: 3
+
+                        Text {
+                            id: clickerOverlayText
+                            text: autoClickerController.overlayPrimaryText
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            font.bold: autoClickerController.active
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Text {
+                            id: overlayHintText
+                            visible: autoClickerController.overlayHintText !== ""
+                            text: autoClickerController.overlayHintText
+                            color: settingsController.secondaryTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 10
-                            font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        background: Rectangle {
-                            radius: 5
-                            color: parent.hovered ? "#5f2034" : "#431926"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
                         }
                     }
-                }
-
-                Text {
-                    visible: overlayController.showProfile
-                    text: steamController.personaName !== "" ? steamController.personaName : tr("user.unknown")
-                    color: "#edf6ff"
-                    font.family: "Segoe UI"
-                    font.pixelSize: 11
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-
-                Text {
-                    visible: overlayController.showClicker
-                    text: autoClickerController.overlayPrimaryText
-                    color: "#c7d7ed"
-                    font.family: "Segoe UI"
-                    font.pixelSize: 11
-                    font.bold: autoClickerController.active
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
-
-                Text {
-                    visible: overlayController.showClicker && autoClickerController.overlayHintText !== ""
-                    text: autoClickerController.overlayHintText
-                    color: "#7f93ad"
-                    font.family: "Segoe UI"
-                    font.pixelSize: 10
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                }
-
-                Text {
-                    visible: overlayController.showTarget
-                    text: autoClickerController.targetTitle !== "" ? autoClickerController.targetTitle : tr("overlay.target_default")
-                    color: overlayController.accentColor
-                    font.family: "Segoe UI"
-                    font.pixelSize: 10
-                    font.bold: true
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
                 }
             }
         }
@@ -1737,10 +2335,11 @@ ApplicationWindow {
             anchors.fill: parent
             anchors.margins: 3
             radius: 8
-            color: "#0d1828"
-            border.color: notificationsController.squadlockFinished ? "#62d7a4" : "#39506f"
-            border.width: 1
-            opacity: 0.96
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.8 }
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.08 }
+            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.accentColor; border.width: 1; opacity: 0.8 }
 
             MouseArea {
                 anchors.fill: parent
@@ -1776,7 +2375,7 @@ ApplicationWindow {
 
                 Text {
                     text: window.tr("notifications.overlay_title")
-                    color: "#a8bfdc"
+                    color: settingsController.secondaryTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 9
                     font.bold: true
@@ -1785,7 +2384,7 @@ ApplicationWindow {
                 }
                 Text {
                     text: notificationsController.timeText
-                    color: notificationsController.squadlockFinished ? "#62d7a4" : "#edf6ff"
+                    color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 21
                     font.bold: true
@@ -1793,7 +2392,7 @@ ApplicationWindow {
                 }
                 Text {
                     text: notificationsController.squadlockFinished ? window.tr("notifications.finished") : window.tr("notifications.vehicle")
-                    color: notificationsController.squadlockFinished ? "#62d7a4" : "#7f93ad"
+                    color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.disabledTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 9
                     font.bold: true
@@ -1811,9 +2410,9 @@ ApplicationWindow {
                         text: window.tr("notifications.reset")
                         Layout.fillWidth: true
                         implicitHeight: 24
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
                         font.pixelSize: 9
                         onPressed: notificationsController.holdOverlayVisible(1500)
                         onClicked: notificationsController.resetSquadlock()
@@ -1822,9 +2421,9 @@ ApplicationWindow {
                         text: window.tr("notifications.finish")
                         Layout.fillWidth: true
                         implicitHeight: 24
-                        fill: "#5eead4"
-                        hoverFill: "#8ab4ff"
-                        textFill: "#041014"
+                        fill: settingsController.accentColor
+                        hoverFill: settingsController.accentHoverColor
+                        textFill: settingsController.textInverseColor
                         font.pixelSize: 9
                         onPressed: notificationsController.holdOverlayVisible(1500)
                         onClicked: notificationsController.finishSquadlock()
@@ -1852,15 +2451,280 @@ ApplicationWindow {
                 required property int matchY
                 required property int matchW
                 required property int matchH
-                x: matchX
-                y: matchY
-                width: matchW
-                height: matchH
+                required property string scoreText
+                property int markerPad: Math.max(6, Math.round(Math.max(matchW, matchH) * 0.18))
+                x: Math.max(0, matchX - markerPad)
+                y: Math.max(0, matchY - markerPad)
+                width: Math.min(identifyMonitorOverlayWindow.width - x, matchW + markerPad * 2)
+                height: Math.min(identifyMonitorOverlayWindow.height - y, matchH + markerPad * 2)
                 radius: Math.min(width, height) / 2
                 color: "transparent"
-                border.color: "#4ef7b2"
+                border.color: settingsController.successColor
                 border.width: 3
                 opacity: 0.92
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.leftMargin: 2
+                    anchors.topMargin: -24
+                    width: 58
+                    height: 22
+                    radius: 6
+                    color: settingsController.surfaceColor
+                    border.color: settingsController.successColor
+                    Text {
+                        anchors.centerIn: parent
+                        text: scoreText
+                        color: settingsController.successColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
+            }
+        }
+    }
+
+    Window {
+        id: identifyControlOverlayWindow
+        width: 340
+        height: Math.max(150, identifyOverlayPanel.implicitHeight + 10)
+        visible: identifyItemController.monitorControlVisible || identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+        color: "transparent"
+        transientParent: null
+        flags: window.interactiveOverlayFlags
+
+        function place() {
+            var screenWidth = Screen.width > 0 ? Screen.width : 1920
+            x = screenWidth - width - 24
+            y = 24
+        }
+
+        onVisibleChanged: if (visible) place()
+        onHeightChanged: if (visible) place()
+
+        Rectangle {
+            id: identifyOverlayPanel
+            anchors.fill: parent
+            anchors.margins: 3
+            implicitHeight: identifyOverlayLayout.implicitHeight + 24
+            radius: 8
+            color: settingsController.surfaceColor
+            border.color: settingsController.accentColor
+            border.width: 1
+            opacity: 0.96
+
+            ColumnLayout {
+                id: identifyOverlayLayout
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 12
+                spacing: 7
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text {
+                        text: window.tr("identify.overlay_title")
+                        color: settingsController.accentColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    PrimaryButton {
+                        text: "X"
+                        Layout.preferredWidth: 34
+                        implicitHeight: 26
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
+                        font.pixelSize: 11
+                        onClicked: identifyItemController.hideMonitorOverlay()
+                    }
+                }
+                Text {
+                    text: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                          ? window.tr("identify.select_stockpile_hint")
+                          : identifyItemController.monitorSummary
+                    color: settingsController.textColor
+                    font.family: "Segoe UI"
+                    font.pixelSize: 12
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+                RowLayout {
+                    visible: identifyItemController.selectedImageUrl !== ""
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Rectangle {
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
+                        radius: 6
+                        color: settingsController.accentPanelColor
+                        border.color: settingsController.borderColor
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            source: identifyItemController.selectedImageUrl
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                            cache: false
+                        }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+                        Text {
+                            text: identifyItemController.monitorTarget !== "" ? identifyItemController.monitorTarget : window.tr("identify.no_reference")
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            font.bold: true
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: identifyItemController.monitoring ? window.tr("identify.on") : window.tr("identify.off")
+                            color: identifyItemController.monitoring ? settingsController.successColor : settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Text {
+                        text: window.tr("identify.live_matches") + ": " + identifyItemController.monitorMatchCount
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        text: window.tr("identify.confidence") + ": " + identifyItemController.monitorBestScoreText
+                        color: settingsController.warningColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    PrimaryButton {
+                        text: window.tr("identify.select")
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
+                        font.pixelSize: 11
+                        enabled: !identifyItemController.selectionBusy
+                        onClicked: identifyItemController.selectImage()
+                    }
+                    PrimaryButton {
+                        text: window.tr("identify.paste")
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
+                        font.pixelSize: 11
+                        enabled: !identifyItemController.selectionBusy
+                        onClicked: identifyItemController.pasteClipboard()
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    PrimaryButton {
+                        property bool selectingStockpile: identifyItemController.selectionBusy || identifyItemController.selectionOverlayVisible
+                        text: selectingStockpile
+                              ? window.tr("identify.cancel_select")
+                              : window.tr("identify.select_stockpile")
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        fill: selectingStockpile ? "#efc85f" : settingsController.controlColor
+                        hoverFill: selectingStockpile ? "#ffd976" : settingsController.controlHoverColor
+                        textFill: selectingStockpile ? "#101820" : settingsController.textColor
+                        font.pixelSize: 11
+                        onClicked: selectingStockpile
+                                   ? identifyItemController.cancelStockpileItemSelection()
+                                   : identifyItemController.beginStockpileItemSelection()
+                    }
+                    PrimaryButton {
+                        text: window.tr("identify.clear_reference")
+                        Layout.preferredWidth: 118
+                        implicitHeight: 30
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
+                        font.pixelSize: 11
+                        onClicked: identifyItemController.clearReference()
+                    }
+                }
+            }
+        }
+    }
+
+    Window {
+        id: identifySelectionOverlayWindow
+        x: 0
+        y: 0
+        width: Math.max(1, (Screen.width > 0 ? Screen.width : 1920) - identifyControlOverlayWindow.width - 48)
+        height: Screen.height > 0 ? Screen.height : 1080
+        visible: identifyItemController.selectionOverlayVisible
+        color: "transparent"
+        transientParent: null
+        flags: window.interactiveOverlayFlags
+
+        Rectangle {
+            anchors.fill: parent
+            color: settingsController.scrimColor
+            opacity: 0.05
+        }
+
+        Repeater {
+            model: identifyItemController.selectionCandidatesModel
+            delegate: Rectangle {
+                required property int candidateIndex
+                required property int selectX
+                required property int selectY
+                required property int selectW
+                required property int selectH
+                property bool hot: false
+                x: selectX
+                y: selectY
+                width: selectW
+                height: selectH
+                radius: 5
+                scale: hot ? 1.03 : 1.0
+                transformOrigin: Item.Center
+                color: hot ? Qt.rgba(0.98, 0.78, 0.22, 0.30) : Qt.rgba(0.00, 0.88, 0.78, 0.16)
+                border.color: hot ? "#f4d35e" : "#42e6d3"
+                border.width: hot ? 3 : 2
+                opacity: 1.0
+                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: 120 } }
+                Behavior on border.color { ColorAnimation { duration: 120 } }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: parent.hot = true
+                    onExited: parent.hot = false
+                    onClicked: identifyItemController.selectStockpileCandidate(parent.candidateIndex)
+                }
             }
         }
     }
@@ -1890,8 +2754,8 @@ ApplicationWindow {
             anchors.margins: 3
             implicitHeight: mentionLayout.implicitHeight + 24
             radius: 8
-            color: "#111c31"
-            border.color: "#ffd166"
+            color: settingsController.surfaceColor
+            border.color: settingsController.warningColor
             border.width: 1
             opacity: 0.97
 
@@ -1904,7 +2768,7 @@ ApplicationWindow {
                 spacing: 4
                 Text {
                     text: chatController.mentionOverlayTitle
-                    color: "#ffd166"
+                    color: settingsController.infoColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     font.bold: true
@@ -1913,7 +2777,7 @@ ApplicationWindow {
                 }
                 Text {
                     text: chatController.mentionOverlayBody
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     wrapMode: Text.WordWrap
@@ -1966,8 +2830,8 @@ ApplicationWindow {
             anchors.margins: 10
             implicitHeight: hoverLayout.implicitHeight + 16
             radius: 12
-            color: "#0a1321"
-            border.color: "#3b82f6"
+            color: settingsController.backgroundColor
+            border.color: settingsController.infoColor
             border.width: 1
             opacity: 0.98
             layer.enabled: true
@@ -1985,21 +2849,32 @@ ApplicationWindow {
                     Layout.preferredWidth: 52
                     Layout.preferredHeight: 52
                     radius: 26
-                    color: "#1d3353"
+                    color: settingsController.controlColor
                     clip: true
                     Image {
+                        id: mentionHoverAvatarImage
                         anchors.fill: parent
+                        anchors.margins: 1
                         source: chatController.mentionHoverAvatar || ""
                         fillMode: Image.PreserveAspectCrop
                         visible: chatController.mentionHoverAvatar !== ""
                         asynchronous: true
                         cache: false
+                        layer.enabled: visible
+                        layer.effect: OpacityMask {
+                            maskSource: Rectangle {
+                                width: mentionHoverAvatarImage.width
+                                height: mentionHoverAvatarImage.height
+                                radius: Math.min(width, height) / 2
+                                visible: false
+                            }
+                        }
                     }
                     Text {
                         anchors.centerIn: parent
                         visible: chatController.mentionHoverAvatar === ""
                         text: (chatController.mentionHoverName || "?").substring(0,2).toUpperCase()
-                        color: "#60a5fa"
+                        color: settingsController.infoColor
                         font.bold: true
                         font.pixelSize: 18
                     }
@@ -2010,7 +2885,7 @@ ApplicationWindow {
                     spacing: 5
                     Text {
                         text: chatController.mentionHoverName
-                        color: "#ffffff"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 16
                         font.bold: true
@@ -2024,11 +2899,11 @@ ApplicationWindow {
                             Layout.preferredWidth: 10
                             Layout.preferredHeight: 10
                             radius: 5
-                            color: chatController.mentionHoverOnline ? "#22c55e" : "#64748b"
+                            color: chatController.mentionHoverOnline ? settingsController.successColor : settingsController.disabledTextColor
                         }
                         Text {
-                            text: (chatController.mentionHoverOnline ? "Online" : "Offline") + (chatController.mentionHoverRegiment ? (" • " + chatController.mentionHoverRegiment) : "")
-                            color: "#94a3b8"
+                            text: (chatController.mentionHoverOnline ? "Online" : "Offline") + (chatController.mentionHoverRegiment ? (" â€¢ " + chatController.mentionHoverRegiment) : "")
+                            color: settingsController.mutedTextColor
                             font.pixelSize: 13
                             font.family: "Segoe UI"
                             Layout.fillWidth: true
@@ -2065,7 +2940,7 @@ ApplicationWindow {
             anchors.margins: 3
             implicitHeight: stockpileUploadLayout.implicitHeight + 24
             radius: 8
-            color: "#0d1828"
+            color: settingsController.surfaceAltColor
             border.color: stockpileController.uploadOverlayAccent
             border.width: 1
             opacity: 0.97
@@ -2103,7 +2978,7 @@ ApplicationWindow {
 
                 Text {
                     text: stockpileController.uploadOverlayBody
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     font.bold: true
@@ -2113,7 +2988,7 @@ ApplicationWindow {
 
                 Text {
                     text: stockpileController.uploadOverlayDetail
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
                     wrapMode: Text.WordWrap
@@ -2126,7 +3001,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 5
                     radius: 3
-                    color: "#172943"
+                    color: settingsController.surfaceRaisedColor
                     clip: true
 
                     Rectangle {
@@ -2183,10 +3058,35 @@ ApplicationWindow {
             anchors.fill: parent
             anchors.margins: 4
             radius: 12
-            color: "#0a121e"
-            border.color: timeTaskController.recordOverlayAccent
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 12; color: settingsController.scrimColor; opacity: 0.8 }
+            Rectangle { anchors.fill: parent; radius: 12; color: "transparent"; border.color: timeTaskController.recordOverlayAccent; border.width: 1; opacity: 0.6 }
             border.width: 1
-            opacity: 0.98
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.42)
+                radius: 20
+                samples: 41
+                verticalOffset: 7
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: timeTaskController.recordOverlayAccent
+                opacity: 0.10
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 5
+                radius: 3
+                color: timeTaskController.recordOverlayAccent
+            }
 
             MouseArea {
                 anchors.fill: parent
@@ -2215,7 +3115,9 @@ ApplicationWindow {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 16
+                anchors.leftMargin: 20
+                anchors.rightMargin: 16
+                anchors.topMargin: 16
                 spacing: 12
 
                 RowLayout {
@@ -2223,36 +3125,59 @@ ApplicationWindow {
                     spacing: 8
                     
                     Rectangle {
-                        width: 8
-                        height: 8
-                        radius: 4
-                        color: timeTaskController.recordOverlayAccent
+                        width: 36
+                        height: 36
+                        radius: 9
+                        color: Qt.rgba(1, 1, 1, 0.08)
+                        border.color: timeTaskController.recordOverlayAccent
                         Layout.alignment: Qt.AlignVCenter
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 11
+                            height: 11
+                            radius: 6
+                            color: timeTaskController.recordOverlayAccent
+                        }
                     }
 
-                    Text {
-                        text: timeTaskController.recordOverlayTitle
-                        color: timeTaskController.recordOverlayAccent
-                        font.family: "Segoe UI"
-                        font.pixelSize: 14
-                        font.bold: true
-                        font.letterSpacing: 0.5
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        elide: Text.ElideRight
+                        spacing: 1
+
+                        Text {
+                            text: timeTaskController.recordOverlayTitle
+                            color: timeTaskController.recordOverlayAccent
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            text: timeTaskController.captureSummary
+                            color: settingsController.secondaryTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
                     }
 
                     Rectangle {
                         width: 24
                         height: 24
                         radius: 12
-                        color: closeRecordMouse.containsMouse ? "#ff7a90" : "transparent"
+                        color: closeRecordMouse.containsMouse ? settingsController.dangerColor : "transparent"
                         Text {
                             anchors.centerIn: parent
-                            text: "×"
-                            color: closeRecordMouse.containsMouse ? "#ffffff" : "#60728c"
-                            font.pixelSize: 22
+                            text: "X"
+                            color: closeRecordMouse.containsMouse ? settingsController.textColor : settingsController.disabledTextColor
+                            font.pixelSize: 14
                             font.family: "Segoe UI"
-                            anchors.verticalCenterOffset: -2
+                            font.bold: true
+                            anchors.verticalCenterOffset: -1
                         }
                         MouseArea {
                             id: closeRecordMouse
@@ -2266,15 +3191,14 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 1
-                    color: "#1d3353"
-                    opacity: 0.6
+                    color: Qt.rgba(1, 1, 1, 0.10)
                 }
 
                 Text {
                     text: timeTaskController.recordOverlayDetail
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
-                    font.pixelSize: 14
+                    font.pixelSize: 15
                     font.bold: true
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
@@ -2282,7 +3206,7 @@ ApplicationWindow {
 
                 Text {
                     text: timeTaskController.recordOverlayHint
-                    color: "#8ab4ff"
+                    color: settingsController.secondaryTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     Layout.fillWidth: true
@@ -2306,9 +3230,9 @@ ApplicationWindow {
                         text: window.tr("timetask.pause")
                         Layout.fillWidth: true
                         implicitHeight: 36
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
                         font.pixelSize: 12
                         onClicked: timeTaskController.pauseResume()
                     }
@@ -2316,9 +3240,9 @@ ApplicationWindow {
                         text: window.tr("timetask.stop")
                         Layout.fillWidth: true
                         implicitHeight: 36
-                        fill: "#ff7a90"
-                        hoverFill: "#b94a5d"
-                        textFill: "#111c31"
+                        fill: settingsController.dangerColor
+                        hoverFill: settingsController.dangerHoverColor
+                        textFill: settingsController.surfaceColor
                         font.pixelSize: 12
                         onClicked: timeTaskController.stopRecording()
                     }
@@ -2362,10 +3286,35 @@ ApplicationWindow {
             anchors.fill: parent
             anchors.margins: 4
             radius: 12
-            color: "#0a121e"
-            border.color: timeTaskController.replayOverlayAccent
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 12; color: settingsController.scrimColor; opacity: 0.8 }
+            Rectangle { anchors.fill: parent; radius: 12; color: "transparent"; border.color: timeTaskController.recordOverlayAccent; border.width: 1; opacity: 0.6 }
             border.width: 1
-            opacity: 0.98
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.42)
+                radius: 20
+                samples: 41
+                verticalOffset: 7
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: timeTaskController.replayOverlayAccent
+                opacity: 0.10
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 5
+                radius: 3
+                color: timeTaskController.replayOverlayAccent
+            }
 
             MouseArea {
                 anchors.fill: parent
@@ -2395,7 +3344,9 @@ ApplicationWindow {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 16
+                anchors.leftMargin: 20
+                anchors.rightMargin: 16
+                anchors.topMargin: 16
                 spacing: 12
 
                 RowLayout {
@@ -2403,36 +3354,59 @@ ApplicationWindow {
                     spacing: 8
                     
                     Rectangle {
-                        width: 8
-                        height: 8
-                        radius: 4
-                        color: timeTaskController.replayOverlayAccent
+                        width: 36
+                        height: 36
+                        radius: 9
+                        color: Qt.rgba(1, 1, 1, 0.08)
+                        border.color: timeTaskController.replayOverlayAccent
                         Layout.alignment: Qt.AlignVCenter
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 11
+                            height: 11
+                            radius: 6
+                            color: timeTaskController.replayOverlayAccent
+                        }
                     }
 
-                    Text {
-                        text: timeTaskController.replayOverlayTitle
-                        color: timeTaskController.replayOverlayAccent
-                        font.family: "Segoe UI"
-                        font.pixelSize: 14
-                        font.bold: true
-                        font.letterSpacing: 0.5
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        elide: Text.ElideRight
+                        spacing: 1
+
+                        Text {
+                            text: timeTaskController.replayOverlayTitle
+                            color: timeTaskController.replayOverlayAccent
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            text: timeTaskController.selectedMacroName !== "" ? timeTaskController.selectedMacroName : window.tr("timetask.replay_empty")
+                            color: settingsController.secondaryTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
                     }
 
                     Rectangle {
                         width: 24
                         height: 24
                         radius: 12
-                        color: closeReplayMouse.containsMouse ? "#ff7a90" : "transparent"
+                        color: closeReplayMouse.containsMouse ? settingsController.dangerColor : "transparent"
                         Text {
                             anchors.centerIn: parent
-                            text: "×"
-                            color: closeReplayMouse.containsMouse ? "#ffffff" : "#60728c"
-                            font.pixelSize: 22
+                            text: "X"
+                            color: closeReplayMouse.containsMouse ? settingsController.textColor : settingsController.disabledTextColor
+                            font.pixelSize: 14
                             font.family: "Segoe UI"
-                            anchors.verticalCenterOffset: -2
+                            font.bold: true
+                            anchors.verticalCenterOffset: -1
                         }
                         MouseArea {
                             id: closeReplayMouse
@@ -2446,15 +3420,14 @@ ApplicationWindow {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 1
-                    color: "#1d3353"
-                    opacity: 0.6
+                    color: Qt.rgba(1, 1, 1, 0.10)
                 }
 
                 Text {
                     text: timeTaskController.replayOverlayDetail
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
-                    font.pixelSize: 14
+                    font.pixelSize: 15
                     font.bold: true
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
@@ -2462,7 +3435,7 @@ ApplicationWindow {
 
                 Text {
                     text: tr("timetask.macro_running_warning")
-                    color: "#ffd166"
+                    color: settingsController.dangerColor
                     font.family: "Segoe UI"
                     font.pixelSize: 13
                     font.bold: true
@@ -2481,9 +3454,9 @@ ApplicationWindow {
                         text: window.tr("timetask.play")
                         Layout.fillWidth: true
                         implicitHeight: 36
-                        fill: "#62d7a4"
-                        hoverFill: "#5eead4"
-                        textFill: "#041014"
+                        fill: settingsController.accentColor
+                        hoverFill: settingsController.accentHoverColor
+                        textFill: settingsController.textInverseColor
                         font.pixelSize: 12
                         onClicked: timeTaskController.playSelected()
                     }
@@ -2491,9 +3464,9 @@ ApplicationWindow {
                         text: window.tr("timetask.pause")
                         Layout.fillWidth: true
                         implicitHeight: 36
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
                         font.pixelSize: 12
                         onClicked: timeTaskController.pauseResume()
                     }
@@ -2501,9 +3474,9 @@ ApplicationWindow {
                         text: window.tr("timetask.stop")
                         Layout.fillWidth: true
                         implicitHeight: 36
-                        fill: "#ff7a90"
-                        hoverFill: "#b94a5d"
-                        textFill: "#111c31"
+                        fill: settingsController.dangerColor
+                        hoverFill: settingsController.dangerHoverColor
+                        textFill: settingsController.surfaceColor
                         font.pixelSize: 12
                         onClicked: timeTaskController.stopReplay()
                     }
@@ -2520,4 +3493,58 @@ ApplicationWindow {
         }
         return "nav.home"
     }
+
+    function navMatchesSearch(searchText, term) {
+        var query = (term || "").toLowerCase().trim()
+        if (query === "")
+            return true
+        return String(searchText || "").toLowerCase().indexOf(query) !== -1
+    }
+
+    function navSearchResultCount(term) {
+        var count = 0
+        for (var i = 0; i < navItems.count(); i++) {
+            var item = navItems.get(i)
+            if (navMatchesSearch(item.searchText, term))
+                count += 1
+        }
+        return count
+    }
+
+    function isFirstVisibleInSection(index, section, term) {
+        if ((term || "").trim() === "") {
+            return index === 0 || navItems.get(index - 1).section !== section
+        }
+        for (var i = index - 1; i >= 0; i--) {
+            var item = navItems.get(i)
+            if (item.section !== section)
+                break
+            if (navMatchesSearch(item.searchText, term))
+                return false
+        }
+        return true
+    }
+
+    function sectionMatchesSearch(section, term) {
+        var query = (term || "").trim()
+        if (query === "")
+            return true
+        for (var i = 0; i < navItems.count(); i++) {
+            var item = navItems.get(i)
+            if (item.section === section && navMatchesSearch(item.searchText, query))
+                return true
+        }
+        return false
+    }
+
+    function sectionTitleKey(section) {
+        if (section === "core") return "sidebar.navigation"
+        if (section === "automation") return "sidebar.automation"
+        if (section === "logistics") return "sidebar.logistics"
+        if (section === "tools") return "sidebar.utilities"
+        if (section === "config") return "sidebar.settings"
+        return "sidebar.navigation"
+    }
 }
+
+

@@ -1,11 +1,12 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 
 Button {
     id: root
-    property color fill: "#5eead4"
-    property color hoverFill: "#8ab4ff"
-    property color textFill: "#041014"
+    property color fill: settingsController.accentColor
+    property color hoverFill: settingsController.accentHoverColor
+    property color textFill: settingsController.textInverseColor
+    property string visualStyle: settingsController.buttonStyle
 
     implicitHeight: 38
     leftPadding: 16
@@ -16,7 +17,8 @@ Button {
 
     contentItem: Text {
         text: root.text
-        color: root.textFill
+        color: root.enabled ? (root.visualStyle === "solid" ? root.textFill : settingsController.textColor) : settingsController.disabledTextColor
+        opacity: root.enabled ? 1 : 0.86
         font: root.font
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
@@ -24,8 +26,29 @@ Button {
     }
 
     background: Rectangle {
-        radius: 8
-        color: root.hovered ? root.hoverFill : root.fill
+        radius: settingsController.buttonRadius
+        color: {
+            if (!root.enabled)
+                return Qt.rgba(0, 0, 0, 0.4)
+            if (root.visualStyle === "outline")
+                return root.hovered ? settingsController.accentPanelColor : "transparent"
+            if (root.visualStyle === "soft")
+                return root.hovered ? root.hoverFill : settingsController.accentPanelColor
+            if (root.visualStyle === "glass")
+                return root.hovered ? root.hoverFill : settingsController.surfaceColor
+            return root.hovered ? root.hoverFill : root.fill
+        }
+        border.color: {
+            if (!root.enabled)
+                return Qt.rgba(1, 1, 1, 0.1)
+            if (root.visualStyle === "outline" || root.visualStyle === "glass")
+                return root.fill
+            return "transparent"
+        }
+        border.width: root.visualStyle === "outline" || root.visualStyle === "glass" || !root.enabled ? 1 : 0
+        opacity: root.visualStyle === "glass" && root.enabled ? 0.92 : 1
         Behavior on color { ColorAnimation { duration: 140 } }
+        Behavior on border.color { ColorAnimation { duration: 140 } }
     }
 }
+

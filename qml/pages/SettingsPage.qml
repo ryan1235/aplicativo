@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -50,16 +50,17 @@ Flickable {
 
         Text {
             text: tr("settings.title")
-            color: "#edf6ff"
+            color: settingsController.textColor
             font.family: "Segoe UI"
             font.pixelSize: 26
             font.bold: true
             Layout.fillWidth: true
+            elide: Text.ElideRight
         }
 
         Text {
             text: tr("settings.subtitle")
-            color: "#8ab4ff"
+            color: settingsController.mutedTextColor
             font.family: "Segoe UI"
             font.pixelSize: 13
             font.bold: true
@@ -69,23 +70,29 @@ Flickable {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
-            implicitHeight: 170
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
+            implicitHeight: languageColumn.implicitHeight + 32
 
             ColumnLayout {
-                anchors.fill: parent
+                id: languageColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
                 anchors.margins: 16
                 spacing: 12
+
                 Text {
                     text: tr("settings.language_title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
-                    font.pixelSize: 17
+                    font.pixelSize: 18
                     font.bold: true
                     Layout.fillWidth: true
+                    elide: Text.ElideRight
                 }
+
                 ListView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 72
@@ -98,9 +105,9 @@ Flickable {
                         text: name
                         onClicked: i18nController.setLanguage(code)
                         background: Rectangle {
-                            radius: 8
-                            color: active ? "#1d3353" : "#0e1a2d"
-                            border.color: active ? "#5eead4" : "#2d496f"
+                            radius: settingsController.cardRadius
+                            color: active ? settingsController.accentPanelColor : settingsController.backgroundColor
+                            border.color: active ? settingsController.accentColor : settingsController.borderColor
                             Behavior on color { ColorAnimation { duration: 140 } }
                         }
                         contentItem: RowLayout {
@@ -114,7 +121,7 @@ Flickable {
                             }
                             Text {
                                 text: name
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.bold: true
                                 elide: Text.ElideRight
@@ -128,9 +135,54 @@ Flickable {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.accentColor
+            implicitHeight: personalizationColumn.implicitHeight + 32
+
+            RowLayout {
+                id: personalizationColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 16
+                spacing: 14
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Text {
+                        text: tr("settings.personalization_shortcut_title")
+                        color: settingsController.textColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 18
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
+                    Text {
+                        text: tr("settings.personalization_shortcut_body")
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                }
+
+                PrimaryButton {
+                    Layout.preferredWidth: 190
+                    text: tr("settings.open_personalization")
+                    onClicked: appController.setCurrentPage("personalization")
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
             implicitHeight: appSettingsColumn.implicitHeight + 32
 
             ColumnLayout {
@@ -143,7 +195,7 @@ Flickable {
 
                 Text {
                     text: tr("settings.app_title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 18
                     font.bold: true
@@ -155,7 +207,7 @@ Flickable {
                     spacing: 14
                     Text {
                         text: tr("settings.close_action")
-                        color: "#c7d7ed"
+                        color: settingsController.textColor
                         font.family: "Segoe UI"
                         font.pixelSize: 13
                         Layout.fillWidth: true
@@ -164,101 +216,10 @@ Flickable {
                     PrimaryComboBox {
                         id: closeActionCombo
                         Layout.preferredWidth: 190
-                        implicitHeight: 38
+                        Layout.preferredHeight: 42
                         model: [tr("settings.close_ask"), tr("settings.close_tray"), tr("settings.close_exit")]
                         currentIndex: root.closeActionIndex()
                         onActivated: settingsController.setCloseAction(root.closeActionKeys[index])
-                        delegate: ItemDelegate {
-                            width: closeActionCombo.width
-                            height: 38
-                            highlighted: closeActionCombo.highlightedIndex === index
-                            contentItem: Text {
-                                text: modelData
-                                color: parent.highlighted ? "#5eead4" : "#edf6ff"
-                                font.family: "Segoe UI"
-                                font.pixelSize: 12
-                                font.bold: parent.highlighted
-                                verticalAlignment: Text.AlignVCenter
-                                elide: Text.ElideRight
-                            }
-                            background: Rectangle {
-                                color: parent.highlighted ? "#173c35" : "#0e1a2d"
-                                border.color: parent.highlighted ? "#5eead4" : "transparent"
-                            }
-                        }
-                        indicator: Canvas {
-                            id: closeActionArrow
-                            x: closeActionCombo.width - width - 12
-                            y: closeActionCombo.topPadding + (closeActionCombo.availableHeight - height) / 2
-                            width: 10
-                            height: 6
-                            contextType: "2d"
-
-                            Connections {
-                                target: closeActionCombo
-                                function onActiveFocusChanged() { closeActionArrow.requestPaint() }
-                                function onPressedChanged() { closeActionArrow.requestPaint() }
-                            }
-
-                            Connections {
-                                target: closeActionCombo.popup
-                                function onVisibleChanged() { closeActionArrow.requestPaint() }
-                            }
-
-                            onPaint: {
-                                context.reset()
-                                context.beginPath()
-                                if (closeActionCombo.popup.visible) {
-                                    context.moveTo(0, height)
-                                    context.lineTo(width / 2, 0)
-                                    context.lineTo(width, height)
-                                } else {
-                                    context.moveTo(0, 0)
-                                    context.lineTo(width / 2, height)
-                                    context.lineTo(width, 0)
-                                }
-                                context.strokeStyle = closeActionCombo.enabled
-                                    ? (closeActionCombo.activeFocus || closeActionCombo.popup.visible ? "#5eead4" : "#8ab4ff")
-                                    : "#52657f"
-                                context.lineWidth = 1.5
-                                context.stroke()
-                            }
-                        }
-                        background: Rectangle {
-                            radius: 7
-                            color: closeActionCombo.down ? "#13213a" : "#0e1a2d"
-                            border.color: closeActionCombo.activeFocus || closeActionCombo.popup.visible ? "#5eead4" : "#2d496f"
-                            Behavior on color { ColorAnimation { duration: 120 } }
-                            Behavior on border.color { ColorAnimation { duration: 120 } }
-                        }
-                        contentItem: Text {
-                            text: closeActionCombo.displayText
-                            color: "#edf6ff"
-                            font.family: "Segoe UI"
-                            font.pixelSize: 12
-                            font.bold: true
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 12
-                            rightPadding: 30
-                            elide: Text.ElideRight
-                        }
-                        popup: Popup {
-                            y: closeActionCombo.height + 6
-                            width: closeActionCombo.width
-                            implicitHeight: contentItem.implicitHeight + 2
-                            padding: 1
-                            background: Rectangle {
-                                radius: 7
-                                color: "#0b1424"
-                                border.color: "#2d496f"
-                            }
-                            contentItem: ListView {
-                                clip: true
-                                implicitHeight: contentHeight
-                                model: closeActionCombo.popup.visible ? closeActionCombo.delegateModel : null
-                                currentIndex: closeActionCombo.highlightedIndex
-                            }
-                        }
                     }
                     Connections {
                         target: settingsController
@@ -276,7 +237,7 @@ Flickable {
                         spacing: 3
                         Text {
                             text: tr("settings.start_windows")
-                            color: "#c7d7ed"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 13
                             font.bold: true
@@ -285,7 +246,7 @@ Flickable {
                         }
                         Text {
                             text: tr("settings.startup_command") + ": " + settingsController.startupCommand
-                            color: "#7f93ad"
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 11
                             Layout.fillWidth: true
@@ -294,7 +255,7 @@ Flickable {
                         Text {
                             text: settingsController.status
                             visible: settingsController.status !== ""
-                            color: "#ff7a90"
+                            color: settingsController.warningColor
                             font.family: "Segoe UI"
                             font.pixelSize: 11
                             Layout.fillWidth: true
@@ -302,7 +263,6 @@ Flickable {
                         }
                     }
                     ToggleSwitch {
-                        id: startupSwitch
                         checked: settingsController.startWithWindows
                         onClicked: settingsController.setStartWithWindows(checked)
                     }
@@ -312,9 +272,9 @@ Flickable {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
             implicitHeight: soundColumn.implicitHeight + 32
 
             ColumnLayout {
@@ -327,7 +287,7 @@ Flickable {
 
                 Text {
                     text: tr("settings.sound_title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 18
                     font.bold: true
@@ -335,7 +295,7 @@ Flickable {
                 }
                 Text {
                     text: tr("settings.sound_body")
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 12
                     Layout.fillWidth: true
@@ -353,22 +313,21 @@ Flickable {
                     delegate: Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: 48
-                        radius: 7
-                        color: "#0e1a2d"
-                        border.color: "#1e3554"
+                        radius: settingsController.cardRadius
+                        color: settingsController.backgroundColor
+                        border.color: settingsController.borderColor
 
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 10
                             spacing: 10
                             ToggleSwitch {
-                                id: optionSwitch
                                 checked: root.notificationChecked(modelData.key)
                                 onClicked: settingsController.setNotificationEnabled(modelData.key, checked)
                             }
                             Text {
                                 text: tr(modelData.labelKey)
-                                color: "#edf6ff"
+                                color: settingsController.textColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 12
                                 font.bold: true
@@ -383,43 +342,54 @@ Flickable {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
             implicitHeight: 280
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 16
                 spacing: 10
                 Text {
                     text: tr("settings.runtime_title")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
-                    font.pixelSize: 17
+                    font.pixelSize: 18
                     font.bold: true
                     Layout.fillWidth: true
                 }
                 Text {
                     text: tr("settings.settings_file") + ": " + settingsController.settingsPath()
-                    color: "#99abc4"
+                    color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     Layout.fillWidth: true
                     elide: Text.ElideMiddle
                 }
                 RowLayout {
                     PrimaryButton { text: tr("settings.check_updates"); onClicked: updateController.check() }
-                    Text { text: updateController.status; color: "#99abc4"; font.family: "Segoe UI"; Layout.fillWidth: true; elide: Text.ElideRight }
+                    Text {
+                        text: updateController.status
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                    }
                 }
                 TextArea {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     text: root.settingsJsonText()
                     readOnly: true
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Consolas"
                     font.pixelSize: 11
                     wrapMode: TextArea.NoWrap
-                    background: Rectangle { radius: 7; color: "#07111f"; border.color: "#24486d" }
+                    background: Rectangle {
+                        radius: settingsController.cardRadius
+                        color: settingsController.backgroundColor
+                        border.color: settingsController.borderColor
+                    }
                 }
             }
         }

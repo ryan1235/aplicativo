@@ -1,4 +1,4 @@
-import QtQuick
+﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -21,7 +21,7 @@ Flickable {
 
         Text {
             text: tr("notifications.title")
-            color: "#edf6ff"
+            color: settingsController.textColor
             font.family: "Segoe UI"
             font.pixelSize: 26
             font.bold: true
@@ -30,7 +30,7 @@ Flickable {
 
         Text {
             text: tr("notifications.subtitle")
-            color: "#8ab4ff"
+            color: settingsController.accentColor
             font.family: "Segoe UI"
             font.pixelSize: 13
             font.bold: true
@@ -41,8 +41,11 @@ Flickable {
         Rectangle {
             Layout.fillWidth: true
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.035 }
+            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
             implicitHeight: 284
 
             ColumnLayout {
@@ -59,7 +62,7 @@ Flickable {
                         spacing: 4
                         Text {
                             text: tr("notifications.squadlock_title")
-                            color: "#edf6ff"
+                            color: settingsController.textColor
                             font.family: "Segoe UI"
                             font.pixelSize: 20
                             font.bold: true
@@ -68,7 +71,7 @@ Flickable {
                         }
                         Text {
                             text: tr("notifications.squadlock_body")
-                            color: "#99abc4"
+                            color: settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 12
                             Layout.fillWidth: true
@@ -80,13 +83,16 @@ Flickable {
                         Layout.preferredWidth: 150
                         Layout.preferredHeight: 42
                         radius: 8
-                        color: notificationsController.overlayVisible ? "#173c35" : "#0e1a2d"
-                        border.color: notificationsController.overlayVisible ? "#5eead4" : "#2d496f"
+                        color: "transparent"
+                        border.color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.4 }
+                        Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: notificationsController.overlayVisible ? 0.2 : 0.0 }
+                        Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: notificationsController.overlayVisible ? settingsController.accentColor : Qt.rgba(1,1,1,0.1); border.width: 1 }
                         Behavior on color { ColorAnimation { duration: 140 } }
                         Text {
                             anchors.centerIn: parent
                             text: notificationsController.overlayVisible ? tr("notifications.overlay_live") : tr("notifications.overlay_idle")
-                            color: notificationsController.overlayVisible ? "#5eead4" : "#99abc4"
+                            color: notificationsController.overlayVisible ? settingsController.accentColor : settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 12
                             font.bold: true
@@ -100,7 +106,7 @@ Flickable {
 
                     Text {
                         text: notificationsController.timeText
-                        color: notificationsController.squadlockFinished ? "#62d7a4" : "#ffd166"
+                        color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.warningColor
                         font.family: "Segoe UI"
                         font.pixelSize: 54
                         font.bold: true
@@ -112,7 +118,7 @@ Flickable {
                         spacing: 8
                         Text {
                             text: tr(notificationsController.statusKey)
-                            color: "#c7d7ed"
+                            color: settingsController.secondaryTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 14
                             font.bold: true
@@ -124,8 +130,9 @@ Flickable {
                             background: Rectangle {
                                 implicitHeight: 10
                                 radius: 5
-                                color: "#07111f"
-                                border.color: "#24486d"
+                                color: "transparent"
+                                Rectangle { anchors.fill: parent; radius: 5; color: settingsController.scrimColor; opacity: 0.3 }
+                                border.color: Qt.rgba(1,1,1,0.1)
                             }
                             contentItem: Item {
                                 implicitHeight: 10
@@ -133,7 +140,7 @@ Flickable {
                                     width: parent.width * notificationsController.progress
                                     height: parent.height
                                     radius: 5
-                                    color: notificationsController.squadlockFinished ? "#62d7a4" : "#5eead4"
+                                    color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.accentColor
                                     Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                                 }
                             }
@@ -148,7 +155,7 @@ Flickable {
                             }
                             Text {
                                 text: tr("notifications.show_overlay")
-                                color: "#99abc4"
+                                color: settingsController.mutedTextColor
                                 font.family: "Segoe UI"
                                 font.pixelSize: 12
                                 Layout.fillWidth: true
@@ -168,17 +175,17 @@ Flickable {
                     PrimaryButton {
                         text: tr("notifications.reset")
                         enabled: notificationsController.squadlockRunning || notificationsController.squadlockFinished
-                        fill: "#1d3353"
-                        hoverFill: "#2d496f"
-                        textFill: "#edf6ff"
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
                         onClicked: notificationsController.resetSquadlock()
                     }
                     PrimaryButton {
                         text: tr("notifications.finish")
                         enabled: notificationsController.squadlockRunning || notificationsController.squadlockFinished
-                        fill: "#0e1a2d"
-                        hoverFill: "#1d3353"
-                        textFill: "#edf6ff"
+                        fill: Qt.rgba(0,0,0,0.4)
+                        hoverFill: Qt.rgba(1,1,1,0.1)
+                        textFill: settingsController.accentColor
                         onClicked: notificationsController.finishSquadlock()
                     }
                 }
@@ -188,8 +195,11 @@ Flickable {
         Rectangle {
             Layout.fillWidth: true
             radius: 8
-            color: "#111c31"
-            border.color: "#24486d"
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.035 }
+            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
             implicitHeight: settingsColumn.implicitHeight + 32
 
             ColumnLayout {
@@ -202,7 +212,7 @@ Flickable {
 
                 Text {
                     text: tr("notifications.runtime_alerts")
-                    color: "#edf6ff"
+                    color: settingsController.textColor
                     font.family: "Segoe UI"
                     font.pixelSize: 18
                     font.bold: true
@@ -215,8 +225,10 @@ Flickable {
                         Layout.fillWidth: true
                         implicitHeight: 66
                         radius: 7
-                        color: "#0e1a2d"
-                        border.color: "#1e3554"
+                        color: "transparent"
+                        border.color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.4 }
+                        Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: Qt.rgba(1,1,1,0.1); border.width: 1 }
 
                         RowLayout {
                             anchors.fill: parent
@@ -231,7 +243,7 @@ Flickable {
                                 spacing: 2
                                 Text {
                                     text: tr(labelKey)
-                                    color: "#edf6ff"
+                                    color: settingsController.textColor
                                     font.family: "Segoe UI"
                                     font.bold: true
                                     Layout.fillWidth: true
@@ -239,7 +251,7 @@ Flickable {
                                 }
                                 Text {
                                     text: tr(detailKey)
-                                    color: "#99abc4"
+                                    color: settingsController.mutedTextColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 12
                                     Layout.fillWidth: true
@@ -253,3 +265,5 @@ Flickable {
         }
     }
 }
+
+
