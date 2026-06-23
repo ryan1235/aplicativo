@@ -22,7 +22,6 @@ from PySide6.QtGui import QColor, QIcon, QMovie
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
-    QComboBox,
     QFrame,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
@@ -30,6 +29,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QProgressBar,
     QStackedWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -51,8 +51,11 @@ TEXT = {
         "language": "Idioma",
         "title": "Instalar GG Coalition",
         "subtitle": "Baixa a versão mais recente do GitHub e instala automaticamente.",
-        "welcome_title": "Instalar GG Coalition",
+        "welcome_title": "Instalação",
         "welcome_body": "Este assistente baixa a versão mais recente e prepara tudo em poucos passos.",
+        "terms_title": "Termos de uso",
+        "terms_body": "Este aplicativo é de uso exclusivo de membros da GG Coalition. Pessoas que não fazem parte da coalizão não podem ter acesso ou usar o aplicativo.\n\nAo continuar, você confirma que é membro autorizado, concorda em usar o aplicativo apenas para fins permitidos pela coalizão e entende que o acesso pode ser removido em caso de uso indevido.",
+        "accept_terms": "Li e aceito os termos de uso",
         "mode_title": "Escolha como instalar",
         "mode_body": "Confira o destino da instalação e clique em instalar.",
         "existing_short": "Já existe uma instalação. Marque instalação limpa se quiser remover os arquivos antigos.",
@@ -64,7 +67,7 @@ TEXT = {
         "finish": "Concluir",
         "start": "Instalar última versão",
         "clean": "Instalação limpa",
-        "open": "Abrir GG Coalition",
+        "open": "Abrir aplicativo",
         "close": "Fechar",
         "ready": "Pronto para instalar",
         "checking": "Procurando a última versão...",
@@ -93,8 +96,11 @@ TEXT = {
         "language": "Language",
         "title": "Install GG Coalition",
         "subtitle": "Downloads the latest GitHub release and installs it automatically.",
-        "welcome_title": "Install GG Coalition",
+        "welcome_title": "Installation",
         "welcome_body": "This setup wizard downloads the latest version and gets everything ready in a few steps.",
+        "terms_title": "Terms of use",
+        "terms_body": "This application is for the exclusive use of GG Coalition members. People who are not part of the coalition may not access or use the application.\n\nBy continuing, you confirm that you are an authorized member, agree to use the application only for purposes allowed by the coalition, and understand that access may be removed in case of misuse.",
+        "accept_terms": "I have read and accept the terms of use",
         "mode_title": "Choose install mode",
         "mode_body": "Confirm the install destination and click install.",
         "existing_short": "An installation already exists. Select clean install to remove the old program files.",
@@ -106,7 +112,7 @@ TEXT = {
         "finish": "Finish",
         "start": "Install latest version",
         "clean": "Clean install",
-        "open": "Open GG Coalition",
+        "open": "Open app",
         "close": "Close",
         "ready": "Ready to install",
         "checking": "Looking for the latest version...",
@@ -135,8 +141,11 @@ TEXT = {
         "language": "Idioma",
         "title": "Instalar GG Coalition",
         "subtitle": "Descarga la última versión de GitHub y la instala automáticamente.",
-        "welcome_title": "Instalar GG Coalition",
+        "welcome_title": "Instalación",
         "welcome_body": "Este asistente descarga la versión más reciente y prepara todo en pocos pasos.",
+        "terms_title": "Términos de uso",
+        "terms_body": "Esta aplicación es de uso exclusivo para miembros de GG Coalition. Las personas que no forman parte de la coalición no pueden acceder ni usar la aplicación.\n\nAl continuar, confirmas que eres un miembro autorizado, aceptas usar la aplicación solo para fines permitidos por la coalición y entiendes que el acceso puede ser retirado en caso de uso indebido.",
+        "accept_terms": "He leído y acepto los términos de uso",
         "mode_title": "Elige cómo instalar",
         "mode_body": "Confirma el destino de instalación y haz clic en instalar.",
         "existing_short": "Ya existe una instalación. Marca instalación limpia para quitar los archivos antiguos.",
@@ -148,7 +157,7 @@ TEXT = {
         "finish": "Finalizar",
         "start": "Instalar última versión",
         "clean": "Instalación limpia",
-        "open": "Abrir GG Coalition",
+        "open": "Abrir aplicación",
         "close": "Cerrar",
         "ready": "Listo para instalar",
         "checking": "Buscando la última versión...",
@@ -177,8 +186,11 @@ TEXT = {
         "language": "Langue",
         "title": "Installer GG Coalition",
         "subtitle": "Télécharge la dernière version GitHub et l'installe automatiquement.",
-        "welcome_title": "Installer GG Coalition",
+        "welcome_title": "Installation",
         "welcome_body": "Cet assistant télécharge la dernière version et prépare tout en quelques étapes.",
+        "terms_title": "Conditions d'utilisation",
+        "terms_body": "Cette application est réservée exclusivement aux membres de GG Coalition. Les personnes qui ne font pas partie de la coalition ne peuvent pas accéder à l'application ni l'utiliser.\n\nEn continuant, vous confirmez être un membre autorisé, acceptez d'utiliser l'application uniquement pour les usages autorisés par la coalition et comprenez que l'accès peut être retiré en cas d'utilisation abusive.",
+        "accept_terms": "J'ai lu et j'accepte les conditions d'utilisation",
         "mode_title": "Choisissez le mode d'installation",
         "mode_body": "Vérifiez la destination puis lancez l'installation.",
         "existing_short": "Une installation existe déjà. Cochez installation propre pour supprimer les anciens fichiers.",
@@ -190,7 +202,7 @@ TEXT = {
         "finish": "Terminer",
         "start": "Installer la dernière version",
         "clean": "Installation propre",
-        "open": "Ouvrir GG Coalition",
+        "open": "Ouvrir l'application",
         "close": "Fermer",
         "ready": "Prêt à installer",
         "checking": "Recherche de la dernière version...",
@@ -526,14 +538,14 @@ class InstallerWindow(QWidget):
         self.window_title.setObjectName("windowTitle")
         top.addWidget(self.window_title)
         top.addStretch(1)
-        self.language_combo = QComboBox()
-        self.language_combo.setObjectName("language")
-        self.language_combo.addItem("Português", "pt")
-        self.language_combo.addItem("English", "en")
-        self.language_combo.addItem("Español", "es")
-        self.language_combo.addItem("Français", "fr")
-        self.language_combo.currentIndexChanged.connect(self.change_language)
-        top.addWidget(self.language_combo)
+        self.language_buttons: list[QPushButton] = []
+        for label, lang in (("PT", "pt"), ("EN", "en"), ("ES", "es"), ("FR", "fr")):
+            button = QPushButton(label)
+            button.setObjectName("langButton")
+            button.setProperty("lang", lang)
+            button.clicked.connect(lambda _checked=False, value=lang: self.change_language(value))
+            self.language_buttons.append(button)
+            top.addWidget(button)
         self.close_button = QPushButton("X")
         self.close_button.setObjectName("close")
         self.close_button.clicked.connect(self.close)
@@ -549,10 +561,6 @@ class InstallerWindow(QWidget):
         media_layout = QVBoxLayout(media_panel)
         media_layout.setContentsMargins(18, 18, 18, 18)
         media_layout.setSpacing(14)
-        self.badge = QLabel("GG")
-        self.badge.setObjectName("badge")
-        self.badge.setAlignment(Qt.AlignCenter)
-        media_layout.addWidget(self.badge, alignment=Qt.AlignLeft)
         self.gif_label = QLabel()
         self.gif_label.setObjectName("gif")
         self.gif_label.setAlignment(Qt.AlignCenter)
@@ -581,6 +589,15 @@ class InstallerWindow(QWidget):
         self.welcome_body = QLabel()
         self.welcome_body.setObjectName("pageBody")
         self.welcome_body.setWordWrap(True)
+        self.terms_title = QLabel()
+        self.terms_title.setObjectName("pageTitle")
+        self.terms_body = QTextEdit()
+        self.terms_body.setObjectName("termsBody")
+        self.terms_body.setReadOnly(True)
+        self.terms_body.setFrameShape(QFrame.NoFrame)
+        self.terms_accept = QCheckBox()
+        self.terms_accept.setObjectName("check")
+        self.terms_accept.toggled.connect(lambda _checked=False: self.sync_page())
         self.mode_title = QLabel()
         self.mode_title.setObjectName("pageTitle")
         self.mode_body = QLabel()
@@ -611,6 +628,7 @@ class InstallerWindow(QWidget):
         self.done_body.setWordWrap(True)
 
         self.pages.addWidget(self.make_welcome_page())
+        self.pages.addWidget(self.make_terms_page())
         self.pages.addWidget(self.make_mode_page())
         self.pages.addWidget(self.make_progress_page())
         self.pages.addWidget(self.make_done_page())
@@ -640,32 +658,40 @@ class InstallerWindow(QWidget):
 
         self.card.setStyleSheet(
             """
-            QFrame#card { background: #f8fbff; border: 1px solid #d7e2ee; border-radius: 16px; }
-            QFrame#mediaPanel { background: #edf7ff; border: 1px solid #c9ddec; border-radius: 14px; min-width: 236px; max-width: 236px; }
-            QLabel { font-family: "Segoe UI"; color: #132238; }
-            QLabel#windowTitle { color: #607187; font-size: 12px; font-weight: 800; }
-            QLabel#badge { min-width: 48px; max-width: 48px; min-height: 34px; max-height: 34px; background: #ffffff; color: #0f766e; border: 1px solid #2dd4bf; border-radius: 11px; font-weight: 900; }
-            QLabel#gif { background: #ffffff; border: 1px solid #d6e6f2; border-radius: 12px; }
-            QLabel#mediaCaption, QLabel#stepHint, QLabel#detail, QLabel#installPath { color: #607187; font-size: 11px; }
-            QLabel#pageTitle { color: #132238; font-size: 28px; font-weight: 900; }
-            QLabel#pageBody { color: #536579; font-size: 13px; line-height: 150%; }
-            QLabel#status { color: #132238; font-size: 15px; font-weight: 800; }
-            QLabel#percent { color: #0f766e; font-size: 38px; font-weight: 900; }
+            QFrame#card { background: #0b1324; border: 1px solid #28456a; border-radius: 16px; }
+            QFrame#mediaPanel { background: #111c31; border: 1px solid #2b4a70; border-radius: 14px; min-width: 236px; max-width: 236px; }
+            QLabel { font-family: "Segoe UI"; color: #f4f8ff; }
+            QLabel#windowTitle { color: #9fb3c8; font-size: 12px; font-weight: 800; }
+            QLabel#gif { background: #07101f; border: 1px solid #27486c; border-radius: 12px; }
+            QLabel#mediaCaption, QLabel#stepHint, QLabel#detail, QLabel#installPath { color: #8fa6bf; font-size: 11px; }
+            QLabel#pageTitle { color: #ffffff; font-size: 28px; font-weight: 900; }
+            QLabel#pageBody { color: #c4d2e4; font-size: 13px; line-height: 150%; }
+            QLabel#status { color: #ffffff; font-size: 15px; font-weight: 800; }
+            QLabel#percent { color: #5eead4; font-size: 38px; font-weight: 900; }
+            QTextEdit#termsBody { background: #0f1a2d; color: #d8e4f2; border: 1px solid #28486d; border-radius: 10px; padding: 12px; font-family: "Segoe UI"; font-size: 12px; selection-background-color: #5eead4; selection-color: #06111f; }
+            QTextEdit#termsBody QScrollBar:vertical { background: #0b1324; width: 10px; margin: 2px; border-radius: 5px; }
+            QTextEdit#termsBody QScrollBar::handle:vertical { background: #345778; min-height: 28px; border-radius: 5px; }
+            QTextEdit#termsBody QScrollBar::handle:vertical:hover { background: #5eead4; }
+            QTextEdit#termsBody QScrollBar::add-line:vertical, QTextEdit#termsBody QScrollBar::sub-line:vertical { height: 0; background: transparent; }
+            QTextEdit#termsBody QScrollBar::add-page:vertical, QTextEdit#termsBody QScrollBar::sub-page:vertical { background: transparent; }
             QStackedWidget#pages { background: transparent; }
-            QCheckBox#check { color: #132238; font-family: "Segoe UI"; font-size: 13px; spacing: 10px; }
-            QCheckBox#check::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #28b8a8; background: #ffffff; }
-            QCheckBox#check::indicator:checked { background: #2dd4bf; }
+            QCheckBox#check { color: #edf6ff; font-family: "Segoe UI"; font-size: 13px; spacing: 10px; }
+            QCheckBox#check::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #5eead4; background: #0b1324; }
+            QCheckBox#check::indicator:checked { background: #5eead4; }
             QPushButton { font-family: "Segoe UI"; border-radius: 8px; padding: 11px 18px; font-weight: 800; min-width: 92px; }
-            QPushButton#primary { background: #14b8a6; color: #ffffff; border: 0; }
-            QPushButton#primary:hover { background: #0f9f92; }
-            QPushButton#primary:disabled { background: #a7c7c2; color: #ffffff; }
-            QPushButton#secondary { background: #ffffff; color: #1f334b; border: 1px solid #c8d6e4; }
-            QPushButton#secondary:hover { background: #edf7ff; }
-            QPushButton#close { background: transparent; color: #607187; padding: 6px 10px; border-radius: 6px; min-width: 0; }
-            QPushButton#close:hover { background: #ffe8ee; color: #c2415a; }
-            QComboBox#language { background: #ffffff; color: #1f334b; border: 1px solid #c8d6e4; border-radius: 8px; padding: 8px 12px; min-width: 120px; font-weight: 700; }
-            QProgressBar { height: 14px; background: #e6eef7; border: 1px solid #d2dfec; border-radius: 7px; }
-            QProgressBar::chunk { background: #14b8a6; border-radius: 6px; }
+            QPushButton#primary { background: #5eead4; color: #041014; border: 0; }
+            QPushButton#primary:hover { background: #34d399; }
+            QPushButton#primary:disabled { background: #254453; color: #7893a8; }
+            QPushButton#secondary { background: #16253d; color: #edf6ff; border: 1px solid #345778; }
+            QPushButton#secondary:hover { background: #20395c; }
+            QPushButton#close { background: transparent; color: #9fb3c8; padding: 6px 10px; border-radius: 6px; min-width: 0; }
+            QPushButton#close:hover { background: #3f1f2a; color: #ff7a90; }
+            QPushButton#langButton { background: #111c31; color: #9fb3c8; border: 1px solid #2b4a70; border-radius: 8px; padding: 7px 10px; min-width: 0; font-size: 11px; }
+            QPushButton#langButton[current="true"] { background: #5eead4; color: #041014; border-color: #5eead4; }
+            QPushButton#langButton:hover { border-color: #5eead4; color: #edf6ff; }
+            QPushButton#langButton[current="true"]:hover { color: #041014; }
+            QProgressBar { height: 14px; background: #070b16; border: 1px solid #2b4a70; border-radius: 7px; }
+            QProgressBar::chunk { background: #5eead4; border-radius: 6px; }
             """
         )
         self.page_index = 0
@@ -683,6 +709,16 @@ class InstallerWindow(QWidget):
 
     def make_welcome_page(self) -> QWidget:
         return self.make_page([self.welcome_title, self.welcome_body])
+
+    def make_terms_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.setSpacing(12)
+        layout.addWidget(self.terms_title)
+        layout.addWidget(self.terms_body, stretch=1)
+        layout.addWidget(self.terms_accept)
+        return page
 
     def make_mode_page(self) -> QWidget:
         page = QWidget()
@@ -703,7 +739,7 @@ class InstallerWindow(QWidget):
         layout.addWidget(destination_card)
         layout.addWidget(self.clean_checkbox)
         layout.addStretch(1)
-        destination_card.setStyleSheet("QFrame#destinationCard { background: #ffffff; border: 1px solid #d7e2ee; border-radius: 10px; }")
+        destination_card.setStyleSheet("QFrame#destinationCard { background: #0f1a2d; border: 1px solid #28486d; border-radius: 10px; }")
         return page
 
     def make_progress_page(self) -> QWidget:
@@ -735,15 +771,23 @@ class InstallerWindow(QWidget):
         frame.moveCenter(screen.availableGeometry().center())
         self.move(frame.topLeft())
 
-    def change_language(self) -> None:
-        self.language = str(self.language_combo.currentData() or "pt")
+    def change_language(self, language: str) -> None:
+        self.language = language
         self.apply_text()
 
     def apply_text(self) -> None:
-        self.window_title.setText(f"{APP_NAME} Setup")
-        self.media_caption.setText("GG Coalition\nOnline Setup")
+        self.window_title.setText("Setup")
+        self.media_caption.setText("Online Setup")
+        for button in self.language_buttons:
+            is_current = button.property("lang") == self.language
+            button.setProperty("current", "true" if is_current else "false")
+            button.style().unpolish(button)
+            button.style().polish(button)
         self.welcome_title.setText(tr(self.language, "welcome_title"))
         self.welcome_body.setText(tr(self.language, "welcome_body"))
+        self.terms_title.setText(tr(self.language, "terms_title"))
+        self.terms_body.setPlainText(tr(self.language, "terms_body"))
+        self.terms_accept.setText(tr(self.language, "accept_terms"))
         self.mode_title.setText(tr(self.language, "mode_title"))
         self.mode_body.setText(tr(self.language, "mode_body"))
         self.destination_label.setText(tr(self.language, "install_path"))
@@ -764,16 +808,23 @@ class InstallerWindow(QWidget):
 
     def sync_page(self) -> None:
         self.pages.setCurrentIndex(self.page_index)
-        self.back_button.setVisible(self.page_index == 1)
+        self.back_button.setVisible(self.page_index in (1, 2))
         self.open_button.setVisible(self.install_complete)
         self.start_button.setVisible(not self.install_complete)
-        self.language_combo.setEnabled(self.page_index == 0)
+        for button in self.language_buttons:
+            button.setEnabled(self.page_index in (0, 1))
         if self.page_index == 0:
             self.start_button.setText(tr(self.language, "next"))
-            self.step_hint.setText("1 / 4")
+            self.start_button.setEnabled(True)
+            self.step_hint.setText("1 / 5")
         elif self.page_index == 1:
+            self.start_button.setText(tr(self.language, "next"))
+            self.start_button.setEnabled(self.terms_accept.isChecked())
+            self.step_hint.setText("2 / 5")
+        elif self.page_index == 2:
             self.start_button.setText(tr(self.language, "start"))
-            self.step_hint.setText("2 / 4")
+            self.start_button.setEnabled(True)
+            self.step_hint.setText("3 / 5")
             existing = self.has_existing_install()
             self.clean_checkbox.setVisible(existing)
             self.clean_checkbox.setChecked(False)
@@ -781,22 +832,25 @@ class InstallerWindow(QWidget):
                 self.mode_body.setText(tr(self.language, "existing_short"))
             else:
                 self.mode_body.setText(tr(self.language, "mode_body"))
-        elif self.page_index == 2:
+        elif self.page_index == 3:
             self.start_button.setText(tr(self.language, "start"))
-            self.step_hint.setText("3 / 4")
+            self.step_hint.setText("4 / 5")
         else:
             self.start_button.setText(tr(self.language, "finish"))
-            self.step_hint.setText("4 / 4")
+            self.start_button.setEnabled(True)
+            self.step_hint.setText("5 / 5")
 
     def next_page(self) -> None:
-        if self.page_index == 0:
-            self.page_index = 1
+        if self.page_index in (0, 1):
+            if self.page_index == 1 and not self.terms_accept.isChecked():
+                return
+            self.page_index += 1
             self.sync_page()
             return
-        if self.page_index == 1:
+        if self.page_index == 2:
             self.start_install()
             return
-        if self.page_index == 3:
+        if self.page_index == 4:
             self.close()
 
     def back_page(self) -> None:
@@ -806,11 +860,12 @@ class InstallerWindow(QWidget):
 
     def start_install(self) -> None:
         clean = self.has_existing_install() and self.clean_checkbox.isChecked()
-        self.page_index = 2
+        self.page_index = 3
         self.sync_page()
         self.start_button.setEnabled(False)
         self.back_button.setEnabled(False)
-        self.language_combo.setEnabled(False)
+        for button in self.language_buttons:
+            button.setEnabled(False)
         threading.Thread(target=self.install_worker, args=(clean,), daemon=True).start()
 
     def install_worker(self, clean: bool) -> None:
@@ -881,17 +936,17 @@ class InstallerWindow(QWidget):
         self.install_complete = success
         self.done_title.setText(message)
         self.done_body.setText(detail or str(INSTALL_DIR))
-        self.page_index = 3
-        self.pages.setCurrentIndex(3)
+        self.page_index = 4
+        self.pages.setCurrentIndex(4)
         self.back_button.hide()
         self.start_button.setEnabled(True)
         self.start_button.show()
         self.start_button.setText(tr(self.language, "finish"))
-        self.language_combo.setEnabled(True)
-        self.step_hint.setText("4 / 4")
+        for button in self.language_buttons:
+            button.setEnabled(True)
+        self.step_hint.setText("5 / 5")
         if success:
             self.open_button.show()
-            self.close_button.setText(tr(self.language, "close"))
         else:
             self.progress.setValue(100)
             self.percent.setText("100%")
