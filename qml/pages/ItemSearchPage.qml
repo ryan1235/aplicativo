@@ -10,7 +10,15 @@ Item {
     property bool wide: width >= 1120
     property int scrollBarContentPadding: 14
 
-    Component.onCompleted: itemSearchController.ensureLoaded()
+    Component.onCompleted: {
+        itemSearchController.ensureLoaded()
+        if (itemSearchController.query !== "") {
+            Qt.callLater(function() {
+                search.forceActiveFocus()
+                search.selectAll()
+            })
+        }
+    }
 
     function tr(key) {
         i18nController.revision
