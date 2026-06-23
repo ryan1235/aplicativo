@@ -18,7 +18,7 @@ import zipfile
 
 import PySide6
 from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QIcon, QMovie
+from PySide6.QtGui import QColor, QIcon, QMovie, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -594,6 +594,8 @@ class InstallerWindow(QWidget):
         self.terms_body = QTextEdit()
         self.terms_body.setObjectName("termsBody")
         self.terms_body.setReadOnly(True)
+        self.terms_body.setFocusPolicy(Qt.NoFocus)
+        self.terms_body.setTextInteractionFlags(Qt.NoTextInteraction)
         self.terms_body.setFrameShape(QFrame.NoFrame)
         self.terms_accept = QCheckBox()
         self.terms_accept.setObjectName("check")
@@ -658,17 +660,17 @@ class InstallerWindow(QWidget):
 
         self.card.setStyleSheet(
             """
-            QFrame#card { background: #0b1324; border: 1px solid #28456a; border-radius: 16px; }
-            QFrame#mediaPanel { background: #111c31; border: 1px solid #2b4a70; border-radius: 14px; min-width: 236px; max-width: 236px; }
+            QFrame#card { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0c1528, stop:1 #07111f); border: 1px solid #2b4d73; border-radius: 16px; }
+            QFrame#mediaPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #14233d, stop:1 #0d182b); border: 1px solid #31577f; border-radius: 14px; min-width: 236px; max-width: 236px; }
             QLabel { font-family: "Segoe UI"; color: #f4f8ff; }
             QLabel#windowTitle { color: #9fb3c8; font-size: 12px; font-weight: 800; }
-            QLabel#gif { background: #07101f; border: 1px solid #27486c; border-radius: 12px; }
+            QLabel#gif { background: #07101f; border: 1px solid #2f5278; border-radius: 12px; }
             QLabel#mediaCaption, QLabel#stepHint, QLabel#detail, QLabel#installPath { color: #8fa6bf; font-size: 11px; }
             QLabel#pageTitle { color: #ffffff; font-size: 28px; font-weight: 900; }
             QLabel#pageBody { color: #c4d2e4; font-size: 13px; line-height: 150%; }
             QLabel#status { color: #ffffff; font-size: 15px; font-weight: 800; }
             QLabel#percent { color: #5eead4; font-size: 38px; font-weight: 900; }
-            QTextEdit#termsBody { background: #0f1a2d; color: #d8e4f2; border: 1px solid #28486d; border-radius: 10px; padding: 12px; font-family: "Segoe UI"; font-size: 12px; selection-background-color: #5eead4; selection-color: #06111f; }
+            QTextEdit#termsBody { background: #0e1b30; color: #d8e4f2; border: 1px solid #31577f; border-radius: 10px; padding: 14px; font-family: "Segoe UI"; font-size: 12px; selection-background-color: transparent; selection-color: #d8e4f2; }
             QTextEdit#termsBody QScrollBar:vertical { background: #0b1324; width: 10px; margin: 2px; border-radius: 5px; }
             QTextEdit#termsBody QScrollBar::handle:vertical { background: #345778; min-height: 28px; border-radius: 5px; }
             QTextEdit#termsBody QScrollBar::handle:vertical:hover { background: #5eead4; }
@@ -678,15 +680,15 @@ class InstallerWindow(QWidget):
             QCheckBox#check { color: #edf6ff; font-family: "Segoe UI"; font-size: 13px; spacing: 10px; }
             QCheckBox#check::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #5eead4; background: #0b1324; }
             QCheckBox#check::indicator:checked { background: #5eead4; }
-            QPushButton { font-family: "Segoe UI"; border-radius: 8px; padding: 11px 18px; font-weight: 800; min-width: 92px; }
+            QPushButton { font-family: "Segoe UI"; border-radius: 9px; padding: 11px 18px; font-weight: 800; min-width: 92px; }
             QPushButton#primary { background: #5eead4; color: #041014; border: 0; }
             QPushButton#primary:hover { background: #34d399; }
             QPushButton#primary:disabled { background: #254453; color: #7893a8; }
-            QPushButton#secondary { background: #16253d; color: #edf6ff; border: 1px solid #345778; }
-            QPushButton#secondary:hover { background: #20395c; }
+            QPushButton#secondary { background: #14243d; color: #edf6ff; border: 1px solid #345b82; }
+            QPushButton#secondary:hover { background: #203b61; border-color: #4c78a6; }
             QPushButton#close { background: transparent; color: #9fb3c8; padding: 6px 10px; border-radius: 6px; min-width: 0; }
             QPushButton#close:hover { background: #3f1f2a; color: #ff7a90; }
-            QPushButton#langButton { background: #111c31; color: #9fb3c8; border: 1px solid #2b4a70; border-radius: 8px; padding: 7px 10px; min-width: 0; font-size: 11px; }
+            QPushButton#langButton { background: #101b30; color: #9fb3c8; border: 1px solid #2b4a70; border-radius: 8px; padding: 7px 10px; min-width: 0; font-size: 11px; }
             QPushButton#langButton[current="true"] { background: #5eead4; color: #041014; border-color: #5eead4; }
             QPushButton#langButton:hover { border-color: #5eead4; color: #edf6ff; }
             QPushButton#langButton[current="true"]:hover { color: #041014; }
@@ -787,6 +789,7 @@ class InstallerWindow(QWidget):
         self.welcome_body.setText(tr(self.language, "welcome_body"))
         self.terms_title.setText(tr(self.language, "terms_title"))
         self.terms_body.setPlainText(tr(self.language, "terms_body"))
+        self.terms_body.moveCursor(QTextCursor.Start)
         self.terms_accept.setText(tr(self.language, "accept_terms"))
         self.mode_title.setText(tr(self.language, "mode_title"))
         self.mode_body.setText(tr(self.language, "mode_body"))
@@ -797,6 +800,7 @@ class InstallerWindow(QWidget):
         self.done_title.setText(tr(self.language, "done"))
         self.done_body.setText(str(INSTALL_DIR))
         self.open_button.setText(tr(self.language, "open"))
+        self.back_button.setText(tr(self.language, "back"))
         if not self.install_complete:
             self.status.setText(tr(self.language, "ready"))
         self.sync_page()
