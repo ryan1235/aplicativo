@@ -17,12 +17,14 @@ import urllib.request
 import zipfile
 
 import PySide6
-from PySide6.QtCore import QObject, Qt, QTimer, Signal, Slot
+from PySide6.QtCore import QEasingCurve, QLocale, QObject, QPropertyAnimation, Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QColor, QIcon, QMovie, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QFrame,
+    QGraphicsOpacityEffect,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
@@ -53,9 +55,11 @@ TEXT = {
         "subtitle": "Baixa a versão mais recente do GitHub e instala automaticamente.",
         "welcome_title": "Instalação",
         "welcome_body": "Este assistente baixa a versão mais recente e prepara tudo em poucos passos.",
+        "language_prompt": "Idioma do instalador",
         "terms_title": "Termos de uso",
-        "terms_body": "Este aplicativo é de uso exclusivo de membros da GG Coalition. Pessoas que não fazem parte da coalizão não podem ter acesso ou usar o aplicativo.\n\nPara logar, você precisa estar no Discord da GG Coalition. O acesso é feito pelo Discord e, ao autorizar o login, você permite que o aplicativo leia algumas informações públicas do seu perfil, como ID, nome de usuário, avatar e participação no servidor, apenas para segurança, validação de membro e controle de acesso.\n\nAo continuar, você confirma que é membro autorizado, concorda em usar o aplicativo apenas para fins permitidos pela coalizão e entende que o acesso pode ser removido em caso de uso indevido.",
+        "terms_body": "Este aplicativo é de uso exclusivo de membros da GG Coalition. Pessoas que não fazem parte da coalizão não podem ter acesso, instalar, compartilhar credenciais ou usar o aplicativo.\n\nPara logar, você precisa estar no Discord da GG Coalition. O acesso é feito pelo Discord e, ao autorizar o login, você permite que o aplicativo leia algumas informações públicas do seu perfil, como ID, nome de usuário, avatar e participação no servidor, apenas para segurança, validação de membro e controle de acesso.\n\nO aplicativo pode verificar sua sessão, validar permissões, consultar a versão instalada, baixar atualizações oficiais e registrar eventos técnicos necessários para estabilidade, auditoria de segurança e diagnóstico de falhas. Tokens, senhas e informações sensíveis não devem ser compartilhados com terceiros.\n\nVocê concorda em não redistribuir o instalador fora dos canais autorizados, não tentar contornar autenticação, não modificar arquivos para liberar acesso indevido e não usar o aplicativo para prejudicar membros, sistemas ou serviços da coalizão.\n\nA GG Coalition pode bloquear ou remover o acesso em caso de uso indevido, perda de vínculo com a coalizão, violação destes termos ou risco de segurança. Ao continuar, você confirma que é membro autorizado e aceita estes termos.",
         "accept_terms": "Eu concordo e confirmo que sou membro autorizado",
+        "scroll_terms": "Role até o fim dos termos para liberar o aceite.",
         "mode_title": "Escolha como instalar",
         "mode_body": "Confira o destino da instalação e clique em instalar.",
         "existing_short": "Já existe uma instalação. Marque instalação limpa se quiser remover os arquivos antigos.",
@@ -98,9 +102,11 @@ TEXT = {
         "subtitle": "Downloads the latest GitHub release and installs it automatically.",
         "welcome_title": "Installation",
         "welcome_body": "This setup wizard downloads the latest version and gets everything ready in a few steps.",
+        "language_prompt": "Installer language",
         "terms_title": "Terms of use",
-        "terms_body": "This application is for the exclusive use of GG Coalition members. People who are not part of the coalition may not access or use the application.\n\nTo log in, you must be in the GG Coalition Discord. Access is handled through Discord and, when authorizing login, you allow the app to read some public profile information, such as ID, username, avatar, and server membership, only for security, member validation, and access control.\n\nBy continuing, you confirm that you are an authorized member, agree to use the application only for purposes allowed by the coalition, and understand that access may be removed in case of misuse.",
+        "terms_body": "This application is for the exclusive use of GG Coalition members. People who are not part of the coalition may not access, install, share credentials, or use the application.\n\nTo log in, you must be in the GG Coalition Discord. Access is handled through Discord and, when authorizing login, you allow the app to read some public profile information, such as ID, username, avatar, and server membership, only for security, member validation, and access control.\n\nThe application may verify your session, validate permissions, check the installed version, download official updates, and record technical events required for stability, security auditing, and failure diagnostics. Tokens, passwords, and sensitive information must not be shared with third parties.\n\nYou agree not to redistribute the installer outside authorized channels, not to bypass authentication, not to modify files to unlock improper access, and not to use the application to harm coalition members, systems, or services.\n\nGG Coalition may block or remove access in case of misuse, loss of coalition membership, violation of these terms, or security risk. By continuing, you confirm that you are an authorized member and accept these terms.",
         "accept_terms": "I agree and confirm that I am an authorized member",
+        "scroll_terms": "Scroll to the end of the terms to enable acceptance.",
         "mode_title": "Choose install mode",
         "mode_body": "Confirm the install destination and click install.",
         "existing_short": "An installation already exists. Select clean install to remove the old program files.",
@@ -143,9 +149,11 @@ TEXT = {
         "subtitle": "Descarga la última versión de GitHub y la instala automáticamente.",
         "welcome_title": "Instalación",
         "welcome_body": "Este asistente descarga la versión más reciente y prepara todo en pocos pasos.",
+        "language_prompt": "Idioma del instalador",
         "terms_title": "Términos de uso",
-        "terms_body": "Esta aplicación es de uso exclusivo para miembros de GG Coalition. Las personas que no forman parte de la coalición no pueden acceder ni usar la aplicación.\n\nPara iniciar sesión, debes estar en el Discord de GG Coalition. El acceso se realiza por Discord y, al autorizar el inicio de sesión, permites que la aplicación lea algunas informaciones públicas de tu perfil, como ID, nombre de usuario, avatar y participación en el servidor, solo para seguridad, validación de miembro y control de acceso.\n\nAl continuar, confirmas que eres un miembro autorizado, aceptas usar la aplicación solo para fines permitidos por la coalición y entiendes que el acceso puede ser retirado en caso de uso indebido.",
+        "terms_body": "Esta aplicación es de uso exclusivo para miembros de GG Coalition. Las personas que no forman parte de la coalición no pueden acceder, instalar, compartir credenciales ni usar la aplicación.\n\nPara iniciar sesión, debes estar en el Discord de GG Coalition. El acceso se realiza por Discord y, al autorizar el inicio de sesión, permites que la aplicación lea algunas informaciones públicas de tu perfil, como ID, nombre de usuario, avatar y participación en el servidor, solo para seguridad, validación de miembro y control de acceso.\n\nLa aplicación puede verificar tu sesión, validar permisos, consultar la versión instalada, descargar actualizaciones oficiales y registrar eventos técnicos necesarios para estabilidad, auditoría de seguridad y diagnóstico de fallos. Los tokens, contraseñas e información sensible no deben compartirse con terceros.\n\nAceptas no redistribuir el instalador fuera de canales autorizados, no intentar evitar la autenticación, no modificar archivos para liberar acceso indebido y no usar la aplicación para perjudicar a miembros, sistemas o servicios de la coalición.\n\nGG Coalition puede bloquear o retirar el acceso en caso de uso indebido, pérdida de vínculo con la coalición, violación de estos términos o riesgo de seguridad. Al continuar, confirmas que eres un miembro autorizado y aceptas estos términos.",
         "accept_terms": "Acepto y confirmo que soy un miembro autorizado",
+        "scroll_terms": "Desplázate hasta el final de los términos para habilitar la aceptación.",
         "mode_title": "Elige cómo instalar",
         "mode_body": "Confirma el destino de instalación y haz clic en instalar.",
         "existing_short": "Ya existe una instalación. Marca instalación limpia para quitar los archivos antiguos.",
@@ -188,9 +196,11 @@ TEXT = {
         "subtitle": "Télécharge la dernière version GitHub et l'installe automatiquement.",
         "welcome_title": "Installation",
         "welcome_body": "Cet assistant télécharge la dernière version et prépare tout en quelques étapes.",
+        "language_prompt": "Langue de l'installateur",
         "terms_title": "Conditions d'utilisation",
-        "terms_body": "Cette application est réservée exclusivement aux membres de GG Coalition. Les personnes qui ne font pas partie de la coalition ne peuvent pas accéder à l'application ni l'utiliser.\n\nPour vous connecter, vous devez être sur le Discord de GG Coalition. L'accès se fait via Discord et, en autorisant la connexion, vous permettez à l'application de lire certaines informations publiques de votre profil, comme l'ID, le nom d'utilisateur, l'avatar et l'appartenance au serveur, uniquement pour la sécurité, la validation des membres et le contrôle d'accès.\n\nEn continuant, vous confirmez être un membre autorisé, acceptez d'utiliser l'application uniquement pour les usages autorisés par la coalition et comprenez que l'accès peut être retiré en cas d'utilisation abusive.",
+        "terms_body": "Cette application est réservée exclusivement aux membres de GG Coalition. Les personnes qui ne font pas partie de la coalition ne peuvent pas accéder à l'application, l'installer, partager des identifiants ni l'utiliser.\n\nPour vous connecter, vous devez être sur le Discord de GG Coalition. L'accès se fait via Discord et, en autorisant la connexion, vous permettez à l'application de lire certaines informations publiques de votre profil, comme l'ID, le nom d'utilisateur, l'avatar et l'appartenance au serveur, uniquement pour la sécurité, la validation des membres et le contrôle d'accès.\n\nL'application peut vérifier votre session, valider les autorisations, consulter la version installée, télécharger les mises à jour officielles et enregistrer des événements techniques nécessaires à la stabilité, à l'audit de sécurité et au diagnostic des erreurs. Les tokens, mots de passe et informations sensibles ne doivent pas être partagés avec des tiers.\n\nVous acceptez de ne pas redistribuer l'installateur hors des canaux autorisés, de ne pas contourner l'authentification, de ne pas modifier les fichiers pour obtenir un accès indu et de ne pas utiliser l'application pour nuire aux membres, systèmes ou services de la coalition.\n\nGG Coalition peut bloquer ou retirer l'accès en cas d'utilisation abusive, de perte du lien avec la coalition, de violation de ces conditions ou de risque de sécurité. En continuant, vous confirmez être un membre autorisé et acceptez ces conditions.",
         "accept_terms": "J'accepte et je confirme être un membre autorisé",
+        "scroll_terms": "Faites défiler jusqu'à la fin des conditions pour activer l'acceptation.",
         "mode_title": "Choisissez le mode d'installation",
         "mode_body": "Vérifiez la destination puis lancez l'installation.",
         "existing_short": "Une installation existe déjà. Cochez installation propre pour supprimer les anciens fichiers.",
@@ -256,6 +266,17 @@ def tr(language: str, key: str, **kwargs) -> str:
         except Exception:
             return value
     return value
+
+
+def detect_system_language() -> str:
+    locale_name = QLocale.system().name().lower()
+    if locale_name.startswith("pt"):
+        return "pt"
+    if locale_name.startswith("es"):
+        return "es"
+    if locale_name.startswith("fr"):
+        return "fr"
+    return "en"
 
 
 def fetch_latest_asset() -> ReleaseAsset:
@@ -501,7 +522,8 @@ class InstallerSignals(QObject):
 class InstallerWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
-        self.language = "pt"
+        self.language = detect_system_language()
+        self.terms_scrolled_to_bottom = False
         self.signals = InstallerSignals()
         self.signals.progress.connect(self.set_progress)
         self.signals.finished.connect(self.finish)
@@ -538,14 +560,6 @@ class InstallerWindow(QWidget):
         self.window_title.setObjectName("windowTitle")
         top.addWidget(self.window_title)
         top.addStretch(1)
-        self.language_buttons: list[QPushButton] = []
-        for label, lang in (("PT", "pt"), ("EN", "en"), ("ES", "es"), ("FR", "fr")):
-            button = QPushButton(label)
-            button.setObjectName("langButton")
-            button.setProperty("lang", lang)
-            button.clicked.connect(lambda _checked=False, value=lang: self.change_language(value))
-            self.language_buttons.append(button)
-            top.addWidget(button)
         self.close_button = QPushButton("X")
         self.close_button.setObjectName("close")
         self.close_button.clicked.connect(self.close)
@@ -584,11 +598,31 @@ class InstallerWindow(QWidget):
 
         self.pages = QStackedWidget()
         self.pages.setObjectName("pages")
+        self.page_opacity = QGraphicsOpacityEffect(self.pages)
+        self.pages.setGraphicsEffect(self.page_opacity)
+        self.page_animation = QPropertyAnimation(self.page_opacity, b"opacity", self)
+        self.page_animation.setDuration(180)
+        self.page_animation.setEasingCurve(QEasingCurve.OutCubic)
         self.welcome_title = QLabel()
         self.welcome_title.setObjectName("pageTitle")
         self.welcome_body = QLabel()
         self.welcome_body.setObjectName("pageBody")
         self.welcome_body.setWordWrap(True)
+        self.language_label = QLabel()
+        self.language_label.setObjectName("detail")
+        self.language_combo = QComboBox()
+        self.language_combo.setObjectName("languageSelect")
+        for label, lang in (
+            ("Português", "pt"),
+            ("English", "en"),
+            ("Español", "es"),
+            ("Français", "fr"),
+        ):
+            self.language_combo.addItem(label, lang)
+        detected_index = self.language_combo.findData(self.language)
+        if detected_index >= 0:
+            self.language_combo.setCurrentIndex(detected_index)
+        self.language_combo.currentIndexChanged.connect(self.change_language_from_combo)
         self.terms_title = QLabel()
         self.terms_title.setObjectName("pageTitle")
         self.terms_body = QTextEdit()
@@ -597,8 +631,10 @@ class InstallerWindow(QWidget):
         self.terms_body.setFocusPolicy(Qt.NoFocus)
         self.terms_body.setTextInteractionFlags(Qt.NoTextInteraction)
         self.terms_body.setFrameShape(QFrame.NoFrame)
+        self.terms_body.verticalScrollBar().valueChanged.connect(self.update_terms_scroll_state)
         self.terms_accept = QCheckBox()
         self.terms_accept.setObjectName("termsAccept")
+        self.terms_accept.setEnabled(False)
         self.terms_accept.toggled.connect(lambda _checked=False: self.sync_page())
         self.mode_title = QLabel()
         self.mode_title.setObjectName("pageTitle")
@@ -670,6 +706,12 @@ class InstallerWindow(QWidget):
             QLabel#pageBody { color: #c4d2e4; font-size: 13px; line-height: 150%; }
             QLabel#status { color: #ffffff; font-size: 15px; font-weight: 800; }
             QLabel#percent { color: #5eead4; font-size: 38px; font-weight: 900; }
+            QFrame#languagePanel { background: #0e1b30; border: 0; border-radius: 10px; }
+            QComboBox#languageSelect { background: #13253d; color: #edf6ff; border: 0; border-radius: 9px; padding: 10px 12px; font-family: "Segoe UI"; font-size: 13px; font-weight: 800; }
+            QComboBox#languageSelect:hover { background: #18304f; }
+            QComboBox#languageSelect::drop-down { border: 0; width: 28px; }
+            QComboBox#languageSelect::down-arrow { image: none; width: 0; height: 0; }
+            QComboBox#languageSelect QAbstractItemView { background: #13253d; color: #edf6ff; border: 0; selection-background-color: #5eead4; selection-color: #041014; padding: 6px; outline: 0; }
             QTextEdit#termsBody { background: #0e1b30; color: #d8e4f2; border: 0; border-radius: 10px; padding: 15px; font-family: "Segoe UI"; font-size: 12px; selection-background-color: transparent; selection-color: #d8e4f2; }
             QTextEdit#termsBody QScrollBar:vertical { background: #0b1324; width: 10px; margin: 2px; border-radius: 5px; }
             QTextEdit#termsBody QScrollBar::handle:vertical { background: #345778; min-height: 28px; border-radius: 5px; }
@@ -682,7 +724,9 @@ class InstallerWindow(QWidget):
             QCheckBox#check::indicator:checked { background: #5eead4; }
             QCheckBox#termsAccept { background: #101f35; color: #edf6ff; border: 0; border-radius: 10px; padding: 11px 13px; font-family: "Segoe UI"; font-size: 12px; font-weight: 800; spacing: 10px; }
             QCheckBox#termsAccept:hover { background: #142941; }
+            QCheckBox#termsAccept:disabled { color: #7893a8; background: #0c182a; }
             QCheckBox#termsAccept::indicator { width: 20px; height: 20px; border-radius: 7px; border: 1px solid #5eead4; background: #091323; }
+            QCheckBox#termsAccept::indicator:disabled { border-color: #345778; background: #0b1324; }
             QCheckBox#termsAccept::indicator:checked { background: #5eead4; }
             QPushButton { font-family: "Segoe UI"; border-radius: 9px; padding: 11px 18px; font-weight: 800; min-width: 92px; }
             QPushButton#primary { background: #5eead4; color: #041014; border: 0; }
@@ -692,10 +736,6 @@ class InstallerWindow(QWidget):
             QPushButton#secondary:hover { background: #203b61; }
             QPushButton#close { background: transparent; color: #9fb3c8; padding: 6px 10px; border-radius: 6px; min-width: 0; }
             QPushButton#close:hover { background: #3f1f2a; color: #ff7a90; }
-            QPushButton#langButton { background: #101b30; color: #9fb3c8; border: 0; border-radius: 8px; padding: 7px 10px; min-width: 0; font-size: 11px; }
-            QPushButton#langButton[current="true"] { background: #5eead4; color: #041014; }
-            QPushButton#langButton:hover { background: #182b48; color: #edf6ff; }
-            QPushButton#langButton[current="true"]:hover { color: #041014; }
             QProgressBar { height: 14px; background: #070b16; border: 1px solid #2b4a70; border-radius: 7px; }
             QProgressBar::chunk { background: #5eead4; border-radius: 6px; }
             """
@@ -714,7 +754,22 @@ class InstallerWindow(QWidget):
         return page
 
     def make_welcome_page(self) -> QWidget:
-        return self.make_page([self.welcome_title, self.welcome_body])
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.setSpacing(16)
+        layout.addWidget(self.welcome_title)
+        layout.addWidget(self.welcome_body)
+        language_panel = QFrame()
+        language_panel.setObjectName("languagePanel")
+        language_layout = QVBoxLayout(language_panel)
+        language_layout.setContentsMargins(14, 12, 14, 12)
+        language_layout.setSpacing(8)
+        language_layout.addWidget(self.language_label)
+        language_layout.addWidget(self.language_combo)
+        layout.addWidget(language_panel)
+        layout.addStretch(1)
+        return page
 
     def make_terms_page(self) -> QWidget:
         page = QWidget()
@@ -777,23 +832,28 @@ class InstallerWindow(QWidget):
         frame.moveCenter(screen.availableGeometry().center())
         self.move(frame.topLeft())
 
-    def change_language(self, language: str) -> None:
-        self.language = language
+    def change_language_from_combo(self) -> None:
+        self.language = str(self.language_combo.currentData() or self.language)
         self.apply_text()
 
     def apply_text(self) -> None:
         self.window_title.setText("Setup")
         self.media_caption.setText("Online Setup")
-        for button in self.language_buttons:
-            is_current = button.property("lang") == self.language
-            button.setProperty("current", "true" if is_current else "false")
-            button.style().unpolish(button)
-            button.style().polish(button)
+        self.language_label.setText(tr(self.language, "language_prompt"))
+        combo_index = self.language_combo.findData(self.language)
+        if combo_index >= 0 and self.language_combo.currentIndex() != combo_index:
+            self.language_combo.blockSignals(True)
+            self.language_combo.setCurrentIndex(combo_index)
+            self.language_combo.blockSignals(False)
         self.welcome_title.setText(tr(self.language, "welcome_title"))
         self.welcome_body.setText(tr(self.language, "welcome_body"))
         self.terms_title.setText(tr(self.language, "terms_title"))
         self.terms_body.setPlainText(tr(self.language, "terms_body"))
         self.terms_body.moveCursor(QTextCursor.Start)
+        self.terms_body.verticalScrollBar().setValue(0)
+        self.terms_scrolled_to_bottom = False
+        self.terms_accept.setChecked(False)
+        self.terms_accept.setEnabled(False)
         self.terms_accept.setText(tr(self.language, "accept_terms"))
         self.mode_title.setText(tr(self.language, "mode_title"))
         self.mode_body.setText(tr(self.language, "mode_body"))
@@ -809,25 +869,49 @@ class InstallerWindow(QWidget):
             self.status.setText(tr(self.language, "ready"))
         self.sync_page()
 
+    def update_terms_scroll_state(self) -> None:
+        if getattr(self, "page_index", 0) != 1:
+            return
+        scrollbar = self.terms_body.verticalScrollBar()
+        reached_bottom = scrollbar.maximum() > 0 and scrollbar.value() >= scrollbar.maximum() - 2
+        if reached_bottom and not self.terms_scrolled_to_bottom:
+            self.terms_scrolled_to_bottom = True
+            self.terms_accept.setEnabled(True)
+        elif not self.terms_scrolled_to_bottom:
+            self.terms_accept.setEnabled(False)
+        self.sync_page()
+
+    def set_page(self, index: int, animated: bool = True) -> None:
+        if index == self.pages.currentIndex():
+            return
+        self.page_animation.stop()
+        self.pages.setCurrentIndex(index)
+        if animated:
+            self.page_opacity.setOpacity(0.0)
+            self.page_animation.setStartValue(0.0)
+            self.page_animation.setEndValue(1.0)
+            self.page_animation.start()
+        else:
+            self.page_opacity.setOpacity(1.0)
+
     def has_existing_install(self) -> bool:
         return INSTALL_DIR.exists() and (
             (INSTALL_DIR / APP_EXE_NAME).exists() or any(INSTALL_DIR.glob("*"))
         )
 
     def sync_page(self) -> None:
-        self.pages.setCurrentIndex(self.page_index)
+        self.set_page(self.page_index)
         self.back_button.setVisible(self.page_index in (1, 2))
         self.open_button.setVisible(self.install_complete)
         self.start_button.setVisible(not self.install_complete)
-        for button in self.language_buttons:
-            button.setEnabled(self.page_index in (0, 1))
+        self.language_combo.setEnabled(self.page_index == 0)
         if self.page_index == 0:
             self.start_button.setText(tr(self.language, "next"))
             self.start_button.setEnabled(True)
             self.step_hint.setText("1 / 5")
         elif self.page_index == 1:
             self.start_button.setText(tr(self.language, "next"))
-            self.start_button.setEnabled(self.terms_accept.isChecked())
+            self.start_button.setEnabled(self.terms_scrolled_to_bottom and self.terms_accept.isChecked())
             self.step_hint.setText("2 / 5")
         elif self.page_index == 2:
             self.start_button.setText(tr(self.language, "start"))
@@ -850,7 +934,7 @@ class InstallerWindow(QWidget):
 
     def next_page(self) -> None:
         if self.page_index in (0, 1):
-            if self.page_index == 1 and not self.terms_accept.isChecked():
+            if self.page_index == 1 and not (self.terms_scrolled_to_bottom and self.terms_accept.isChecked()):
                 return
             self.page_index += 1
             self.sync_page()
@@ -872,8 +956,7 @@ class InstallerWindow(QWidget):
         self.sync_page()
         self.start_button.setEnabled(False)
         self.back_button.setEnabled(False)
-        for button in self.language_buttons:
-            button.setEnabled(False)
+        self.language_combo.setEnabled(False)
         threading.Thread(target=self.install_worker, args=(clean,), daemon=True).start()
 
     def install_worker(self, clean: bool) -> None:
@@ -945,13 +1028,12 @@ class InstallerWindow(QWidget):
         self.done_title.setText(message)
         self.done_body.setText(detail or str(INSTALL_DIR))
         self.page_index = 4
-        self.pages.setCurrentIndex(4)
+        self.set_page(4)
         self.back_button.hide()
         self.start_button.setEnabled(True)
         self.start_button.show()
         self.start_button.setText(tr(self.language, "finish"))
-        for button in self.language_buttons:
-            button.setEnabled(True)
+        self.language_combo.setEnabled(True)
         self.step_hint.setText("5 / 5")
         if success:
             self.open_button.show()
