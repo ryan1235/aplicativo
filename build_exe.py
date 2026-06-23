@@ -93,6 +93,65 @@ def app_version() -> str:
     return "1.0.0"
 
 
+def version_tuple(version: str) -> tuple[int, int, int, int]:
+    parts: list[int] = []
+    for part in version.split("."):
+        try:
+            parts.append(int(re.sub(r"\D.*$", "", part) or "0"))
+        except ValueError:
+            parts.append(0)
+    while len(parts) < 4:
+        parts.append(0)
+    return tuple(parts[:4])
+
+
+def write_pyinstaller_version_file(
+    target: Path,
+    *,
+    product_name: str,
+    file_description: str,
+    version: str,
+) -> Path:
+    major, minor, patch, build = version_tuple(version)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        f"""# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=({major}, {minor}, {patch}, {build}),
+    prodvers=({major}, {minor}, {patch}, {build}),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        '040904B0',
+        [
+          StringStruct('CompanyName', 'GG Coalition'),
+          StringStruct('FileDescription', '{file_description}'),
+          StringStruct('FileVersion', '{version}'),
+          StringStruct('InternalName', '{product_name}'),
+          StringStruct('LegalCopyright', 'GG Coalition'),
+          StringStruct('OriginalFilename', '{product_name}.exe'),
+          StringStruct('ProductName', '{product_name}'),
+          StringStruct('ProductVersion', '{version}')
+        ]
+      )
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
+""",
+        encoding="utf-8",
+    )
+    return target
+
+
 def has_nuitka() -> bool:
     result = subprocess.run(
         [sys.executable, "-m", "nuitka", "--version"],
@@ -320,6 +379,13 @@ def build_web_installer() -> Path:
     RELEASE_DIR.mkdir(exist_ok=True)
     output = RELEASE_DIR / f"{WEB_INSTALLER_NAME}.exe"
     work_dir = BUILD_DIR / "pyinstaller-web"
+    version = app_version()
+    version_file = write_pyinstaller_version_file(
+        work_dir / "web_installer_version_info.txt",
+        product_name=WEB_INSTALLER_NAME,
+        file_description=f"{WEB_INSTALLER_NAME} - Instalador online",
+        version=version,
+    )
     stale_release_dir = RELEASE_DIR / WEB_INSTALLER_NAME
     if stale_release_dir.exists():
         remove_tree(stale_release_dir)
@@ -337,8 +403,11 @@ def build_web_installer() -> Path:
         "--noconsole",
         "--noconfirm",
         "--clean",
+        "--noupx",
         "--name",
         WEB_INSTALLER_NAME,
+        "--version-file",
+        str(version_file),
         *( [f"--icon={icon_path}"] if icon_path else [] ),
         *( [f"--add-data={icon_path};img"] if icon_path else [] ),
         *( [f"--add-data={gif_path};img"] if gif_path else [] ),
