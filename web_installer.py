@@ -54,8 +54,8 @@ TEXT = {
         "welcome_title": "Instalação",
         "welcome_body": "Este assistente baixa a versão mais recente e prepara tudo em poucos passos.",
         "terms_title": "Termos de uso",
-        "terms_body": "Este aplicativo é de uso exclusivo de membros da GG Coalition. Pessoas que não fazem parte da coalizão não podem ter acesso ou usar o aplicativo.\n\nAo continuar, você confirma que é membro autorizado, concorda em usar o aplicativo apenas para fins permitidos pela coalizão e entende que o acesso pode ser removido em caso de uso indevido.",
-        "accept_terms": "Li e aceito os termos de uso",
+        "terms_body": "Este aplicativo é de uso exclusivo de membros da GG Coalition. Pessoas que não fazem parte da coalizão não podem ter acesso ou usar o aplicativo.\n\nPara logar, você precisa estar no Discord da GG Coalition. O acesso é feito pelo Discord e, ao autorizar o login, você permite que o aplicativo leia algumas informações públicas do seu perfil, como ID, nome de usuário, avatar e participação no servidor, apenas para segurança, validação de membro e controle de acesso.\n\nAo continuar, você confirma que é membro autorizado, concorda em usar o aplicativo apenas para fins permitidos pela coalizão e entende que o acesso pode ser removido em caso de uso indevido.",
+        "accept_terms": "Eu concordo e confirmo que sou membro autorizado",
         "mode_title": "Escolha como instalar",
         "mode_body": "Confira o destino da instalação e clique em instalar.",
         "existing_short": "Já existe uma instalação. Marque instalação limpa se quiser remover os arquivos antigos.",
@@ -99,8 +99,8 @@ TEXT = {
         "welcome_title": "Installation",
         "welcome_body": "This setup wizard downloads the latest version and gets everything ready in a few steps.",
         "terms_title": "Terms of use",
-        "terms_body": "This application is for the exclusive use of GG Coalition members. People who are not part of the coalition may not access or use the application.\n\nBy continuing, you confirm that you are an authorized member, agree to use the application only for purposes allowed by the coalition, and understand that access may be removed in case of misuse.",
-        "accept_terms": "I have read and accept the terms of use",
+        "terms_body": "This application is for the exclusive use of GG Coalition members. People who are not part of the coalition may not access or use the application.\n\nTo log in, you must be in the GG Coalition Discord. Access is handled through Discord and, when authorizing login, you allow the app to read some public profile information, such as ID, username, avatar, and server membership, only for security, member validation, and access control.\n\nBy continuing, you confirm that you are an authorized member, agree to use the application only for purposes allowed by the coalition, and understand that access may be removed in case of misuse.",
+        "accept_terms": "I agree and confirm that I am an authorized member",
         "mode_title": "Choose install mode",
         "mode_body": "Confirm the install destination and click install.",
         "existing_short": "An installation already exists. Select clean install to remove the old program files.",
@@ -144,8 +144,8 @@ TEXT = {
         "welcome_title": "Instalación",
         "welcome_body": "Este asistente descarga la versión más reciente y prepara todo en pocos pasos.",
         "terms_title": "Términos de uso",
-        "terms_body": "Esta aplicación es de uso exclusivo para miembros de GG Coalition. Las personas que no forman parte de la coalición no pueden acceder ni usar la aplicación.\n\nAl continuar, confirmas que eres un miembro autorizado, aceptas usar la aplicación solo para fines permitidos por la coalición y entiendes que el acceso puede ser retirado en caso de uso indebido.",
-        "accept_terms": "He leído y acepto los términos de uso",
+        "terms_body": "Esta aplicación es de uso exclusivo para miembros de GG Coalition. Las personas que no forman parte de la coalición no pueden acceder ni usar la aplicación.\n\nPara iniciar sesión, debes estar en el Discord de GG Coalition. El acceso se realiza por Discord y, al autorizar el inicio de sesión, permites que la aplicación lea algunas informaciones públicas de tu perfil, como ID, nombre de usuario, avatar y participación en el servidor, solo para seguridad, validación de miembro y control de acceso.\n\nAl continuar, confirmas que eres un miembro autorizado, aceptas usar la aplicación solo para fines permitidos por la coalición y entiendes que el acceso puede ser retirado en caso de uso indebido.",
+        "accept_terms": "Acepto y confirmo que soy un miembro autorizado",
         "mode_title": "Elige cómo instalar",
         "mode_body": "Confirma el destino de instalación y haz clic en instalar.",
         "existing_short": "Ya existe una instalación. Marca instalación limpia para quitar los archivos antiguos.",
@@ -189,8 +189,8 @@ TEXT = {
         "welcome_title": "Installation",
         "welcome_body": "Cet assistant télécharge la dernière version et prépare tout en quelques étapes.",
         "terms_title": "Conditions d'utilisation",
-        "terms_body": "Cette application est réservée exclusivement aux membres de GG Coalition. Les personnes qui ne font pas partie de la coalition ne peuvent pas accéder à l'application ni l'utiliser.\n\nEn continuant, vous confirmez être un membre autorisé, acceptez d'utiliser l'application uniquement pour les usages autorisés par la coalition et comprenez que l'accès peut être retiré en cas d'utilisation abusive.",
-        "accept_terms": "J'ai lu et j'accepte les conditions d'utilisation",
+        "terms_body": "Cette application est réservée exclusivement aux membres de GG Coalition. Les personnes qui ne font pas partie de la coalition ne peuvent pas accéder à l'application ni l'utiliser.\n\nPour vous connecter, vous devez être sur le Discord de GG Coalition. L'accès se fait via Discord et, en autorisant la connexion, vous permettez à l'application de lire certaines informations publiques de votre profil, comme l'ID, le nom d'utilisateur, l'avatar et l'appartenance au serveur, uniquement pour la sécurité, la validation des membres et le contrôle d'accès.\n\nEn continuant, vous confirmez être un membre autorisé, acceptez d'utiliser l'application uniquement pour les usages autorisés par la coalition et comprenez que l'accès peut être retiré en cas d'utilisation abusive.",
+        "accept_terms": "J'accepte et je confirme être un membre autorisé",
         "mode_title": "Choisissez le mode d'installation",
         "mode_body": "Vérifiez la destination puis lancez l'installation.",
         "existing_short": "Une installation existe déjà. Cochez installation propre pour supprimer les anciens fichiers.",
@@ -598,7 +598,7 @@ class InstallerWindow(QWidget):
         self.terms_body.setTextInteractionFlags(Qt.NoTextInteraction)
         self.terms_body.setFrameShape(QFrame.NoFrame)
         self.terms_accept = QCheckBox()
-        self.terms_accept.setObjectName("check")
+        self.terms_accept.setObjectName("termsAccept")
         self.terms_accept.toggled.connect(lambda _checked=False: self.sync_page())
         self.mode_title = QLabel()
         self.mode_title.setObjectName("pageTitle")
@@ -660,17 +660,17 @@ class InstallerWindow(QWidget):
 
         self.card.setStyleSheet(
             """
-            QFrame#card { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0c1528, stop:1 #07111f); border: 1px solid #2b4d73; border-radius: 16px; }
-            QFrame#mediaPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #14233d, stop:1 #0d182b); border: 1px solid #31577f; border-radius: 14px; min-width: 236px; max-width: 236px; }
+            QFrame#card { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0c1528, stop:1 #07111f); border: 0; border-radius: 16px; }
+            QFrame#mediaPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #14233d, stop:1 #0d182b); border: 0; border-radius: 14px; min-width: 236px; max-width: 236px; }
             QLabel { font-family: "Segoe UI"; color: #f4f8ff; }
             QLabel#windowTitle { color: #9fb3c8; font-size: 12px; font-weight: 800; }
-            QLabel#gif { background: #07101f; border: 1px solid #2f5278; border-radius: 12px; }
+            QLabel#gif { background: #07101f; border: 0; border-radius: 12px; }
             QLabel#mediaCaption, QLabel#stepHint, QLabel#detail, QLabel#installPath { color: #8fa6bf; font-size: 11px; }
             QLabel#pageTitle { color: #ffffff; font-size: 28px; font-weight: 900; }
             QLabel#pageBody { color: #c4d2e4; font-size: 13px; line-height: 150%; }
             QLabel#status { color: #ffffff; font-size: 15px; font-weight: 800; }
             QLabel#percent { color: #5eead4; font-size: 38px; font-weight: 900; }
-            QTextEdit#termsBody { background: #0e1b30; color: #d8e4f2; border: 1px solid #31577f; border-radius: 10px; padding: 14px; font-family: "Segoe UI"; font-size: 12px; selection-background-color: transparent; selection-color: #d8e4f2; }
+            QTextEdit#termsBody { background: #0e1b30; color: #d8e4f2; border: 0; border-radius: 10px; padding: 15px; font-family: "Segoe UI"; font-size: 12px; selection-background-color: transparent; selection-color: #d8e4f2; }
             QTextEdit#termsBody QScrollBar:vertical { background: #0b1324; width: 10px; margin: 2px; border-radius: 5px; }
             QTextEdit#termsBody QScrollBar::handle:vertical { background: #345778; min-height: 28px; border-radius: 5px; }
             QTextEdit#termsBody QScrollBar::handle:vertical:hover { background: #5eead4; }
@@ -680,17 +680,21 @@ class InstallerWindow(QWidget):
             QCheckBox#check { color: #edf6ff; font-family: "Segoe UI"; font-size: 13px; spacing: 10px; }
             QCheckBox#check::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #5eead4; background: #0b1324; }
             QCheckBox#check::indicator:checked { background: #5eead4; }
+            QCheckBox#termsAccept { background: #101f35; color: #edf6ff; border: 0; border-radius: 10px; padding: 11px 13px; font-family: "Segoe UI"; font-size: 12px; font-weight: 800; spacing: 10px; }
+            QCheckBox#termsAccept:hover { background: #142941; }
+            QCheckBox#termsAccept::indicator { width: 20px; height: 20px; border-radius: 7px; border: 1px solid #5eead4; background: #091323; }
+            QCheckBox#termsAccept::indicator:checked { background: #5eead4; }
             QPushButton { font-family: "Segoe UI"; border-radius: 9px; padding: 11px 18px; font-weight: 800; min-width: 92px; }
             QPushButton#primary { background: #5eead4; color: #041014; border: 0; }
             QPushButton#primary:hover { background: #34d399; }
             QPushButton#primary:disabled { background: #254453; color: #7893a8; }
-            QPushButton#secondary { background: #14243d; color: #edf6ff; border: 1px solid #345b82; }
-            QPushButton#secondary:hover { background: #203b61; border-color: #4c78a6; }
+            QPushButton#secondary { background: #14243d; color: #edf6ff; border: 0; }
+            QPushButton#secondary:hover { background: #203b61; }
             QPushButton#close { background: transparent; color: #9fb3c8; padding: 6px 10px; border-radius: 6px; min-width: 0; }
             QPushButton#close:hover { background: #3f1f2a; color: #ff7a90; }
-            QPushButton#langButton { background: #101b30; color: #9fb3c8; border: 1px solid #2b4a70; border-radius: 8px; padding: 7px 10px; min-width: 0; font-size: 11px; }
-            QPushButton#langButton[current="true"] { background: #5eead4; color: #041014; border-color: #5eead4; }
-            QPushButton#langButton:hover { border-color: #5eead4; color: #edf6ff; }
+            QPushButton#langButton { background: #101b30; color: #9fb3c8; border: 0; border-radius: 8px; padding: 7px 10px; min-width: 0; font-size: 11px; }
+            QPushButton#langButton[current="true"] { background: #5eead4; color: #041014; }
+            QPushButton#langButton:hover { background: #182b48; color: #edf6ff; }
             QPushButton#langButton[current="true"]:hover { color: #041014; }
             QProgressBar { height: 14px; background: #070b16; border: 1px solid #2b4a70; border-radius: 7px; }
             QProgressBar::chunk { background: #5eead4; border-radius: 6px; }
@@ -741,7 +745,7 @@ class InstallerWindow(QWidget):
         layout.addWidget(destination_card)
         layout.addWidget(self.clean_checkbox)
         layout.addStretch(1)
-        destination_card.setStyleSheet("QFrame#destinationCard { background: #0f1a2d; border: 1px solid #28486d; border-radius: 10px; }")
+        destination_card.setStyleSheet("QFrame#destinationCard { background: #0f1a2d; border: 0; border-radius: 10px; }")
         return page
 
     def make_progress_page(self) -> QWidget:
