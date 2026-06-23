@@ -101,6 +101,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "config": True,
         },
     },
+    "debug": {
+        "enabled": False,
+        "hotkey": "Ctrl+Shift+D",
+    },
     "time_task": {
         "overlay_record_x": None,
         "overlay_record_y": None,
@@ -166,6 +170,10 @@ def load_settings() -> dict[str, Any]:
     settings["app"]["chat_discord"] = {
         **DEFAULT_SETTINGS["app"]["chat_discord"],
         **loaded.get("app", {}).get("chat_discord", {}),
+    }
+    settings["debug"] = {
+        **DEFAULT_SETTINGS["debug"],
+        **loaded.get("debug", {}),
     }
     legacy_discord = loaded.get("app", {}).get("chat_discord", {})
     if not settings["discord"].get("id") and legacy_discord.get("discordId"):

@@ -7,12 +7,14 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 
 
 APP_NAME = "GG Coalition"
 UPDATER_NAME = "GG Updater"
+WEB_INSTALLER_NAME = "GG Coalition Web Setup"
 
 ROOT = Path(__file__).resolve().parent
 DIST_DIR = ROOT / "dist"
@@ -236,6 +238,10 @@ def standalone_exe_path(script_name: str, output_name: str) -> Path:
     return standalone_output_dir(script_name) / output_name
 
 
+def onefile_exe_path(output_name: str) -> Path:
+    return DIST_DIR / output_name
+
+
 def build_app() -> Path:
     clean_nuitka_target("felb_app.py")
     icon_path = ensure_icon()
@@ -305,6 +311,48 @@ def build_updater() -> Path:
     if not output.exists():
         raise SystemExit(f"Build do updater finalizou, mas o executavel nao foi encontrado em: {output}")
     return output
+
+
+def build_web_installer() -> Path:
+    clean_nuitka_target("web_installer.py")
+    icon_path = ensure_icon()
+    gif_path = ICON_GIF if ICON_GIF.exists() else None
+    temp_output_dir = Path(tempfile.gettempdir()) / "gg_coalition_web_setup_build"
+    if temp_output_dir.exists():
+        shutil.rmtree(temp_output_dir, ignore_errors=True)
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+    output = temp_output_dir / "web_installer.dist" / f"{WEB_INSTALLER_NAME}.exe"
+
+    command = [
+        sys.executable,
+        "-m",
+        "nuitka",
+        "--standalone",
+        "--assume-yes-for-downloads",
+        "--windows-console-mode=disable",
+        "--enable-plugin=pyside6",
+        "--include-qt-plugins=platforms,styles",
+        f"--output-dir={temp_output_dir}",
+        f"--output-filename={output.name}",
+        *( [f"--include-data-file={icon_path}=img/app_icon.ico"] if icon_path else [] ),
+        *( [f"--include-data-file={gif_path}=img/ggimege.gif"] if gif_path else [] ),
+        str(ROOT / "web_installer.py"),
+    ]
+
+    run(command)
+    if not output.exists():
+        raise SystemExit(f"Build do instalador online finalizou, mas o executavel nao foi encontrado em: {output}")
+    RELEASE_DIR.mkdir(exist_ok=True)
+    release_dir = RELEASE_DIR / WEB_INSTALLER_NAME
+    if release_dir.exists():
+        remove_tree(release_dir)
+    shutil.copytree(output.parent, release_dir)
+    dist_dir = DIST_DIR / WEB_INSTALLER_NAME
+    if dist_dir.exists():
+        remove_tree(dist_dir)
+    DIST_DIR.mkdir(exist_ok=True)
+    shutil.copytree(output.parent, dist_dir)
+    return release_dir / output.name
 
 
 def merge_updater_into_app_dist(updater_exe: Path) -> None:
@@ -596,6 +644,12 @@ def main() -> int:
         help="Generate an Inno Setup installer that installs or updates the app.",
     )
 
+    parser.add_argument(
+        "--web-installer",
+        action="store_true",
+        help="Build only the online bootstrap installer that downloads the latest GitHub release.",
+    )
+
     args = parser.parse_args()
 
     if args.clean:
@@ -613,6 +667,13 @@ def main() -> int:
         raise SystemExit(
             "Nuitka nao esta instalado. Rode: py build_exe.py --install --clean --zip"
         )
+
+    if args.web_installer:
+        installer = build_web_installer()
+        if args.sign:
+            sign_single_file(installer, args.cert_subject, args.timestamp_url, args.no_timestamp)
+        print(f"\nInstalador online criado em: {installer}")
+        return 0
 
     outputs = [build_app()]
 

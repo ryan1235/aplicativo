@@ -55,6 +55,33 @@ ApplicationWindow {
             spacing: 4
 
             Button {
+                id: debugPill
+                visible: debugController.enabled
+                Layout.preferredWidth: 92
+                Layout.preferredHeight: 24
+                Layout.alignment: Qt.AlignVCenter
+                background: Rectangle {
+                    radius: 4
+                    color: debugPill.hovered ? settingsController.warningColor : settingsController.warningTextColor
+                    border.color: settingsController.warningColor
+                    border.width: 1
+                    opacity: debugPill.hovered ? 0.95 : 0.82
+                }
+                contentItem: Text {
+                    text: "DEBUG"
+                    color: settingsController.backgroundColor
+                    font.family: "Segoe UI"
+                    font.pixelSize: 11
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: debugController.openLogFolder()
+                ToolTip.visible: hovered
+                ToolTip.text: debugController.logPath
+            }
+
+            Button {
                 id: minBtn
                 Layout.preferredWidth: 34
                 Layout.preferredHeight: 24
@@ -183,6 +210,12 @@ ApplicationWindow {
         if (visible)
             showMaximized()
         chatController.autoConnectWithSavedDiscord()
+    }
+
+    Shortcut {
+        sequence: debugController.hotkeyLabel
+        context: Qt.ApplicationShortcut
+        onActivated: debugController.toggleDebug()
     }
 
     function pageSource(page) {

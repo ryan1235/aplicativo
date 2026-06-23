@@ -23,19 +23,19 @@ Popup {
     }
     
     property var allEmojis: [
-        {char: "ðŸ˜€", name: "smile feliz"}, {char: "ðŸ˜", name: "smile feliz"}, {char: "ðŸ˜‚", name: "laugh rir chorando"},
-        {char: "ðŸ¤£", name: "laugh rir chorando rofl"}, {char: "ðŸ˜Š", name: "smile feliz"}, {char: "ðŸ˜", name: "love amor apaixonado"},
-        {char: "ðŸ¥°", name: "love amor"}, {char: "ðŸ˜Ž", name: "cool oculos"}, {char: "ðŸ¤”", name: "think pensando"},
-        {char: "ðŸ˜", name: "neutral serio"}, {char: "ðŸ™„", name: "roll eyes revirando"}, {char: "ðŸ˜¥", name: "sad triste chorando"},
-        {char: "ðŸ˜­", name: "cry chorando"}, {char: "ðŸ˜¡", name: "angry irritado raiva"}, {char: "ðŸ‘", name: "like joinha ok yes"},
-        {char: "ðŸ‘Ž", name: "dislike nao no"}, {char: "ðŸ‘", name: "clap palmas"}, {char: "ðŸ™Œ", name: "hands maos amem"},
-        {char: "ðŸ¦Š", name: "fox raposa foxhole"}, {char: "ðŸ’£", name: "bomb bomba"}, {char: "ðŸ”«", name: "gun arma tiro"},
-        {char: "ðŸ”ª", name: "knife faca"}, {char: "ðŸ›¡ï¸", name: "shield escudo def"}, {char: "âš”ï¸", name: "sword espada ataque"},
-        {char: "ðŸª–", name: "helmet capacete soldado"}, {char: "ðŸ¥", name: "hospital medic"}, {char: "ðŸš‘", name: "ambulance ambulancia"},
-        {char: "ðŸ”¥", name: "fire fogo chama"}, {char: "âœ¨", name: "sparkles brilho"}, {char: "â¤ï¸", name: "heart coracao amor"},
-        {char: "ðŸ’€", name: "skull caveira morte dead"}, {char: "ðŸ‘½", name: "alien"}, {char: "ðŸ’©", name: "poop coco"},
-        {char: "ðŸ¤¡", name: "clown palhaco"}, {char: "ðŸ¶", name: "dog cachorro"}, {char: "ðŸ±", name: "cat gato"},
-        {char: "ðŸš—", name: "car carro logi"}, {char: "ðŸšš", name: "truck caminhao logi"}, {char: "ðŸ“¦", name: "box caixa logi supplies"}
+        {char: "\uD83D\uDE00", name: "smile feliz"}, {char: "\uD83D\uDE01", name: "smile feliz"}, {char: "\uD83D\uDE02", name: "laugh rir chorando"},
+        {char: "\uD83E\uDD23", name: "laugh rir chorando rofl"}, {char: "\uD83D\uDE0A", name: "smile feliz"}, {char: "\uD83D\uDE0D", name: "love amor apaixonado"},
+        {char: "\uD83E\uDD70", name: "love amor"}, {char: "\uD83D\uDE0E", name: "cool oculos"}, {char: "\uD83E\uDD14", name: "think pensando"},
+        {char: "\uD83D\uDE10", name: "neutral serio"}, {char: "\uD83D\uDE44", name: "roll eyes revirando"}, {char: "\uD83D\uDE25", name: "sad triste chorando"},
+        {char: "\uD83D\uDE2D", name: "cry chorando"}, {char: "\uD83D\uDE21", name: "angry irritado raiva"}, {char: "\uD83D\uDC4D", name: "like joinha ok yes"},
+        {char: "\uD83D\uDC4E", name: "dislike nao no"}, {char: "\uD83D\uDC4F", name: "clap palmas"}, {char: "\uD83D\uDE4C", name: "hands maos amem"},
+        {char: "\uD83E\uDD8A", name: "fox raposa foxhole"}, {char: "\uD83D\uDCA3", name: "bomb bomba"}, {char: "\uD83D\uDD2B", name: "gun arma tiro"},
+        {char: "\uD83D\uDD2A", name: "knife faca"}, {char: "\uD83D\uDEE1\uFE0F", name: "shield escudo def"}, {char: "\u2694\uFE0F", name: "sword espada ataque"},
+        {char: "\uD83E\uDE96", name: "helmet capacete soldado"}, {char: "\uD83C\uDFE5", name: "hospital medic"}, {char: "\uD83D\uDE91", name: "ambulance ambulancia"},
+        {char: "\uD83D\uDD25", name: "fire fogo chama"}, {char: "\u2728", name: "sparkles brilho"}, {char: "\u2764\uFE0F", name: "heart coracao amor"},
+        {char: "\uD83D\uDC80", name: "skull caveira morte dead"}, {char: "\uD83D\uDC7D", name: "alien"}, {char: "\uD83D\uDCA9", name: "poop coco"},
+        {char: "\uD83E\uDD21", name: "clown palhaco"}, {char: "\uD83D\uDC36", name: "dog cachorro"}, {char: "\uD83D\uDC31", name: "cat gato"},
+        {char: "\uD83D\uDE97", name: "car carro logi"}, {char: "\uD83D\uDE9A", name: "truck caminhao logi"}, {char: "\uD83D\uDCE6", name: "box caixa logi supplies"}
     ]
     
     function filterEmojis(query) {
@@ -211,12 +211,40 @@ Popup {
                     clip: true
                     
                     AnimatedImage {
+                        id: gifPreview
                         anchors.fill: parent
                         source: model.previewUrl
                         fillMode: Image.PreserveAspectCrop
                         cache: false
                         asynchronous: true
-                        playing: root.currentTab === 1 && root.visible
+                        playing: false
+                        function updatePlayback() {
+                            playing = root.currentTab === 1 && root.visible && status === Image.Ready
+                        }
+                        Component.onCompleted: updatePlayback()
+                        onStatusChanged: {
+                            updatePlayback()
+                        }
+                        onCurrentFrameChanged: {
+                            if (playing && frameCount > 1 && currentFrame >= frameCount - 1)
+                                gifPreviewLoop.restart()
+                        }
+                        Connections {
+                            target: root
+                            function onCurrentTabChanged() { gifPreview.updatePlayback() }
+                            function onVisibleChanged() { gifPreview.updatePlayback() }
+                        }
+                        Timer {
+                            id: gifPreviewLoop
+                            interval: 16
+                            repeat: false
+                            onTriggered: {
+                                if (root.currentTab === 1 && root.visible && gifPreview.status === Image.Ready) {
+                                    gifPreview.currentFrame = 0
+                                    gifPreview.updatePlayback()
+                                }
+                            }
+                        }
                     }
                     
                     MouseArea {

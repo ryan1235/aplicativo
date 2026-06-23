@@ -24,6 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from debug_logging import debug_log, debug_logger
 from PySide6.QtNetwork import QNetworkAccessManager
 from PySide6.QtCore import (
     QAbstractListModel,
@@ -2740,6 +2741,7 @@ class AutoClickerController(QObject):
     @Slot(str)
     def _set_status(self, text: str) -> None:
         self._status = text
+        debug_log("autoclicker", "status", {"text": text})
         self.changed.emit()
 
     @Property(bool, notify=changed)
@@ -3839,6 +3841,7 @@ class StockpileController(QObject):
         self.changed.emit()
 
     def _append_log(self, message: str) -> None:
+        debug_log("stockpile", "log", {"message": message})
         self.logs.append({"time": now_label(), "message": message})
         if self.logs.count() > 200:
             self.logs.set_items(self.logs.items()[-200:])
@@ -4211,6 +4214,10 @@ class ChatController(QObject):
             self._ws.disconnected.connect(self._on_ws_disconnected)
             self._ws.textMessageReceived.connect(self._on_ws_text_received)
         return self._ws
+
+    def _send_ws(self, payload: dict[str, Any]) -> None:
+        debug_log("websocket", "send", payload)
+        self._ensure_ws().sendTextMessage(json.dumps(payload, ensure_ascii=False))
 
     def _close_ws(self) -> None:
         if self._ws is not None:
@@ -4934,6 +4941,7 @@ class ChatController(QObject):
         room_changed = slug != self._selected_room
         self._selected_room = slug
         self._selected_room_label = self._room_label(slug)
+        debug_log("chat", "select room", {"slug": slug, "label": self._selected_room_label, "changed": room_changed})
         if room_changed:
             self._next_message_cursor = ""
             self._loading_older_messages = False
@@ -4996,31 +5004,31 @@ class ChatController(QObject):
     def sendMessage(self, body: str) -> None:
         if not self._token or not self._selected_room or not body.strip():
             return
-        self._ensure_ws().sendTextMessage(json.dumps({
+        self._send_ws({
             "type": "send_message",
             "chatSlug": self._selected_room,
             "content": body.strip()
-        }))
+        })
 
     @Slot(str, str)
     def sendMessageReply(self, body: str, replyToMessageId: str) -> None:
         if not self._token or not self._selected_room or not body.strip():
             return
-        self._ensure_ws().sendTextMessage(json.dumps({
+        self._send_ws({
             "type": "send_message",
             "chatSlug": self._selected_room,
             "content": body.strip(),
             "replyToMessageId": replyToMessageId
-        }))
+        })
 
     @Slot(str, str)
     def reactMessage(self, messageId: str, emoji: str) -> None:
         if not self._token or not messageId or not emoji: return
-        self._ensure_ws().sendTextMessage(json.dumps({
+        self._send_ws({
             "type": "react_message",
             "messageId": messageId,
             "emoji": emoji
-        }))
+        })
 
 
     @Slot(str)
@@ -5595,17 +5603,20 @@ class ChatController(QObject):
         ws = self._ensure_ws()
         ws.close()
         url = QUrl(f"{CHAT_WS_BASE}/ws/chat?token={self._token}")
+        debug_log("websocket", "connect", {"url": f"{CHAT_WS_BASE}/ws/chat", "tokenPresent": bool(self._token)})
         ws.open(url)
 
     @Slot()
     def _on_ws_connected(self) -> None:
+        debug_log("websocket", "connected", {"selectedRoom": self._selected_room})
         self._status = self._t("home.chat.connected")
         self.changed.emit()
         if self._selected_room:
-            self._ensure_ws().sendTextMessage(json.dumps({"type": "join_chat", "chatSlug": self._selected_room}))
+            self._send_ws({"type": "join_chat", "chatSlug": self._selected_room})
 
     @Slot()
     def _on_ws_disconnected(self) -> None:
+        debug_log("websocket", "disconnected", {"started": self._started, "tokenPresent": bool(self._token)})
         if self._started and self._token:
             QTimer.singleShot(5000, self._connect_ws)
 
@@ -5614,8 +5625,10 @@ class ChatController(QObject):
         try:
             data = json.loads(text)
         except Exception:
+            debug_log("websocket", "receive invalid json", {"text": text})
             return
         dtype = data.get("type")
+        debug_log("websocket", "receive", {"type": dtype, "payload": data})
         if dtype == "message_created":
             msg = data.get("message")
             if msg:
@@ -5630,6 +5643,7 @@ class ChatController(QObject):
                 self._handle_ws_message_delete(msg_id)
 
     def _handle_ws_message(self, msg: dict) -> None:
+        debug_log("chat", "message created", {"id": msg.get("id") or msg.get("_id"), "chatSlug": msg.get("chatSlug")})
         rows = normalize_messages([msg], self.currentUserName, self._current_user_steam_id, self.discordId)
         if not rows: return
         row = rows[0]
@@ -5641,6 +5655,7 @@ class ChatController(QObject):
         self.changed.emit()
 
     def _handle_ws_message_update(self, msg: dict) -> None:
+        debug_log("chat", "message updated", {"id": msg.get("id") or msg.get("_id")})
         rows = normalize_messages([msg], self.currentUserName, self._current_user_steam_id, self.discordId)
         if not rows: return
         row = rows[0]
@@ -5653,6 +5668,7 @@ class ChatController(QObject):
         self.changed.emit()
 
     def _handle_ws_message_delete(self, msg_id: str) -> None:
+        debug_log("chat", "message deleted", {"id": msg_id})
         current_rows = [self.messages.get(i) for i in range(self.messages.count())]
         current_rows = [r for r in current_rows if str(r.get("id")) != str(msg_id)]
         self.messages.set_items(current_rows)
@@ -8888,6 +8904,7 @@ class UpdateController(QObject):
     def check(self) -> None:
         if self._checking or self._installing:
             return
+        debug_log("update", "check start", {"repo": UPDATE_REPO, "currentVersion": APP_VERSION})
         self._checking = True
         self._error_visible = False
         self._offer_visible = False
@@ -8918,6 +8935,7 @@ class UpdateController(QObject):
     def installAvailableUpdate(self) -> None:
         if self._installing or not self._update:
             return
+        debug_log("update", "install requested", {"version": self._update.version, "asset": self._update.asset_name})
         if self.sourceMode:
             self._error_text = self._t("update.source_mode_unavailable")
             self._error_visible = True
@@ -8967,6 +8985,7 @@ class UpdateController(QObject):
     def _handle_check_result(self, update: object, error: str) -> None:
         self._checking = False
         if error:
+            debug_log("update", "check failed", {"error": error})
             self._status = self._t("update.check_failed", message=error)
             self._error_text = self._status
             self._error_visible = True
@@ -8974,9 +8993,11 @@ class UpdateController(QObject):
             return
         self._update = update if isinstance(update, UpdateInfo) else None
         if self._update:
+            debug_log("update", "available", {"version": self._update.version, "asset": self._update.asset_name})
             self._status = self._t("update.available_status", version=self._update.version)
             self._offer_visible = True
         else:
+            debug_log("update", "no update", {})
             self._status = self._t("update.no_update")
             self._offer_visible = False
         self.changed.emit()
@@ -8986,6 +9007,7 @@ class UpdateController(QObject):
         self._progress_value = max(0, min(100, int(value)))
         self._progress_text = text
         self._status = text
+        debug_log("update", "progress", {"value": self._progress_value, "text": text})
         self.changed.emit()
 
     @Slot(str)
@@ -8995,6 +9017,7 @@ class UpdateController(QObject):
         self._error_text = message
         self._error_visible = True
         self._status = message
+        debug_log("update", "install failed", {"message": message})
         self.changed.emit()
 
 
@@ -9506,6 +9529,7 @@ def http_json(
     payload: Any | None = None,
     timeout: int = 15,
 ) -> dict[str, Any]:
+    started = time.monotonic()
     data = None
     headers = {"Accept": "application/json", "User-Agent": APP_USER_AGENT, "X-App-Version": APP_VERSION}
     if payload is not None:
@@ -9521,13 +9545,44 @@ def http_json(
         headers=headers,
         method=method,
     )
+    debug_log("http", "request", {
+        "method": method,
+        "url": request.full_url,
+        "headers": headers,
+        "payload": payload,
+        "timeout": timeout,
+    })
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read().decode("utf-8", errors="replace")
-            return json.loads(body) if body else {}
+            parsed = json.loads(body) if body else {}
+            debug_log("http", "response", {
+                "method": method,
+                "url": request.full_url,
+                "status": getattr(response, "status", None),
+                "durationMs": round((time.monotonic() - started) * 1000, 1),
+                "body": parsed,
+            })
+            return parsed
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        debug_log("http", "error", {
+            "method": method,
+            "url": request.full_url,
+            "status": exc.code,
+            "reason": exc.reason,
+            "durationMs": round((time.monotonic() - started) * 1000, 1),
+            "body": body,
+        })
         raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {body or 'empty response'}") from exc
+    except Exception as exc:
+        debug_log("http", "exception", {
+            "method": method,
+            "url": request.full_url,
+            "durationMs": round((time.monotonic() - started) * 1000, 1),
+            "error": repr(exc),
+        })
+        raise
 
 
 def http_json_url(
@@ -9539,6 +9594,7 @@ def http_json_url(
     form: dict[str, str] | None = None,
     timeout: int = 15,
 ) -> dict[str, Any]:
+    started = time.monotonic()
     data = None
     headers = {"Accept": "application/json", "User-Agent": APP_USER_AGENT, "X-App-Version": APP_VERSION}
     if payload is not None:
@@ -9550,13 +9606,45 @@ def http_json_url(
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    debug_log("http", "request", {
+        "method": method,
+        "url": url,
+        "headers": headers,
+        "payload": payload,
+        "form": form,
+        "timeout": timeout,
+    })
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read().decode("utf-8", errors="replace")
-            return json.loads(body) if body else {}
+            parsed = json.loads(body) if body else {}
+            debug_log("http", "response", {
+                "method": method,
+                "url": url,
+                "status": getattr(response, "status", None),
+                "durationMs": round((time.monotonic() - started) * 1000, 1),
+                "body": parsed,
+            })
+            return parsed
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        debug_log("http", "error", {
+            "method": method,
+            "url": url,
+            "status": exc.code,
+            "reason": exc.reason,
+            "durationMs": round((time.monotonic() - started) * 1000, 1),
+            "body": body,
+        })
         raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {body or 'empty response'}") from exc
+    except Exception as exc:
+        debug_log("http", "exception", {
+            "method": method,
+            "url": url,
+            "durationMs": round((time.monotonic() - started) * 1000, 1),
+            "error": repr(exc),
+        })
+        raise
 
 
 def discord_avatar_url(user: dict[str, Any]) -> str:
@@ -9904,11 +9992,113 @@ class NewsController(QObject):
             pass
 
 
+class DebugController(QObject):
+    changed = Signal()
+    hotkeyTriggered = Signal()
+
+    def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.settings = settings
+        debug_settings = self.settings.setdefault("debug", {})
+        self._enabled = bool(debug_settings.get("enabled", False))
+        self._hotkey = str(debug_settings.get("hotkey") or "Ctrl+Shift+D")
+        self._status = ""
+        self._stop_event = threading.Event()
+        self._hotkey_was_down = False
+        self._last_toggle_at = 0.0
+        self.hotkeyTriggered.connect(self.toggleDebug)
+        if self._enabled:
+            debug_logger.set_enabled(True, reason="startup")
+            self._status = f"Debug ligado: {debug_logger.path}"
+        if sys.platform.startswith("win"):
+            threading.Thread(target=self._hotkey_loop, daemon=True).start()
+
+    @Property(bool, notify=changed)
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @Property(str, notify=changed)
+    def hotkeyLabel(self) -> str:
+        return self._hotkey
+
+    @Property(str, notify=changed)
+    def logPath(self) -> str:
+        return debug_logger.path
+
+    @Property(str, notify=changed)
+    def status(self) -> str:
+        return self._status
+
+    def _debug_settings(self) -> dict[str, Any]:
+        return self.settings.setdefault("debug", {})
+
+    def _hotkey_loop(self) -> None:
+        try:
+            user32 = ctypes.windll.user32
+        except Exception:
+            return
+        vk_control = 0x11
+        vk_shift = 0x10
+        vk_d = 0x44
+        while not self._stop_event.is_set():
+            try:
+                pressed = all(bool(user32.GetAsyncKeyState(vk) & 0x8000) for vk in (vk_control, vk_shift, vk_d))
+                if pressed and not self._hotkey_was_down:
+                    self.hotkeyTriggered.emit()
+                self._hotkey_was_down = pressed
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    @Slot()
+    def toggleDebug(self) -> None:
+        now = time.monotonic()
+        if now - self._last_toggle_at < 0.35:
+            return
+        self._last_toggle_at = now
+        self.setEnabled(not self._enabled)
+
+    @Slot(bool)
+    def setEnabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self._enabled == enabled:
+            return
+        self._enabled = enabled
+        self._debug_settings()["enabled"] = enabled
+        self._debug_settings()["hotkey"] = self._hotkey
+        save_settings(self.settings)
+        path = debug_logger.set_enabled(enabled, reason="user toggle")
+        self._status = f"Debug ligado: {path}" if enabled else "Debug desligado"
+        self.changed.emit()
+
+    @Slot()
+    def openLogFolder(self) -> None:
+        folder = user_data_dir() / "logs"
+        folder.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+        self._status = f"Pasta de logs: {folder}"
+        self.changed.emit()
+
+    @Slot(str)
+    def writeMarker(self, label: str = "") -> None:
+        text = str(label or "manual").strip() or "manual"
+        debug_log("debug", "user marker", {"label": text}, force=self._enabled)
+        self._status = f"Marcador registrado: {text}"
+        self.changed.emit()
+
+    @Slot()
+    def shutdown(self) -> None:
+        self._stop_event.set()
+        debug_log("debug", "shutdown", {}, force=self._enabled)
+
+
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
         super().__init__()
         debug_memory("registry init start")
         self.settings_data = load_settings()
+        self.debugController = DebugController(self.settings_data, self)
+        debug_log("app", "registry init start", {"version": APP_VERSION})
         self.i18nController = I18nController(self.settings_data, self)
         self.appController = AppController(self.i18nController, self.settings_data, self)
         self.settingsController = SettingsController(self.settings_data, self)
@@ -9935,6 +10125,7 @@ class ControllerRegistry(QObject):
         
         QTimer.singleShot(2000, self.updateController.check)
         debug_memory("registry init ready")
+        debug_log("app", "registry init ready", {"controllers": "ready"})
 
     def expose(self, engine) -> None:
         context = engine.rootContext()
@@ -9942,6 +10133,7 @@ class ControllerRegistry(QObject):
             "appController",
             "i18nController",
             "settingsController",
+            "debugController",
             "steamController",
             "trayController",
             "autoClickerController",
@@ -9962,6 +10154,7 @@ class ControllerRegistry(QObject):
 
     @Slot()
     def shutdown(self) -> None:
+        self.debugController.shutdown()
         self.autoClickerController.shutdown()
         self.stockpileController.shutdown()
         self.chatController.shutdown()

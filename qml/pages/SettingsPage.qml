@@ -183,6 +183,104 @@ Flickable {
             radius: settingsController.cardRadius
             color: settingsController.surfaceColor
             border.color: settingsController.borderColor
+            implicitHeight: debugColumn.implicitHeight + 24
+
+            ColumnLayout {
+                id: debugColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 12
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text {
+                            text: "Debug"
+                            color: settingsController.secondaryTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: "Atalho global: " + debugController.hotkeyLabel + ". Registra API, WebSocket, chat, stockpile, updater e eventos principais do app."
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                    ToggleSwitch {
+                        checked: debugController.enabled
+                        onClicked: debugController.setEnabled(checked)
+                    }
+                }
+
+                Text {
+                    text: debugController.logPath !== "" ? ("Log atual: " + debugController.logPath) : "Log atual: nenhum arquivo criado ainda"
+                    color: settingsController.secondaryTextColor
+                    font.family: "Segoe UI"
+                    font.pixelSize: 11
+                    Layout.fillWidth: true
+                    elide: Text.ElideMiddle
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    PrimaryButton {
+                        Layout.preferredWidth: 112
+                        implicitHeight: 32
+                        text: debugController.enabled ? "Desligar" : "Ligar"
+                        fill: settingsController.controlColor
+                        hoverFill: settingsController.controlHoverColor
+                        textFill: settingsController.textColor
+                        font.pixelSize: 11
+                        onClicked: debugController.toggleDebug()
+                    }
+                    PrimaryButton {
+                        Layout.preferredWidth: 112
+                        implicitHeight: 32
+                        text: "Abrir logs"
+                        fill: settingsController.controlColor
+                        hoverFill: settingsController.controlHoverColor
+                        textFill: settingsController.textColor
+                        font.pixelSize: 11
+                        onClicked: debugController.openLogFolder()
+                    }
+                    PrimaryButton {
+                        Layout.preferredWidth: 128
+                        implicitHeight: 32
+                        text: "Marcar evento"
+                        fill: settingsController.controlColor
+                        hoverFill: settingsController.controlHoverColor
+                        textFill: settingsController.textColor
+                        font.pixelSize: 11
+                        onClicked: debugController.writeMarker("settings")
+                    }
+                    Text {
+                        text: debugController.status
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 10
+                        Layout.fillWidth: true
+                        elide: Text.ElideMiddle
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            radius: settingsController.cardRadius
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
             implicitHeight: appSettingsColumn.implicitHeight + 32
 
             ColumnLayout {
