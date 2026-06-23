@@ -317,49 +317,51 @@ def build_web_installer() -> Path:
     clean_nuitka_target("web_installer.py")
     icon_path = ensure_icon()
     gif_path = ICON_GIF if ICON_GIF.exists() else None
-    temp_output_dir = Path(tempfile.gettempdir()) / "gg_coalition_web_setup_build"
-    if temp_output_dir.exists():
-        shutil.rmtree(temp_output_dir, ignore_errors=True)
-    temp_output_dir.mkdir(parents=True, exist_ok=True)
-    output = temp_output_dir / "web_installer.dist" / f"{WEB_INSTALLER_NAME}.exe"
+    RELEASE_DIR.mkdir(exist_ok=True)
+    output = RELEASE_DIR / f"{WEB_INSTALLER_NAME}.exe"
+    work_dir = BUILD_DIR / "pyinstaller-web"
+    stale_release_dir = RELEASE_DIR / WEB_INSTALLER_NAME
+    if stale_release_dir.exists():
+        remove_tree(stale_release_dir)
+    stale_zip = RELEASE_DIR / "GG-Coalition-Web-Setup-Standalone.zip"
+    if stale_zip.exists():
+        stale_zip.unlink()
+    if output.exists():
+        output.unlink()
 
     command = [
         sys.executable,
         "-m",
-        "nuitka",
-        "--standalone",
-        "--assume-yes-for-downloads",
-        "--windows-console-mode=disable",
-        f"--file-version={app_version()}",
-        f"--product-version={app_version()}",
-        f"--product-name={WEB_INSTALLER_NAME}",
-        f"--file-description={WEB_INSTALLER_NAME} - Instalador online",
-        "--company-name=GG Coalition",
-        "--copyright=GG Coalition",
-        *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
-        "--enable-plugin=pyside6",
-        "--include-qt-plugins=platforms,styles",
-        f"--output-dir={temp_output_dir}",
-        f"--output-filename={output.name}",
-        *( [f"--include-data-file={icon_path}=img/app_icon.ico"] if icon_path else [] ),
-        *( [f"--include-data-file={gif_path}=img/ggimege.gif"] if gif_path else [] ),
+        "PyInstaller",
+        "--onefile",
+        "--noconsole",
+        "--noconfirm",
+        "--clean",
+        "--name",
+        WEB_INSTALLER_NAME,
+        *( [f"--icon={icon_path}"] if icon_path else [] ),
+        *( [f"--add-data={icon_path};img"] if icon_path else [] ),
+        *( [f"--add-data={gif_path};img"] if gif_path else [] ),
+        "--distpath",
+        str(RELEASE_DIR),
+        "--workpath",
+        str(work_dir),
+        "--specpath",
+        str(work_dir),
         str(ROOT / "web_installer.py"),
     ]
 
     run(command)
     if not output.exists():
         raise SystemExit(f"Build do instalador online finalizou, mas o executavel nao foi encontrado em: {output}")
-    RELEASE_DIR.mkdir(exist_ok=True)
-    release_dir = RELEASE_DIR / WEB_INSTALLER_NAME
-    if release_dir.exists():
-        remove_tree(release_dir)
-    shutil.copytree(output.parent, release_dir)
+
     dist_dir = DIST_DIR / WEB_INSTALLER_NAME
     if dist_dir.exists():
         remove_tree(dist_dir)
     DIST_DIR.mkdir(exist_ok=True)
-    shutil.copytree(output.parent, dist_dir)
-    return release_dir / output.name
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(output, dist_dir / output.name)
+    return output
 
 
 def merge_updater_into_app_dist(updater_exe: Path) -> None:

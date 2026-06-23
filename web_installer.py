@@ -17,21 +17,20 @@ import urllib.request
 import zipfile
 
 import PySide6
-from PySide6.QtCore import QEasingCurve, QLocale, QObject, QPropertyAnimation, Qt, QTimer, Signal, Slot
-from PySide6.QtGui import QColor, QIcon, QMovie, QTextCursor
+from PySide6.QtCore import QLocale, QObject, Qt, Signal, Slot
+from PySide6.QtGui import QColor, QIcon, QMovie
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
     QFrame,
-    QGraphicsOpacityEffect,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QProgressBar,
+    QScrollArea,
     QStackedWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -598,11 +597,6 @@ class InstallerWindow(QWidget):
 
         self.pages = QStackedWidget()
         self.pages.setObjectName("pages")
-        self.page_opacity = QGraphicsOpacityEffect(self.pages)
-        self.pages.setGraphicsEffect(self.page_opacity)
-        self.page_animation = QPropertyAnimation(self.page_opacity, b"opacity", self)
-        self.page_animation.setDuration(180)
-        self.page_animation.setEasingCurve(QEasingCurve.OutCubic)
         self.welcome_title = QLabel()
         self.welcome_title.setObjectName("pageTitle")
         self.welcome_body = QLabel()
@@ -625,13 +619,17 @@ class InstallerWindow(QWidget):
         self.language_combo.currentIndexChanged.connect(self.change_language_from_combo)
         self.terms_title = QLabel()
         self.terms_title.setObjectName("pageTitle")
-        self.terms_body = QTextEdit()
-        self.terms_body.setObjectName("termsBody")
-        self.terms_body.setReadOnly(True)
-        self.terms_body.setFocusPolicy(Qt.NoFocus)
-        self.terms_body.setTextInteractionFlags(Qt.NoTextInteraction)
-        self.terms_body.setFrameShape(QFrame.NoFrame)
-        self.terms_body.verticalScrollBar().valueChanged.connect(self.update_terms_scroll_state)
+        self.terms_scroll = QScrollArea()
+        self.terms_scroll.setObjectName("termsScroll")
+        self.terms_scroll.setWidgetResizable(True)
+        self.terms_scroll.setFrameShape(QFrame.NoFrame)
+        self.terms_scroll.verticalScrollBar().valueChanged.connect(self.update_terms_scroll_state)
+        self.terms_content = QLabel()
+        self.terms_content.setObjectName("termsContent")
+        self.terms_content.setWordWrap(True)
+        self.terms_content.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.terms_content.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.terms_scroll.setWidget(self.terms_content)
         self.terms_accept = QCheckBox()
         self.terms_accept.setObjectName("termsAccept")
         self.terms_accept.setEnabled(False)
@@ -712,12 +710,14 @@ class InstallerWindow(QWidget):
             QComboBox#languageSelect::drop-down { border: 0; width: 28px; }
             QComboBox#languageSelect::down-arrow { image: none; width: 0; height: 0; }
             QComboBox#languageSelect QAbstractItemView { background: #13253d; color: #edf6ff; border: 0; selection-background-color: #5eead4; selection-color: #041014; padding: 6px; outline: 0; }
-            QTextEdit#termsBody { background: #0e1b30; color: #d8e4f2; border: 0; border-radius: 10px; padding: 15px; font-family: "Segoe UI"; font-size: 12px; selection-background-color: transparent; selection-color: #d8e4f2; }
-            QTextEdit#termsBody QScrollBar:vertical { background: #0b1324; width: 10px; margin: 2px; border-radius: 5px; }
-            QTextEdit#termsBody QScrollBar::handle:vertical { background: #345778; min-height: 28px; border-radius: 5px; }
-            QTextEdit#termsBody QScrollBar::handle:vertical:hover { background: #5eead4; }
-            QTextEdit#termsBody QScrollBar::add-line:vertical, QTextEdit#termsBody QScrollBar::sub-line:vertical { height: 0; background: transparent; }
-            QTextEdit#termsBody QScrollBar::add-page:vertical, QTextEdit#termsBody QScrollBar::sub-page:vertical { background: transparent; }
+            QScrollArea#termsScroll { background: #0e1b30; border: 0; border-radius: 10px; padding: 0; }
+            QScrollArea#termsScroll QWidget { background: #0e1b30; }
+            QLabel#termsContent { background: #0e1b30; color: #d8e4f2; padding: 15px 18px 18px 15px; font-family: "Segoe UI"; font-size: 12px; line-height: 145%; }
+            QScrollArea#termsScroll QScrollBar:vertical { background: #0b1324; width: 10px; margin: 2px; border-radius: 5px; }
+            QScrollArea#termsScroll QScrollBar::handle:vertical { background: #345778; min-height: 28px; border-radius: 5px; }
+            QScrollArea#termsScroll QScrollBar::handle:vertical:hover { background: #5eead4; }
+            QScrollArea#termsScroll QScrollBar::add-line:vertical, QScrollArea#termsScroll QScrollBar::sub-line:vertical { height: 0; background: transparent; }
+            QScrollArea#termsScroll QScrollBar::add-page:vertical, QScrollArea#termsScroll QScrollBar::sub-page:vertical { background: transparent; }
             QStackedWidget#pages { background: transparent; }
             QCheckBox#check { color: #edf6ff; font-family: "Segoe UI"; font-size: 13px; spacing: 10px; }
             QCheckBox#check::indicator { width: 18px; height: 18px; border-radius: 5px; border: 1px solid #5eead4; background: #0b1324; }
@@ -777,7 +777,7 @@ class InstallerWindow(QWidget):
         layout.setContentsMargins(0, 6, 0, 0)
         layout.setSpacing(12)
         layout.addWidget(self.terms_title)
-        layout.addWidget(self.terms_body, stretch=1)
+        layout.addWidget(self.terms_scroll, stretch=1)
         layout.addWidget(self.terms_accept)
         return page
 
@@ -848,9 +848,8 @@ class InstallerWindow(QWidget):
         self.welcome_title.setText(tr(self.language, "welcome_title"))
         self.welcome_body.setText(tr(self.language, "welcome_body"))
         self.terms_title.setText(tr(self.language, "terms_title"))
-        self.terms_body.setPlainText(tr(self.language, "terms_body"))
-        self.terms_body.moveCursor(QTextCursor.Start)
-        self.terms_body.verticalScrollBar().setValue(0)
+        self.terms_content.setText(tr(self.language, "terms_body"))
+        self.terms_scroll.verticalScrollBar().setValue(0)
         self.terms_scrolled_to_bottom = False
         self.terms_accept.setChecked(False)
         self.terms_accept.setEnabled(False)
@@ -872,7 +871,7 @@ class InstallerWindow(QWidget):
     def update_terms_scroll_state(self) -> None:
         if getattr(self, "page_index", 0) != 1:
             return
-        scrollbar = self.terms_body.verticalScrollBar()
+        scrollbar = self.terms_scroll.verticalScrollBar()
         reached_bottom = scrollbar.maximum() > 0 and scrollbar.value() >= scrollbar.maximum() - 2
         if reached_bottom and not self.terms_scrolled_to_bottom:
             self.terms_scrolled_to_bottom = True
@@ -882,17 +881,7 @@ class InstallerWindow(QWidget):
         self.sync_page()
 
     def set_page(self, index: int, animated: bool = True) -> None:
-        if index == self.pages.currentIndex():
-            return
-        self.page_animation.stop()
         self.pages.setCurrentIndex(index)
-        if animated:
-            self.page_opacity.setOpacity(0.0)
-            self.page_animation.setStartValue(0.0)
-            self.page_animation.setEndValue(1.0)
-            self.page_animation.start()
-        else:
-            self.page_opacity.setOpacity(1.0)
 
     def has_existing_install(self) -> bool:
         return INSTALL_DIR.exists() and (
