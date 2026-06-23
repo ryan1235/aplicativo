@@ -42,9 +42,11 @@ REPO = "ryan1235/aplicativo"
 GITHUB_LATEST_RELEASE = f"https://api.github.com/repos/{REPO}/releases/latest"
 MIN_ZIP_SIZE = 1024 * 1024
 INSTALL_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "Programs" / APP_NAME
+USER_DATA_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / APP_NAME
 ICON_PATH = Path(__file__).resolve().parent / "img" / "app_icon.ico"
 GIF_PATH = Path(__file__).resolve().parent / "img" / "ggimege.gif"
 USER_AGENT = "GG-Coalition-Web-Setup/1.0"
+STARTUP_RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
 TEXT = {
@@ -61,7 +63,7 @@ TEXT = {
         "scroll_terms": "Role até o fim dos termos para liberar o aceite.",
         "mode_title": "Escolha como instalar",
         "mode_body": "Confira o destino da instalação e clique em instalar.",
-        "existing_short": "Já existe uma instalação. Marque instalação limpa se quiser remover os arquivos antigos.",
+        "existing_short": "Já existe uma instalação. Marque instalação limpa se quiser remover o programa, configurações, logs e dados antigos.",
         "install_path": "Destino",
         "clean_choice": "Fazer instalação limpa",
         "update_choice": "Atualizar mantendo arquivos existentes",
@@ -84,11 +86,12 @@ TEXT = {
         "done": "Instalação concluída.",
         "failed": "Falha na instalação.",
         "existing_title": "Versão já instalada",
-        "existing_body": "Encontrei uma instalação em:\n{path}\n\nDeseja fazer uma instalação limpa? Isso remove os arquivos antigos antes de instalar a versão mais recente. Suas configurações em %LOCALAPPDATA%\\GG Coalition são mantidas.",
+        "existing_body": "Encontrei uma instalação em:\n{path}\n\nDeseja fazer uma instalação limpa? Isso remove o programa, configurações, logs e dados locais antes de instalar a versão mais recente.",
         "yes_clean": "Sim, instalação limpa",
         "no_keep": "Não, atualizar por cima",
         "cancel": "Cancelar",
-        "cleaning": "Removendo instalação antiga...",
+        "cleaning": "Removendo instalação e dados antigos...",
+        "app_running": "Não consegui fechar o GG Coalition. Feche o aplicativo e tente novamente.",
         "download_failed": "Download falhou: HTTP {status}",
         "zip_invalid": "O pacote baixado não é um ZIP válido.",
         "zip_incomplete": "O pacote está incompleto. Faltando: {missing}",
@@ -131,11 +134,12 @@ TEXT = {
         "done": "Installation complete.",
         "failed": "Installation failed.",
         "existing_title": "Version already installed",
-        "existing_body": "I found an installation at:\n{path}\n\nDo you want a clean install? This removes old program files before installing the latest version. Your settings in %LOCALAPPDATA%\\GG Coalition are kept.",
+        "existing_body": "I found an installation at:\n{path}\n\nDo you want a clean install? This removes old program files, settings, logs, and local app data before installing the latest version.",
         "yes_clean": "Yes, clean install",
         "no_keep": "No, update in place",
         "cancel": "Cancel",
-        "cleaning": "Removing old installation...",
+        "cleaning": "Removing old installation and data...",
+        "app_running": "I could not close GG Coalition. Close the app and try again.",
         "download_failed": "Download failed: HTTP {status}",
         "zip_invalid": "The downloaded package is not a valid ZIP.",
         "zip_incomplete": "The package is incomplete. Missing: {missing}",
@@ -155,7 +159,7 @@ TEXT = {
         "scroll_terms": "Desplázate hasta el final de los términos para habilitar la aceptación.",
         "mode_title": "Elige cómo instalar",
         "mode_body": "Confirma el destino de instalación y haz clic en instalar.",
-        "existing_short": "Ya existe una instalación. Marca instalación limpia para quitar los archivos antiguos.",
+        "existing_short": "Ya existe una instalación. Marca instalación limpia para quitar el programa, configuraciones, logs y datos antiguos.",
         "install_path": "Destino",
         "clean_choice": "Instalación limpia",
         "update_choice": "Actualizar archivos existentes",
@@ -178,11 +182,12 @@ TEXT = {
         "done": "Instalación completada.",
         "failed": "Error en la instalación.",
         "existing_title": "Ya hay una versión instalada",
-        "existing_body": "Encontré una instalación en:\n{path}\n\n¿Quieres hacer una instalación limpia? Esto elimina los archivos antiguos antes de instalar la versión más reciente. Tus configuraciones en %LOCALAPPDATA%\\GG Coalition se mantienen.",
+        "existing_body": "Encontré una instalación en:\n{path}\n\n¿Quieres hacer una instalación limpia? Esto elimina el programa, configuraciones, logs y datos locales antes de instalar la versión más reciente.",
         "yes_clean": "Sí, instalación limpia",
         "no_keep": "No, actualizar encima",
         "cancel": "Cancelar",
-        "cleaning": "Eliminando instalación antigua...",
+        "cleaning": "Eliminando instalación y datos antiguos...",
+        "app_running": "No pude cerrar GG Coalition. Cierra la aplicación e inténtalo de nuevo.",
         "download_failed": "La descarga falló: HTTP {status}",
         "zip_invalid": "El paquete descargado no es un ZIP válido.",
         "zip_incomplete": "El paquete está incompleto. Falta: {missing}",
@@ -202,7 +207,7 @@ TEXT = {
         "scroll_terms": "Faites défiler jusqu'à la fin des conditions pour activer l'acceptation.",
         "mode_title": "Choisissez le mode d'installation",
         "mode_body": "Vérifiez la destination puis lancez l'installation.",
-        "existing_short": "Une installation existe déjà. Cochez installation propre pour supprimer les anciens fichiers.",
+        "existing_short": "Une installation existe déjà. Cochez installation propre pour supprimer le programme, les paramètres, les journaux et les anciennes données.",
         "install_path": "Destination",
         "clean_choice": "Installation propre",
         "update_choice": "Mettre à jour les fichiers existants",
@@ -225,11 +230,12 @@ TEXT = {
         "done": "Installation terminée.",
         "failed": "Échec de l'installation.",
         "existing_title": "Version déjà installée",
-        "existing_body": "J'ai trouvé une installation dans :\n{path}\n\nVoulez-vous faire une installation propre ? Cela supprime les anciens fichiers avant d'installer la dernière version. Vos paramètres dans %LOCALAPPDATA%\\GG Coalition sont conservés.",
+        "existing_body": "J'ai trouvé une installation dans :\n{path}\n\nVoulez-vous faire une installation propre ? Cela supprime le programme, les paramètres, les journaux et les données locales avant d'installer la dernière version.",
         "yes_clean": "Oui, installation propre",
         "no_keep": "Non, mettre à jour",
         "cancel": "Annuler",
-        "cleaning": "Suppression de l'ancienne installation...",
+        "cleaning": "Suppression de l'installation et des données anciennes...",
+        "app_running": "Impossible de fermer GG Coalition. Fermez l'application puis réessayez.",
         "download_failed": "Téléchargement échoué : HTTP {status}",
         "zip_invalid": "Le paquet téléchargé n'est pas un ZIP valide.",
         "zip_incomplete": "Le paquet est incomplet. Manquant : {missing}",
@@ -378,6 +384,7 @@ def close_installed_processes(target: Path) -> None:
         if not matching_processes_in_dir(target, {APP_EXE_NAME.lower(), "gg updater.exe"}, current_pid):
             return
         time.sleep(0.35)
+    raise RuntimeError("app_running")
 
 
 def matching_processes_in_dir(target: Path, names: set[str], exclude_pid: int) -> list[tuple[int, str]]:
@@ -443,14 +450,83 @@ def is_relative_to(path: Path, parent: Path) -> bool:
         return False
 
 
+def remove_tree_with_retry(path: Path) -> None:
+    if not path.exists():
+        return
+    last_error: BaseException | None = None
+    for _attempt in range(5):
+        try:
+            shutil.rmtree(path)
+            return
+        except (PermissionError, OSError) as exc:
+            last_error = exc
+            time.sleep(0.5)
+    if last_error:
+        raise last_error
+
+
 def safe_clean_install_dir(path: Path) -> None:
     target = path.resolve()
-    local = Path(os.getenv("LOCALAPPDATA", "")).resolve()
+    local = Path(os.getenv("LOCALAPPDATA", str(Path.home()))).resolve()
     expected = (local / "Programs" / APP_NAME).resolve()
     if target != expected:
         raise RuntimeError(f"unsafe clean target: {target}")
-    if target.exists():
-        shutil.rmtree(target)
+    remove_tree_with_retry(target)
+
+
+def safe_clean_user_data_dir(path: Path) -> None:
+    target = path.resolve()
+    allowed: list[Path] = []
+    local = os.getenv("LOCALAPPDATA")
+    if local:
+        allowed.append((Path(local) / APP_NAME).resolve())
+    allowed.append((Path.home() / APP_NAME).resolve())
+    if target not in allowed:
+        raise RuntimeError(f"unsafe user data clean target: {target}")
+    remove_tree_with_retry(target)
+
+
+def remove_startup_registration() -> None:
+    if os.name != "nt":
+        return
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_RUN_KEY, 0, winreg.KEY_SET_VALUE) as key:
+            try:
+                winreg.DeleteValue(key, APP_NAME)
+            except FileNotFoundError:
+                pass
+    except OSError:
+        pass
+
+
+def shortcut_paths() -> list[Path]:
+    start_menu = Path(os.getenv("APPDATA", str(Path.home()))) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / APP_NAME
+    desktop = Path.home() / "Desktop"
+    startup = Path(os.getenv("APPDATA", str(Path.home()))) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    return [
+        start_menu / f"{APP_NAME}.lnk",
+        desktop / f"{APP_NAME}.lnk",
+        startup / f"{APP_NAME}.lnk",
+        startup / f"{APP_NAME}.cmd",
+        startup / f"{APP_NAME}.bat",
+    ]
+
+
+def remove_shortcuts() -> None:
+    for path in shortcut_paths():
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError:
+            pass
+
+
+def clean_existing_install() -> None:
+    remove_startup_registration()
+    remove_shortcuts()
+    safe_clean_install_dir(INSTALL_DIR)
+    safe_clean_user_data_dir(USER_DATA_DIR)
 
 
 def copy_tree(source: Path, target: Path, progress) -> None:
@@ -884,9 +960,11 @@ class InstallerWindow(QWidget):
         self.pages.setCurrentIndex(index)
 
     def has_existing_install(self) -> bool:
-        return INSTALL_DIR.exists() and (
+        install_exists = INSTALL_DIR.exists() and (
             (INSTALL_DIR / APP_EXE_NAME).exists() or any(INSTALL_DIR.glob("*"))
         )
+        data_exists = USER_DATA_DIR.exists() and any(USER_DATA_DIR.glob("*"))
+        return install_exists or data_exists
 
     def sync_page(self) -> None:
         self.set_page(self.page_index)
@@ -969,7 +1047,7 @@ class InstallerWindow(QWidget):
             close_installed_processes(INSTALL_DIR)
             if clean:
                 self.emit_progress(64, "cleaning", str(INSTALL_DIR))
-                safe_clean_install_dir(INSTALL_DIR)
+                clean_existing_install()
 
             def copy_progress(index: int, total: int, relative: Path) -> None:
                 self.emit_progress(66 + int((index / total) * 24), "installing", str(relative))
@@ -994,6 +1072,8 @@ class InstallerWindow(QWidget):
                 return tr(self.language, "no_asset")
             if key == "zip_invalid":
                 return tr(self.language, "zip_invalid")
+            if key == "app_running":
+                return tr(self.language, "app_running")
             if isinstance(key, tuple) and key[0] == "download_failed":
                 return tr(self.language, "download_failed", status=key[1])
             if isinstance(key, tuple) and key[0] == "zip_incomplete":
