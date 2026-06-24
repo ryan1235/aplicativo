@@ -146,14 +146,32 @@ Item {
                             anchors.rightMargin: 10
                             spacing: 10
 
-                            Text {
-                                text: "Search"
-                                color: search.activeFocus ? settingsController.accentColor : settingsController.mutedTextColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 11
-                                font.bold: true
-                                Layout.preferredWidth: 52
-                                horizontalAlignment: Text.AlignHCenter
+                            Item {
+                                Layout.preferredWidth: 34
+                                Layout.preferredHeight: 34
+
+                                Canvas {
+                                    id: searchIcon
+                                    anchors.centerIn: parent
+                                    width: 18
+                                    height: 18
+                                    property color strokeColor: search.activeFocus ? settingsController.accentColor : settingsController.mutedTextColor
+                                    onStrokeColorChanged: requestPaint()
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.strokeStyle = strokeColor
+                                        ctx.lineWidth = 2
+                                        ctx.lineCap = "round"
+                                        ctx.beginPath()
+                                        ctx.arc(7.5, 7.5, 5.5, 0, Math.PI * 2)
+                                        ctx.stroke()
+                                        ctx.beginPath()
+                                        ctx.moveTo(12, 12)
+                                        ctx.lineTo(16, 16)
+                                        ctx.stroke()
+                                    }
+                                }
                             }
 
                             TextField {
