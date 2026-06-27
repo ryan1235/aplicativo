@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -26,7 +26,7 @@ Flickable {
     Connections {
         target: chatController
         function onChanged() {
-            console.log("ChatController changed! apiToken:", chatController.apiToken, "newsCount:", newsController.newsModel ? newsController.newsModel.length : 0, "loading:", newsController.loading)
+            console.log("ChatController changed! tokenPresent:", Boolean(chatController.apiToken), "tokenLength:", chatController.apiToken ? chatController.apiToken.length : 0, "newsCount:", newsController.newsModel ? newsController.newsModel.length : 0, "loading:", newsController.loading)
             if (chatController.apiToken && (!newsController.newsModel || newsController.newsModel.length === 0) && !newsController.loading) {
                 newsController.fetchNews()
             }

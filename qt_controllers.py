@@ -4743,6 +4743,73 @@ class ChatController(QObject):
 
     @Slot()
     def connectWithDiscord(self) -> None:
+        access = result.get("panelAccess") or user.get("panelAccess")
+        profile = merge_panel_profile(user, access)
+
+        if not panel_access_allows_app_login(profile):
+            discord_id = str(profile.get("discordId") or profile.get("discord_id") or "").strip()
+            if discord_id:
+                access_result = http_json("POST", "/chat/panel/access", token=token or None, payload={"discordId": discord_id}, timeout=12)
+                debug_login_response("/chat/panel/access", access_result)
+                profile = merge_panel_profile(
+                    access_result.get("user") if isinstance(access_result.get("user"), dict) else profile,
+                    access_result,
+                )
+
+        if not panel_access_allows_app_login(profile):
+            access = profile.get("panelAccess") if isinstance(profile.get("panelAccess"), dict) else {}
+            level = int_or_none(access.get("accessLevel") or profile.get("panelAccessLevel") or profile.get("accessLevel"))
+            reason = str(access.get("message") or access.get("reason") or f"nível {level if level is not None else 0}")
+            raise RuntimeError(f"Acesso negado: {reason}")
+
+        result = dict(result)
+        result["user"] = profile
+        result["panelAccess"] = profile.get("panelAccess")
+        return result
+
+    def _request_users(self) -> dict[str, Any]:
+        last_error: Exception | None = None
+        for path in CHAT_USERS_PATHS:
+            try:
+                return http_json("GET", path, token=self._token)
+            except Exception as exc:
+                last_error = exc
+        raise RuntimeError(str(last_error) if last_error else "chat users failed")
+
+    def _request_online_users(self) -> dict[str, Any]:
+        discord_id = self._current_user_discord_id or self._saved_discord_id()
+        if discord_id:
+            try:
+                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"discordId": discord_id}, timeout=10)
+            except Exception:
+                pass
+        if self._current_user_id:
+            try:
+                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"userId": self._current_user_id}, timeout=10)
+            except Exception:
+                pass
+        steam_id = self._current_user_steam_id or self.steam.steamId
+        if steam_id:
+            try:
+                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"steamId": steam_id}, timeout=10)
+            except Exception:
+                pass
+        last_error: Exception | None = None
+        for path in CHAT_ONLINE_PATHS:
+            try:
+                return http_json("GET", path, token=self._token, timeout=10)
+            except Exception as exc:
+                last_error = exc
+        raise RuntimeError(str(last_error) if last_error else "chat online users failed")
+
+    def _request_messages(self, slug: str, cursor: str = "") -> dict[str, Any]:
+        path = f"/chat/chats/{urllib.parse.quote(slug)}/messages?take=50"
+        if cursor:
+            path = f"{path}&cursor={urllib.parse.quote(cursor)}"
+        return http_json("GET", path, token=self._token)
+
+    @Slot()
+    def connectWithDiscord(self) -> None:
         self.ensureStarted()
         self._auth_retry_after = 0.0
         self._connect_with_discord(allow_oauth=True)
@@ -4750,9 +4817,15 @@ class ChatController(QObject):
     @Slot()
     def autoConnectWithSavedDiscord(self) -> None:
         self.ensureStarted()
+        if self._saved_discord_id():
+            self._discord_configuration_checked = True
+            self._discord_login_required = False
+            self.changed.emit()
+            self._connect_with_discord(allow_oauth=False)
+            return
         self._discord_configuration_checked = True
         self._discord_login_required = True
-        self._status = self._t("home.chat.secure_relogin_required") if self._saved_discord_id() else self._t("home.chat.no_discord")
+        self._status = self._t("home.chat.no_discord")
         self.changed.emit()
 
     def _connect_with_discord(self, *, allow_oauth: bool = False) -> None:
@@ -4773,20 +4846,23 @@ class ChatController(QObject):
             self.changed.emit()
             return
         saved_discord_id = self._saved_discord_id()
-        if not allow_oauth:
+        if not saved_discord_id and not allow_oauth:
             self._discord_configuration_checked = True
             self._discord_login_required = True
-            self._status = self._t("home.chat.secure_relogin_required") if saved_discord_id else self._t("home.chat.no_discord")
+            self._status = self._t("home.chat.no_discord")
             self.changed.emit()
             return
-        if not self._discord_client_id():
+        if allow_oauth and not self._discord_client_id():
             self._status = self._t("home.chat.discord_config_missing", uri=self.discordRedirectUri)
             self.changed.emit()
             return
 
         def worker() -> None:
             try:
-                result = self._auth_with_discord_oauth()
+                if not allow_oauth and saved_discord_id:
+                    result = self._auth_with_discord(self._discord_auth_payload(saved_discord_id))
+                else:
+                    result = self._auth_with_discord_oauth()
                 result = self._verify_discord_app_access(result)
                 self.resultFromWorker.emit("auth", result)
             except Exception as exc:
@@ -4798,10 +4874,12 @@ class ChatController(QObject):
         self._auth_in_flight = True
         self._auth_error_visible = False
         self._auth_denied = False
-        self._discord_oauth_in_flight = True
-        self._status = self._t("home.chat.discord_opening")
-        # NOTE: Do NOT set _discord_login_required = False here!
-        # The overlay will only close once auth actually succeeds in _apply_result("auth").
+        self._discord_oauth_in_flight = allow_oauth
+        if saved_discord_id and not allow_oauth:
+            self._discord_login_required = False
+            self._status = self._t("home.chat.authenticating_discord")
+        else:
+            self._status = self._t("home.chat.discord_opening")
         self.changed.emit()
         threading.Thread(target=worker, daemon=True).start()
 
@@ -4857,7 +4935,7 @@ class ChatController(QObject):
             return
         if self._saved_discord_id():
             self._discord_configuration_checked = True
-            self._discord_login_required = True
+            self._discord_login_required = False
             self.changed.emit()
             self._connect_with_discord(allow_oauth=False)
             return
