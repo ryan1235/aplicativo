@@ -1,0 +1,354 @@
+{
+  "meta": {
+    "game": "Foxhole",
+    "data_pesquisa": "2026-06-26",
+    "idioma_nomes": "en-US / nomes oficiais do jogo",
+    "escopo": "Estruturas quebraveis/destrutiveis, reconstruiveis ou com HP, incluindo bunker, trench, relic/world structures, facilities, defesas, grandes estruturas, minefields e navios de grande porte.",
+    "observacao_importante": "Foxhole muda bastante por update. Esta lista e best-effort ampla com base na Wiki oficial atual e notas recentes. Nao dupliquei tiers como entradas separadas quando o nome base e o mesmo.",
+    "nao_inclui": [
+      "husk como entrada separada",
+      "veiculos terrestres comuns",
+      "avioes comuns",
+      "armas portateis",
+      "municoes",
+      "inventario interno de bases"
+    ]
+  },
+  "estruturas_quebraveis": {
+    "bunker_e_trench": [
+      "Bunker",
+      "Bunker Piece",
+      "Bunker Corner",
+      "Bunker Ramp",
+      "Bunker Base",
+      "Trench",
+      "Trench Connector",
+      "Trench Bridge",
+      "Trench Stairs",
+      "Trench Sandbags",
+      "Trench Barbed Wire",
+      "Trench Firing Port"
+    ],
+    "bunker_modifications": [
+      "Artillery Garrison",
+      "Artillery Shelter Room",
+      "AT Gun Garrison",
+      "Engine Room",
+      "Howitzer Garrison",
+      "Intelligence Center",
+      "Machine Gun Garrison",
+      "Medical Room",
+      "Observation Bunker",
+      "Rifle Garrison",
+      "Storage Room",
+      "Storm Cannon",
+      "Weather Station"
+    ],
+    "field_fortifications_e_defesas": [
+      "Anti-Tank Rifle Pillbox",
+      "Barbed Wire",
+      "Barbed Wire Fence",
+      "Dragon's Teeth",
+      "Encampment",
+      "Field Bridge",
+      "Field Hospital",
+      "Fire Pit",
+      "Gate",
+      "Infantry Support Gun Pillbox",
+      "Machine Gun Pillbox",
+      "Rifle Pillbox",
+      "Sandbag Cover",
+      "Sandbags",
+      "Signpost",
+      "Storage Box",
+      "Tank Trap",
+      "Tripod",
+      "Deployed Tripod",
+      "Wall",
+      "Watch Tower"
+    ],
+    "minefields": [
+      {
+        "name": "Abisme AT-99 Minefield",
+        "type": "land_minefield",
+        "faction": "Both"
+      },
+      {
+        "name": "E680-S Rudder Lock Minefield",
+        "type": "sea_minefield",
+        "faction": "Warden"
+      },
+      {
+        "name": "E681-B Hullbreaker Minefield",
+        "type": "sea_minefield",
+        "faction": "Colonial"
+      }
+    ],
+    "facilities_producao": [
+      "A0E-9 Rocket Platform",
+      "Aircraft Maintenance Factory",
+      "Ammunition Factory",
+      "Coal Refinery",
+      "Field Modification Center",
+      "Infantry Kit Factory",
+      "Large Assembly Station",
+      "Light Vehicle Assembly Station",
+      "Materials Factory",
+      "Metalworks Factory",
+      "Oil Refinery",
+      "Small Assembly Station"
+    ],
+    "facilities_recursos_energia_fluidos": [
+      "Diesel Power Plant",
+      "Liquid Silo",
+      "Liquid Transfer Station",
+      "Oil Well",
+      "Offshore Platform",
+      "Pipeline",
+      "Pipeline (Overhead)",
+      "Pipeline (Underground)",
+      "Pipeline Valve",
+      "Power Line",
+      "Power Pole",
+      "Power Station",
+      "Stationary Harvester (Coal)",
+      "Stationary Harvester (Components)",
+      "Stationary Harvester (Scrap)",
+      "Stationary Harvester (Sulfur)",
+      "Water Pump"
+    ],
+    "facilities_logistica_storage_transfer": [
+      {
+        "name": "BMS Foreman Stacker",
+        "aliases": ["Facility Crane"]
+      },
+      {
+        "name": "Crate Transfer Station",
+        "aliases": ["CTS"]
+      },
+      "Dry Dock",
+      "Facility Crane",
+      "Fuel Container",
+      {
+        "name": "Material Transfer Station",
+        "aliases": ["MTS"]
+      },
+      "Material Pallet",
+      "Resource Container",
+      "Resource Transfer Station",
+      "Shipping Container",
+      "Storage Box"
+    ],
+    "facilities_fundacoes_trilhos_passarelas": [
+      "Catwalk Bridge",
+      "Catwalk Platform",
+      "Catwalk Stairs",
+      "Facility Foundation",
+      "Foundation (1x1)",
+      "Foundation (1x2)",
+      "Foundation (2x2)",
+      "Foundation Corner (1x1)",
+      "Large Structure Foundation",
+      "Provisional Road",
+      "Railway Track",
+      "Railway Track (Biarc)",
+      "Railway Track (Foundation)",
+      "Crane Railway Track",
+      "Small Gauge Railway Track",
+      "Small Gauge Railway Track (Biarc)",
+      "Small Gauge Railway Track (Foundation)"
+    ],
+    "large_structures_e_super_structures": [
+      "Large Structure Foundation",
+      "Storm Cannon",
+      "Intelligence Center",
+      "Weather Station",
+      "SC-3 Aerial Interceptor Array",
+      "A0E-9 Rocket Platform",
+      "Dry Dock"
+    ],
+    "emplaced_weapons_e_armas_de_estrutura": [
+      "Leary Snare Trap 127",
+      "DAE 1b-2 \"Serra\"",
+      "Leary Shellbore 68mm",
+      "DAE 1o-3 \"Polybolos\"",
+      "Huber Lariat 120mm",
+      "DAE 3b-2 \"Hades' Net\"",
+      "Huber Exalt 150mm",
+      "50-500 \"Thunderbolt\" Cannon",
+      "Huber Starbreaker 94.5mm",
+      "DAE 2a-1 \"Ruptura\"",
+      "40-250 \"Alekto\" Heavy Cannon",
+      "Tempest Cannon RA-2",
+      "DAE 5b \"Zeal\"",
+      "Leary AA-70 Bolas"
+    ],
+    "world_structures_spawn_base": [
+      "Border Base",
+      "Forward Base",
+      "Garrisoned House",
+      "Keep",
+      "Relic Base",
+      "Relic Base (Small)",
+      "Safe House",
+      "Town Base",
+      "Town Center"
+    ],
+    "world_structures_logistica_producao": [
+      "Abandoned Armouries",
+      "Aircraft Depot",
+      "Aircraft Hangar",
+      "Aircraft Runway",
+      "Aircraft Runway (Tier 1)",
+      "Aircraft Runway (Tier 2)",
+      "Barracks",
+      "Construction Yard",
+      "Engineering Center",
+      "Factory",
+      "Garage",
+      "Hospital",
+      "Mass Production Factory",
+      "Refinery",
+      "Seaport",
+      "Shipyard",
+      "Storage Depot",
+      "Train Station"
+    ],
+    "world_structures_recursos": [
+      "Component Mine",
+      "Offshore Platform",
+      "Salvage Mine",
+      "Sulfur Mine"
+    ],
+    "world_structures_defesas_utilidade": [
+      "Bridge",
+      "Coastal Gun",
+      "Drawbridge",
+      "Emplacement House",
+      "Firing Range",
+      "Observation Tower",
+      "Rail Bridge",
+      "Stationary Crane",
+      "The Bulwark"
+    ],
+    "world_structures_rocket_legacy_ou_especiais": [
+      "Font of Balor",
+      "Rocket",
+      "Rocket Launch Site"
+    ],
+    "airborne_structures_e_itens_grandes": [
+      "Aircraft Crate",
+      "Aircraft Parts",
+      "Aircraft Depot",
+      "Aircraft Hangar",
+      "Aircraft Runway",
+      "Aircraft Maintenance Factory"
+    ],
+    "rocket_parts_e_plataforma": [
+      "A0E-9 Rocket Platform",
+      "Rocket Booster",
+      "Rocket Body",
+      "Rocket Warhead",
+      "Rocket"
+    ]
+  },
+  "navios_grande_porte": [
+    {
+      "sigla_principal": "DD",
+      "nome_oficial": "Conqueror",
+      "nome_pt_comunidade": "Conquistador",
+      "classe": "Destroyer",
+      "faction": "Colonial",
+      "aliases": ["Conqueror-Class Destroyer", "Destroyer", "DD"]
+    },
+    {
+      "sigla_principal": "FF",
+      "nome_oficial": "Blacksteele",
+      "classe": "Light Frigate",
+      "faction": "Warden",
+      "aliases": ["Blacksteele-Class Light Frigate", "Frigate", "FF"]
+    },
+    {
+      "sigla_principal": "BS",
+      "nome_oficial": "Titan",
+      "classe": "Battleship",
+      "faction": "Colonial",
+      "aliases": ["Titan-Class Battleship", "Battleship", "BS"]
+    },
+    {
+      "sigla_principal": "BS",
+      "nome_oficial": "Callahan",
+      "classe": "Battleship",
+      "faction": "Warden",
+      "aliases": ["Callahan-Class Battleship", "Battleship", "BS"]
+    },
+    {
+      "sigla_principal": "SS",
+      "nome_oficial": "AC-b \"Trident\"",
+      "classe": "Submarine",
+      "faction": "Colonial",
+      "aliases": ["Trident", "Submarine", "Sub", "SS"]
+    },
+    {
+      "sigla_principal": "SS",
+      "nome_oficial": "Nakki",
+      "classe": "Submarine",
+      "faction": "Warden",
+      "aliases": ["Nakki-Class Submarine", "Submarine", "Sub", "SS"]
+    },
+    {
+      "sigla_principal": "CV",
+      "nome_oficial": "Poseidon",
+      "classe": "Aircraft Carrier",
+      "faction": "Colonial",
+      "aliases": [
+        "Poseidon-Class Aircraft Carrier",
+        "Aircraft Carrier",
+        "Carrier",
+        "CV"
+      ]
+    },
+    {
+      "sigla_principal": "CV",
+      "nome_oficial": "Mercy",
+      "classe": "Aircraft Carrier",
+      "faction": "Warden",
+      "aliases": [
+        "Mercy-Class Aircraft Carrier",
+        "Aircraft Carrier",
+        "Carrier",
+        "CV"
+      ]
+    },
+    {
+      "sigla_principal": null,
+      "nome_oficial": "BMS - Longhook",
+      "classe": "Base Ship",
+      "faction": "Both",
+      "aliases": ["Longhook", "Base Ship", "Mobile Base"]
+    },
+    {
+      "sigla_principal": null,
+      "nome_oficial": "BMS - Bluefin",
+      "classe": "Storage Ship",
+      "faction": "Both",
+      "aliases": ["Bluefin", "Storage Ship", "Logistics Ship"]
+    },
+    {
+      "sigla_principal": null,
+      "nome_oficial": "BMS - Bowhead",
+      "classe": "Resource Ship",
+      "faction": "Both",
+      "aliases": ["Bowhead", "Resource Ship"]
+    }
+  ],
+  "siglas_navais_resumo": {
+    "DD": "Destroyer / Conqueror",
+    "FF": "Frigate / Blacksteele",
+    "BS": "Battleship / Titan ou Callahan",
+    "SS": "Submarine / Trident ou Nakki",
+    "CV": "Aircraft Carrier / Poseidon ou Mercy",
+    "MTS": "Material Transfer Station",
+    "CTS": "Crate Transfer Station"
+  }
+}

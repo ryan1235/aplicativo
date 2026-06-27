@@ -1429,6 +1429,7 @@ class AppController(QObject):
             "stockpile": "stockpile",
             "production": "production_calculator",
             "itemSearch": "item_search",
+            "wiki": "wiki",
             "identifyItem": "identify_item",
             "notifications": "notificacoes",
             "settings": "configuracoes",
@@ -1716,6 +1717,7 @@ class AppController(QObject):
             {"key": "stockpile", "labelKey": "stockpile.nav", "icon": "database", "section": "logistics"},
             {"key": "production", "labelKey": "production.nav", "icon": "factory", "section": "logistics"},
             {"key": "itemSearch", "labelKey": "item_search.nav", "icon": "search", "section": "tools"},
+            {"key": "wiki", "labelKey": "wiki.nav", "icon": "search", "section": "tools"},
             {"key": "identifyItem", "labelKey": "identify.nav", "icon": "target", "section": "tools"},
             {"key": "notifications", "labelKey": "notifications.nav", "icon": "bell", "section": "tools"},
             {"key": "settings", "labelKey": "nav.settings", "icon": "settings", "section": "config"},
@@ -5684,50 +5686,439 @@ class ChatController(QObject):
         self._close_ws()
 
 
-WIKI_KEY_LABELS = {
-    "class": "Classe",
-    "health": "Vida",
-    "resistance": "Resistencia",
-    "armour": "Blindagem",
-    "disable_threshold": "Limite de desativacao",
-    "repair_cost": "Custo de reparo",
-    "crew": "Tripulacao",
-    "inventory_slots": "Espacos no inventario",
-    "armament": "Armamento",
-    "ammo": "Municao",
-    "production_site": "Local de producao",
-    "production_cost_raw": "Custo de producao",
-    "package_size": "Tamanho do pacote",
-    "fuel_capacity": "Capacidade de combustivel",
-    "intel_icon": "Icone de inteligencia",
+WIKI_KEY_LABELS_BY_LANGUAGE = {
+    "pt": {
+        "class": "Classe",
+        "health": "Vida",
+        "resistance": "Resistencia",
+        "armour": "Blindagem",
+        "disable_threshold": "Limite de desativacao",
+        "repair_cost": "Custo de reparo",
+        "crew": "Tripulacao",
+        "inventory_slots": "Espacos no inventario",
+        "armament": "Armamento",
+        "ammo": "Municao",
+        "production_site": "Local de producao",
+        "production_cost_raw": "Custo de producao",
+        "package_size": "Tamanho do pacote",
+        "fuel_capacity": "Capacidade de combustivel",
+        "intel_icon": "Icone de inteligencia",
+        "super_class": "Superclasse",
+        "category": "Categoria",
+        "encumbrance": "Peso",
+        "amount_per_crate": "Quantidade por caixa",
+        "main_production_site": "Local principal de producao",
+        "main_production_cost": "Custo principal de producao",
+        "faction": "Faccao",
+        "damage": "Dano",
+        "damage_type": "Tipo de dano",
+        "range": "Alcance",
+        "rate_of_fire": "Cadencia",
+        "magazine_size": "Tamanho do carregador",
+        "reload_time": "Tempo de recarga",
+        "weight": "Peso",
+        "equipment_slot": "Espaco de equipamento",
+        "ammunition": "Municao",
+        "fire_rate": "Cadencia de tiro",
+        "firing_mode": "Modo de disparo",
+    },
+    "en": {
+        "class": "Class",
+        "health": "Health",
+        "resistance": "Resistance",
+        "armour": "Armour",
+        "disable_threshold": "Disable threshold",
+        "repair_cost": "Repair cost",
+        "crew": "Crew",
+        "inventory_slots": "Inventory slots",
+        "armament": "Armament",
+        "ammo": "Ammo",
+        "production_site": "Production site",
+        "production_cost_raw": "Production cost",
+        "package_size": "Package size",
+        "fuel_capacity": "Fuel capacity",
+        "intel_icon": "Intel icon",
+        "super_class": "Super class",
+        "category": "Category",
+        "encumbrance": "Encumbrance",
+        "amount_per_crate": "Amount per crate",
+        "main_production_site": "Main production site",
+        "main_production_cost": "Main production cost",
+        "faction": "Faction",
+        "damage": "Damage",
+        "damage_type": "Damage type",
+        "range": "Range",
+        "rate_of_fire": "Rate of fire",
+        "magazine_size": "Magazine size",
+        "reload_time": "Reload time",
+        "weight": "Weight",
+        "equipment_slot": "Equipment slot",
+        "ammunition": "Ammunition",
+        "fire_rate": "Fire rate",
+        "firing_mode": "Firing mode",
+    },
+    "es": {
+        "class": "Clase",
+        "health": "Vida",
+        "resistance": "Resistencia",
+        "armour": "Blindaje",
+        "disable_threshold": "Umbral de desactivacion",
+        "repair_cost": "Costo de reparacion",
+        "crew": "Tripulacion",
+        "inventory_slots": "Espacios de inventario",
+        "armament": "Armamento",
+        "ammo": "Municion",
+        "production_site": "Lugar de produccion",
+        "production_cost_raw": "Costo de produccion",
+        "package_size": "Tamano del paquete",
+        "fuel_capacity": "Capacidad de combustible",
+        "intel_icon": "Icono de inteligencia",
+        "super_class": "Superclase",
+        "category": "Categoria",
+        "encumbrance": "Peso",
+        "amount_per_crate": "Cantidad por caja",
+        "main_production_site": "Lugar principal de produccion",
+        "main_production_cost": "Costo principal de produccion",
+        "faction": "Faccion",
+        "damage": "Dano",
+        "damage_type": "Tipo de dano",
+        "range": "Alcance",
+        "rate_of_fire": "Cadencia",
+        "magazine_size": "Tamano del cargador",
+        "reload_time": "Tiempo de recarga",
+        "weight": "Peso",
+        "equipment_slot": "Espacio de equipo",
+        "ammunition": "Municion",
+        "fire_rate": "Cadencia de disparo",
+        "firing_mode": "Modo de disparo",
+    },
+    "fr": {
+        "class": "Classe",
+        "health": "Sante",
+        "resistance": "Resistance",
+        "armour": "Blindage",
+        "disable_threshold": "Seuil de desactivation",
+        "repair_cost": "Cout de reparation",
+        "crew": "Equipage",
+        "inventory_slots": "Emplacements d'inventaire",
+        "armament": "Armement",
+        "ammo": "Munitions",
+        "production_site": "Site de production",
+        "production_cost_raw": "Cout de production",
+        "package_size": "Taille du paquet",
+        "fuel_capacity": "Capacite de carburant",
+        "intel_icon": "Icone de renseignement",
+        "super_class": "Super classe",
+        "category": "Categorie",
+        "encumbrance": "Poids",
+        "amount_per_crate": "Quantite par caisse",
+        "main_production_site": "Site principal de production",
+        "main_production_cost": "Cout principal de production",
+        "faction": "Faction",
+        "damage": "Degats",
+        "damage_type": "Type de degats",
+        "range": "Portee",
+        "rate_of_fire": "Cadence",
+        "magazine_size": "Taille du chargeur",
+        "reload_time": "Temps de rechargement",
+        "weight": "Poids",
+        "equipment_slot": "Emplacement d'equipement",
+        "ammunition": "Munitions",
+        "fire_rate": "Cadence de tir",
+        "firing_mode": "Mode de tir",
+    },
 }
 
-WIKI_VALUE_TRANSLATIONS = {
-    "Armored Car": "Carro blindado",
-    "Battle Tank": "Tanque de batalha",
-    "Emplacement": "Emplacement",
-    "Field Weapon": "Arma de campo",
-    "Flatbed Truck": "Caminhao prancha",
-    "Heavy Artillery": "Artilharia pesada",
-    "Infantry Weapon": "Arma de infantaria",
-    "Large Item": "Item grande",
-    "Logistics Structure": "Estrutura logistica",
-    "Material": "Material",
-    "Refined Material": "Material refinado",
-    "Resource": "Recurso",
-    "Small Arms": "Armas leves",
-    "Small Item": "Item pequeno",
-    "Structure": "Estrutura",
-    "Vehicle": "Veiculo",
-    "Warden": "Warden",
-    "Colonial": "Colonial",
-    "Both": "Ambos",
-    "Factory": "Fabrica",
-    "Garage": "Garagem",
-    "Mass Production Factory": "Fabrica de producao em massa",
-    "Construction Yard": "Patio de construcao",
-    "Unpackageable": "Nao empacotavel",
-    "None": "Nenhum",
+WIKI_VALUE_TRANSLATIONS_BY_LANGUAGE = {
+    "pt": {
+        "Armored Car": "Carro blindado",
+        "Battle Tank": "Tanque de batalha",
+        "Emplacement": "Posicao fixa",
+        "Field Weapon": "Arma de campo",
+        "Flatbed Truck": "Caminhao prancha",
+        "Heavy Artillery": "Artilharia pesada",
+        "Infantry Weapon": "Arma de infantaria",
+        "Large Item": "Item grande",
+        "Logistics Structure": "Estrutura logistica",
+        "Material": "Material",
+        "Refined Material": "Material refinado",
+        "Resource": "Recurso",
+        "Small Arms": "Armas leves",
+        "Small Item": "Item pequeno",
+        "Structure": "Estrutura",
+        "Vehicle": "Veiculo",
+        "Warden": "Warden",
+        "Colonial": "Colonial",
+        "Both": "Ambos",
+        "Factory": "Fabrica",
+        "Garage": "Garagem",
+        "Mass Production Factory": "Fabrica de producao em massa",
+        "Construction Yard": "Patio de construcao",
+        "Unpackageable": "Nao empacotavel",
+        "None": "Nenhum",
+        "Submachine Gun Ammo": "Municao de submetralhadora",
+        "Magazine": "Carregador",
+        "Ammunition": "Municao",
+        "Firearms": "Armas de fogo",
+        "Small Arms Facility Items": "Itens de instalacao de armas leves",
+        "Basic Materials": "Materiais basicos",
+        "Crate": "Caixa",
+        "Magazines": "Carregadores",
+        "Rifles": "Rifles",
+        "Weapon Classes": "Classes de armas",
+        "Light Kinetic Damage": "Dano cinetico leve",
+        "Kinetic Damage": "Dano cinetico",
+        "Submachine Guns": "Submetralhadoras",
+        "Weapons": "Armas",
+        "Tools": "Ferramentas",
+        "Uniforms": "Uniformes",
+        "Vehicles": "Veiculos",
+        "Structures": "Estruturas",
+        "Armored Vehicles": "Veiculos blindados",
+        "Inventory": "Inventario",
+        "Player": "Jogador",
+        "Players": "Jogadores",
+        "Faction": "Faccao",
+        "Stack": "Acumulo",
+        "Stacks": "Acumulos",
+        "Per slot": "Por espaco",
+        "Soldier Uniform": "Uniforme de soldado",
+        "Snow Uniform": "Uniforme de neve",
+        "Rain Uniform": "Uniforme de chuva",
+        "Structure damage": "Dano a estruturas",
+        "Armored vehicle": "veiculo blindado",
+        "Armored vehicles": "veiculos blindados",
+        "Small Arms Magazine": "Carregador de armas leves",
+        "small arms Magazine": "carregador de armas leves",
+        "is a type of": "e um tipo de",
+        "used in": "usado em",
+        "By default": "Por padrao",
+        "its bullets": "seus projeteis",
+        "deal": "causam",
+        "damage": "dano",
+        "It does not deal any damage to": "Nao causa dano a",
+        "and very little to": "e muito pouco a",
+        "It does not stack in the player's inventory": "Nao acumula no inventario do jogador",
+        "except when wearing": "exceto ao usar",
+        "can be fired by": "pode ser disparado por",
+        "Description": "Descricao",
+        "Usage": "Uso",
+        "Production": "Producao",
+        "Storage": "Armazenamento",
+        "Tactics": "Taticas",
+        "Trivia": "Curiosidades",
+        "Update History": "Historico de atualizacoes",
+    },
+    "en": {
+        "Armored Car": "Armored Car",
+        "Battle Tank": "Battle Tank",
+        "Emplacement": "Emplacement",
+        "Field Weapon": "Field Weapon",
+        "Flatbed Truck": "Flatbed Truck",
+        "Heavy Artillery": "Heavy Artillery",
+        "Infantry Weapon": "Infantry Weapon",
+        "Large Item": "Large Item",
+        "Logistics Structure": "Logistics Structure",
+        "Material": "Material",
+        "Refined Material": "Refined Material",
+        "Resource": "Resource",
+        "Small Arms": "Small Arms",
+        "Small Item": "Small Item",
+        "Structure": "Structure",
+        "Vehicle": "Vehicle",
+        "Warden": "Warden",
+        "Colonial": "Colonial",
+        "Both": "Both",
+        "Factory": "Factory",
+        "Garage": "Garage",
+        "Mass Production Factory": "Mass Production Factory",
+        "Construction Yard": "Construction Yard",
+        "Unpackageable": "Unpackageable",
+        "None": "None",
+        "Submachine Gun Ammo": "Submachine Gun Ammo",
+        "Magazine": "Magazine",
+        "Ammunition": "Ammunition",
+        "Firearms": "Firearms",
+        "Small Arms Facility Items": "Small Arms Facility Items",
+        "Basic Materials": "Basic Materials",
+        "Crate": "Crate",
+        "Magazines": "Magazines",
+        "Rifles": "Rifles",
+        "Weapon Classes": "Weapon Classes",
+        "Light Kinetic Damage": "Light Kinetic Damage",
+        "Description": "Description",
+        "Usage": "Usage",
+        "Production": "Production",
+        "Storage": "Storage",
+        "Tactics": "Tactics",
+        "Trivia": "Trivia",
+        "Update History": "Update History",
+    },
+    "es": {
+        "Armored Car": "Auto blindado",
+        "Battle Tank": "Tanque de batalla",
+        "Emplacement": "Emplazamiento",
+        "Field Weapon": "Arma de campo",
+        "Flatbed Truck": "Camion plataforma",
+        "Heavy Artillery": "Artilleria pesada",
+        "Infantry Weapon": "Arma de infanteria",
+        "Large Item": "Item grande",
+        "Logistics Structure": "Estructura logistica",
+        "Material": "Material",
+        "Refined Material": "Material refinado",
+        "Resource": "Recurso",
+        "Small Arms": "Armas ligeras",
+        "Small Item": "Item pequeno",
+        "Structure": "Estructura",
+        "Vehicle": "Vehiculo",
+        "Warden": "Warden",
+        "Colonial": "Colonial",
+        "Both": "Ambos",
+        "Factory": "Fabrica",
+        "Garage": "Garaje",
+        "Mass Production Factory": "Fabrica de produccion en masa",
+        "Construction Yard": "Patio de construccion",
+        "Unpackageable": "No empaquetable",
+        "None": "Ninguno",
+        "Submachine Gun Ammo": "Municion de subfusil",
+        "Magazine": "Cargador",
+        "Ammunition": "Municion",
+        "Firearms": "Armas de fuego",
+        "Small Arms Facility Items": "Items de instalacion de armas ligeras",
+        "Basic Materials": "Materiales basicos",
+        "Crate": "Caja",
+        "Magazines": "Cargadores",
+        "Rifles": "Rifles",
+        "Weapon Classes": "Clases de armas",
+        "Light Kinetic Damage": "Dano cinetico ligero",
+        "Kinetic Damage": "Dano cinetico",
+        "Submachine Guns": "Subfusiles",
+        "Weapons": "Armas",
+        "Tools": "Herramientas",
+        "Uniforms": "Uniformes",
+        "Vehicles": "Vehiculos",
+        "Structures": "Estructuras",
+        "Armored Vehicles": "Vehiculos blindados",
+        "Inventory": "Inventario",
+        "Player": "Jugador",
+        "Players": "Jugadores",
+        "Faction": "Faccion",
+        "Stack": "Acumulacion",
+        "Stacks": "Acumulaciones",
+        "Per slot": "Por espacio",
+        "Soldier Uniform": "Uniforme de soldado",
+        "Snow Uniform": "Uniforme de nieve",
+        "Rain Uniform": "Uniforme de lluvia",
+        "Structure damage": "Dano a estructuras",
+        "Armored vehicle": "vehiculo blindado",
+        "Armored vehicles": "vehiculos blindados",
+        "Small Arms Magazine": "Cargador de armas ligeras",
+        "small arms Magazine": "cargador de armas ligeras",
+        "is a type of": "es un tipo de",
+        "used in": "usado en",
+        "By default": "Por defecto",
+        "its bullets": "sus proyectiles",
+        "deal": "causan",
+        "damage": "dano",
+        "It does not deal any damage to": "No causa dano a",
+        "and very little to": "y muy poco a",
+        "It does not stack in the player's inventory": "No se acumula en el inventario del jugador",
+        "except when wearing": "excepto al usar",
+        "can be fired by": "puede ser disparado por",
+        "Description": "Descripcion",
+        "Usage": "Uso",
+        "Production": "Produccion",
+        "Storage": "Almacenamiento",
+        "Tactics": "Tacticas",
+        "Trivia": "Curiosidades",
+        "Update History": "Historial de actualizaciones",
+    },
+    "fr": {
+        "Armored Car": "Voiture blindee",
+        "Battle Tank": "Char de bataille",
+        "Emplacement": "Emplacement",
+        "Field Weapon": "Arme de campagne",
+        "Flatbed Truck": "Camion plateau",
+        "Heavy Artillery": "Artillerie lourde",
+        "Infantry Weapon": "Arme d'infanterie",
+        "Large Item": "Objet lourd",
+        "Logistics Structure": "Structure logistique",
+        "Material": "Materiau",
+        "Refined Material": "Materiau raffine",
+        "Resource": "Ressource",
+        "Small Arms": "Armes legeres",
+        "Small Item": "Petit objet",
+        "Structure": "Structure",
+        "Vehicle": "Vehicule",
+        "Warden": "Warden",
+        "Colonial": "Colonial",
+        "Both": "Les deux",
+        "Factory": "Usine",
+        "Garage": "Garage",
+        "Mass Production Factory": "Usine de production de masse",
+        "Construction Yard": "Chantier de construction",
+        "Unpackageable": "Non empaquetable",
+        "None": "Aucun",
+        "Submachine Gun Ammo": "Munitions de pistolet-mitrailleur",
+        "Magazine": "Chargeur",
+        "Ammunition": "Munitions",
+        "Firearms": "Armes a feu",
+        "Small Arms Facility Items": "Objets d'installation d'armes legeres",
+        "Basic Materials": "Materiaux basiques",
+        "Crate": "Caisse",
+        "Magazines": "Chargeurs",
+        "Rifles": "Fusils",
+        "Weapon Classes": "Classes d'armes",
+        "Light Kinetic Damage": "Degats cinetiques legers",
+        "Kinetic Damage": "Degats cinetiques",
+        "Submachine Guns": "Pistolets-mitrailleurs",
+        "Weapons": "Armes",
+        "Tools": "Outils",
+        "Uniforms": "Uniformes",
+        "Vehicles": "Vehicules",
+        "Structures": "Structures",
+        "Armored Vehicles": "Vehicules blindes",
+        "Inventory": "Inventaire",
+        "Player": "Joueur",
+        "Players": "Joueurs",
+        "Faction": "Faction",
+        "Stack": "Pile",
+        "Stacks": "Piles",
+        "Per slot": "Par emplacement",
+        "Soldier Uniform": "Uniforme de soldat",
+        "Snow Uniform": "Uniforme de neige",
+        "Rain Uniform": "Uniforme de pluie",
+        "Structure damage": "Degats aux structures",
+        "Armored vehicle": "vehicule blinde",
+        "Armored vehicles": "vehicules blindes",
+        "Small Arms Magazine": "Chargeur d'armes legeres",
+        "small arms Magazine": "chargeur d'armes legeres",
+        "is a type of": "est un type de",
+        "used in": "utilise dans",
+        "By default": "Par defaut",
+        "its bullets": "ses projectiles",
+        "deal": "infligent",
+        "damage": "degats",
+        "It does not deal any damage to": "N'inflige aucun degat a",
+        "and very little to": "et tres peu a",
+        "It does not stack in the player's inventory": "Ne s'empile pas dans l'inventaire du joueur",
+        "except when wearing": "sauf en portant",
+        "can be fired by": "peut etre tire par",
+        "Description": "Description",
+        "Usage": "Utilisation",
+        "Production": "Production",
+        "Storage": "Stockage",
+        "Tactics": "Tactiques",
+        "Trivia": "Anecdotes",
+        "Update History": "Historique des mises a jour",
+    },
+}
+
+WIKI_FALLBACK_WORDS = {
+    "pt": {"below": "abaixo de", "health": "vida"},
+    "en": {"below": "below", "health": "health"},
+    "es": {"below": "por debajo de", "health": "vida"},
+    "fr": {"below": "sous", "health": "sante"},
 }
 
 
@@ -5746,6 +6137,21 @@ def strip_wiki_html(value: str) -> str:
     return clean_wiki_text(value)
 
 
+def strip_wiki_block(value: str) -> str:
+    value = re.sub(r"<!--.*?-->", " ", value, flags=re.S)
+    value = re.sub(r"<(script|style|aside|table)\b.*?</\1>", " ", value, flags=re.S | re.I)
+    value = re.sub(r"<span\b[^>]*class=(?:\"[^\"]*\bmw-editsection\b[^\"]*\"|'[^']*\bmw-editsection\b[^']*')[^>]*>.*?</span>", " ", value, flags=re.S | re.I)
+    value = re.sub(r"<br\s*/?>", "\n", value, flags=re.I)
+    value = re.sub(r"</p\s*>", "\n", value, flags=re.I)
+    value = re.sub(r"<li\b[^>]*>", "\n- ", value, flags=re.I)
+    value = re.sub(r"</h[1-6]\s*>", "\n", value, flags=re.I)
+    value = re.sub(r"<[^>]+>", " ", value)
+    value = html.unescape(value.replace("\xa0", " "))
+    lines = [re.sub(r"\s+", " ", line).strip(" -") for line in value.splitlines()]
+    lines = [line for line in lines if line and line.lower() not in {"edit", "edit source"}]
+    return "\n".join(dict.fromkeys(lines))
+
+
 def normalize_wiki_key(label: str) -> str:
     mapping = {
         "Class": "class",
@@ -5758,6 +6164,24 @@ def normalize_wiki_key(label: str) -> str:
         "Inventory Slots": "inventory_slots",
         "Armament": "armament",
         "Ammo": "ammo",
+        "Super Class": "super_class",
+        "Category": "category",
+        "Encumbrance": "encumbrance",
+        "Amount per crate": "amount_per_crate",
+        "Main Production Site": "main_production_site",
+        "Main Production Cost": "main_production_cost",
+        "Faction": "faction",
+        "Damage": "damage",
+        "Damage Type": "damage_type",
+        "Range": "range",
+        "Rate of Fire": "rate_of_fire",
+        "Magazine Size": "magazine_size",
+        "Reload Time": "reload_time",
+        "Weight": "weight",
+        "Equipment Slot": "equipment_slot",
+        "Ammunition": "ammunition",
+        "Fire Rate": "fire_rate",
+        "Firing Mode": "firing_mode",
         "Production Site": "production_site",
         "Production Cost": "production_cost_raw",
         "Package Size": "package_size",
@@ -5767,24 +6191,33 @@ def normalize_wiki_key(label: str) -> str:
     return mapping.get(label, re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_"))
 
 
-def wiki_field_label(key: str) -> str:
-    if key in WIKI_KEY_LABELS:
-        return WIKI_KEY_LABELS[key]
+def wiki_field_label(key: str, language: str | None = None) -> str:
+    labels = WIKI_KEY_LABELS_BY_LANGUAGE.get(normalize_language(language), WIKI_KEY_LABELS_BY_LANGUAGE["pt"])
+    if key in labels:
+        return labels[key]
     return " ".join(part.capitalize() for part in str(key or "").split("_") if part)
 
 
-def translate_wiki_value(value: Any) -> str:
+def translate_wiki_value(value: Any, language: str | None = None) -> str:
     text = clean_wiki_text(value)
     if not text:
         return ""
-    if text in WIKI_VALUE_TRANSLATIONS:
-        return WIKI_VALUE_TRANSLATIONS[text]
+    code = normalize_language(language)
+    translations = WIKI_VALUE_TRANSLATIONS_BY_LANGUAGE.get(code, WIKI_VALUE_TRANSLATIONS_BY_LANGUAGE["pt"])
+    if text in translations:
+        return translations[text]
     translated = text
-    for source, target in sorted(WIKI_VALUE_TRANSLATIONS.items(), key=lambda item: -len(item[0])):
+    for source, target in sorted(translations.items(), key=lambda item: -len(item[0])):
         translated = re.sub(rf"\b{re.escape(source)}\b", target, translated)
-    translated = re.sub(r"\bbelow\b", "abaixo de", translated, flags=re.I)
-    translated = re.sub(r"\bhealth\b", "vida", translated, flags=re.I)
+    fallback_words = WIKI_FALLBACK_WORDS.get(code, WIKI_FALLBACK_WORDS["pt"])
+    translated = re.sub(r"\bbelow\b", fallback_words["below"], translated, flags=re.I)
+    translated = re.sub(r"\bhealth\b", fallback_words["health"], translated, flags=re.I)
     return translated
+
+
+def wiki_section_label(value: Any, language: str | None = None) -> str:
+    text = clean_wiki_text(value)
+    return translate_wiki_value(text, language) or text
 
 
 def wiki_title_candidates(page_title: str) -> list[str]:
@@ -5840,8 +6273,8 @@ def cache_wiki_image(image_url: str, page_title: str) -> str:
         return url
 
 
-def extract_wiki_infobox(page_html: str) -> dict[str, str]:
-    result: dict[str, str] = {}
+def extract_wiki_infobox(page_html: str) -> dict[str, Any]:
+    result: dict[str, Any] = {}
     aside_match = re.search(
         r"<aside\b(?=[^>]*\bportable-infobox\b)[^>]*>(.*?)</aside>",
         page_html,
@@ -5882,18 +6315,30 @@ def extract_wiki_infobox(page_html: str) -> dict[str, str]:
         r"<[^>]*class=(?:\"[^\"]*\bpi-data-value\b[^\"]*\"|'[^']*\bpi-data-value\b[^']*'|[^\s>]*\bpi-data-value\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
         flags=re.S | re.I,
     )
+    fields: list[dict[str, str]] = []
     for label_match in label_pattern.finditer(infobox):
-        block = infobox[label_match.end() : label_match.end() + 1800]
-        value_match = re.search(
-            value_pattern,
-            block,
-        )
+        next_label = label_pattern.search(infobox, label_match.end())
+        block_end = next_label.start() if next_label else len(infobox)
+        block = infobox[label_match.start() : block_end]
+        value_match = re.search(value_pattern, block)
         if not value_match:
             continue
         label = strip_wiki_html(label_match.group(1))
         value = strip_wiki_html(value_match.group(1))
         if label and value:
-            result[normalize_wiki_key(label)] = value
+            key = normalize_wiki_key(label)
+            header_matches = list(
+                re.finditer(
+                    r"<[^>]*class=(?:\"[^\"]*\bpi-header\b[^\"]*\"|'[^']*\bpi-header\b[^']*'|[^\s>]*\bpi-header\b[^\s>]*)[^>]*>(.*?)</[^>]+>",
+                    infobox[: label_match.start()],
+                    flags=re.S | re.I,
+                )
+            )
+            group = strip_wiki_html(header_matches[-1].group(1)) if header_matches else ""
+            fields.append({"key": key, "label": label, "value": value, "group": group})
+            if key not in result:
+                result[key] = value
+    result["fields"] = fields
     return result
 
 
@@ -5907,6 +6352,50 @@ def extract_wiki_intro(page_html: str) -> str:
         if len(text) > 24:
             return text
     return ""
+
+
+def extract_wiki_sections(page_html: str, sections: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
+    allowed = {
+        "Description",
+        "Usage",
+        "Production",
+        "Storage",
+        "Tactics",
+        "Notes",
+        "Variants",
+        "Trivia",
+        "Update History",
+    }
+    heading_pattern = re.compile(
+        r"<h([23])\b[^>]*>\s*<span\b[^>]*class=(?:\"[^\"]*\bmw-headline\b[^\"]*\"|'[^']*\bmw-headline\b[^']*')[^>]*\bid=(?:\"([^\"]+)\"|'([^']+)')[^>]*>(.*?)</span>.*?</h\1>",
+        flags=re.S | re.I,
+    )
+    matches = list(heading_pattern.finditer(page_html))
+    rows: list[dict[str, str]] = []
+    for index, match in enumerate(matches):
+        title = strip_wiki_html(match.group(4))
+        if title not in allowed:
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(page_html)
+        body = strip_wiki_block(page_html[match.end() : end])
+        if len(body) > 1200:
+            body = body[:1200].rsplit("\n", 1)[0].strip() or body[:1200].strip()
+        if body:
+            rows.append({"title": title, "body": body})
+    return rows[:8]
+
+
+def normalize_wiki_categories(categories: Any) -> list[str]:
+    rows = categories if isinstance(categories, list) else []
+    values: list[str] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        category = clean_wiki_text(item.get("category") or item.get("*") or "")
+        category = category.replace("_", " ")
+        if category and not category.startswith("Pages "):
+            values.append(category)
+    return list(dict.fromkeys(values))[:8]
 
 
 def extract_wiki_production(page_html: str) -> list[dict[str, str]]:
@@ -5940,12 +6429,12 @@ def extract_wiki_production(page_html: str) -> list[dict[str, str]]:
     return rows[:8]
 
 
-def fetch_wiki_page_html(page_title: str) -> str:
+def fetch_wiki_page_payload(page_title: str) -> dict[str, Any]:
     params = urllib.parse.urlencode(
         {
             "action": "parse",
             "page": page_title,
-            "prop": "text",
+            "prop": "text|categories|sections|displaytitle",
             "format": "json",
             "formatversion": "2",
             "origin": "*",
@@ -5966,7 +6455,11 @@ def fetch_wiki_page_html(page_title: str) -> str:
     page_html = str((page or {}).get("text") or "")
     if not page_html:
         raise RuntimeError("Wiki page returned no content.")
-    return page_html
+    return page if isinstance(page, dict) else {"text": page_html}
+
+
+def fetch_wiki_page_html(page_title: str) -> str:
+    return str(fetch_wiki_page_payload(page_title).get("text") or "")
 
 
 def search_wiki_page_title(query: str) -> str:
@@ -5993,16 +6486,39 @@ def search_wiki_page_title(query: str) -> str:
     return ""
 
 
+def search_wiki_page_titles(query: str, limit: int = 6) -> list[str]:
+    raw = clean_wiki_text(query)
+    if len(raw) < 3:
+        return []
+    params = urllib.parse.urlencode(
+        {
+            "action": "opensearch",
+            "search": raw,
+            "limit": str(max(1, min(10, limit))),
+            "namespace": "0",
+            "format": "json",
+            "origin": "*",
+        }
+    )
+    request = urllib.request.Request(f"{FOXHOLE_WIKI_API_URL}?{params}", headers={"User-Agent": APP_USER_AGENT})
+    with urllib.request.urlopen(request, timeout=10) as response:
+        payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    titles = payload[1] if isinstance(payload, list) and len(payload) > 1 and isinstance(payload[1], list) else []
+    return [clean_wiki_text(title) for title in titles if clean_wiki_text(title)]
+
+
 def fetch_wiki_item_info(page_title: str) -> dict[str, Any]:
     original_title = clean_wiki_text(page_title)
     candidates = wiki_title_candidates(original_title)
     last_error: Exception | None = None
     resolved_title = candidates[0] if candidates else original_title
     page_html = ""
+    page_payload: dict[str, Any] = {}
     for candidate in candidates:
         try:
             resolved_title = candidate
-            page_html = fetch_wiki_page_html(candidate)
+            page_payload = fetch_wiki_page_payload(candidate)
+            page_html = str(page_payload.get("text") or "")
             break
         except Exception as exc:
             last_error = exc
@@ -6014,11 +6530,15 @@ def fetch_wiki_item_info(page_title: str) -> dict[str, Any]:
                 raise last_error
             raise RuntimeError("Wiki page not found.")
         resolved_title = fallback_title
-        page_html = fetch_wiki_page_html(resolved_title)
+        page_payload = fetch_wiki_page_payload(resolved_title)
+        page_html = str(page_payload.get("text") or "")
 
     item = extract_wiki_infobox(page_html)
+    item["name"] = clean_wiki_text(item.get("name") or page_payload.get("title") or resolved_title)
     item["description"] = extract_wiki_intro(page_html)
     item["production"] = extract_wiki_production(page_html)
+    item["sections"] = extract_wiki_sections(page_html, page_payload.get("sections") if isinstance(page_payload.get("sections"), list) else [])
+    item["categories"] = normalize_wiki_categories(page_payload.get("categories"))
     item["source_url"] = f"{FOXHOLE_WIKI_BASE_URL}/wiki/{urllib.parse.quote(resolved_title.replace(' ', '_'))}"
     if item.get("image"):
         item["remote_image"] = item["image"]
@@ -6049,13 +6569,24 @@ class ItemSearchController(QObject):
             self,
         )
         self.suggestions = DictListModel(["name", "alias", "detail", "source"], self)
-        self.wiki_fields = DictListModel(["label", "value"], self)
+        self.wiki_fields = DictListModel(["group", "label", "value"], self)
         self.wiki_production_rows = DictListModel(["site", "input", "output", "time"], self)
+        self.wiki_sections = DictListModel(["title", "body"], self)
+        self.wiki_categories = DictListModel(["label"], self)
+        self.damage_ammo_suggestions = DictListModel(["name", "detail"], self)
+        self.damage_duel_left_suggestions = DictListModel(["name", "detail"], self)
+        self.damage_duel_right_suggestions = DictListModel(["name", "detail"], self)
+        self.damage_result_rows = DictListModel(["label", "value", "kind"], self)
+        self.damage_duel_rows = DictListModel(["label", "value", "kind"], self)
+        self._damage_data = self._load_damage_data()
+        self._damage_ammo_rows = self._build_damage_ammo_rows(self._damage_data)
+        self._damage_target_rows = self._build_damage_target_rows(self._damage_data)
         self._all_rows: list[dict[str, Any]] = []
         self._cached_item_names: list[str] = []
         self._name_norm_by_name: dict[str, str] = {}
         self._slang_terms = self._load_slang_terms()
         self._slang_resolved_names: dict[int, list[str]] = {}
+        self._damage_target_rows = self._merge_damage_target_rows(self._damage_target_rows, self._damage_targets_from_terms())
         self._wiki_title = ""
         self._wiki_name = ""
         self._wiki_description = ""
@@ -6064,6 +6595,18 @@ class ItemSearchController(QObject):
         self._wiki_status_key = "item_search.wiki_empty"
         self._wiki_status_message = ""
         self._wiki_loading = False
+        self._wiki_data: dict[str, Any] = {}
+        self._damage_duel_left_name = ""
+        self._damage_duel_right_name = ""
+        self._damage_duel_left_image = ""
+        self._damage_duel_right_image = ""
+        self._damage_duel_left_detail = ""
+        self._damage_duel_right_detail = ""
+        self._damage_duel_left_faction = ""
+        self._damage_duel_right_faction = ""
+        self._damage_target_image = ""
+        self._damage_duel_left_prob = -1.0
+        self._damage_duel_right_prob = -1.0
         self._wiki_request_token = 0
         self._pending_wiki_title = ""
         self._wiki_timer = QTimer(self)
@@ -6144,12 +6687,85 @@ class ItemSearchController(QObject):
     def wikiProduction(self) -> QObject:
         return self.wiki_production_rows
 
+    @Property(QObject, constant=True)
+    def wikiSections(self) -> QObject:
+        return self.wiki_sections
+
+    @Property(QObject, constant=True)
+    def wikiCategories(self) -> QObject:
+        return self.wiki_categories
+
+    @Property(QObject, constant=True)
+    def damageAmmoSuggestions(self) -> QObject:
+        return self.damage_ammo_suggestions
+
+    @Property(QObject, constant=True)
+    def damageDuelLeftSuggestions(self) -> QObject:
+        return self.damage_duel_left_suggestions
+
+    @Property(QObject, constant=True)
+    def damageDuelRightSuggestions(self) -> QObject:
+        return self.damage_duel_right_suggestions
+
+    @Property(QObject, constant=True)
+    def damageResultRows(self) -> QObject:
+        return self.damage_result_rows
+
+    @Property(QObject, constant=True)
+    def damageDuelRows(self) -> QObject:
+        return self.damage_duel_rows
+
+    @Property(str, notify=changed)
+    def damageDuelLeftName(self) -> str:
+        return self._damage_duel_left_name
+
+    @Property(str, notify=changed)
+    def damageDuelRightName(self) -> str:
+        return self._damage_duel_right_name
+
+    @Property(str, notify=changed)
+    def damageDuelLeftImage(self) -> str:
+        return self._damage_duel_left_image
+
+    @Property(str, notify=changed)
+    def damageDuelRightImage(self) -> str:
+        return self._damage_duel_right_image
+
+    @Property(str, notify=changed)
+    def damageDuelLeftDetail(self) -> str:
+        return self._damage_duel_left_detail
+
+    @Property(str, notify=changed)
+    def damageDuelRightDetail(self) -> str:
+        return self._damage_duel_right_detail
+
+    @Property(str, notify=changed)
+    def damageDuelLeftFaction(self) -> str:
+        return self._damage_duel_left_faction
+
+    @Property(str, notify=changed)
+    def damageDuelRightFaction(self) -> str:
+        return self._damage_duel_right_faction
+
+    @Property(float, notify=changed)
+    def damageDuelLeftProb(self) -> float:
+        return self._damage_duel_left_prob
+
+    @Property(float, notify=changed)
+    def damageDuelRightProb(self) -> float:
+        return self._damage_duel_right_prob
+
+    @Property(str, notify=changed)
+    def damageTargetImage(self) -> str:
+        return self._damage_target_image
+
     @Property("QVariantList", notify=changed)
     def resultRowItems(self) -> list[dict[str, Any]]:
         return self.items.items()
 
     @Property("QVariantList", notify=changed)
     def suggestionRowItems(self) -> list[dict[str, Any]]:
+
         return self.suggestions.items()
 
     @Property(bool, notify=changed)
@@ -6184,6 +6800,8 @@ class ItemSearchController(QObject):
     def refreshLocalizedTimes(self) -> None:
         if self._loaded:
             self._update_search_models()
+        if self._wiki_data:
+            self._render_wiki_data(self._wiki_data)
         self.changed.emit()
 
     @Slot()
@@ -6226,6 +6844,7 @@ class ItemSearchController(QObject):
             key=str.lower,
         )
         self._name_norm_by_name = {name: self._normalize_search_text(name) for name in self._cached_item_names}
+        self._damage_target_rows = self._merge_damage_target_rows(self._damage_target_rows, self._damage_targets_from_item_names())
         self._slang_resolved_names = {}
         self._last_update = last_update or "-"
         self._loaded = True
@@ -6256,6 +6875,105 @@ class ItemSearchController(QObject):
             QDesktopServices.openUrl(QUrl(self._wiki_source_url))
 
     @Slot()
+    def prepareDamageCalculator(self) -> None:
+        self._update_damage_ammo_suggestions("")
+        target = self._current_damage_target()
+        self.damage_result_rows.set_items(self._damage_target_preview_rows())
+        self._damage_target_image = str(target.get("image") or "")
+        self.damage_duel_rows.set_items([])
+        self._update_damage_duel_suggestions("", "left")
+        self._update_damage_duel_suggestions("", "right")
+        self._damage_duel_left_prob = -1.0
+        self._damage_duel_right_prob = -1.0
+        self.changed.emit()
+
+    @Slot(str)
+    def searchDamageAmmo(self, query: str) -> None:
+        self._update_damage_ammo_suggestions(query)
+
+    @Slot(str, str)
+    def searchDamageDuelTarget(self, query: str, side: str) -> None:
+        self._update_damage_duel_suggestions(query, side)
+
+    @Slot(str, str)
+    def calculateDamageTarget(self, ammo_name: str, penetration_percent: str = "") -> None:
+        target = self._current_damage_target()
+        ammo = self._find_damage_ammo(ammo_name)
+        rows = self._calculate_damage_rows(target, ammo, penetration_percent)
+        self.damage_result_rows.set_items(rows)
+        self._damage_target_image = str(target.get("image") or "")
+        self.changed.emit()
+
+    @Slot(str, str, str, str)
+    def calculateTankDuel(self, left_name: str, right_name: str, ammo_name: str = "", penetration_percent: str = "") -> None:
+        ammo = self._find_damage_ammo(ammo_name) if ammo_name.strip() else {}
+        left = self._find_damage_target(left_name)
+        right = self._find_damage_target(right_name)
+        self._damage_duel_left_name = clean_wiki_text(left.get("name") or left_name)
+        self._damage_duel_right_name = clean_wiki_text(right.get("name") or right_name)
+        self._damage_duel_left_image = str(left.get("image") or "")
+        self._damage_duel_right_image = str(right.get("image") or "")
+        self._damage_duel_left_detail = clean_wiki_text(left.get("detail") or left.get("resistance_type") or "")
+        self._damage_duel_right_detail = clean_wiki_text(right.get("detail") or right.get("resistance_type") or "")
+        self._damage_duel_left_faction = self._detect_faction(left)
+        self._damage_duel_right_faction = self._detect_faction(right)
+        rows = self._calculate_duel_rows(left, right, ammo, penetration_percent)
+        # Extract win probabilities for bar display
+        self._damage_duel_left_prob = -1.0
+        self._damage_duel_right_prob = -1.0
+        # Pick any valid ammo for the bar (specific if given, else best from all ammos)
+        bar_ammo = ammo if ammo else self._best_ammo_for_duel(left, right, penetration_percent)
+        if bar_ammo:
+            left_attack = self._damage_estimate(right, bar_ammo, penetration_percent)
+            right_attack = self._damage_estimate(left, bar_ammo, penetration_percent)
+            if left_attack.get("ok") and right_attack.get("ok"):
+                lp = left_attack.get("probability_destroy")
+                rp = right_attack.get("probability_destroy")
+                if lp is not None:
+                    self._damage_duel_left_prob = float(lp)
+                if rp is not None:
+                    self._damage_duel_right_prob = float(rp)
+                if lp is None and rp is None:
+                    ls = left_attack.get("expected_destroy") or left_attack.get("hits_destroy")
+                    rs = right_attack.get("expected_destroy") or right_attack.get("hits_destroy")
+                    if ls and rs and (ls + rs) > 0:
+                        self._damage_duel_left_prob = float(rs) / (ls + rs)
+                        self._damage_duel_right_prob = float(ls) / (ls + rs)
+        self.damage_duel_rows.set_items(rows)
+        self.changed.emit()
+
+    def _best_ammo_for_duel(self, left: dict[str, Any], right: dict[str, Any], penetration_percent: str = "") -> dict[str, Any]:
+        """Find the ammo where the combined kill efficiency is highest (smallest total shots)."""
+        best: dict[str, Any] = {}
+        best_diff = 0
+        for ammo in self._damage_ammo_rows:
+            la = self._damage_estimate(right, ammo, penetration_percent)
+            ra = self._damage_estimate(left, ammo, penetration_percent)
+            if not la.get("ok") or not ra.get("ok"):
+                continue
+            ls = la.get("expected_destroy") or la.get("hits_destroy") or 9999
+            rs = ra.get("expected_destroy") or ra.get("hits_destroy") or 9999
+            diff = abs(rs - ls)
+            if not best or diff > best_diff:
+                best = ammo
+                best_diff = diff
+        return best
+
+
+
+    @staticmethod
+    def _detect_faction(target: dict[str, Any]) -> str:
+        """Detect faction from target detail/name/source. Returns 'warden', 'colonial' or ''."""
+        haystack = ItemSearchController._normalize_search_text(
+            " ".join(str(v) for v in [target.get("detail"), target.get("name"), target.get("faction")] if v)
+        )
+        if any(w in haystack for w in ("warden", "blacksteele", "callahan", "mercy", "nakki", "brigand", "loyalist", "silver", "harpa")):
+            return "warden"
+        if any(w in haystack for w in ("colonial", "conqueror", "titan", "poseidon", "trident", "ares", "ironship", "cullen", "predator")):
+            return "colonial"
+        return ""
+
+    @Slot()
     def _run_pending_wiki_lookup(self) -> None:
         self._start_wiki_lookup(self._pending_wiki_title)
 
@@ -6270,8 +6988,11 @@ class ItemSearchController(QObject):
         self._wiki_status_key = "item_search.wiki_empty"
         self._wiki_status_message = ""
         self._wiki_loading = False
+        self._wiki_data = {}
         self.wiki_fields.set_items([])
         self.wiki_production_rows.set_items([])
+        self.wiki_sections.set_items([])
+        self.wiki_categories.set_items([])
 
     def _schedule_wiki_lookup(self) -> None:
         if not self._query.strip():
@@ -6308,6 +7029,8 @@ class ItemSearchController(QObject):
         self._wiki_loading = True
         self.wiki_fields.set_items([])
         self.wiki_production_rows.set_items([])
+        self.wiki_sections.set_items([])
+        self.wiki_categories.set_items([])
         self.changed.emit()
 
         def worker() -> None:
@@ -6326,42 +7049,899 @@ class ItemSearchController(QObject):
         if error:
             self._wiki_status_key = "item_search.wiki_error"
             self._wiki_status_message = error
+            self._wiki_data = {}
             self.wiki_fields.set_items([])
             self.wiki_production_rows.set_items([])
+            self.wiki_sections.set_items([])
+            self.wiki_categories.set_items([])
             self.changed.emit()
             return
 
         item = data if isinstance(data, dict) else {}
+        self._wiki_data = item
+        self._render_wiki_data(item)
+        self.changed.emit()
+
+    def _render_wiki_data(self, item: dict[str, Any]) -> None:
         production = item.get("production") if isinstance(item.get("production"), list) else []
-        excluded = {"name", "image", "remote_image", "description", "production", "source_url"}
-        fields = [
-            {"label": wiki_field_label(str(key)), "value": translate_wiki_value(value)}
-            for key, value in item.items()
-            if key not in excluded and translate_wiki_value(value)
+        raw_sections = item.get("sections") if isinstance(item.get("sections"), list) else []
+        raw_categories = item.get("categories") if isinstance(item.get("categories"), list) else []
+        raw_fields = item.get("fields") if isinstance(item.get("fields"), list) else []
+        excluded = {"name", "image", "remote_image", "description", "production", "source_url", "sections", "categories", "fields"}
+        language = selected_language(self.settings)
+        if raw_fields:
+            fields = [
+                {
+                    "group": wiki_section_label(row.get("group"), language),
+                    "label": wiki_field_label(str(row.get("key") or normalize_wiki_key(str(row.get("label") or ""))), language),
+                    "value": translate_wiki_value(row.get("value"), language),
+                }
+                for row in raw_fields
+                if isinstance(row, dict) and translate_wiki_value(row.get("value"), language)
+            ]
+        else:
+            fields = [
+                {"group": "", "label": wiki_field_label(str(key), language), "value": translate_wiki_value(value, language)}
+                for key, value in item.items()
+                if key not in excluded and translate_wiki_value(value, language)
+            ]
+        sections = [
+            {
+                "title": wiki_section_label(row.get("title"), language),
+                "body": translate_wiki_value(row.get("body"), language),
+            }
+            for row in raw_sections
+            if isinstance(row, dict) and clean_wiki_text(row.get("body"))
         ]
-        fields.sort(key=lambda row: row["label"].lower())
-        has_data = bool(item.get("name") or item.get("description") or item.get("image") or fields or production)
+        categories = [
+            {"label": translate_wiki_value(value, language)}
+            for value in raw_categories
+            if translate_wiki_value(value, language)
+        ]
+        has_data = bool(item.get("name") or item.get("description") or item.get("image") or fields or production or sections or categories)
 
         self._wiki_name = clean_wiki_text(item.get("name") or self._wiki_title)
-        self._wiki_description = clean_wiki_text(item.get("description") or "")
+        self._wiki_description = translate_wiki_value(item.get("description") or "", language)
         self._wiki_image = str(item.get("image") or "")
         self._wiki_source_url = str(item.get("source_url") or self._wiki_source_url)
         self._wiki_status_key = "item_search.wiki_loaded" if has_data else "item_search.wiki_empty"
         self._wiki_status_message = ""
-        self.wiki_fields.set_items(fields[:12])
+        self.wiki_fields.set_items(fields[:24])
+        self.wiki_sections.set_items(sections[:8])
+        self.wiki_categories.set_items(categories[:8])
         self.wiki_production_rows.set_items(
             [
                 {
-                    "site": clean_wiki_text(row.get("site")),
-                    "input": clean_wiki_text(row.get("input")),
-                    "output": clean_wiki_text(row.get("output")),
+                    "site": translate_wiki_value(row.get("site"), language),
+                    "input": translate_wiki_value(row.get("input"), language),
+                    "output": translate_wiki_value(row.get("output"), language),
                     "time": clean_wiki_text(row.get("time")),
                 }
                 for row in production[:8]
                 if isinstance(row, dict)
             ]
         )
-        self.changed.emit()
+
+    @staticmethod
+    def _load_damage_data() -> dict[str, Any]:
+        path = BASE_DIR / "damege.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    @staticmethod
+    def _damage_number(value: Any) -> float | None:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+        text = clean_wiki_text(value)
+        if not text:
+            return None
+        match = re.search(r"\d+(?:[.,]\d+)?", text.replace(" ", ""))
+        if not match:
+            return None
+        try:
+            return float(match.group(0).replace(",", "."))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _damage_percent(value: Any) -> float | None:
+        number = ItemSearchController._damage_number(value)
+        if number is None:
+            return None
+        if number > 1:
+            number = number / 100.0
+        if number <= 0:
+            return None
+        return min(1.0, number)
+
+    @staticmethod
+    def _build_damage_ammo_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
+        raw = data.get("municoes_importantes") if isinstance(data, dict) else {}
+        if not isinstance(raw, dict):
+            return []
+        rows: list[dict[str, Any]] = []
+        for name, payload in raw.items():
+            if not isinstance(payload, dict):
+                continue
+            damage = ItemSearchController._damage_number(payload.get("damage"))
+            if damage is None:
+                continue
+            damage_type = clean_wiki_text(payload.get("damage_type"))
+            uses = payload.get("uso") if isinstance(payload.get("uso"), list) else []
+            detail = f"{int(damage) if damage.is_integer() else damage:g} dano"
+            if damage_type:
+                detail += f" | {damage_type}"
+            if uses:
+                detail += f" | {', '.join(clean_wiki_text(use) for use in uses[:2])}"
+            rows.append(
+                {
+                    "name": str(name),
+                    "detail": detail,
+                    "damage": damage,
+                    "damage_type": damage_type,
+                    "penetration_modifier": ItemSearchController._damage_number(payload.get("penetration_modifier")),
+                    "inner_radius_m": ItemSearchController._damage_number(payload.get("inner_radius_m")),
+                    "outer_radius_m": ItemSearchController._damage_number(payload.get("outer_radius_m")),
+                    "uso": uses,
+                }
+            )
+        return sorted(rows, key=lambda row: row["name"].lower())
+
+    @staticmethod
+    def _build_damage_target_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        large_ships = data.get("large_ship_hp") if isinstance(data, dict) else {}
+        if isinstance(large_ships, dict):
+            for name, payload in large_ships.items():
+                if not isinstance(payload, dict):
+                    continue
+                hp = ItemSearchController._damage_number(payload.get("hp"))
+                if hp is None:
+                    continue
+                detail = " | ".join(
+                    part
+                    for part in (
+                        clean_wiki_text(payload.get("sigla")),
+                        clean_wiki_text(payload.get("classe")),
+                        clean_wiki_text(payload.get("faction")),
+                        f"{int(hp)} HP",
+                    )
+                    if part
+                )
+                rows.append(
+                    {
+                        "name": str(name),
+                        "detail": detail,
+                        "hp": hp,
+                        "disable_threshold": ItemSearchController._damage_percent(payload.get("disable_threshold")),
+                        "resistance_type": clean_wiki_text(payload.get("resistance_type") or "Large Ship"),
+                        "category": "ship",
+                        "source": "damege.json",
+                    }
+                )
+        examples = data.get("exemplos_calculados") if isinstance(data, dict) else {}
+        if isinstance(examples, dict):
+            for payload in examples.values():
+                if not isinstance(payload, dict):
+                    continue
+                name = clean_wiki_text(payload.get("target"))
+                hp = ItemSearchController._damage_number(payload.get("hp"))
+                if not name or hp is None:
+                    continue
+                target_type = clean_wiki_text(payload.get("target_type"))
+                rows.append(
+                    {
+                        "name": name,
+                        "detail": " | ".join(part for part in (target_type, f"{int(hp)} HP") if part),
+                        "hp": hp,
+                        "disable_threshold": ItemSearchController._damage_percent(payload.get("disable_threshold")),
+                        "resistance_type": target_type or "Heavy Armour",
+                        "category": "tank",
+                        "source": "damege.json",
+                    }
+                )
+        unique: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            unique.setdefault(ItemSearchController._normalize_search_text(row.get("name")), row)
+        return sorted(unique.values(), key=lambda row: str(row.get("name") or "").lower())
+
+    @staticmethod
+    def _merge_damage_target_rows(*groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: dict[str, dict[str, Any]] = {}
+        for rows in groups:
+            for row in rows:
+                name = clean_wiki_text(row.get("name"))
+                if not name:
+                    continue
+                key = ItemSearchController._normalize_search_text(name)
+                existing = merged.get(key)
+                if not existing:
+                    merged[key] = dict(row)
+                    continue
+                if not existing.get("hp") and row.get("hp"):
+                    existing.update(row)
+                else:
+                    aliases = list(existing.get("aliases", [])) if isinstance(existing.get("aliases"), list) else []
+                    aliases.extend(row.get("aliases", []) if isinstance(row.get("aliases"), list) else [])
+                    existing["aliases"] = list(dict.fromkeys(str(alias) for alias in aliases if str(alias or "").strip()))
+        return sorted(merged.values(), key=lambda row: str(row.get("name") or "").lower())
+
+    def _damage_targets_from_terms(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        useful_tokens = ("tank", "vehicle", "armour", "armor", "ship", "submarine", "carrier", "destroyer", "frigate")
+        for term in self._slang_terms:
+            name = clean_wiki_text(term.get("name"))
+            haystack = self._normalize_search_text(
+                " ".join(
+                    [
+                        name,
+                        clean_wiki_text(term.get("category")),
+                        clean_wiki_text(term.get("kind")),
+                        " ".join(str(alias) for alias in term.get("aliases", []) if alias),
+                    ]
+                )
+            )
+            if not name or not any(token in haystack for token in useful_tokens):
+                continue
+            rows.append(
+                {
+                    "name": name,
+                    "detail": " | ".join(
+                        part
+                        for part in (
+                            clean_wiki_text(term.get("category")),
+                            clean_wiki_text(term.get("kind")),
+                            clean_wiki_text(term.get("faction")),
+                        )
+                        if part
+                    ),
+                    "aliases": list(term.get("aliases", [])) if isinstance(term.get("aliases"), list) else [],
+                    "hp": None,
+                    "disable_threshold": None,
+                    "resistance_type": clean_wiki_text(term.get("category")),
+                    "category": "vehicle",
+                    "source": "terms",
+                }
+            )
+        return rows
+
+    def _damage_targets_from_item_names(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        useful_tokens = ("tank", "armoured", "armored", "vehicle", "half track", "half-track", "gunboat", "submarine", "battleship", "destroyer")
+        for name in self._cached_item_names:
+            norm = self._normalize_search_text(name)
+            if any(token.replace("-", " ") in norm for token in useful_tokens):
+                rows.append(
+                    {
+                        "name": name,
+                        "detail": "Item carregado | Wiki resolve HP/imagem ao calcular",
+                        "aliases": [],
+                        "hp": None,
+                        "disable_threshold": None,
+                        "resistance_type": "",
+                        "category": "vehicle",
+                        "source": "items",
+                    }
+                )
+        return rows
+
+    def _find_damage_ammo(self, name: str) -> dict[str, Any]:
+        query = self._normalize_search_text(name)
+        if not query and self._damage_ammo_rows:
+            return dict(self._damage_ammo_rows[0])
+        for row in self._damage_ammo_rows:
+            if self._normalize_search_text(row.get("name")) == query:
+                return dict(row)
+        for row in self._damage_ammo_rows:
+            haystack = self._normalize_search_text(f"{row.get('name')} {row.get('detail')}")
+            if query and query in haystack:
+                return dict(row)
+        # Not found in local DB — try wiki
+        if query:
+            try:
+                wiki_ammo = self._fetch_ammo_from_wiki(name)
+                if wiki_ammo:
+                    self._damage_ammo_rows = sorted(
+                        self._damage_ammo_rows + [wiki_ammo],
+                        key=lambda r: str(r.get("name") or "").lower(),
+                    )
+                    return wiki_ammo
+            except Exception:
+                pass
+        return {}
+
+    def _fetch_ammo_from_wiki(self, name: str) -> dict[str, Any] | None:
+        """Try to fetch ammo damage info from the Foxhole wiki."""
+        title = clean_wiki_text(name)
+        if not title:
+            return None
+        try:
+            resolved = search_wiki_page_title(title) or title
+            item = fetch_wiki_item_info(resolved)
+        except Exception:
+            return None
+        fields = item.get("fields") if isinstance(item.get("fields"), list) else []
+        values: dict[str, Any] = {}
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            key = str(field.get("key") or normalize_wiki_key(str(field.get("label") or "")))
+            values[key] = field.get("value")
+        damage = self._damage_number(
+            values.get("damage") or values.get("explosive_damage") or values.get("ap_damage")
+        )
+        if damage is None:
+            return None
+        damage_type = clean_wiki_text(values.get("damage_type") or values.get("type") or "")
+        item_name = clean_wiki_text(item.get("name") or resolved)
+        detail = f"{int(damage) if float(damage).is_integer() else damage:g} dano | Wiki"
+        if damage_type:
+            detail = f"{int(damage) if float(damage).is_integer() else damage:g} dano | {damage_type} | Wiki"
+        return {
+            "name": item_name,
+            "detail": detail,
+            "damage": damage,
+            "damage_type": damage_type,
+            "penetration_modifier": self._damage_number(values.get("penetration_modifier")),
+            "inner_radius_m": self._damage_number(values.get("inner_radius")),
+            "outer_radius_m": self._damage_number(values.get("outer_radius")),
+            "source": "wiki",
+        }
+
+    def _find_damage_target(self, name: str) -> dict[str, Any]:
+        query = self._normalize_search_text(name)
+        for row in self._damage_target_rows:
+            aliases = row.get("aliases", []) if isinstance(row.get("aliases"), list) else []
+            alias_norms = [self._normalize_search_text(alias) for alias in aliases]
+            if self._normalize_search_text(row.get("name")) == query or query in alias_norms:
+                found = dict(row)
+                if not found.get("hp") or not found.get("image"):
+                    wiki_target = self._fetch_damage_target_from_wiki(str(found.get("name") or name))
+                    if wiki_target:
+                        found.update({key: value for key, value in wiki_target.items() if value not in (None, "")})
+                        self._damage_target_rows = self._merge_damage_target_rows(self._damage_target_rows, [found])
+                return found
+        for row in self._damage_target_rows:
+            aliases = " ".join(str(alias) for alias in row.get("aliases", []) if alias) if isinstance(row.get("aliases"), list) else ""
+            haystack = self._normalize_search_text(f"{row.get('name')} {row.get('detail')} {aliases}")
+            if query and query in haystack:
+                found = dict(row)
+                if not found.get("hp") or not found.get("image"):
+                    wiki_target = self._fetch_damage_target_from_wiki(str(found.get("name") or name))
+                    if wiki_target:
+                        found.update({key: value for key, value in wiki_target.items() if value not in (None, "")})
+                        self._damage_target_rows = self._merge_damage_target_rows(self._damage_target_rows, [found])
+                return found
+        if query and query == self._normalize_search_text(self._wiki_name):
+            return self._wiki_damage_target()
+        if query:
+            wiki_target = self._fetch_damage_target_from_wiki(name)
+            if wiki_target:
+                self._damage_target_rows = self._merge_damage_target_rows(self._damage_target_rows, [wiki_target])
+                return wiki_target
+        return {}
+
+    def _fetch_damage_target_from_wiki(self, name: str) -> dict[str, Any]:
+        title = clean_wiki_text(name)
+        if not title:
+            return {}
+        candidates = [title]
+        for suffix in (" Tank", " Vehicle"):
+            if suffix.strip().casefold() not in title.casefold():
+                candidates.append(f"{title}{suffix}")
+        seen: set[str] = set()
+        best: dict[str, Any] = {}
+        for candidate in candidates:
+            try:
+                resolved = search_wiki_page_title(candidate) or candidate
+                if self._normalize_search_text(resolved) in seen:
+                    continue
+                seen.add(self._normalize_search_text(resolved))
+                item = fetch_wiki_item_info(resolved)
+            except Exception:
+                continue
+            target = self._wiki_damage_target_from_item(item)
+            if target.get("hp") or target.get("image"):
+                return target
+            if target and not best:
+                best = target
+        return best
+
+    def _wiki_damage_target_from_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        fields = item.get("fields") if isinstance(item.get("fields"), list) else []
+        values: dict[str, Any] = {}
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            key = str(field.get("key") or normalize_wiki_key(str(field.get("label") or "")))
+            values[key] = field.get("value")
+        for key, value in item.items():
+            if key not in values:
+                values[str(key)] = value
+        hp = self._damage_number(values.get("health") or values.get("hp") or values.get("hitpoints"))
+        disable_threshold_text = clean_wiki_text(values.get("disable_threshold"))
+        disable_threshold = self._damage_percent(disable_threshold_text)
+        if hp is None and disable_threshold:
+            below_match = re.search(r"below\s+(\d+(?:[.,]\d+)?)\s+health", disable_threshold_text, flags=re.I)
+            if below_match:
+                try:
+                    hp = float(below_match.group(1).replace(",", ".")) / disable_threshold
+                except ValueError:
+                    hp = None
+        resistance_type = clean_wiki_text(
+            values.get("resistance")
+            or values.get("resistance_type")
+            or values.get("class")
+            or values.get("category")
+            or values.get("super_class")
+        )
+        name = clean_wiki_text(item.get("name"))
+        detail_parts = [part for part in (resistance_type, f"{int(hp)} HP" if hp else "", "Wiki") if part]
+        return {
+            "name": name,
+            "detail": " | ".join(detail_parts),
+            "hp": hp,
+            "disable_threshold": disable_threshold,
+            "resistance_type": resistance_type,
+            "category": "wiki",
+            "source": "wiki",
+            "image": str(item.get("image") or ""),
+        }
+
+    def _wiki_damage_target(self) -> dict[str, Any]:
+        item = self._wiki_data if isinstance(self._wiki_data, dict) else {}
+        target = self._wiki_damage_target_from_item(item) if item else {}
+        if not target.get("name"):
+            target["name"] = clean_wiki_text(self._wiki_name or self._selected_name or self._query)
+        if not target.get("image"):
+            target["image"] = self._wiki_image
+        if not target.get("detail"):
+            target["detail"] = "Wiki carregada" + (f" | {int(target.get('hp'))} HP" if target.get("hp") else "")
+        return target
+
+    def _current_damage_target(self) -> dict[str, Any]:
+        name = clean_wiki_text(self._wiki_name or self._selected_name or self._query)
+        static_target = self._find_damage_target(name)
+        if static_target:
+            return static_target
+        return self._wiki_damage_target()
+
+    def _damage_target_preview_rows(self) -> list[dict[str, str]]:
+        target = self._current_damage_target()
+        if not target.get("name"):
+            return [{"label": "Alvo", "value": "Pesquise uma estrutura, veiculo ou navio na Wiki primeiro.", "kind": "warning"}]
+        rows = [{"label": "Alvo", "value": str(target.get("name") or "-"), "kind": "info"}]
+        hp = self._damage_number(target.get("hp"))
+        rows.append({"label": "HP conhecido", "value": str(int(hp)) if hp else "Nao encontrado no JSON/Wiki", "kind": "warning" if not hp else "info"})
+        if target.get("resistance_type"):
+            rows.append({"label": "Resistencia/classe", "value": str(target.get("resistance_type")), "kind": "info"})
+        return rows
+
+    def _damage_multiplier(self, target: dict[str, Any], ammo: dict[str, Any]) -> tuple[float, list[str], bool]:
+        damage_type = self._normalize_search_text(ammo.get("damage_type")).replace(" ", "_")
+        resistance = self._normalize_search_text(target.get("resistance_type"))
+        category = self._normalize_search_text(target.get("category"))
+        notes: list[str] = []
+        requires_penetration = False
+        multiplier = 1.0
+        if "large ship" in resistance and damage_type == "armour_piercing":
+            multiplier = 0.6
+            notes.append("Large Ship AP: aplicado multiplicador 0.6 do damege.json.")
+        is_heavy_armour = "heavy armour" in resistance or ("heavy" in resistance and "tank" in resistance)
+        if is_heavy_armour and damage_type == "explosive":
+            multiplier = 0.85
+            requires_penetration = True
+            notes.append("Heavy Armour + Explosive: usando 15% de mitigacao do exemplo do JSON.")
+        if any(token in resistance for token in ("armour", "armor", "tank")) and damage_type in {"explosive", "armour_piercing"}:
+            requires_penetration = True
+        if "structure" in category or "structure" in resistance or "bunker" in resistance:
+            if damage_type in {"light_kinetic", "anti_tank_kinetic", "anti_tank_explosive", "shrapnel"}:
+                multiplier = 0.0
+                notes.append("O JSON marca esse tipo de dano como ineficiente/normalmente sem dano estrutural.")
+            elif damage_type in {"explosive", "high_explosive"} and "tier 2" in resistance and "bunker" in resistance:
+                multiplier = 0.35
+                notes.append("Tier 2 Bunker: aplicado override 0.35 para explosive/high explosive.")
+        return multiplier, notes, requires_penetration
+
+    def _damage_estimate(self, target: dict[str, Any], ammo: dict[str, Any], penetration_percent: str = "") -> dict[str, Any]:
+        hp = self._damage_number(target.get("hp"))
+        raw_damage = self._damage_number(ammo.get("damage"))
+        if hp is None or raw_damage is None:
+            return {"ok": False, "hp": hp, "raw_damage": raw_damage, "notes": []}
+        multiplier, notes, requires_penetration = self._damage_multiplier(target, ammo)
+        effective = raw_damage * multiplier
+        if effective <= 0:
+            return {"ok": False, "hp": hp, "raw_damage": raw_damage, "effective": 0, "notes": notes}
+        hits_destroy = math.ceil(hp / effective)
+        threshold = self._damage_percent(target.get("disable_threshold"))
+        hits_disable = math.ceil((hp * threshold) / effective) if threshold else None
+        chance = self._damage_percent(penetration_percent)
+        chance_source = "informada"
+        if requires_penetration and chance is None:
+            chance = self._default_penetration_chance(target, ammo)
+            chance_source = "estimada"
+        expected_destroy = math.ceil(hits_destroy / chance) if chance and requires_penetration else None
+        expected_disable = math.ceil(hits_disable / chance) if chance and requires_penetration and hits_disable else None
+        probability_destroy = self._binomial_at_least(expected_destroy, hits_destroy, chance) if expected_destroy and chance else None
+        probability_disable = self._binomial_at_least(expected_disable, hits_disable, chance) if expected_disable and chance and hits_disable else None
+        return {
+            "ok": True,
+            "hp": hp,
+            "raw_damage": raw_damage,
+            "effective": effective,
+            "hits_destroy": hits_destroy,
+            "hits_disable": hits_disable,
+            "requires_penetration": requires_penetration,
+            "penetration_chance": chance,
+            "penetration_source": chance_source,
+            "expected_destroy": expected_destroy,
+            "expected_disable": expected_disable,
+            "probability_destroy": probability_destroy,
+            "probability_disable": probability_disable,
+            "notes": notes,
+        }
+
+    @staticmethod
+    def _default_penetration_chance(target: dict[str, Any], ammo: dict[str, Any]) -> float:
+        resistance = ItemSearchController._normalize_search_text(target.get("resistance_type"))
+        ammo_name = ItemSearchController._normalize_search_text(ammo.get("name"))
+        ammo_type = ItemSearchController._normalize_search_text(ammo.get("damage_type"))
+        if "super heavy" in resistance and "40mm" in ammo_name:
+            return 0.22
+        if "armour piercing" in ammo_type:
+            return 0.35
+        if "heavy" in resistance or "tank" in resistance:
+            return 0.25
+        return 0.30
+
+    @staticmethod
+    def _binomial_at_least(trials: int | None, successes: int | None, chance: float | None) -> float | None:
+        if not trials or not successes or chance is None or chance <= 0:
+            return None
+        trials = min(int(trials), 240)
+        successes = int(successes)
+        if successes > trials:
+            return 0.0
+        try:
+            probability = sum(
+                math.comb(trials, hit) * (chance ** hit) * ((1 - chance) ** (trials - hit))
+                for hit in range(successes, trials + 1)
+            )
+        except (OverflowError, ValueError):
+            return None
+        return max(0.0, min(1.0, probability))
+
+    def _calculate_damage_rows(self, target: dict[str, Any], ammo: dict[str, Any], penetration_percent: str = "") -> list[dict[str, str]]:
+        rows = self._damage_target_preview_rows()
+        if not ammo:
+            rows.append({"label": "Municao", "value": "Escolha uma municao do damege.json.", "kind": "warning"})
+            return rows
+        rows.append({"label": "Municao", "value": str(ammo.get("name") or "-"), "kind": "info"})
+        estimate = self._damage_estimate(target, ammo, penetration_percent)
+        if not estimate.get("ok"):
+            if estimate.get("hp") is None:
+                rows.append({"label": "Calculo", "value": "HP do alvo nao encontrado. Abra um item com Health na Wiki ou use um alvo presente no damege.json.", "kind": "warning"})
+            elif estimate.get("raw_damage") is None:
+                rows.append({"label": "Calculo", "value": "Dano da municao nao encontrado.", "kind": "warning"})
+            else:
+                rows.append({"label": "Dano efetivo", "value": "0 ou ineficiente contra esse alvo pelas regras do JSON.", "kind": "warning"})
+            for note in estimate.get("notes", []):
+                rows.append({"label": "Nota", "value": str(note), "kind": "note"})
+            return rows
+        rows.append({"label": "Dano bruto", "value": f"{estimate['raw_damage']:g}", "kind": "info"})
+        rows.append({"label": "Dano efetivo", "value": f"{estimate['effective']:g}", "kind": "success"})
+        if estimate.get("hits_disable"):
+            rows.append({"label": "Acertos penetrantes para desabilitar", "value": str(estimate["hits_disable"]), "kind": "success"})
+        rows.append({"label": "Acertos penetrantes para destruir", "value": str(estimate["hits_destroy"]), "kind": "success"})
+        if estimate.get("requires_penetration"):
+            chance = estimate.get("penetration_chance")
+            if chance:
+                source = "estimada" if estimate.get("penetration_source") == "estimada" else "informada"
+                rows.append({"label": f"Chance por tiro ({source})", "value": f"{chance * 100:.0f}%", "kind": "warning"})
+                if estimate.get("expected_disable"):
+                    rows.append({"label": "Media para desabilitar", "value": f"{estimate['expected_disable']} tiros", "kind": "warning"})
+                    if estimate.get("probability_disable") is not None:
+                        rows.append({"label": "Chance nessa media", "value": f"{estimate['probability_disable'] * 100:.0f}% de desabilitar", "kind": "warning"})
+                rows.append({"label": "Media para destruir", "value": f"{estimate['expected_destroy']} tiros", "kind": "warning"})
+                if estimate.get("probability_destroy") is not None:
+                    rows.append({"label": "Chance nessa media", "value": f"{estimate['probability_destroy'] * 100:.0f}% de destruir", "kind": "warning"})
+            else:
+                rows.append({"label": "Penetracao", "value": "Esse alvo pode dar bounce. Informe uma chance para estimar tiros reais.", "kind": "warning"})
+        else:
+            rows.append({"label": "Chance por tiro", "value": "100% se o acerto aplicar dano", "kind": "success"})
+            rows.append({"label": "Media para destruir", "value": f"{estimate['hits_destroy']} acertos", "kind": "success"})
+        for note in estimate.get("notes", []):
+            rows.append({"label": "Nota", "value": str(note), "kind": "note"})
+        return rows
+
+    def _calculate_duel_rows(self, left: dict[str, Any], right: dict[str, Any], ammo: dict[str, Any], penetration_percent: str = "") -> list[dict[str, str]]:
+        if not left or not right:
+            return [{"label": "Duelo", "value": "Escolha os dois tanques para simular o duelo.", "kind": "warning"}]
+        if not ammo:
+            # No specific ammo → test ALL ammos
+            return self._calculate_duel_all_ammos(left, right, penetration_percent)
+        left_name = str(left.get("name") or "Tanque A")
+        right_name = str(right.get("name") or "Tanque B")
+        ammo_name = str(ammo.get("name") or "-")
+        # A attacks B, B attacks A
+        left_attack = self._damage_estimate(right, ammo, penetration_percent)
+        right_attack = self._damage_estimate(left, ammo, penetration_percent)
+        if not left_attack.get("ok") or not right_attack.get("ok"):
+            rows: list[dict[str, str]] = [
+                {"label": "Municao", "value": ammo_name, "kind": "info"},
+                {"label": "Resultado", "value": "Faltam dados de HP ou dano para simular essa luta. Verifique se os dois alvos tem HP na Wiki ou no banco de dados.", "kind": "warning"},
+            ]
+            return rows
+        left_score = left_attack.get("expected_destroy") or left_attack.get("hits_destroy")
+        right_score = right_attack.get("expected_destroy") or right_attack.get("hits_destroy")
+        left_hits = left_attack.get("hits_destroy")
+        right_hits = right_attack.get("hits_destroy")
+        chance = left_attack.get("penetration_chance") or right_attack.get("penetration_chance")
+        pen_source = "estimada" if (
+            left_attack.get("penetration_source") == "estimada" or right_attack.get("penetration_source") == "estimada"
+        ) else "informada"
+        # Determine winner
+        if left_score < right_score:
+            winner = left_name
+            winner_kind = "success"
+        elif right_score < left_score:
+            winner = right_name
+            winner_kind = "warning"
+        else:
+            winner = "Empate tecnico"
+            winner_kind = "note"
+        rows = [
+            # --- Overview row ---
+            {"label": "Municao simulada", "value": ammo_name, "kind": "info"},
+            # --- Winner ---
+            {"label": "Vencedor estimado", "value": winner, "kind": winner_kind},
+            # --- A attacks B ---
+            {
+                "label": f"{left_name} destrói {right_name} em",
+                "value": f"{left_score} tiros" + (f" ({left_hits} penetrantes)" if chance and left_hits != left_score else ""),
+                "kind": "success",
+            },
+            # --- B attacks A ---
+            {
+                "label": f"{right_name} destrói {left_name} em",
+                "value": f"{right_score} tiros" + (f" ({right_hits} penetrantes)" if chance and right_hits != right_score else ""),
+                "kind": "warning",
+            },
+        ]
+        if chance:
+            rows.append({"label": f"Chance de penetração por tiro ({pen_source})", "value": f"{chance * 100:.0f}%", "kind": "info"})
+        if left_attack.get("probability_destroy") is not None:
+            rows.append({"label": f"Probabilidade de {left_name} vencer na média", "value": f"{left_attack['probability_destroy'] * 100:.0f}%", "kind": "success"})
+        if right_attack.get("probability_destroy") is not None:
+            rows.append({"label": f"Probabilidade de {right_name} vencer na média", "value": f"{right_attack['probability_destroy'] * 100:.0f}%", "kind": "warning"})
+        # Disable info if applicable
+        left_dis = left_attack.get("hits_disable")
+        right_dis = right_attack.get("hits_disable")
+        if left_dis:
+            left_dis_shots = left_attack.get("expected_disable") or left_dis
+            rows.append({"label": f"{left_name} desabilita {right_name} em", "value": f"{left_dis_shots} tiros", "kind": "success"})
+        if right_dis:
+            right_dis_shots = right_attack.get("expected_disable") or right_dis
+            rows.append({"label": f"{right_name} desabilita {left_name} em", "value": f"{right_dis_shots} tiros", "kind": "warning"})
+        rows.append({"label": "Nota", "value": "Estimativa por tiros médios necessários. Não considera cadência de fogo, distância, ângulo de impacto, reparo ou tripulação.", "kind": "note"})
+        return rows
+
+    def _calculate_duel_all_ammos(self, left: dict[str, Any], right: dict[str, Any], penetration_percent: str = "") -> list[dict[str, str]]:
+        """Calculate duel results for ammo types the tanks can use, ranked by combined efficiency."""
+        left_name = str(left.get("name") or "Tanque A")
+        right_name = str(right.get("name") or "Tanque B")
+
+        if not self._damage_ammo_rows:
+            return [{"label": "Municao", "value": "Banco de munições vazio.", "kind": "warning"}]
+
+        left_hp = self._damage_number(left.get("hp"))
+        right_hp = self._damage_number(right.get("hp"))
+        if left_hp is None or right_hp is None:
+            return [
+                {"label": "Dados insuficientes", "value": "HP de um ou ambos os tanques é desconhecido. Abra cada tanque na Wiki primeiro.", "kind": "warning"},
+            ]
+
+        # Filter ammo to only those relevant for vehicle-vs-vehicle duels
+        left_res  = self._normalize_search_text(left.get("resistance_type") or left.get("detail") or "")
+        right_res = self._normalize_search_text(right.get("resistance_type") or right.get("detail") or "")
+        combined_res = left_res + " " + right_res
+        relevant_ammos = [a for a in self._damage_ammo_rows if self._ammo_relevant_for_vehicle(a, combined_res)]
+
+        if not relevant_ammos:
+            relevant_ammos = self._damage_ammo_rows  # fallback: use all if filter returns nothing
+
+        results: list[dict[str, Any]] = []
+        for ammo in relevant_ammos:
+            la = self._damage_estimate(right, ammo, penetration_percent)  # A attacks B
+            ra = self._damage_estimate(left,  ammo, penetration_percent)  # B attacks A
+            if not la.get("ok") or not ra.get("ok"):
+                continue
+            ls = la.get("expected_destroy") or la.get("hits_destroy") or 9999
+            rs = ra.get("expected_destroy") or ra.get("hits_destroy") or 9999
+            diff = rs - ls  # positive = A wins, negative = B wins
+            results.append({
+                "ammo": ammo,
+                "left_attack": la,
+                "right_attack": ra,
+                "left_score": ls,
+                "right_score": rs,
+                "diff": diff,
+            })
+
+        if not results:
+            return [{"label": "Sem resultados", "value": "Nenhuma munição relevante causa dano útil em ambos com os dados disponíveis.", "kind": "warning"}]
+
+        results.sort(key=lambda r: -r["diff"])
+
+        left_wins  = [r for r in results if r["diff"] > 0]
+        right_wins = [r for r in results if r["diff"] < 0]
+        ties       = [r for r in results if r["diff"] == 0]
+
+        # Determine overall advantage by comparing total "diff" sum
+        total_diff = sum(r["diff"] for r in results)
+        if total_diff > 0:
+            winner_name  = left_name
+            loser_name   = right_name
+            winner_wins  = len(left_wins)
+            winner_kind  = "winner"
+            loser_kind   = "loser"
+        elif total_diff < 0:
+            winner_name  = right_name
+            loser_name   = left_name
+            winner_wins  = len(right_wins)
+            winner_kind  = "loser"
+            loser_kind   = "winner"
+        else:
+            winner_name  = "Empate técnico"
+            loser_name   = ""
+            winner_wins  = len(ties)
+            winner_kind  = "note"
+            loser_kind   = "note"
+
+        # Best single ammo result
+        best = results[0]  # highest diff = most favourable for A
+        best_ammo_name = str(best["ammo"].get("name") or "-")
+        best_ls = best["left_score"]
+        best_rs = best["right_score"]
+
+        rows: list[dict[str, str]] = [
+            # Big winner announcement
+            {"label": f"{len(results)} munições testadas • {winner_wins} favorecem o vencedor",
+             "value": winner_name,
+             "kind": winner_kind},
+        ]
+
+        # Best ammo detail
+        if best["diff"] > 0:
+            rows.append({"label": f"Melhor munição para {left_name}", "value": best_ammo_name, "kind": "success"})
+        elif best["diff"] < 0:
+            # If best for A is actually negative, the best for A overall is from the right_wins side
+            best_for_a = results[-1] if right_wins else results[0]
+            rows.append({"label": "Melhor munição encontrada", "value": str(best_for_a["ammo"].get("name") or "-"), "kind": "warning"})
+        else:
+            rows.append({"label": "Melhor munição", "value": best_ammo_name, "kind": "note"})
+
+        rows.append({"label": f"{left_name} destrói {right_name} com {best_ammo_name}", "value": f"{best_ls} tiros", "kind": "success"})
+        rows.append({"label": f"{right_name} destrói {left_name} com {best_ammo_name}", "value": f"{best_rs} tiros", "kind": "warning"})
+
+        # Per-ammo ranking rows
+        shown: set[str] = {best_ammo_name.lower()}
+        for r in results:
+            aname = str(r["ammo"].get("name") or "-")
+            if aname.lower() in shown:
+                continue
+            shown.add(aname.lower())
+            ls = r["left_score"]
+            rs = r["right_score"]
+            if r["diff"] > 0:
+                kind = "success"
+                summary = f"{left_name} • {ls} tiros vs {rs}"
+            elif r["diff"] < 0:
+                kind = "warning"
+                summary = f"{right_name} • {rs} tiros vs {ls}"
+            else:
+                kind = "note"
+                summary = f"Empate — {ls} tiros cada"
+            rows.append({"label": aname, "value": summary, "kind": kind})
+            if len(rows) >= 18:
+                break
+
+        rows.append({"label": "Nota", "value": "Baseado em HP banco/wiki + dano por munição. Não considera cadência, distância, ângulo, reparo ou tripulação.", "kind": "note"})
+        return rows
+
+    @staticmethod
+    def _ammo_relevant_for_vehicle(ammo: dict[str, Any], combined_resistance: str) -> bool:
+        """Return True if this ammo is suitable for a vehicle-vs-vehicle duel."""
+        uso = [ItemSearchController._normalize_search_text(u) for u in (ammo.get("uso") or [])]
+        uso_text = " ".join(uso)
+        damage_type = ItemSearchController._normalize_search_text(ammo.get("damage_type") or "")
+
+        # Exclude pure infantry / AA / sea mine / structure demolition ammos
+        EXCLUDE_TAGS = (
+            "anti-infantry", "anti-air", "area denial", "anti-aircraft",
+            "sabotage", "structure demolition", "concrete cracking",
+            "base destruction", "heavy pve", "sea mine", "infantry demolition",
+            "area bleed",
+        )
+        if any(tag in uso_text for tag in EXCLUDE_TAGS):
+            # Exception: if it also explicitly mentions anti-tank or anti-vehicle, keep it
+            if not any(t in uso_text for t in ("anti-tank", "anti-vehicle", "anti-armor", "anti-armour")):
+                return False
+
+        # Always include if tagged as vehicle / tank relevant
+        INCLUDE_TAGS = (
+            "anti-tank", "anti-vehicle", "anti-armor", "anti-armour",
+            "vehicle weapon", "heavy vehicle", "light vehicle",
+            "armour piercing", "anti-structure medio",
+        )
+        if any(tag in uso_text for tag in INCLUDE_TAGS):
+            return True
+
+        # Include standard calibre ammos (no uso or pve/artillery)
+        CALIBRE_TYPES = ("explosive", "armour_piercing", "armour piercing", "high_explosive", "high explosive",
+                         "anti_tank", "anti-tank", "anti_tank_explosive", "anti-tank explosive",
+                         "anti_tank_kinetic", "anti-tank kinetic", "heavy kinetic")
+        if damage_type in CALIBRE_TYPES or not uso:
+            return True
+
+        # Exclude torpedoes when not fighting ships
+        if "anti-ship" in uso_text or "anti-large-ship" in uso_text:
+            is_ship = any(t in combined_resistance for t in ("ship", "naval", "submarine"))
+            return is_ship
+
+        return False
+
+    def _damage_suggestions(self, rows: list[dict[str, Any]], query: str, limit: int = 10) -> list[dict[str, str]]:
+        query_norm = self._normalize_search_text(query)
+        scored: list[tuple[int, dict[str, Any]]] = []
+        for row in rows:
+            name_norm = self._normalize_search_text(row.get("name"))
+            detail_norm = self._normalize_search_text(row.get("detail"))
+            aliases_norm = self._normalize_search_text(" ".join(str(alias) for alias in row.get("aliases", []) if alias)) if isinstance(row.get("aliases"), list) else ""
+            score = 0
+            if not query_norm:
+                score = 10
+            elif name_norm == query_norm:
+                score = 100
+            elif query_norm and query_norm in aliases_norm:
+                score = 90
+            elif name_norm.startswith(query_norm):
+                score = 82
+            elif query_norm in name_norm:
+                score = 62
+            elif query_norm in detail_norm:
+                score = 45
+            if score:
+                scored.append((score, row))
+        scored.sort(key=lambda item: (-item[0], str(item[1].get("name") or "").lower()))
+        return [{"name": str(row.get("name") or ""), "detail": str(row.get("detail") or "")} for _score, row in scored[:limit]]
+
+    def _update_damage_ammo_suggestions(self, query: str) -> None:
+        self.damage_ammo_suggestions.set_items(self._damage_suggestions(self._damage_ammo_rows, query))
+
+    def _update_damage_duel_suggestions(self, query: str, side: str) -> None:
+        rows = self._damage_suggestions(self._damage_target_rows, query)
+        if len(rows) < 6 and len(clean_wiki_text(query)) >= 3:
+            seen = {self._normalize_search_text(row.get("name")) for row in rows}
+            try:
+                titles = search_wiki_page_titles(query, 8)
+            except Exception:
+                titles = []
+            for title in titles:
+                key = self._normalize_search_text(title)
+                if not key or key in seen:
+                    continue
+                rows.append({"name": title, "detail": "Wiki | HP e imagem resolvidos ao calcular"})
+                seen.add(key)
+                if len(rows) >= 8:
+                    break
+        if str(side).lower() == "right":
+            self.damage_duel_right_suggestions.set_items(rows)
+        else:
+            self.damage_duel_left_suggestions.set_items(rows)
 
     def _item_names(self) -> list[str]:
         return self._cached_item_names
@@ -6394,31 +7974,134 @@ class ItemSearchController(QObject):
 
     @staticmethod
     def _load_slang_terms() -> list[dict[str, Any]]:
+        def aliases_from_name(name: str) -> list[str]:
+            words = re.findall(r"[A-Za-z0-9]+", name)
+            aliases: list[str] = []
+            if 2 <= len(words) <= 5:
+                acronym = "".join(word[0] for word in words if word and word[0].isalnum()).upper()
+                if len(acronym) >= 2:
+                    aliases.append(acronym)
+            compact = re.sub(r"[^A-Za-z0-9]+", "", name)
+            if compact and compact != name and len(compact) <= 24:
+                aliases.append(compact)
+            return aliases
+
+        def add_term(
+            terms: list[dict[str, Any]],
+            name: str,
+            aliases: list[Any] | None = None,
+            category: str = "",
+            kind: str = "",
+            faction: str = "",
+            source: str = "slang",
+        ) -> None:
+            clean_name = str(name or "").strip()
+            clean_aliases = [str(alias).strip() for alias in (aliases or []) if str(alias or "").strip()]
+            if clean_name:
+                clean_aliases.extend(aliases_from_name(clean_name))
+            unique_aliases = list(dict.fromkeys(alias for alias in clean_aliases if alias and alias != clean_name))
+            if not clean_name and not unique_aliases:
+                return
+            terms.append(
+                {
+                    "index": len(terms),
+                    "name": clean_name,
+                    "aliases": unique_aliases,
+                    "category": str(category or "").strip(),
+                    "kind": str(kind or "").strip(),
+                    "faction": str(faction or "").strip(),
+                    "source": source,
+                }
+            )
+
+        terms: list[dict[str, Any]] = []
         path = BASE_DIR / "slang_terms.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            return []
+            data = {}
         raw_terms = data.get("slang_terms", []) if isinstance(data, dict) else []
-        terms: list[dict[str, Any]] = []
-        for index, item in enumerate(raw_terms):
+        for item in raw_terms:
             if not isinstance(item, dict):
                 continue
-            name = str(item.get("nome") or "").strip()
-            aliases = [str(alias).strip() for alias in item.get("apelidos", []) if str(alias).strip()]
-            if not name and not aliases:
-                continue
-            terms.append(
-                {
-                    "index": index,
-                    "name": name,
-                    "aliases": aliases,
-                    "category": str(item.get("categoria") or "").strip(),
-                    "kind": str(item.get("tipo") or "").strip(),
-                    "faction": str(item.get("faccao") or "").strip(),
-                }
+            add_term(
+                terms,
+                str(item.get("nome") or "").strip(),
+                item.get("apelidos", []) if isinstance(item.get("apelidos"), list) else [],
+                str(item.get("categoria") or "").strip(),
+                str(item.get("tipo") or "").strip(),
+                str(item.get("faccao") or "").strip(),
+                "slang",
             )
-        return terms
+
+        structure_path = BASE_DIR / "siglestrutrure.json"
+        try:
+            structure_data = json.loads(structure_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            structure_data = {}
+
+        def add_structure_value(value: Any, category: str) -> None:
+            if isinstance(value, str):
+                add_term(terms, value, [], category, "estrutura", "", "structure")
+                return
+            if not isinstance(value, dict):
+                return
+            name = str(value.get("name") or value.get("nome") or value.get("nome_oficial") or "").strip()
+            aliases = value.get("aliases", [])
+            if not isinstance(aliases, list):
+                aliases = []
+            aliases = list(aliases)
+            for key in ("sigla_principal", "nome_pt_comunidade", "classe", "type"):
+                alias = value.get(key)
+                if alias:
+                    aliases.append(alias)
+            add_term(
+                terms,
+                name,
+                aliases,
+                category,
+                str(value.get("type") or value.get("classe") or "estrutura").strip(),
+                str(value.get("faction") or "").strip(),
+                "structure",
+            )
+
+        if isinstance(structure_data, dict):
+            structures = structure_data.get("estruturas_quebraveis")
+            if isinstance(structures, dict):
+                for category, values in structures.items():
+                    if isinstance(values, list):
+                        for value in values:
+                            add_structure_value(value, str(category))
+            ships = structure_data.get("navios_grande_porte")
+            if isinstance(ships, list):
+                for value in ships:
+                    add_structure_value(value, "navios_grande_porte")
+            naval_acronyms = structure_data.get("siglas_navais_resumo")
+            if isinstance(naval_acronyms, dict):
+                for acronym, description in naval_acronyms.items():
+                    parts = [part.strip() for part in re.split(r"/|\bou\b", str(description or "")) if part.strip()]
+                    if not parts:
+                        continue
+                    name = parts[-1]
+                    aliases = [acronym, *parts[:-1]]
+                    add_term(terms, name, aliases, "siglas_navais_resumo", "abreviacao", "", "structure")
+
+        unique_terms: list[dict[str, Any]] = []
+        seen_terms: set[tuple[str, tuple[str, ...], str]] = set()
+        for term in terms:
+            normalized_name = str(term.get("name") or "").casefold()
+            normalized_aliases = tuple(str(alias).casefold() for alias in term.get("aliases", []))
+            key = (
+                normalized_name,
+                normalized_aliases,
+                str(term.get("source") or ""),
+            )
+            if key in seen_terms or (not normalized_name and not normalized_aliases):
+                continue
+            term["index"] = len(unique_terms)
+            unique_terms.append(term)
+            seen_terms.add(key)
+        return unique_terms
 
     def _resolve_slang_names(self, term: dict[str, Any]) -> list[str]:
         term_index = int(term.get("index", -1))
@@ -6461,9 +8144,9 @@ class ItemSearchController(QObject):
                 score = 82
             elif name_norm.startswith(query_norm):
                 score = 76
-            elif any(query_norm in alias for alias in alias_norms):
+            elif len(query_norm) >= 3 and any(query_norm in alias for alias in alias_norms):
                 score = 62
-            elif query_norm in name_norm:
+            elif len(query_norm) >= 3 and query_norm in name_norm:
                 score = 55
             if score:
                 scored.append((score, term))
@@ -6493,16 +8176,28 @@ class ItemSearchController(QObject):
                 ),
                 str((term.get("aliases") or [""])[0] or ""),
             )
-            detail_parts = [part for part in (alias, str(term.get("name") or ""), str(term.get("kind") or "")) if part]
-            for name in self._resolve_slang_names(term):
+            detail_parts = [
+                part
+                for part in (
+                    alias,
+                    str(term.get("name") or ""),
+                    str(term.get("kind") or ""),
+                    str(term.get("category") or ""),
+                    str(term.get("faction") or ""),
+                )
+                if part
+            ]
+            resolved_names = self._resolve_slang_names(term)
+            names_to_show = resolved_names or ([str(term.get("name") or "").strip()] if str(term.get("name") or "").strip() else [])
+            for name in names_to_show:
                 if name in seen:
                     continue
                 rows.append(
                     {
                         "name": name,
                         "alias": alias,
-                        "detail": " -> ".join(detail_parts[:3]),
-                        "source": "slang",
+                        "detail": " -> ".join(detail_parts[:4]),
+                        "source": str(term.get("source") or "slang"),
                     }
                 )
                 seen.add(name)

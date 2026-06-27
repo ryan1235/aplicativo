@@ -884,5 +884,22 @@
   "item_search.wiki_fields": "Fiche technique",
   "item_search.wiki_production": "Production",
   "item_search.wiki_no_data": "Le Wiki n a pas encore renvoye de details pour cet objet.",
-  "item_search.wiki_open": "Ouvrir la page Wiki"
+  "item_search.wiki_open": "Ouvrir la page Wiki",
+  "wiki.nav": "Wiki",
+  "wiki.title": "Wiki",
+  "wiki.subtitle": "Consultez les donnees de Foxhole Wiki avec la meme recherche d'objets.",
+  "wiki.placeholder": "Tapez un objet du Wiki...",
+  "wiki.refresh": "Consulter",
+  "wiki.loading": "Recherche...",
+  "wiki.empty_title": "Choisir un objet",
+  "wiki.sections": "Details du Wiki",
+  "wiki.damage_open": "Calcul degats",
+  "wiki.damage_title": "Calculateur de degats",
+  "wiki.damage_break": "Detruire cible",
+  "wiki.damage_duel": "Duel de chars",
+  "wiki.damage_ammo": "Munition ou objet",
+  "wiki.damage_pen": "Pen. %",
+  "wiki.damage_calculate": "Calculer",
+  "wiki.damage_tank_a": "Char A",
+  "wiki.damage_tank_b": "Char B"
 }

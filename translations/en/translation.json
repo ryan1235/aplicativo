@@ -884,5 +884,22 @@
   "item_search.wiki_fields": "Technical sheet",
   "item_search.wiki_production": "Production",
   "item_search.wiki_no_data": "The Wiki did not return details for this item yet.",
-  "item_search.wiki_open": "Open Wiki page"
+  "item_search.wiki_open": "Open Wiki page",
+  "wiki.nav": "Wiki",
+  "wiki.title": "Wiki",
+  "wiki.subtitle": "Query Foxhole Wiki data with the same item search.",
+  "wiki.placeholder": "Type a Wiki item...",
+  "wiki.refresh": "Query",
+  "wiki.loading": "Fetching...",
+  "wiki.empty_title": "Choose an item",
+  "wiki.sections": "Wiki details",
+  "wiki.damage_open": "Damage calc",
+  "wiki.damage_title": "Damage calculator",
+  "wiki.damage_break": "Break target",
+  "wiki.damage_duel": "Tank duel",
+  "wiki.damage_ammo": "Ammo or item",
+  "wiki.damage_pen": "Pen. %",
+  "wiki.damage_calculate": "Calculate",
+  "wiki.damage_tank_a": "Tank A",
+  "wiki.damage_tank_b": "Tank B"
 }

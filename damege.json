@@ -1,0 +1,660 @@
+{
+  "meta": {
+    "game": "Foxhole",
+    "data_pesquisa": "2026-06-26",
+    "objetivo": "Base de dados para calcular quantos tiros, shells, explosivos ou acertos sao necessarios para destruir ou desabilitar estruturas, veiculos, navios e aeronaves.",
+    "idioma_nomes": "en-US / nomes oficiais do jogo",
+    "regra_principal": "Sempre calcule usando dano efetivo, nao dano bruto.",
+    "aviso": "Tanques e veiculos blindados dependem de penetracao. Se o tiro der bounce, o dano e 0. Portanto existem dois numeros: acertos penetrantes necessarios e tiros esperados considerando chance de penetracao.",
+    "fontes_base": [
+      "Foxhole Wiki - Damage Types",
+      "Foxhole Wiki - Damage Resistance",
+      "Foxhole Wiki - Vehicle Health",
+      "Foxhole Wiki - Tank Armour",
+      "Foxhole Wiki - Ammo pages",
+      "Foxhole Wiki - Large Ship pages",
+      "Foxhole Update 61 / Update 63 notes"
+    ]
+  },
+  "formulas": {
+    "dano_efetivo": {
+      "formula": "raw_damage * velocity_multiplier * splash_multiplier * resistance_multiplier",
+      "descricao": "Use o dano bruto da municao, aplique multiplicadores de velocidade se existirem, queda de dano por raio da explosao e resistencia do alvo.",
+      "exemplo": "40mm contra heavy armor usando mitigacao de 15%: 600 * 0.85 = 510 dano efetivo por acerto penetrante."
+    },
+    "acertos_para_destruir": {
+      "formula": "ceil(target_hp / effective_damage)",
+      "descricao": "Numero de acertos efetivos necessarios para destruir o alvo."
+    },
+    "acertos_para_desabilitar": {
+      "formula": "ceil((target_hp * disable_threshold) / effective_damage)",
+      "descricao": "Numero de acertos efetivos necessarios para desabilitar um alvo que tenha threshold de disable."
+    },
+    "tiros_esperados_com_penetracao": {
+      "formula": "ceil(required_penetrating_hits / penetration_chance)",
+      "descricao": "Estimativa media de tiros disparados quando existe RNG de penetracao. Nao e garantia, porque penetracao e probabilistica."
+    },
+    "penetracao": {
+      "formula_conceitual": "penetration_chance = base_penetration * ammo_penetration_modifier * range_modifier * angle_modifier * armor_state_modifier",
+      "descricao": "A Wiki trata penetracao como uma chance afetada por armadura atual, tipo de municao, distancia e angulo. Deflection/bounce anula totalmente o dano."
+    },
+    "splash": {
+      "formula_conceitual": "splash_multiplier = valor entre 0 e 1 dependendo da distancia ate o centro da explosao",
+      "descricao": "Muitas municoes explosivas tem dano maximo no raio interno e dano decrescente ate o raio externo."
+    }
+  },
+  "classes_de_alvo": {
+    "vehicles": ["Unarmoured", "Light Armour", "Heavy Armour"],
+    "ships": ["Ship", "Armoured Ship", "Large Ship"],
+    "aircraft": ["Aircraft"],
+    "structures": [
+      "Tier 1 Structure",
+      "Tier 2 Structure",
+      "Tier 2B Structure",
+      "Tier 3 Structure",
+      "Trench",
+      "Garrison House",
+      "Bunker",
+      "Facility",
+      "World Structure",
+      "Large Structure"
+    ]
+  },
+  "tipos_de_dano": {
+    "light_kinetic": {
+      "nome": "Light Kinetic",
+      "exemplos": ["Rifles", "Pistols", "SMGs"],
+      "uso_principal": "Infantaria e alvos leves.",
+      "contra_estruturas": "Normalmente irrelevante ou sem dano pratico.",
+      "contra_veiculos": "Muito fraco contra blindagem.",
+      "contra_aeronaves": "Pode ter mitigacao alta dependendo do update.",
+      "calculator_note": "Geralmente nao use para PvE pesado."
+    },
+    "heavy_kinetic": {
+      "nome": "Heavy Kinetic",
+      "exemplos": ["12.7mm", "Heavy machine guns"],
+      "uso_principal": "Supressao, infantaria, alvos leves e algumas estruturas leves.",
+      "contra_estruturas": "Pode afetar apenas certas estruturas leves.",
+      "contra_veiculos": "Fraco contra blindagem pesada.",
+      "calculator_note": "Use com lista branca de estruturas vulneraveis."
+    },
+    "anti_tank_kinetic": {
+      "nome": "Anti-Tank Kinetic",
+      "exemplos": ["14.5mm"],
+      "uso_principal": "Anti-veiculo leve e dano limitado em blindados.",
+      "contra_estruturas": "Nao usar como dano estrutural.",
+      "contra_veiculos": "Reduzido contra heavy armor.",
+      "contra_large_ships": "Ineficiente.",
+      "subsystems": {
+        "pode_desabilitar_tracks": true,
+        "pode_causar_leak": false
+      }
+    },
+    "shrapnel": {
+      "nome": "Shrapnel",
+      "exemplos": [
+        "20mm",
+        "Bomastone",
+        "Shrapnel Mortar Shell",
+        "950-70b AA Shell"
+      ],
+      "uso_principal": "Infantaria, bleed e anti-air dependendo da municao.",
+      "contra_estruturas": "Nao e dano estrutural relevante.",
+      "contra_veiculos": "Reduzido ou ineficiente contra blindados.",
+      "contra_aeronaves": "Importante para AA.",
+      "efeitos": ["Pode causar bleed em infantaria"]
+    },
+    "explosive": {
+      "nome": "Explosive",
+      "exemplos": ["30mm", "40mm", "75mm", "RPG", "Mammon", "Tremola"],
+      "uso_principal": "Dano geral contra estruturas, veiculos e defesas.",
+      "contra_estruturas": "Bom contra muitas estruturas, mas sofre resistencia por tier.",
+      "contra_veiculos": "Pode ser reduzido por resistencia e pode depender de penetracao em blindados.",
+      "contra_large_ships": "Reduzido contra large ships.",
+      "subsystems": {
+        "pode_desabilitar_subsystems": true,
+        "pode_ser_defletido_em_blindagem": true
+      },
+      "calculator_note": "Para tanques, conte apenas acertos penetrantes. Bounce = 0 dano."
+    },
+    "high_explosive": {
+      "nome": "High Explosive",
+      "exemplos": [
+        "Mortar Shell",
+        "120mm",
+        "150mm",
+        "3C-High Explosive Rocket",
+        "Tenta Torpedo",
+        "Moray Torpedo"
+      ],
+      "uso_principal": "Artilharia, bombardeio, PvE e dano em area.",
+      "contra_estruturas": "Muito importante para estruturas, bunkers, garrison houses e devastacao.",
+      "contra_veiculos": "Geralmente mitigado contra veiculos, mas ainda pode causar dano se acertar.",
+      "calculator_note": "Obrigatorio aplicar splash falloff se o alvo nao estiver no centro da explosao."
+    },
+    "demolition": {
+      "nome": "Demolition",
+      "exemplos": [
+        "250mm",
+        "Havoc Charge",
+        "Alligator Charge",
+        "Shatter Missile"
+      ],
+      "uso_principal": "Destruir estruturas pesadas, bases, concrete, relics e world structures.",
+      "contra_estruturas": "Extremamente efetivo.",
+      "contra_veiculos": "Nao e o uso ideal; normalmente sofre mitigacao contra veiculos.",
+      "calculator_note": "Use como categoria principal para PvE pesado."
+    },
+    "armour_piercing": {
+      "nome": "Armour Piercing",
+      "exemplos": [
+        "68mm",
+        "94.5mm",
+        "AP/RPG",
+        "ARC/RPG",
+        "Quillback Torpedo",
+        "E681-B Hullbreaker Mine"
+      ],
+      "uso_principal": "Anti-tank, anti-armor e anti-ship.",
+      "contra_veiculos": "Muito forte contra blindados, com modificadores de penetracao por municao.",
+      "contra_estruturas": "Pode causar dano, mas normalmente nao e o melhor custo-beneficio para PvE.",
+      "contra_large_ships": "Importante contra large ships; update recente reduziu mitigacao AP de large ships.",
+      "subsystems": {
+        "pode_desabilitar_subsystems": true,
+        "pode_depletar_tank_armour": true,
+        "pode_causar_small_leak_em_large_ships": true
+      },
+      "leak_chance": {
+        "large_ship": 0.25,
+        "submarine": 0.425,
+        "observacao": "Algumas municoes AP especificas podem ter excecoes e nao causar leak."
+      }
+    },
+    "anti_tank_explosive": {
+      "nome": "Anti-Tank Explosive",
+      "exemplos": ["Sticky Bomb", "White Ash Flask", "Abisme AT-99 Mine"],
+      "uso_principal": "Anti-tank de curta distancia e minas.",
+      "contra_estruturas": "Nao usar como dano estrutural.",
+      "contra_veiculos": "Forte contra veiculos; normalmente nao depende de bounce da mesma forma que projeteis penetrantes.",
+      "subsystems": {
+        "chance_extra_em_tracks": true,
+        "depleta_tank_armour": false
+      }
+    },
+    "incendiary": {
+      "nome": "Incendiary",
+      "exemplos": ["Flamethrower fuel", "Incendiary rockets", "Fire sources"],
+      "uso_principal": "Aplicar fogo, impedir reparo e causar dano ao longo do tempo.",
+      "contra_estruturas": "Pode ser forte pelo efeito de fogo, nao apenas pelo impacto inicial.",
+      "contra_veiculos": "Depende do alvo e da mecanica de fogo.",
+      "calculator_note": "Modele como dano por segundo/tick + estado burning, nao como apenas hit damage."
+    }
+  },
+  "municoes_importantes": {
+    "40mm": {
+      "damage": 600,
+      "damage_type": "Explosive",
+      "penetration_modifier": 1.0,
+      "inner_radius_m": 2.0,
+      "uso": ["anti-structure medio", "anti-vehicle se penetrar"],
+      "calculator_note": "Contra tanques, dano so conta se penetrar."
+    },
+    "68mm": {
+      "damage": 600,
+      "damage_type": "Armour Piercing",
+      "penetration_modifier": 1.5,
+      "inner_radius_m": 1.5,
+      "uso": ["anti-tank", "anti-armor"]
+    },
+    "75mm": {
+      "damage": 1750,
+      "damage_type": "Explosive",
+      "inner_radius_m": 2.5,
+      "outer_radius_m": 5.0,
+      "uso": ["heavy vehicle weapon", "anti-structure", "anti-vehicle"]
+    },
+    "94.5mm": {
+      "damage": 1750,
+      "damage_type": "Armour Piercing",
+      "penetration_modifier": 2.0,
+      "inner_radius_m": 1.5,
+      "uso": ["super heavy anti-tank", "anti-armor"]
+    },
+    "120mm": {
+      "damage": 400,
+      "damage_type": "High Explosive",
+      "inner_radius_m": 4.0,
+      "outer_radius_m": 11.25,
+      "uso": ["artillery", "PvE", "area denial"]
+    },
+    "150mm": {
+      "damage": 900,
+      "damage_type": "High Explosive",
+      "inner_radius_m": 7.0,
+      "outer_radius_m": 11.25,
+      "uso": ["heavy artillery", "PvE", "base destruction"]
+    },
+    "250mm": {
+      "damage": 787,
+      "damage_type": "Demolition",
+      "inner_radius_m": 2.5,
+      "outer_radius_m": 5.0,
+      "uso": ["concrete cracking", "base destruction", "heavy PvE"]
+    },
+    "3C-High Explosive Rocket": {
+      "damage": 700,
+      "damage_type": "High Explosive",
+      "inner_radius_m": 2.25,
+      "uso": ["rocket artillery", "PvE"]
+    },
+    "Havoc Charge": {
+      "damage": 1950,
+      "damage_type": "Demolition",
+      "inner_radius_m": 6.0,
+      "outer_radius_m": 7.0,
+      "uso": ["sabotage", "structure demolition"]
+    },
+    "Alligator Charge": {
+      "damage": 550,
+      "damage_type": "Demolition",
+      "outer_radius_m": 2.0,
+      "uso": ["sabotage", "structure demolition"]
+    },
+    "Mammon 91-b": {
+      "damage": 229,
+      "damage_type": "Explosive",
+      "uso": ["early PvE", "infantry demolition"]
+    },
+    "RPG": {
+      "damage": 524,
+      "damage_type": "Explosive",
+      "uso": ["anti-structure", "anti-vehicle"]
+    },
+    "AP/RPG": {
+      "damage": 524,
+      "damage_type": "Armour Piercing",
+      "penetration_modifier": 1.5,
+      "uso": ["anti-tank", "anti-armor", "RPG AP round"]
+    },
+    "ARC/RPG": {
+      "damage": 524,
+      "damage_type": "Armour Piercing",
+      "penetration_modifier": 2.5,
+      "uso": ["heavy anti-tank", "super heavy armor"]
+    },
+    "Ignifist 30": {
+      "damage": 700,
+      "damage_type": "Anti-Tank Explosive",
+      "penetration_modifier": 1.5,
+      "uso": ["close range anti-tank", "infantry AT"]
+    },
+    "Sticky Bomb": {
+      "damage": 650,
+      "damage_type": "Anti-Tank Explosive",
+      "uso": ["infantry anti-tank", "close range", "stick to vehicle"]
+    },
+    "White Ash Flask Grenade": {
+      "damage": 700,
+      "damage_type": "Anti-Tank Explosive",
+      "uso": ["anti-tank grenade", "infantry AT", "short range"]
+    },
+    "A3 Harpa Fragmentation Grenade": {
+      "damage": 100,
+      "damage_type": "Explosive",
+      "inner_radius_m": 1.5,
+      "outer_radius_m": 6.0,
+      "uso": ["anti-infantry", "area denial"]
+    },
+    "Tremola Grenade GPb-1": {
+      "damage": 160,
+      "damage_type": "Explosive",
+      "inner_radius_m": 2.0,
+      "outer_radius_m": 7.0,
+      "uso": ["anti-infantry", "anti-structure leve", "early game"]
+    },
+    "Bomastone Grenade": {
+      "damage": 150,
+      "damage_type": "Shrapnel",
+      "inner_radius_m": 1.5,
+      "outer_radius_m": 5.0,
+      "uso": ["anti-infantry", "area bleed"]
+    },
+    "Abisme AT-99 Mine": {
+      "damage": 850,
+      "damage_type": "Anti-Tank Explosive",
+      "uso": ["anti-vehicle mine"]
+    },
+    "950-70b AA Shell": {
+      "damage": 1200,
+      "damage_type": "Shrapnel",
+      "inner_radius_m": 8.5,
+      "outer_radius_m": 11.5,
+      "uso": ["anti-air"]
+    },
+    "Quillback Torpedo": {
+      "damage": 500,
+      "damage_type": "Armour Piercing",
+      "inner_radius_m": 6.5,
+      "outer_radius_m": 7.5,
+      "uso": ["anti-ship"],
+      "can_cause_leak": false
+    },
+    "Tenta Torpedo": {
+      "damage": 1500,
+      "damage_type": "High Explosive",
+      "inner_radius_m": 6.5,
+      "outer_radius_m": 7.5,
+      "uso": ["anti-large-ship"]
+    },
+    "Moray Torpedo": {
+      "damage": 3512,
+      "damage_type": "High Explosive",
+      "inner_radius_m": 6.5,
+      "outer_radius_m": 7.5,
+      "uso": ["anti-large-ship"]
+    },
+    "E681-B Hullbreaker Minefield": {
+      "damage": 650,
+      "damage_type": "Armour Piercing",
+      "inner_radius_m": 7.5,
+      "uso": ["sea mine", "anti-ship"],
+      "can_cause_leak": false
+    },
+    "Shatter Missile": {
+      "damage": 600,
+      "damage_type": "Demolition",
+      "inner_radius_m": 3.0,
+      "uso": ["missile", "structure demolition"]
+    },
+    "30mm": {
+      "damage": 80,
+      "damage_type": "Explosive",
+      "penetration_modifier": 1.0,
+      "uso": ["light vehicle weapon", "anti-infantry", "light structures"]
+    },
+    "20mm": {
+      "damage": 44,
+      "damage_type": "Shrapnel",
+      "uso": ["anti-infantry", "light AA", "anti-aircraft"]
+    },
+    "14.5mm": {
+      "damage": 35,
+      "damage_type": "Anti-Tank Kinetic",
+      "uso": ["light anti-vehicle", "penetra unarmoured", "limited vs heavy"]
+    },
+    "12.7mm": {
+      "damage": 25,
+      "damage_type": "Heavy Kinetic",
+      "uso": ["heavy machine gun", "suppression", "anti-infantry", "light vehicles"]
+    }
+  },
+  "modificadores_de_penetracao": {
+    "30mm": 1.0,
+    "40mm": 1.0,
+    "RPG": 1.0,
+    "Ignifist 30": {
+      "modifier": 1.5,
+      "range_bonus_starts_m": 15
+    },
+    "AP/RPG": 1.5,
+    "68mm": 1.5,
+    "75mm": 1.5,
+    "94.5mm": 2.0,
+    "ARC/RPG": {
+      "modifier": 2.5,
+      "range_bonus": false,
+      "angle_bonus": false
+    }
+  },
+  "estrutura_damage_rules": {
+    "regra_geral": "Estruturas usam HP + resistencia por tipo/tier + possiveis modificadores especiais.",
+    "light_kinetic": {
+      "estrutura_damage": "geralmente nao relevante"
+    },
+    "anti_tank_kinetic": {
+      "estrutura_damage": "normalmente nao causa dano em estruturas"
+    },
+    "anti_tank_explosive": {
+      "estrutura_damage": "normalmente nao causa dano em estruturas"
+    },
+    "shrapnel": {
+      "estrutura_damage": "normalmente nao causa dano em estruturas"
+    },
+    "heavy_kinetic": {
+      "estrutura_damage": "apenas certas estruturas leves"
+    },
+    "explosive": {
+      "estrutura_damage": "bom contra muitas estruturas, mas mitigado por tier"
+    },
+    "high_explosive": {
+      "estrutura_damage": "muito usado em artilharia e PvE"
+    },
+    "demolition": {
+      "estrutura_damage": "principal categoria para estruturas pesadas"
+    },
+    "update_61_overrides": {
+      "tier_2_bunker_explosive_resistance": 0.35,
+      "tier_2_bunker_high_explosive_resistance": 0.35,
+      "tier_2_bunker_high_explosive_incendiary_resistance": 0.35,
+      "tier_1_structure_kinetic_resistance": 0.95
+    },
+    "calculator_note": "Para bunker/concrete, tambem considere structural integrity, reparo ativo, devastation/no man's land e se o tiro acertou diretamente ou pegou por splash."
+  },
+  "vehicle_damage_rules": {
+    "regra_geral": "Veiculos usam HP, classe de resistencia, threshold de disable e, se forem blindados, sistema de Tank Armour.",
+    "bounce": {
+      "descricao": "Se o tiro for defletido pela armadura, causa 0 dano.",
+      "aplica_para": [
+        "30mm",
+        "40mm",
+        "68mm",
+        "75mm",
+        "94.5mm",
+        "AP/RPG",
+        "ARC/RPG",
+        "Ignifist 30",
+        "RPG"
+      ]
+    },
+    "penetrating_hit": {
+      "descricao": "Somente acertos que penetram aplicam dano ao HP e podem reduzir Tank Armour quando aplicavel."
+    },
+    "disable_thresholds": {
+      "comum": "Muitos veiculos desabilitam em 50%, mas alguns navios/veiculos usam 30% ou outro threshold.",
+      "calculator_note": "Sempre armazene disable_threshold por entidade, nao por categoria."
+    }
+  },
+  "aircraft_damage_rules": {
+    "classe": "Aircraft",
+    "regra_geral": "Aeronaves usam HP, partes/componentes e resistencia propria contra tipos de dano.",
+    "update_63_aircraft_changes": {
+      "aircraft_health_reduction": 0.66,
+      "aircraft_part_health_reduction": 0.66,
+      "shrapnel_mitigation": 0.66,
+      "light_kinetic_mitigation": 0.8,
+      "heavy_kinetic_mitigation": 0.8,
+      "armour_piercing_mitigation": 0.6,
+      "anti_tank_kinetic_mitigation": 0.7
+    },
+    "calculator_note": "Modele aeronaves separadas de veiculos terrestres. AA Shell usa Shrapnel e deve ter tabela propria contra Aircraft."
+  },
+  "large_ship_damage_rules": {
+    "classe": "Large Ship",
+    "regra_geral": "Large Ships tem HP muito alto, resistencia propria e podem sofrer leaks dependendo do tipo de dano.",
+    "armour_piercing": {
+      "large_ship_mitigation_after_update_63": 0.6,
+      "small_leak_chance_large_ship": 0.25,
+      "small_leak_chance_submarine": 0.425
+    },
+    "high_explosive": {
+      "uso": "Torpedos HE e artilharia naval podem causar dano alto e leaks dependendo da municao."
+    },
+    "calculator_note": "Para navios grandes, nao calcule apenas kill por HP. Tambem modele leaks, flooding, repair, compartments e crew response."
+  },
+  "large_ship_hp": {
+    "Conqueror": {
+      "sigla": "DD",
+      "classe": "Destroyer",
+      "faction": "Colonial",
+      "hp": 46200,
+      "resistance_type": "Large Ship"
+    },
+    "Blacksteele": {
+      "sigla": "FF",
+      "classe": "Light Frigate",
+      "faction": "Warden",
+      "hp": 41400,
+      "resistance_type": "Large Ship"
+    },
+    "Titan": {
+      "sigla": "BS",
+      "classe": "Battleship",
+      "faction": "Colonial",
+      "hp": 74750,
+      "resistance_type": "Large Ship"
+    },
+    "Callahan": {
+      "sigla": "BS",
+      "classe": "Battleship",
+      "faction": "Warden",
+      "hp": 74750,
+      "resistance_type": "Large Ship"
+    },
+    "Poseidon": {
+      "sigla": "CV",
+      "classe": "Aircraft Carrier",
+      "faction": "Colonial",
+      "hp": 78050,
+      "resistance_type": "Large Ship"
+    },
+    "Mercy": {
+      "sigla": "CV",
+      "classe": "Aircraft Carrier",
+      "faction": "Warden",
+      "hp": 74750,
+      "resistance_type": "Large Ship"
+    },
+    "AC-b Trident": {
+      "sigla": "SS",
+      "classe": "Submarine",
+      "faction": "Colonial",
+      "hp": 28500,
+      "resistance_type": "Large Ship"
+    },
+    "Nakki": {
+      "sigla": "SS",
+      "classe": "Submarine",
+      "faction": "Warden",
+      "hp": 21275,
+      "resistance_type": "Large Ship"
+    },
+    "BMS - Longhook": {
+      "sigla": null,
+      "classe": "Base Ship",
+      "faction": "Both",
+      "hp": 49500,
+      "resistance_type": "Large Ship"
+    },
+    "BMS - Bluefin": {
+      "sigla": null,
+      "classe": "Storage Ship",
+      "faction": "Both",
+      "hp": 57750,
+      "resistance_type": "Large Ship"
+    },
+    "BMS - Bowhead": {
+      "sigla": null,
+      "classe": "Resource Ship",
+      "faction": "Both",
+      "hp": 55000,
+      "resistance_type": "Large Ship"
+    }
+  },
+  "exemplos_calculados": {
+    "40mm_vs_O-75b_Ares": {
+      "target": "O-75b Ares",
+      "target_type": "Super Heavy Tank",
+      "hp": 9250,
+      "disable_threshold": 0.5,
+      "ammo": "40mm",
+      "raw_damage": 600,
+      "damage_type": "Explosive",
+      "assumed_effective_damage_if_penetrates": 510,
+      "assumed_explosive_mitigation_vs_heavy_armour": 0.15,
+      "penetrating_hits_to_disable": 10,
+      "penetrating_hits_to_destroy": 19,
+      "important_note": "Esse numero e de acertos que penetraram. Tiros reais podem ser muito mais altos por causa de bounce/penetration RNG."
+    },
+    "40mm_vs_Cullen_Predator_Mk_III": {
+      "target": "Cullen Predator Mk. III",
+      "target_type": "Super Heavy Tank",
+      "hp": 12000,
+      "disable_threshold": 0.5,
+      "ammo": "40mm",
+      "raw_damage": 600,
+      "damage_type": "Explosive",
+      "assumed_effective_damage_if_penetrates": 510,
+      "assumed_explosive_mitigation_vs_heavy_armour": 0.15,
+      "penetrating_hits_to_disable": 12,
+      "penetrating_hits_to_destroy": 24,
+      "base_penetration_reference": 0.22,
+      "expected_shells_to_disable_at_base_pen": 55,
+      "expected_shells_to_destroy_at_base_pen": 110,
+      "important_note": "A Wiki informa 22% como melhor caso/base em certas condicoes para projeteis penetrantes. Na pratica, angulo, distancia e armadura gasta alteram muito isso."
+    }
+  },
+  "modelo_de_entidade_recomendado": {
+    "target_schema": {
+      "id": "string",
+      "name": "string",
+      "category": "vehicle | structure | ship | aircraft",
+      "sub_category": "string",
+      "hp": "number",
+      "disable_threshold": "number | null",
+      "resistance_type": "string",
+      "armor": {
+        "uses_tank_armour": "boolean",
+        "base_penetration_chance": "number | null",
+        "min_penetration_chance": "number | null",
+        "max_penetration_chance": "number | null",
+        "armor_hp": "number | null"
+      },
+      "special_rules": ["string"]
+    },
+    "ammo_schema": {
+      "id": "string",
+      "name": "string",
+      "damage": "number",
+      "damage_type": "string",
+      "penetration_modifier": "number | null",
+      "inner_radius_m": "number | null",
+      "outer_radius_m": "number | null",
+      "can_penetrate_armour": "boolean",
+      "can_deplete_tank_armour": "boolean",
+      "can_disable_subsystems": "boolean",
+      "can_cause_leaks": "boolean"
+    },
+    "calculation_result_schema": {
+      "target_id": "string",
+      "ammo_id": "string",
+      "effective_damage": "number",
+      "hits_to_disable": "number | null",
+      "hits_to_destroy": "number",
+      "penetrating_hits_required": "boolean",
+      "expected_shots_min": "number | null",
+      "expected_shots_average": "number | null",
+      "notes": ["string"]
+    }
+  },
+  "implementacao_recomendada": {
+    "passo_1": "Identificar ammo.damage_type e ammo.damage.",
+    "passo_2": "Identificar target.resistance_type.",
+    "passo_3": "Aplicar resistance_multiplier da tabela Damage Resistance.",
+    "passo_4": "Aplicar splash_multiplier se for explosao fora do centro.",
+    "passo_5": "Se alvo usa Tank Armour e ammo pode penetrar, calcular chance de penetracao.",
+    "passo_6": "Separar resultado em penetrating_hits e expected_shells.",
+    "passo_7": "Para estruturas, aplicar regras de tier, bunker structural integrity, reparo e devastation.",
+    "passo_8": "Para large ships, alem de HP, calcular leaks/flooding quando aplicavel.",
+    "passo_9": "Para aircraft, usar tabela separada de Aircraft resistance e parts."
+  }
+}

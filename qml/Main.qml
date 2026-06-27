@@ -226,6 +226,7 @@ ApplicationWindow {
         if (page === "autoClicker") return "pages/AutoClickerPage.qml"
         if (page === "stockpile") return "pages/StockpilePage.qml"
         if (page === "itemSearch") return "pages/ItemSearchPage.qml"
+        if (page === "wiki") return "pages/WikiPage.qml"
         if (page === "identifyItem") return "pages/IdentifyItemPage.qml"
         if (page === "production") return "pages/ProductionPage.qml"
         if (page === "timeTask") return "pages/TimeTaskPage.qml"
