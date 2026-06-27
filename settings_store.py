@@ -84,7 +84,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "last_tips_version": "",
         "chat_discord": {
             "clientId": "",
-            "clientSecret": "",
             "redirectPort": 53624,
         },
         "stockpile_sound_enabled": True,

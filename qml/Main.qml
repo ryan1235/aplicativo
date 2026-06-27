@@ -1970,6 +1970,30 @@ ApplicationWindow {
                     }
 
                     Rectangle {
+                        visible: chatController.secureReloginRequired && !discordLoginOverlay.waitingForProfile && !discordLoginOverlay.accessDenied
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(62, secureReloginText.implicitHeight + 28)
+                        radius: 10
+                        color: "transparent"
+                        border.color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 10; color: settingsController.infoColor; opacity: 0.10 }
+                        Rectangle { anchors.fill: parent; radius: 10; color: "transparent"; border.color: settingsController.infoColor; border.width: 1; opacity: 0.45 }
+                        Text {
+                            id: secureReloginText
+                            anchors.fill: parent
+                            anchors.margins: 14
+                            text: tr("loading.secure_relogin_notice")
+                            color: settingsController.secondaryTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 12
+                            lineHeight: 1.28
+                            horizontalAlignment: Text.AlignLeft
+                            verticalAlignment: Text.AlignVCenter
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+
+                    Rectangle {
                         visible: discordLoginOverlay.waitingForProfile
                         Layout.fillWidth: true
                         Layout.preferredHeight: 76
@@ -2024,6 +2048,7 @@ ApplicationWindow {
                             }
                         }
                     }
+
 
                     Rectangle {
                         visible: discordLoginOverlay.waitingForProfile || discordLoginOverlay.accessDenied

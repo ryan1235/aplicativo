@@ -100,14 +100,13 @@ SQUADLOCK_SECONDS = 30 * 60
 BASE_DIR = Path(__file__).resolve().parent
 CHAT_API_BASE = "https://archpixel.squareweb.app"
 CHAT_WS_BASE = "wss://archpixel.squareweb.app"
+CHAT_DISCORD_OAUTH_AUTH_PATH = "/chat/auth/discord/oauth"
 CHAT_DISCORD_AUTH_PATHS = ("/chat/auth/discord", "/chat/auth/login")
 CHAT_STEAM_AUTH_PATHS = ("/chat/auth/steam", "/chat/auth/local")
 CHAT_USERS_PATHS = ("/chat/users", "/chat/users/online")
 CHAT_ONLINE_PATHS = ("/chat/presence/online", "/chat/users/online")
 DISCORD_API_BASE = "https://discord.com/api/v10"
 DISCORD_AUTHORIZE_URL = "https://discord.com/oauth2/authorize"
-DISCORD_TOKEN_URL = f"{DISCORD_API_BASE}/oauth2/token"
-DISCORD_USER_URL = f"{DISCORD_API_BASE}/users/@me"
 FOXHOLE_WIKI_BASE_URL = "https://foxhole.wiki.gg"
 FOXHOLE_WIKI_API_URL = f"{FOXHOLE_WIKI_BASE_URL}/api.php"
 DISCORD_DEFAULT_REDIRECT_PORT = 53624
@@ -613,7 +612,7 @@ def redact_login_debug(value: Any) -> Any:
         redacted: dict[str, Any] = {}
         for key, item in value.items():
             key_text = str(key).lower()
-            if key_text in {"token", "accesstoken", "access_token", "refresh_token", "authorization", "client_secret"}:
+            if key_text in {"token", "accesstoken", "access_token", "refresh_token", "authorization", "client_secret", "code", "codeverifier", "code_verifier"}:
                 text_value = str(item or "")
                 redacted[str(key)] = f"<redacted len={len(text_value)}>"
             else:
@@ -623,6 +622,24 @@ def redact_login_debug(value: Any) -> Any:
         return [redact_login_debug(item) for item in value]
     return value
 
+
+def redact_http_error_body(body: str) -> str:
+    if not body:
+        return body
+    try:
+        parsed = json.loads(body)
+    except Exception:
+        sanitized = body
+        sensitive_patterns = (
+            r'("code"\s*:\s*")[^"]+(")',
+            r'("codeVerifier"\s*:\s*")[^"]+(")',
+            r'("code_verifier"\s*:\s*")[^"]+(")',
+            r'("client_secret"\s*:\s*")[^"]+(")',
+        )
+        for pattern in sensitive_patterns:
+            sanitized = re.sub(pattern, r'\1<redacted>\2', sanitized, flags=re.IGNORECASE)
+        return sanitized
+    return json.dumps(redact_login_debug(parsed), ensure_ascii=False)
 
 def debug_login_response(label: str, result: dict[str, Any]) -> None:
     try:
@@ -4410,6 +4427,10 @@ class ChatController(QObject):
         return self._discord_login_required
 
     @Property(bool, notify=changed)
+    def secureReloginRequired(self) -> bool:
+        return bool(self._saved_discord_id() and not self._token)
+
+    @Property(bool, notify=changed)
     def authInFlight(self) -> bool:
         return self._auth_in_flight
 
@@ -4492,9 +4513,6 @@ class ChatController(QObject):
     def _discord_client_id(self) -> str:
         return str(os.environ.get("DISCORD_CLIENT_ID") or self._discord_settings.get("clientId") or DISCORD_DEFAULT_CLIENT_ID).strip()
 
-    def _discord_client_secret(self) -> str:
-        return str(os.environ.get("DISCORD_CLIENT_SECRET") or self._discord_settings.get("clientSecret") or "").strip()
-
     def _discord_redirect_port(self) -> int:
         try:
             port = int(os.environ.get("DISCORD_REDIRECT_PORT") or self._discord_settings.get("redirectPort") or DISCORD_DEFAULT_REDIRECT_PORT)
@@ -4526,7 +4544,7 @@ class ChatController(QObject):
             self._discord_user_settings["avatar"] = obfuscate_string(avatar)
         save_settings(self.settings)
 
-    def _discord_oauth_profile(self) -> dict[str, Any]:
+    def _auth_with_discord_oauth(self) -> dict[str, Any]:
         client_id = self._discord_client_id()
         if not client_id:
             raise RuntimeError(self._t("home.chat.discord_config_missing", uri=self.discordRedirectUri))
@@ -4546,34 +4564,20 @@ class ChatController(QObject):
         }
         auth_url = f"{DISCORD_AUTHORIZE_URL}?{urllib.parse.urlencode(query)}"
         code = wait_for_discord_oauth_code(state, port, auth_url=auth_url, language=self.i18n.translator.language)
-        form = {
-            "client_id": client_id,
-            "grant_type": "authorization_code",
+        payload = {
             "code": code,
-            "redirect_uri": redirect_uri,
-            "code_verifier": verifier,
+            "codeVerifier": verifier,
+            "redirectUri": redirect_uri,
+            "appVersion": APP_VERSION,
         }
-        client_secret = self._discord_client_secret()
-        if client_secret:
-            form["client_secret"] = client_secret
-        token_result = http_json_url("POST", DISCORD_TOKEN_URL, form=form, timeout=20)
-        access_token = str(token_result.get("access_token") or "")
-        if not access_token:
-            raise RuntimeError("Discord OAuth did not return an access token.")
-        user = http_json_url("GET", DISCORD_USER_URL, token=access_token, timeout=20)
-        if not user.get("id"):
-            raise RuntimeError("Discord OAuth did not return a user profile.")
-        avatar_url = discord_avatar_url(user)
-        if avatar_url:
-            user["avatarUrl"] = avatar_url
-            user["avatarfull"] = avatar_url
-            user["avatarmedium"] = avatar_url
-        user["discordId"] = str(user.get("id") or "")
-        user["displayName"] = str(user.get("global_name") or user.get("username") or "")
-        user["globalName"] = str(user.get("global_name") or "")
-        user["discriminator"] = str(user.get("discriminator") or "")
-        user["discordAvatar"] = str(user.get("avatar") or "")
-        return user
+        result = http_json_url(
+            "POST",
+            f"{CHAT_API_BASE.rstrip('/')}/{CHAT_DISCORD_OAUTH_AUTH_PATH.lstrip('/')}",
+            payload=payload,
+            timeout=20,
+        )
+        debug_login_response(CHAT_DISCORD_OAUTH_AUTH_PATH, result)
+        return result
 
     def _discord_auth_payload(self, discord_id: str) -> dict[str, str]:
         payload: dict[str, str] = {"discordId": discord_id}
@@ -4666,6 +4670,11 @@ class ChatController(QObject):
         user = result.get("user") if isinstance(result.get("user"), dict) else result.get("profile")
         if not isinstance(user, dict):
             raise RuntimeError("A API não retornou perfil de usuário no login.")
+        discord_id = str(user.get("discordId") or user.get("discord_id") or "").strip()
+        if not discord_id:
+            raise RuntimeError("A API não retornou o Discord ID validado no login.")
+        user = dict(user)
+        user["discordId"] = discord_id
 
         access = result.get("panelAccess") or user.get("panelAccess")
         profile = merge_panel_profile(user, access)
@@ -4741,15 +4750,9 @@ class ChatController(QObject):
     @Slot()
     def autoConnectWithSavedDiscord(self) -> None:
         self.ensureStarted()
-        if self._saved_discord_id():
-            self._discord_configuration_checked = True
-            # Keep _discord_login_required = True (or as it was) so the overlay stays up
-            self.changed.emit()
-            self._connect_with_discord(allow_oauth=False)
-            return
         self._discord_configuration_checked = True
         self._discord_login_required = True
-        self._status = self._t("home.chat.no_discord")
+        self._status = self._t("home.chat.secure_relogin_required") if self._saved_discord_id() else self._t("home.chat.no_discord")
         self.changed.emit()
 
     def _connect_with_discord(self, *, allow_oauth: bool = False) -> None:
@@ -4769,27 +4772,21 @@ class ChatController(QObject):
             self._status = self._t("home.chat.auth_needed") + f" ({retry_seconds}s)"
             self.changed.emit()
             return
-        discord_id = self._saved_discord_id()
-        if not discord_id:
+        saved_discord_id = self._saved_discord_id()
+        if not allow_oauth:
             self._discord_configuration_checked = True
             self._discord_login_required = True
-            if not allow_oauth:
-                self._status = self._t("home.chat.no_discord")
-                self.changed.emit()
-                return
-            if not self._discord_client_id():
-                self._status = self._t("home.chat.discord_config_missing", uri=self.discordRedirectUri)
-                self.changed.emit()
-                return
+            self._status = self._t("home.chat.secure_relogin_required") if saved_discord_id else self._t("home.chat.no_discord")
+            self.changed.emit()
+            return
+        if not self._discord_client_id():
+            self._status = self._t("home.chat.discord_config_missing", uri=self.discordRedirectUri)
+            self.changed.emit()
+            return
 
         def worker() -> None:
             try:
-                if discord_id:
-                    result = self._auth_with_discord(self._discord_auth_payload(discord_id))
-                else:
-                    profile = self._discord_oauth_profile()
-                    self._save_discord_profile(profile)
-                    result = self._auth_with_discord(self._discord_auth_payload_from_profile(profile))
+                result = self._auth_with_discord_oauth()
                 result = self._verify_discord_app_access(result)
                 self.resultFromWorker.emit("auth", result)
             except Exception as exc:
@@ -4801,8 +4798,8 @@ class ChatController(QObject):
         self._auth_in_flight = True
         self._auth_error_visible = False
         self._auth_denied = False
-        self._discord_oauth_in_flight = not bool(discord_id)
-        self._status = self._t("home.chat.authenticating_discord") if discord_id else self._t("home.chat.discord_opening")
+        self._discord_oauth_in_flight = True
+        self._status = self._t("home.chat.discord_opening")
         # NOTE: Do NOT set _discord_login_required = False here!
         # The overlay will only close once auth actually succeeds in _apply_result("auth").
         self.changed.emit()
@@ -5218,7 +5215,7 @@ class ChatController(QObject):
             self._profile_loading = False
             self._profile_ready = False
             self._discord_configuration_checked = True
-            self._discord_login_required = not bool(self._saved_discord_id())
+            self._discord_login_required = True
             self._auth_error_visible = True
             payload_text = str(payload).lower()
             denied_markers = (
@@ -11261,15 +11258,16 @@ def http_json(
             return parsed
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        safe_body = redact_http_error_body(body)
         debug_log("http", "error", {
             "method": method,
             "url": request.full_url,
             "status": exc.code,
             "reason": exc.reason,
             "durationMs": round((time.monotonic() - started) * 1000, 1),
-            "body": body,
+            "body": safe_body,
         })
-        raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {body or 'empty response'}") from exc
+        raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {safe_body or 'empty response'}") from exc
     except Exception as exc:
         debug_log("http", "exception", {
             "method": method,
@@ -11323,15 +11321,16 @@ def http_json_url(
             return parsed
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        safe_body = redact_http_error_body(body)
         debug_log("http", "error", {
             "method": method,
             "url": url,
             "status": exc.code,
             "reason": exc.reason,
             "durationMs": round((time.monotonic() - started) * 1000, 1),
-            "body": body,
+            "body": safe_body,
         })
-        raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {body or 'empty response'}") from exc
+        raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {safe_body or 'empty response'}") from exc
     except Exception as exc:
         debug_log("http", "exception", {
             "method": method,
