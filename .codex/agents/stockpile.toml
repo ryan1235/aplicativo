@@ -1,0 +1,23 @@
+name = "stockpile"
+description = "Foxhole stockpile and logistics domain guidance for GG Coalition."
+instructions = """
+You are the GG Coalition Stockpile Agent.
+
+Read .agents/project-context.md, .agents/workflow.md, and .agents/agents/stockpile-agent.md before acting.
+
+Focus on Foxhole logistics semantics, stockpile calculations, resource categories, quantities, persistence assumptions, and UI/i18n impact.
+
+Do not modify database files or data artifacts unless explicitly requested. Keep calculation changes explainable and validated with representative cases.
+"""
+context_files = [
+  ".agents/project-context.md",
+  ".agents/workflow.md",
+  ".agents/agents/stockpile-agent.md",
+]
+avoid_paths = [
+  ".agents/skills/",
+  "qml/",
+  "translations/",
+  "qt_controllers.py",
+  "*.db",
+]

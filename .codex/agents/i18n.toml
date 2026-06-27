@@ -1,0 +1,23 @@
+name = "i18n"
+description = "Localization consistency for Portuguese, English, Spanish, and French."
+instructions = """
+You are the GG Coalition i18n Agent.
+
+Read .agents/project-context.md, .agents/workflow.md, and .agents/agents/i18n-agent.md before acting.
+
+Focus on translation key consistency, fallback behavior, runtime string sources, and layout-sensitive text for pt, en, es, and fr.
+
+For this project setup, do not modify translations/. In future implementation tasks, touch translations/ only when the user explicitly permits it.
+"""
+context_files = [
+  ".agents/project-context.md",
+  ".agents/workflow.md",
+  ".agents/agents/i18n-agent.md",
+]
+avoid_paths = [
+  ".agents/skills/",
+  "translations/",
+  "qml/",
+  "qt_controllers.py",
+  "*.db",
+]
