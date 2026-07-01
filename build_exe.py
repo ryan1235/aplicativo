@@ -38,6 +38,70 @@ PACKAGE_PATHS = [
     Path.home() / "AppData" / "Local" / "Python" / "pythoncore-3.14-64" / "Lib" / "site-packages",
 ]
 
+NUITKA_BLOAT_ARGS = [
+    "--python-flag=no_docstrings",
+    "--python-flag=no_asserts",
+    "--nofollow-import-to=*.tests",
+    "--nofollow-import-to=*.testing",
+    "--nofollow-import-to=numpy.testing",
+    "--nofollow-import-to=numpy.tests",
+    "--nofollow-import-to=numpy._core.tests",
+    "--nofollow-import-to=numpy.typing.tests",
+    "--nofollow-import-to=PIL.ImageShow",
+    "--noinclude-pytest-mode=nofollow",
+    "--noinclude-unittest-mode=nofollow",
+    "--noinclude-pydoc-mode=nofollow",
+    "--noinclude-setuptools-mode=nofollow",
+    "--noinclude-qt-translations",
+]
+
+UNUSED_QML_DIRS = [
+    "PySide6/qml/Qt3D/**",
+    "PySide6/qml/QtCharts/**",
+    "PySide6/qml/QtDataVisualization/**",
+    "PySide6/qml/QtGraphs/**",
+    "PySide6/qml/QtLocation/**",
+    "PySide6/qml/QtMultimedia/**",
+    "PySide6/qml/QtPdf/**",
+    "PySide6/qml/QtQuick/VirtualKeyboard/**",
+    "PySide6/qml/QtQuick3D/**",
+    "PySide6/qml/QtWebEngine/**",
+]
+
+UNUSED_QT_DLLS = [
+    "qt63d*.dll",
+    "qt6charts*.dll",
+    "qt6datavisualization*.dll",
+    "qt6graphs*.dll",
+    "qt6location*.dll",
+    "qt6multimedia*.dll",
+    "qt6pdf*.dll",
+    "qt6quick3d*.dll",
+    "qt6virtualkeyboard*.dll",
+    "qt6webengine*.dll",
+]
+
+APP_PYSIDE_MODULES = [
+    "PySide6.QtCore",
+    "PySide6.QtGui",
+    "PySide6.QtQml",
+    "PySide6.QtNetwork",
+    "PySide6.QtWidgets",
+    "PySide6.QtWebSockets",
+]
+
+QT_PLUGIN_FAMILIES = [
+    "generic",
+    "iconengines",
+    "imageformats",
+    "networkinformation",
+    "platforminputcontexts",
+    "platforms",
+    "styles",
+    "tls",
+    "vectorimageformats",
+]
+
 
 for package_path in PACKAGE_PATHS:
     if package_path.exists():
@@ -318,7 +382,8 @@ def build_app() -> Path:
         f"--product-name={APP_NAME}",
         f"--file-description={APP_NAME} - Aplicativo",
         "--copyright=GG Coalition",
-        "--include-package=PySide6",
+        *NUITKA_BLOAT_ARGS,
+        *(f"--include-module={module}" for module in APP_PYSIDE_MODULES),
         "--include-package=pygvas",
         "--include-package=pydantic",
         "--include-package=pydantic_core",
@@ -327,7 +392,10 @@ def build_app() -> Path:
         "--include-package=numpy",
         "--include-package=cv2",
         "--enable-plugin=pyside6",
+        f"--include-qt-plugins={','.join(QT_PLUGIN_FAMILIES)}",
         "--include-qt-plugins=qml",
+        *(f"--noinclude-data-files={pattern}" for pattern in UNUSED_QML_DIRS),
+        *(f"--noinclude-dlls={pattern}" for pattern in UNUSED_QT_DLLS),
         f"--output-dir={DIST_DIR}",
         f"--output-filename={output.name}",
         *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
@@ -358,9 +426,12 @@ def build_updater() -> Path:
         f"--product-name={UPDATER_NAME}",
         f"--file-description={UPDATER_NAME} - Atualizador",
         "--copyright=GG Coalition",
+        *NUITKA_BLOAT_ARGS,
         *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
         "--enable-plugin=pyside6",
-        "--include-qt-plugins=qml",
+        f"--include-qt-plugins={','.join(QT_PLUGIN_FAMILIES)}",
+        *(f"--noinclude-data-files={pattern}" for pattern in UNUSED_QML_DIRS),
+        *(f"--noinclude-dlls={pattern}" for pattern in UNUSED_QT_DLLS),
         f"--output-dir={DIST_DIR}",
         f"--output-filename={output.name}",
         str(ROOT / "updater.py"),

@@ -18,7 +18,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -73,6 +73,7 @@ from production_service import (
 )
 from personalization_store import DEFAULT_THEME_CUSTOM, load_personalization_settings, save_personalization_settings
 from settings_store import load_settings, save_settings, selected_language
+from secure_store import secure_clear_credentials, secure_load_credentials, secure_save_credentials
 from steam_profile import SteamProfile, get_local_steam_profile
 from stockpiler import (
     DEFAULT_API_URL,
@@ -91,7 +92,7 @@ from stockpiler import (
 )
 
 
-UPDATE_REPO = "ryan1235/aplicativo"
+UPDATE_REPO = "ryan1235/aplicativotest"
 FOXHOLE_APP_ID = "505460"
 FOXHOLE_PROCESS_NAMES = ("war-win64-shipping.exe", "foxhole.exe")
 FOXHOLE_PATH_HINTS = ("\\steamapps\\common\\foxhole\\", "/steamapps/common/foxhole/")
@@ -101,8 +102,8 @@ BASE_DIR = Path(__file__).resolve().parent
 CHAT_API_BASE = "https://archpixel.squareweb.app"
 CHAT_WS_BASE = "wss://archpixel.squareweb.app"
 CHAT_DISCORD_OAUTH_AUTH_PATH = "/chat/auth/discord/oauth"
-CHAT_DISCORD_AUTH_PATHS = ("/chat/auth/discord", "/chat/auth/login")
-CHAT_STEAM_AUTH_PATHS = ("/chat/auth/steam", "/chat/auth/local")
+CHAT_AUTO_LOGIN_AUTH_PATH = "/chat/auth/auto-login"
+GG_LOGS_PATH = "/gg-logs"
 CHAT_USERS_PATHS = ("/chat/users", "/chat/users/online")
 CHAT_ONLINE_PATHS = ("/chat/presence/online", "/chat/users/online")
 DISCORD_API_BASE = "https://discord.com/api/v10"
@@ -112,6 +113,21 @@ FOXHOLE_WIKI_API_URL = f"{FOXHOLE_WIKI_BASE_URL}/api.php"
 DISCORD_DEFAULT_REDIRECT_PORT = 53624
 DISCORD_DEFAULT_REDIRECT_PATH = "/discord/callback"
 DISCORD_DEFAULT_CLIENT_ID = "1512509453067358489"
+
+ACTIVITY_LOG_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "auth": ("login", "sessao"),
+    "chat": ("mensagens", "reacoes", "salas"),
+    "autoclique": ("auto", "move", "pilot", "right_hold", "fixed", "artillery", "ordens", "configuracao"),
+    "estoque": ("monitor", "api", "visual", "configuracao"),
+    "producao": ("calculadora", "fila", "rota"),
+    "macros": ("gravacao", "replay", "arquivos"),
+    "notificacoes": ("squadlock", "overlay", "preferencias"),
+    "configuracoes": ("app", "personalizacao", "idioma", "notificacoes"),
+    "navegacao": ("paginas", "sidebar", "painel"),
+}
+
+ActivityLogger = Callable[[str, str, int, dict[str, Any] | None, str], None]
+
 IMAGE_URL_RE = re.compile(r"https?://[^\s<>\"]+\.(?:png|jpe?g|webp|gif)(?:\?[^\s<>\"]*)?", re.IGNORECASE)
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_.-]{1,32})")
 QUICK_EMOJIS = ("👍", "❤️", "😂", "🔥", "✅", "🫡", "👀", "🚚", "⚠️", "🎯")
@@ -612,7 +628,7 @@ def redact_login_debug(value: Any) -> Any:
         redacted: dict[str, Any] = {}
         for key, item in value.items():
             key_text = str(key).lower()
-            if key_text in {"token", "accesstoken", "access_token", "refresh_token", "authorization", "client_secret", "code", "codeverifier", "code_verifier"}:
+            if key_text in {"token", "accesstoken", "access_token", "refresh_token", "authorization", "client_secret", "code", "codeverifier", "code_verifier", "autologinkey", "auto_login_key", "accesspassword", "access_password"}:
                 text_value = str(item or "")
                 redacted[str(key)] = f"<redacted len={len(text_value)}>"
             else:
@@ -635,6 +651,10 @@ def redact_http_error_body(body: str) -> str:
             r'("codeVerifier"\s*:\s*")[^"]+(")',
             r'("code_verifier"\s*:\s*")[^"]+(")',
             r'("client_secret"\s*:\s*")[^"]+(")',
+            r'("autoLoginKey"\s*:\s*")[^"]+(")',
+            r'("auto_login_key"\s*:\s*")[^"]+(")',
+            r'("accessPassword"\s*:\s*")[^"]+(")',
+            r'("access_password"\s*:\s*")[^"]+(")',
         )
         for pattern in sensitive_patterns:
             sanitized = re.sub(pattern, r'\1<redacted>\2', sanitized, flags=re.IGNORECASE)
@@ -1433,6 +1453,8 @@ class AppController(QObject):
         self._tutorial_dialog_body = ""
         self._pending_admin_panel_token = ""
         self._panel_access_check_running = False
+        self._activity_logger: ActivityLogger | None = None
+        self._background_mode = False
         app_settings = self._app_settings()
         self._sidebar_open = bool(app_settings.get("sidebar_open", True))
         self._sidebar_sections_revision = 0
@@ -1456,8 +1478,30 @@ class AppController(QObject):
         self.navItems.set_items(self._nav_items())
         self._foxhole_timer = QTimer(self)
         self._foxhole_timer.timeout.connect(self.refreshFoxholeStatus)
-        self._foxhole_timer.start(5000)
+        self._sync_foxhole_timer()
         self.refreshFoxholeStatus()
+
+    def _sync_foxhole_timer(self) -> None:
+        interval = 30000 if self._background_mode else 5000
+        if self._foxhole_timer.interval() != interval:
+            self._foxhole_timer.setInterval(interval)
+        if not self._foxhole_timer.isActive():
+            self._foxhole_timer.start()
+
+    def setBackgroundMode(self, background: bool) -> None:
+        background = bool(background)
+        if self._background_mode == background:
+            return
+        self._background_mode = background
+        self._sync_foxhole_timer()
+
+
+    def setActivityLogger(self, logger: ActivityLogger | None) -> None:
+        self._activity_logger = logger
+
+    def _log_activity(self, action: str, *, subcategory: str, metadata: dict[str, Any] | None = None) -> None:
+        if callable(self._activity_logger):
+            self._activity_logger("navegacao", action, 1, metadata or {}, subcategory)
 
     @Slot(str)
     def openAdminPanel(self, token: str) -> None:
@@ -1668,7 +1712,9 @@ class AppController(QObject):
     def setCurrentPage(self, page: str) -> None:
         if page == self._current_page:
             return
+        previous = self._current_page
         self._current_page = page
+        self._log_activity("abrir_pagina", subcategory="paginas", metadata={"page": page, "previousPage": previous})
         self.currentPageChanged.emit()
 
     @Slot(bool)
@@ -1679,6 +1725,7 @@ class AppController(QObject):
         self._sidebar_open = open_
         self._app_settings()["sidebar_open"] = open_
         save_settings(self.settings)
+        self._log_activity("alternar_sidebar", subcategory="sidebar", metadata={"open": open_})
         self.sidebarChanged.emit()
 
     @Slot(str, result=bool)
@@ -1914,8 +1961,16 @@ class SettingsController(QObject):
         )
         self._revision = 0
         self._status = ""
+        self._activity_logger: ActivityLogger | None = None
 
         ensure_startup_enabled_by_default(self.settings)
+
+    def setActivityLogger(self, logger: ActivityLogger | None) -> None:
+        self._activity_logger = logger
+
+    def _log_activity(self, action: str, *, subcategory: str, metadata: dict[str, Any] | None = None) -> None:
+        if callable(self._activity_logger):
+            self._activity_logger("configuracoes", action, 1, metadata or {}, subcategory)
 
     def _app_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("app", {})
@@ -2362,6 +2417,7 @@ class SettingsController(QObject):
         target = self.settings.setdefault(section, {})
         target[key] = value
         self._save()
+        self._log_activity("alterar_configuracao", subcategory=str(section or "app"), metadata={"section": section, "key": key})
 
     @Slot()
     def notifyExternalChange(self) -> None:
@@ -2643,6 +2699,7 @@ class AutoClickerController(QObject):
         self.settings = settings
         self._status = "Auto Clicker initializing..."
         self._available = True
+        self._activity_logger: ActivityLogger | None = None
         self.slots = DictListModel(["slotNumber", "slotX", "slotY"], self)
         self.orders = DictListModel(["name"], self)
         self.statusFromWorker.connect(self._set_status)
@@ -2676,6 +2733,33 @@ class AutoClickerController(QObject):
             self._status = f"Auto Clicker unavailable: {exc}"
         self._refresh_models()
         self.changed.emit()
+
+
+    def setActivityLogger(self, logger: ActivityLogger | None) -> None:
+        self._activity_logger = logger
+
+    def _log_activity(
+        self,
+        action: str,
+        *,
+        subcategory: str,
+        quantity: int = 1,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if not callable(self._activity_logger):
+            return
+        self._activity_logger("autoclique", action, quantity, metadata or {}, subcategory)
+
+    def _log_mode_toggle(self, mode: str, enabled: bool, metadata: dict[str, Any] | None = None) -> None:
+        details = {
+            "mode": mode,
+            "enabled": enabled,
+            "status": self._status,
+            "target": self.targetTitle,
+        }
+        if metadata:
+            details.update(metadata)
+        self._log_activity("ativar_modo" if enabled else "desativar_modo", subcategory=mode, metadata=details)
 
     def _clicker_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("auto_clicker", {})
@@ -3055,43 +3139,67 @@ class AutoClickerController(QObject):
     @Slot()
     def toggle(self) -> None:
         if self.clicker:
+            was_enabled = bool(self.clicker.enabled)
             self.clicker.toggle()
             self._status = self.clicker.status_text()
+            is_enabled = bool(self.clicker.enabled)
+            if is_enabled != was_enabled:
+                self._log_mode_toggle("auto", is_enabled, {"hotkey": self.hotkey, "interval": self.interval, "mouseButton": self.mouseButton})
             self.changed.emit()
 
     @Slot()
     def toggleMoveClick(self) -> None:
         if self.clicker:
+            was_enabled = bool(self.clicker.move_click_enabled)
             self.clicker.toggle_move_click()
             self._status = self.clicker.status_text()
+            is_enabled = bool(self.clicker.move_click_enabled)
+            if is_enabled != was_enabled:
+                self._log_mode_toggle("move", is_enabled, {"hotkey": self.moveHotkey})
             self.changed.emit()
 
     @Slot()
     def togglePilot(self) -> None:
         if self.clicker:
+            was_enabled = self._pilot_active()
             self.clicker.toggle_pilot()
             self._status = self.clicker.status_text()
+            is_enabled = self._pilot_active()
+            if is_enabled != was_enabled:
+                self._log_mode_toggle("pilot", is_enabled, {"hotkey": self.pilotHotkey, "wHoldLabel": self.wHoldLetter})
             self.changed.emit()
 
     @Slot()
     def toggleRightHold(self) -> None:
         if self.clicker:
+            was_enabled = bool(self.clicker.right_hold_enabled)
             self.clicker.toggle_right_hold()
             self._status = self.clicker.status_text()
+            is_enabled = bool(self.clicker.right_hold_enabled)
+            if is_enabled != was_enabled:
+                self._log_mode_toggle("right_hold", is_enabled, {"hotkey": self.rightHoldHotkey})
             self.changed.emit()
 
     @Slot()
     def toggleFixedClick(self) -> None:
         if self.clicker:
+            was_enabled = bool(self.clicker.fixed_click_enabled)
             self.clicker.toggle_fixed_click()
             self._status = self.clicker.status_text()
+            is_enabled = bool(self.clicker.fixed_click_enabled)
+            if is_enabled != was_enabled:
+                self._log_mode_toggle("fixed", is_enabled, {"hotkey": self.fixedHotkey})
             self.changed.emit()
 
     @Slot()
     def toggleArtillery(self) -> None:
         if self.clicker:
+            was_enabled = bool(getattr(self.clicker, "artillery_enabled", False))
             self.clicker.toggle_artillery()
             self._status = self.clicker.status_text()
+            is_enabled = bool(getattr(self.clicker, "artillery_enabled", False))
+            if is_enabled != was_enabled:
+                self._log_mode_toggle("artillery", is_enabled, {"hotkey": self.artilleryHotkey})
             self.changed.emit()
 
     @Slot()
@@ -3105,6 +3213,7 @@ class AutoClickerController(QObject):
         if value in ACTION_KEYS:
             self._clicker_settings()["hotkey"] = value
             self._save_and_apply()
+            self._log_activity("configurar_hotkey", subcategory="configuracao", metadata={"mode": "auto", "hotkey": value})
 
     @Slot(str)
     def setMoveHotkey(self, value: str) -> None:
@@ -3141,6 +3250,7 @@ class AutoClickerController(QObject):
         if value in MOUSE_BUTTONS:
             self._clicker_settings()["mouse_button"] = value
             self._save_and_apply()
+            self._log_activity("configurar_mouse", subcategory="configuracao", metadata={"mouseButton": value})
 
     @Property(bool, notify=changed)
     def shiftEnabled(self) -> bool:
@@ -3152,6 +3262,7 @@ class AutoClickerController(QObject):
         save_settings(self.settings)
         if self.clicker:
             self.clicker.shift_enabled = bool(value)
+        self._log_activity("configurar_shift", subcategory="configuracao", metadata={"enabled": bool(value)})
         self.changed.emit()
 
     @Property(bool, notify=changed)
@@ -3190,6 +3301,7 @@ class AutoClickerController(QObject):
         modes[key] = enabled
         self._clicker_settings()["modes_enabled"] = modes
         save_settings(self.settings)
+        self._log_activity("habilitar_modo" if enabled else "desabilitar_modo", subcategory="configuracao", metadata={"mode": key, "enabled": enabled})
         if self.clicker:
             self.clicker.configure_modes_enabled(modes)
             self._status = self.clicker.status_text()
@@ -3214,6 +3326,7 @@ class AutoClickerController(QObject):
             interval = self.DEFAULT_INTERVAL
         self._clicker_settings()["interval"] = round(max(0.03, min(5.0, interval)), 2)
         self._save_and_apply()
+        self._log_activity("configurar_intervalo", subcategory="configuracao", metadata={"interval": self.interval})
 
     @Slot(int, int, int)
     def setSlotPosition(self, slot: int, x: int, y: int) -> None:
@@ -3259,6 +3372,7 @@ class AutoClickerController(QObject):
             return
         order_name = orders[index] if 0 <= index < len(orders) else orders[0]
         self._status = f"Order started: {order_name}"
+        self._log_activity("iniciar_ordem", subcategory="ordens", metadata={"orderName": order_name})
         self.orderRequested.emit(order_name)
         self.changed.emit()
 
@@ -3286,6 +3400,7 @@ class StockpileController(QObject):
         super().__init__(parent)
         self.settings = settings
         self._running = False
+        self._activity_logger: ActivityLogger | None = None
         self._status = "Idle"
         self._last_response = "-"
         self._last_update = "-"
@@ -3320,6 +3435,22 @@ class StockpileController(QObject):
         self.statusFromWorker.connect(self._handle_status)
         self.refreshDebugSnapshot()
 
+
+    def setActivityLogger(self, logger: ActivityLogger | None) -> None:
+        self._activity_logger = logger
+
+    def _log_activity(
+        self,
+        action: str,
+        *,
+        subcategory: str,
+        quantity: int = 1,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if not callable(self._activity_logger):
+            return
+        self._activity_logger("estoque", action, quantity, metadata or {}, subcategory)
+
     @Property(bool, notify=changed)
     def apiLoading(self) -> bool:
         return getattr(self, "_api_loading", False)
@@ -3332,6 +3463,7 @@ class StockpileController(QObject):
     def setHudScale(self, value: float) -> None:
         self.settings.setdefault("stockpile", {})["hud_scale"] = value
         save_settings(self.settings)
+        self._log_activity("ajustar_hud", subcategory="visual", metadata={"hudScale": float(value)})
         self.changed.emit()
 
     @Property(bool, notify=changed)
@@ -3463,6 +3595,7 @@ class StockpileController(QObject):
             return
         self._visual_warehouse = value
         self._cached_visual_groups = self._visual_groups()
+        self._log_activity("selecionar_deposito", subcategory="visual", metadata={"warehouse": value})
         self.visualGroupRowsChanged.emit()
         self.changed.emit()
 
@@ -3470,6 +3603,7 @@ class StockpileController(QObject):
     def setWatchFile(self, value: str) -> None:
         self.settings.setdefault("stockpile", {})["watch_file"] = value
         save_settings(self.settings)
+        self._log_activity("configurar_monitor", subcategory="configuracao", metadata={"field": "watch_file", "fileName": Path(value).name})
         self.refreshDebugSnapshot()
         self.changed.emit()
 
@@ -3477,12 +3611,14 @@ class StockpileController(QObject):
     def setApiUrl(self, value: str) -> None:
         self.settings.setdefault("stockpile", {})["api_url"] = value
         save_settings(self.settings)
+        self._log_activity("configurar_monitor", subcategory="configuracao", metadata={"field": "api_url"})
         self.changed.emit()
 
     @Slot(str)
     def setOutDir(self, value: str) -> None:
         self.settings.setdefault("stockpile", {})["out_dir"] = value
         save_settings(self.settings)
+        self._log_activity("configurar_monitor", subcategory="configuracao", metadata={"field": "out_dir", "folderName": Path(value).name})
         self.refreshDebugSnapshot()
         self.changed.emit()
 
@@ -3534,6 +3670,7 @@ class StockpileController(QObject):
         save_settings(self.settings)
         self._status = "Watcher running"
         self._append_log("Watcher started")
+        self._log_activity("iniciar_monitor", subcategory="monitor", metadata={"watchFile": Path(self.watchFile).name, "outDir": Path(self.outDir).name})
         self.refreshDebugSnapshot(emit_changed=False)
         self.changed.emit()
 
@@ -3551,6 +3688,7 @@ class StockpileController(QObject):
             save_settings(self.settings)
         self._status = "Stopped"
         self._append_log("Watcher stopped")
+        self._log_activity("parar_monitor", subcategory="monitor", metadata={"persistEnabled": bool(persist_enabled)})
         self.refreshDebugSnapshot(emit_changed=False)
         self.changed.emit()
 
@@ -3565,6 +3703,7 @@ class StockpileController(QObject):
         self._api_loading = True
         self._status = "Fetching stockpiles from API..."
         self._append_log(self._status)
+        self._log_activity("atualizar_snapshot", subcategory="api", metadata={"apiUrlConfigured": bool(self.apiUrl)})
         self.changed.emit()
 
         def worker() -> None:
@@ -3596,6 +3735,7 @@ class StockpileController(QObject):
         if not watch_file.exists():
             self.statusFromWorker.emit("manual extract error: no *_MapData.sav file found")
             return
+        self._log_activity("extrair_manual", subcategory="monitor", metadata={"watchFile": watch_file.name, "outDir": out_dir.name})
 
         def worker() -> None:
             try:
@@ -3849,6 +3989,19 @@ class StockpileController(QObject):
             except Exception:
                 pass
             if "upload_reason" in message:
+                quantity = int(message.get("report_count", self._report_count) or 1)
+                self._log_activity(
+                    "sincronizar_estoque",
+                    subcategory="monitor",
+                    quantity=max(1, quantity),
+                    metadata={
+                        "uploadReason": str(message.get("upload_reason") or ""),
+                        "reportCount": self._report_count,
+                        "itemCount": self._item_count,
+                        "stockpileList": self._stockpile_list,
+                        "payloadChanged": bool(message.get("payload_changed")),
+                    },
+                )
                 self._show_upload_notification(message)
         else:
             text = str(message)
@@ -4156,6 +4309,15 @@ class ChatController(QObject):
         self._profile: dict[str, Any] = {}
         self._profile_loading = False
         self._profile_ready = False
+        self._activity_summary: dict[str, Any] = {}
+        self._activity_categories: list[dict[str, Any]] = []
+        self._activity_actions: list[dict[str, Any]] = []
+        self._activity_timeseries: list[dict[str, Any]] = []
+        self._activity_users: list[dict[str, Any]] = []
+        self._activity_logs: list[dict[str, Any]] = []
+        self._activity_user_stats: dict[str, Any] = {}
+        self._user_metrics: dict[str, Any] = {}
+        self._activity_error = ""
         self._auth_error_visible = False
         self._auth_denied = False
         self._discord_oauth_in_flight = False
@@ -4173,6 +4335,8 @@ class ChatController(QObject):
         self._mention_hover_avatar = ""
         self._mention_hover_online = False
         self._started = False
+        self._background_mode = False
+        self._chat_page_active = False
         self._ws = None
         app_settings = self.settings.setdefault("app", {})
         self._discord_user_settings = self.settings.setdefault("discord", {})
@@ -4207,8 +4371,48 @@ class ChatController(QObject):
         self._presence_timer.setInterval(30000)
         self._presence_timer.timeout.connect(self.refreshPresence)
         self._auto_connect_timer = QTimer(self)
-        self._auto_connect_timer.setInterval(2500)
         self._auto_connect_timer.timeout.connect(self._maybe_auto_connect)
+        self._sync_timer_intervals()
+
+    def _sync_timer_intervals(self) -> None:
+        if self._background_mode:
+            refresh_interval = 120000
+            notification_interval = 90000
+            presence_interval = 180000
+            auto_connect_interval = 45000
+        elif self._chat_page_active:
+            refresh_interval = 15000
+            notification_interval = 22000
+            presence_interval = 30000
+            auto_connect_interval = 2500
+        else:
+            refresh_interval = 60000
+            notification_interval = 45000
+            presence_interval = 90000
+            auto_connect_interval = 15000
+
+        for timer, interval in (
+            (self._refresh_timer, refresh_interval),
+            (self._notification_timer, notification_interval),
+            (self._presence_timer, presence_interval),
+            (self._auto_connect_timer, auto_connect_interval),
+        ):
+            if timer.interval() != interval:
+                timer.setInterval(interval)
+
+    def setBackgroundMode(self, background: bool) -> None:
+        background = bool(background)
+        if self._background_mode == background:
+            return
+        self._background_mode = background
+        self._sync_timer_intervals()
+
+    def setPageActive(self, active: bool) -> None:
+        active = bool(active)
+        if self._chat_page_active == active:
+            return
+        self._chat_page_active = active
+        self._sync_timer_intervals()
 
 
     @Slot()
@@ -4243,6 +4447,47 @@ class ChatController(QObject):
             self._ws.close()
 
 
+
+    def logActivity(
+        self,
+        category: str,
+        action: str,
+        quantity: int = 1,
+        metadata: dict[str, Any] | None = None,
+        subcategory: str = "",
+    ) -> None:
+        token = str(self._token or "").strip()
+        category = str(category or "").strip()
+        action = str(action or "").strip()
+        if not token or not category or not action:
+            debug_log("activity", "skip", {"category": category, "action": action, "tokenPresent": bool(token)})
+            return
+        try:
+            quantity_value = int(quantity)
+        except (TypeError, ValueError):
+            quantity_value = 1
+        quantity_value = max(1, min(1_000_000, quantity_value))
+        details = dict(metadata or {})
+        if subcategory and not details.get("subcategory"):
+            details["subcategory"] = str(subcategory)
+        details.setdefault("appVersion", APP_VERSION)
+        payload = {
+            "category": category,
+            "action": action,
+            "quantity": quantity_value,
+            "metadata": details,
+            "occurredAt": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        }
+
+        def worker() -> None:
+            try:
+                http_json_url("POST", f"{CHAT_API_BASE.rstrip('/')}/{GG_LOGS_PATH.lstrip('/')}", token=token, payload=payload, timeout=8)
+                debug_log("activity", "sent", {"category": category, "action": action, "quantity": quantity_value})
+            except Exception as exc:
+                debug_log("activity", "send failed", {"category": category, "action": action, "error": repr(exc)})
+
+        threading.Thread(target=worker, daemon=True).start()
+
     @Property(str, notify=changed)
     def apiToken(self) -> str:
         return getattr(self, "_token", "")
@@ -4265,8 +4510,140 @@ class ChatController(QObject):
             return False
         return True
 
+    @Property("QVariantMap", notify=changed)
+    def activitySummary(self) -> dict[str, Any]:
+        return self._activity_summary
 
+    @Property("QVariantList", notify=changed)
+    def activityCategories(self) -> list[dict[str, Any]]:
+        return self._activity_categories
 
+    @Property("QVariantList", notify=changed)
+    def activityActions(self) -> list[dict[str, Any]]:
+        return self._activity_actions
+
+    @Property("QVariantList", notify=changed)
+    def activityTimeseries(self) -> list[dict[str, Any]]:
+        return self._activity_timeseries
+
+    @Property("QVariantList", notify=changed)
+    def activityUsers(self) -> list[dict[str, Any]]:
+        return self._activity_users
+
+    @Property("QVariantList", notify=changed)
+    def activityLogs(self) -> list[dict[str, Any]]:
+        return self._activity_logs
+
+    @Property("QVariantMap", notify=changed)
+    def activityUserStats(self) -> dict[str, Any]:
+        return self._activity_user_stats
+
+    @Property("QVariantMap", notify=changed)
+    def userMetrics(self) -> dict[str, Any]:
+        return self._user_metrics
+
+    @Property(str, notify=changed)
+    def activityError(self) -> str:
+        return self._activity_error
+
+    def _activity_path(self, path_value: str, params: dict[str, Any] | None = None) -> str:
+        query = urllib.parse.urlencode(
+            [(key, value) for key, value in (params or {}).items() if value not in ("", None)]
+        )
+        return f"{path_value}?{query}" if query else path_value
+
+    def _request_activity(self, kind: str, path_value: str, timeout: int = 12) -> None:
+        if not self._token:
+            return
+
+        def run() -> None:
+            try:
+                result = http_json("GET", path_value, token=self._token, timeout=timeout)
+                self.resultFromWorker.emit(kind, result)
+            except Exception as exc:
+                self.resultFromWorker.emit(f"{kind}-error", str(exc))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot()
+    def loadActivityDashboard(self) -> None:
+        if not self._token:
+            return
+        self._request_activity("activity-summary", "/gg-logs/stats/summary")
+        self._request_activity("activity-categories", "/gg-logs/stats/categories")
+        self._request_activity("activity-actions", "/gg-logs/stats/actions")
+        self._request_activity("activity-timeseries", self._activity_path("/gg-logs/stats/timeseries", {"period": "day", "splitBy": "category"}))
+        self._request_activity("activity-users", self._activity_path("/gg-logs/stats/users", {"limit": 10}))
+
+    @Slot(str, str)
+    def loadActivityActionsByCategory(self, category: str, splitBy: str = "") -> None:
+        params: dict[str, Any] = {}
+        if category:
+            params["category"] = category
+        if splitBy:
+            params["splitBy"] = splitBy
+        self._request_activity("activity-actions", self._activity_path("/gg-logs/stats/actions", params))
+
+    @Slot(str, str, str)
+    def loadActivityTimeseries(self, period: str = "day", splitBy: str = "category", category: str = "") -> None:
+        params: dict[str, Any] = {"period": period or "day"}
+        if splitBy:
+            params["splitBy"] = splitBy
+        if category:
+            params["category"] = category
+        self._request_activity("activity-timeseries", self._activity_path("/gg-logs/stats/timeseries", params))
+
+    @Slot(str, str, str)
+    def loadActivityUserStats(self, userId: str = "", fromDate: str = "", toDate: str = "") -> None:
+        user_id = str(userId or "").strip() or str(self._profile.get("id") or self._profile.get("discordId") or self._current_user_id or "").strip()
+        if not user_id:
+            return
+        params: dict[str, Any] = {}
+        if fromDate:
+            params["from"] = fromDate
+        if toDate:
+            params["to"] = toDate
+        self._request_activity("activity-user-stats", self._activity_path(f"/gg-logs/users/{urllib.parse.quote(user_id)}/stats", params))
+
+    @Slot(int, str, str, str, str, str, str)
+    def loadActivityLogs(
+        self,
+        take: int = 50,
+        cursor: str = "",
+        category: str = "",
+        action: str = "",
+        userId: str = "",
+        fromDate: str = "",
+        toDate: str = "",
+    ) -> None:
+        params: dict[str, Any] = {"take": max(1, min(100, int_or_none(take) or 50))}
+        if cursor:
+            params["cursor"] = cursor
+        if category:
+            params["category"] = category
+        if action:
+            params["action"] = action
+        if userId:
+            params["userId"] = userId
+        if fromDate:
+            params["from"] = fromDate
+        if toDate:
+            params["to"] = toDate
+        self._request_activity("activity-logs", self._activity_path("/gg-logs", params))
+
+    @Slot()
+    def refreshCurrentUserActivity(self) -> None:
+        self.fetchCurrentUserMetrics("month")
+        self.loadActivityDashboard()
+        self.loadActivityUserStats()
+        self.loadActivityLogs(8)
+
+    @Slot(str)
+    def fetchCurrentUserMetrics(self, rangeValue: str = "month") -> None:
+        range_value = str(rangeValue or "month").strip().lower()
+        if range_value not in {"today", "week", "month", "year", "total"}:
+            range_value = "month"
+        self._request_activity("activity-user-metrics", self._activity_path("/gg-logs/me/metrics", {"range": range_value}))
 
     @Slot()
     def fetchProfile(self) -> None:
@@ -4320,6 +4697,7 @@ class ChatController(QObject):
     @Slot()
     def logout(self) -> None:
         self._token = ""
+        self._clear_secure_login_credentials()
         self._discord_user_settings.clear()
         save_settings(self.settings)
         ws = getattr(self, "_ws", None)
@@ -4330,6 +4708,15 @@ class ChatController(QObject):
         self._profile = {}
         self._profile_loading = False
         self._profile_ready = False
+        self._activity_summary = {}
+        self._activity_categories = []
+        self._activity_actions = []
+        self._activity_timeseries = []
+        self._activity_users = []
+        self._activity_logs = []
+        self._activity_user_stats = {}
+        self._user_metrics = {}
+        self._activity_error = ""
         self._auth_error_visible = False
         self._auth_denied = False
         self._discord_oauth_in_flight = False
@@ -4428,7 +4815,7 @@ class ChatController(QObject):
 
     @Property(bool, notify=changed)
     def secureReloginRequired(self) -> bool:
-        return bool(self._saved_discord_id() and not self._token)
+        return bool((self._has_secure_auto_login_key() or self._saved_discord_id()) and not self._token)
 
     @Property(bool, notify=changed)
     def authInFlight(self) -> bool:
@@ -4569,6 +4956,7 @@ class ChatController(QObject):
             "codeVerifier": verifier,
             "redirectUri": redirect_uri,
             "appVersion": APP_VERSION,
+            "app_version": APP_VERSION,
         }
         result = http_json_url(
             "POST",
@@ -4643,27 +5031,53 @@ class ChatController(QObject):
         if self._current_user_discord_id:
             self._save_discord_profile(user)
 
-    def _auth_with_discord(self, payload: dict[str, str]) -> dict[str, Any]:
-        last_error: Exception | None = None
-        for path in CHAT_DISCORD_AUTH_PATHS:
-            try:
-                result = http_json("POST", path, payload=payload, timeout=12)
-                debug_login_response(path, result)
-                return result
-            except Exception as exc:
-                last_error = exc
-        raise RuntimeError(str(last_error) if last_error else "chat auth failed")
+    def _secure_login_credentials(self) -> tuple[str, str]:
+        credentials = secure_load_credentials()
+        if not credentials:
+            return '', ''
+        auto_login_key, access_password = credentials
+        return str(auto_login_key or access_password or '').strip(), str(access_password or auto_login_key or '').strip()
 
-    def _auth_with_steam(self, payload: dict[str, str]) -> dict[str, Any]:
-        last_error: Exception | None = None
-        for path in CHAT_STEAM_AUTH_PATHS:
-            try:
-                result = http_json("POST", path, payload=payload, timeout=12)
-                debug_login_response(path, result)
-                return result
-            except Exception as exc:
-                last_error = exc
-        raise RuntimeError(str(last_error) if last_error else "chat auth failed")
+    def _has_secure_auto_login_key(self) -> bool:
+        auto_login_key, _access_password = self._secure_login_credentials()
+        return bool(auto_login_key)
+
+    def _clear_secure_login_credentials(self) -> None:
+        secure_clear_credentials()
+
+    def _save_secure_login_credentials_from_auth_result(self, result: dict[str, Any]) -> None:
+        auto_login_key = str(
+            result.get("autoLoginKey")
+            or result.get("auto_login_key")
+            or result.get("accessPassword")
+            or result.get("access_password")
+            or ""
+        ).strip()
+        access_password = str(
+            result.get("accessPassword")
+            or result.get("access_password")
+            or auto_login_key
+        ).strip()
+        if not auto_login_key:
+            return
+        try:
+            secure_save_credentials(auto_login_key, access_password or auto_login_key)
+        except Exception as exc:
+            debug_log("auth", "secure credential save failed", {"error": repr(exc)})
+
+    def _auth_with_auto_login(self) -> dict[str, Any]:
+        auto_login_key, access_password = self._secure_login_credentials()
+        if not auto_login_key:
+            raise RuntimeError('autoLoginKey e obrigatorio')
+        payload = {
+            'autoLoginKey': auto_login_key,
+            'accessPassword': access_password or auto_login_key,
+            'appVersion': APP_VERSION,
+            'app_version': APP_VERSION,
+        }
+        result = http_json('POST', CHAT_AUTO_LOGIN_AUTH_PATH, payload=payload, timeout=12)
+        debug_login_response(CHAT_AUTO_LOGIN_AUTH_PATH, result)
+        return result
 
     def _verify_discord_app_access(self, result: dict[str, Any]) -> dict[str, Any]:
         token = str(result.get("token") or result.get("accessToken") or "")
@@ -4743,73 +5157,6 @@ class ChatController(QObject):
 
     @Slot()
     def connectWithDiscord(self) -> None:
-        access = result.get("panelAccess") or user.get("panelAccess")
-        profile = merge_panel_profile(user, access)
-
-        if not panel_access_allows_app_login(profile):
-            discord_id = str(profile.get("discordId") or profile.get("discord_id") or "").strip()
-            if discord_id:
-                access_result = http_json("POST", "/chat/panel/access", token=token or None, payload={"discordId": discord_id}, timeout=12)
-                debug_login_response("/chat/panel/access", access_result)
-                profile = merge_panel_profile(
-                    access_result.get("user") if isinstance(access_result.get("user"), dict) else profile,
-                    access_result,
-                )
-
-        if not panel_access_allows_app_login(profile):
-            access = profile.get("panelAccess") if isinstance(profile.get("panelAccess"), dict) else {}
-            level = int_or_none(access.get("accessLevel") or profile.get("panelAccessLevel") or profile.get("accessLevel"))
-            reason = str(access.get("message") or access.get("reason") or f"nível {level if level is not None else 0}")
-            raise RuntimeError(f"Acesso negado: {reason}")
-
-        result = dict(result)
-        result["user"] = profile
-        result["panelAccess"] = profile.get("panelAccess")
-        return result
-
-    def _request_users(self) -> dict[str, Any]:
-        last_error: Exception | None = None
-        for path in CHAT_USERS_PATHS:
-            try:
-                return http_json("GET", path, token=self._token)
-            except Exception as exc:
-                last_error = exc
-        raise RuntimeError(str(last_error) if last_error else "chat users failed")
-
-    def _request_online_users(self) -> dict[str, Any]:
-        discord_id = self._current_user_discord_id or self._saved_discord_id()
-        if discord_id:
-            try:
-                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"discordId": discord_id}, timeout=10)
-            except Exception:
-                pass
-        if self._current_user_id:
-            try:
-                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"userId": self._current_user_id}, timeout=10)
-            except Exception:
-                pass
-        steam_id = self._current_user_steam_id or self.steam.steamId
-        if steam_id:
-            try:
-                return http_json("POST", "/chat/presence/ping", token=self._token, payload={"steamId": steam_id}, timeout=10)
-            except Exception:
-                pass
-        last_error: Exception | None = None
-        for path in CHAT_ONLINE_PATHS:
-            try:
-                return http_json("GET", path, token=self._token, timeout=10)
-            except Exception as exc:
-                last_error = exc
-        raise RuntimeError(str(last_error) if last_error else "chat online users failed")
-
-    def _request_messages(self, slug: str, cursor: str = "") -> dict[str, Any]:
-        path = f"/chat/chats/{urllib.parse.quote(slug)}/messages?take=50"
-        if cursor:
-            path = f"{path}&cursor={urllib.parse.quote(cursor)}"
-        return http_json("GET", path, token=self._token)
-
-    @Slot()
-    def connectWithDiscord(self) -> None:
         self.ensureStarted()
         self._auth_retry_after = 0.0
         self._connect_with_discord(allow_oauth=True)
@@ -4817,7 +5164,7 @@ class ChatController(QObject):
     @Slot()
     def autoConnectWithSavedDiscord(self) -> None:
         self.ensureStarted()
-        if self._saved_discord_id():
+        if self._has_secure_auto_login_key():
             self._discord_configuration_checked = True
             self._discord_login_required = False
             self.changed.emit()
@@ -4845,8 +5192,8 @@ class ChatController(QObject):
             self._status = self._t("home.chat.auth_needed") + f" ({retry_seconds}s)"
             self.changed.emit()
             return
-        saved_discord_id = self._saved_discord_id()
-        if not saved_discord_id and not allow_oauth:
+        has_auto_login_key = self._has_secure_auto_login_key()
+        if not has_auto_login_key and not allow_oauth:
             self._discord_configuration_checked = True
             self._discord_login_required = True
             self._status = self._t("home.chat.no_discord")
@@ -4859,14 +5206,17 @@ class ChatController(QObject):
 
         def worker() -> None:
             try:
-                if not allow_oauth and saved_discord_id:
-                    result = self._auth_with_discord(self._discord_auth_payload(saved_discord_id))
+                if not allow_oauth and has_auto_login_key:
+                    result = self._auth_with_auto_login()
                 else:
                     result = self._auth_with_discord_oauth()
                 result = self._verify_discord_app_access(result)
                 self.resultFromWorker.emit("auth", result)
             except Exception as exc:
                 message = str(exc)
+                lowered = message.lower()
+                if not allow_oauth and any(marker in lowered for marker in ("reauthrequired", "reauth required", "auto-login invalida", "auto-login inválida", "chave de auto-login invalida", "chave de auto-login inválida", "permissao foi revogado", "permissão foi revogado")):
+                    self._clear_secure_login_credentials()
                 if "access_denied" in message or "oauth_cancelled" in message:
                     message = self._t("home.chat.discord_cancelled")
                 self.resultFromWorker.emit("auth-error", self._t("home.chat.auth_error", message=message))
@@ -4875,7 +5225,7 @@ class ChatController(QObject):
         self._auth_error_visible = False
         self._auth_denied = False
         self._discord_oauth_in_flight = allow_oauth
-        if saved_discord_id and not allow_oauth:
+        if has_auto_login_key and not allow_oauth:
             self._discord_login_required = False
             self._status = self._t("home.chat.authenticating_discord")
         else:
@@ -4885,43 +5235,7 @@ class ChatController(QObject):
 
     @Slot()
     def connectWithSteam(self) -> None:
-        self.ensureStarted()
-        self._auth_retry_after = 0.0
-        if self._auth_in_flight:
-            return
-        if self._token:
-            self.refreshRooms()
-            self.refreshPresence()
-            self.refreshNotifications()
-            return
-        now = time.monotonic()
-        if now < self._auth_retry_after:
-            retry_seconds = int(max(1, self._auth_retry_after - now))
-            self._status = self._t("home.chat.auth_needed") + f" ({retry_seconds}s)"
-            self.changed.emit()
-            return
-        profile_name = self.steam.personaName
-        steam_id = self.steam.steamId
-        if not steam_id:
-            self._status = self._t("home.chat.no_steam")
-            self.changed.emit()
-            return
-
-        def worker() -> None:
-            try:
-                payload = {"steamId": steam_id, "name": profile_name}
-                result = self._auth_with_steam(payload)
-                self.resultFromWorker.emit("auth", result)
-            except Exception as exc:
-                self.resultFromWorker.emit("auth-error", self._t("home.chat.auth_error", message=str(exc)))
-
-        self._auth_in_flight = True
-        self._auth_error_visible = False
-        self._auth_denied = False
-        self._discord_oauth_in_flight = False
-        self._status = self._t("home.chat.authenticating")
-        self.changed.emit()
-        threading.Thread(target=worker, daemon=True).start()
+        self.connectWithDiscord()
 
     @Slot()
     def _maybe_auto_connect(self) -> None:
@@ -4933,7 +5247,7 @@ class ChatController(QObject):
             return
         if self._auth_in_flight:
             return
-        if self._saved_discord_id():
+        if self._has_secure_auto_login_key():
             self._discord_configuration_checked = True
             self._discord_login_required = False
             self.changed.emit()
@@ -5081,36 +5395,85 @@ class ChatController(QObject):
     def sendMessage(self, body: str) -> None:
         if not self._token or not self._selected_room or not body.strip():
             return
+        content = body.strip()
         self._send_ws({
             "type": "send_message",
             "chatSlug": self._selected_room,
-            "content": body.strip()
+            "content": content
         })
+        self.logActivity(
+            "chat",
+            "enviar_mensagem",
+            metadata={
+                "subcategory": "mensagens",
+                "chatSlug": self._selected_room,
+                "length": len(content),
+                "mentions": len(MENTION_RE.findall(content)),
+            },
+        )
 
     @Slot(str, str)
     def sendMessageReply(self, body: str, replyToMessageId: str) -> None:
         if not self._token or not self._selected_room or not body.strip():
             return
+        content = body.strip()
         self._send_ws({
             "type": "send_message",
             "chatSlug": self._selected_room,
-            "content": body.strip(),
+            "content": content,
             "replyToMessageId": replyToMessageId
         })
+        self.logActivity(
+            "chat",
+            "responder_mensagem",
+            metadata={
+                "subcategory": "mensagens",
+                "chatSlug": self._selected_room,
+                "replyToMessageId": str(replyToMessageId or ""),
+                "length": len(content),
+                "mentions": len(MENTION_RE.findall(content)),
+            },
+        )
 
     @Slot(str, str)
     def reactMessage(self, messageId: str, emoji: str) -> None:
-        if not self._token or not messageId or not emoji: return
+        if not self._token or not messageId or not emoji:
+            return
         self._send_ws({
             "type": "react_message",
             "messageId": messageId,
             "emoji": emoji
         })
+        self.logActivity(
+            "chat",
+            "reagir_mensagem",
+            metadata={
+                "subcategory": "reacoes",
+                "messageId": str(messageId or ""),
+                "emoji": str(emoji or ""),
+            },
+        )
 
 
     @Slot(str)
     def sendGif(self, url: str) -> None:
-        self.sendMessage(url)
+        if not self._token or not self._selected_room or not str(url or "").strip():
+            return
+        media_url = str(url or "").strip()
+        self._send_ws({
+            "type": "send_message",
+            "chatSlug": self._selected_room,
+            "content": media_url
+        })
+        self.logActivity(
+            "chat",
+            "enviar_gif",
+            metadata={
+                "subcategory": "mensagens",
+                "chatSlug": self._selected_room,
+                "urlHost": urllib.parse.urlparse(media_url).netloc,
+            },
+        )
 
     @Slot(str)
     def updateMentionSuggestions(self, text: str) -> None:
@@ -5246,6 +5609,63 @@ class ChatController(QObject):
 
     @Slot(str, object)
     def _apply_result(self, kind: str, payload: object) -> None:
+        if kind.startswith("activity-") and kind.endswith("-error"):
+            self._activity_error = str(payload or "")
+            self.changed.emit()
+            return
+        if kind == "activity-summary" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._activity_summary = payload
+            self.changed.emit()
+            return
+        if kind == "activity-categories" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._activity_categories = list(payload.get("categories") or [])
+            self.changed.emit()
+            return
+        if kind == "activity-actions" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._activity_actions = list(payload.get("actions") or [])
+            self.changed.emit()
+            return
+        if kind == "activity-timeseries" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._activity_timeseries = list(payload.get("points") or [])
+            self.changed.emit()
+            return
+        if kind == "activity-users" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._activity_users = list(payload.get("users") or [])
+            self.changed.emit()
+            return
+        if kind == "activity-logs" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._activity_logs = list(payload.get("logs") or [])
+            self.changed.emit()
+            return
+        if kind == "activity-user-stats" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._activity_user_stats = payload
+            self.changed.emit()
+            return
+        if kind == "activity-user-metrics" and isinstance(payload, dict):
+            self._activity_error = ""
+            self._user_metrics = payload
+            account = payload.get("account")
+            if isinstance(account, dict):
+                self._profile = merge_panel_profile(account, account.get("panelAccess"))
+                self._apply_current_user_profile(self._profile)
+                self._profile_ready = True
+            recent_logs = payload.get("recentLogs")
+            if isinstance(recent_logs, list):
+                self._activity_logs = recent_logs
+            actions = payload.get("actions")
+            if isinstance(actions, dict):
+                self._activity_user_stats = actions
+                self._activity_categories = list(actions.get("categories") or [])
+                self._activity_actions = list(actions.get("actions") or [])
+            self.changed.emit()
+            return
         if kind == "auth" and isinstance(payload, dict):
             self._auth_in_flight = False
             self._auth_error_visible = False
@@ -5256,6 +5676,18 @@ class ChatController(QObject):
             self._discord_login_required = False
             self._profile_ready = False
             self._token = str(payload.get("token") or payload.get("accessToken") or "")
+            self._save_secure_login_credentials_from_auth_result(payload)
+            auth_flow = str(payload.get("authFlow") or "")
+            auth_action = "login_auto" if "auto" in auth_flow else "login_oauth" if "oauth" in auth_flow else "login"
+            self.logActivity(
+                "auth",
+                auth_action,
+                metadata={
+                    "subcategory": "login",
+                    "authFlow": auth_flow,
+                    "provider": str((payload.get("user") or {}).get("provider") or "discord") if isinstance(payload.get("user"), dict) else "discord",
+                },
+            )
             user = payload.get("user") or payload.get("profile") or {}
             if isinstance(user, dict):
                 user = merge_panel_profile(user, payload.get("panelAccess") or user.get("panelAccess"))
@@ -5275,6 +5707,9 @@ class ChatController(QObject):
 
                 # Fetch fresh profile async
                 self.fetchProfile()
+                self.loadActivityDashboard()
+                self.loadActivityUserStats()
+                self.loadActivityLogs(8)
 
                 self._connect_ws()
 
@@ -5395,6 +5830,9 @@ class ChatController(QObject):
                     self._profile_ready = True
                     self._discord_login_required = False
                     self._status = self._t("home.chat.connected")
+                    self.loadActivityDashboard()
+                    self.loadActivityUserStats()
+                    self.loadActivityLogs(8)
                     self.changed.emit()
                 else:
                     # Notify UI about someone else's profile
@@ -8431,6 +8869,8 @@ class IdentifyItemController(QObject):
         self._detection_template: Any | None = None
         self._last_result_rows: list[dict[str, Any]] = []
         self._monitoring = False
+        self._background_mode = False
+        self._page_active = False
         self._monitor_dependencies_checked = False
         self._monitor_available = True
         self._monitor_overlay_visible = False
@@ -8449,11 +8889,30 @@ class IdentifyItemController(QObject):
         self._selection_candidate_rows: list[dict[str, Any]] = []
         self._selection_request_id = 0
         self._monitor_timer = QTimer(self)
-        self._monitor_timer.setInterval(200)
         self._monitor_timer.timeout.connect(self._run_monitor_tick)
+        self._sync_monitor_timer_interval()
         self.scanFinished.connect(self._apply_scan_result)
         self.monitorFinished.connect(self._apply_monitor_result)
         self.selectionFinished.connect(self._apply_selection_result)
+
+    def _sync_monitor_timer_interval(self) -> None:
+        interval = 1000 if self._background_mode else 200 if self._page_active else 500
+        if self._monitor_timer.interval() != interval:
+            self._monitor_timer.setInterval(interval)
+
+    def setBackgroundMode(self, background: bool) -> None:
+        background = bool(background)
+        if self._background_mode == background:
+            return
+        self._background_mode = background
+        self._sync_monitor_timer_interval()
+
+    def setPageActive(self, active: bool) -> None:
+        active = bool(active)
+        if self._page_active == active:
+            return
+        self._page_active = active
+        self._sync_monitor_timer_interval()
 
     @Slot()
     def ensureLoaded(self) -> None:
@@ -9183,8 +9642,16 @@ class ProductionController(QObject):
         self._material_detail = "-"
         self._route_summary = "-"
         self._warning = ""
+        self._activity_logger: ActivityLogger | None = None
         if self.i18n:
             self.i18n.changed.connect(self.refresh)
+
+    def setActivityLogger(self, logger: ActivityLogger | None) -> None:
+        self._activity_logger = logger
+
+    def _log_activity(self, action: str, *, subcategory: str, quantity: int = 1, metadata: dict[str, Any] | None = None) -> None:
+        if callable(self._activity_logger):
+            self._activity_logger("producao", action, quantity, metadata or {}, subcategory)
 
     @Slot()
     def ensureLoaded(self) -> None:
@@ -9332,6 +9799,7 @@ class ProductionController(QObject):
             self._route_vehicle_mode = "Dunne"
         self._queue = {category: [] for category in CATEGORY_ORDER}
         self._category = self._first_available_category()
+        self._log_activity("alterar_modo", subcategory="calculadora", metadata={"mode": mode})
         self.refresh()
 
     @Slot(str)
@@ -9340,6 +9808,7 @@ class ProductionController(QObject):
         if faction not in {"Neutral", "Colonial", "Warden"}:
             return
         self._faction = faction
+        self._log_activity("alterar_faccao", subcategory="calculadora", metadata={"faction": faction})
         self.refresh()
 
     @Slot(str)
@@ -9348,6 +9817,7 @@ class ProductionController(QObject):
         if category not in CATEGORY_ORDER:
             return
         self._category = category
+        self._log_activity("alterar_categoria", subcategory="calculadora", metadata={"category": category})
         self.refresh()
 
     @Slot(str)
@@ -9360,6 +9830,7 @@ class ProductionController(QObject):
     def setFactoryMultiplier(self, value: int) -> None:
         self.ensureLoaded()
         self._factory_multiplier = min(2, max(1, int(value)))
+        self._log_activity("alterar_multiplicador", subcategory="calculadora", metadata={"factoryMultiplier": self._factory_multiplier})
         self.refresh()
 
     @Slot(str)
@@ -9372,6 +9843,7 @@ class ProductionController(QObject):
         if value == self._route_vehicle_mode:
             return
         self._route_vehicle_mode = value
+        self._log_activity("alterar_veiculo_rota", subcategory="rota", metadata={"vehicle": value})
         self.refresh()
 
     @Slot(str)
@@ -9383,6 +9855,7 @@ class ProductionController(QObject):
             self.changed.emit()
             return
         self._add_item(item, fill=False)
+        self._log_activity("adicionar_item", subcategory="fila", metadata={"itemKey": key, "category": item.category})
 
     @Slot(str)
     def fillCategoryWithItem(self, key: str) -> None:
@@ -9396,6 +9869,7 @@ class ProductionController(QObject):
                 self.refresh()
             else:
                 self._add_item(item, fill=True)
+                self._log_activity("preencher_categoria", subcategory="fila", quantity=max(1, len(self._queue.get(item.category, []))), metadata={"itemKey": key, "category": item.category})
 
     @Slot(str)
     def removeItemByKey(self, key: str) -> None:
@@ -9407,6 +9881,7 @@ class ProductionController(QObject):
         for index, queued in enumerate(rows):
             if queued.item_id == item.item_id:
                 rows.pop(index)
+                self._log_activity("remover_item", subcategory="fila", metadata={"itemKey": key, "category": item.category})
                 self.refresh()
                 return
 
@@ -9418,8 +9893,10 @@ class ProductionController(QObject):
             self._warning = f"Item not found: {name}"
             self.changed.emit()
             return
-        for _ in range(max(1, int(quantity))):
+        quantity_value = max(1, int(quantity))
+        for _ in range(quantity_value):
             self._add_item(match, fill=False, emit=False)
+        self._log_activity("adicionar_item", subcategory="fila", quantity=quantity_value, metadata={"itemName": name, "category": match.category})
         self.refresh()
 
     @Slot(str, int)
@@ -9427,7 +9904,8 @@ class ProductionController(QObject):
         self.ensureLoaded()
         rows = self._queue.get(category, [])
         if 0 <= index < len(rows):
-            rows.pop(index)
+            removed = rows.pop(index)
+            self._log_activity("remover_item", subcategory="fila", metadata={"category": category, "itemName": getattr(removed, "name", "")})
         self.refresh()
 
     @Slot(str, int)
@@ -9438,12 +9916,16 @@ class ProductionController(QObject):
     def clearCategory(self, category: str) -> None:
         self.ensureLoaded()
         if category in self._queue:
+            quantity = len(self._queue.get(category, []))
             self._queue[category] = []
+            self._log_activity("limpar_categoria", subcategory="fila", quantity=max(1, quantity), metadata={"category": category})
         self.refresh()
 
     @Slot()
     def clear(self) -> None:
+        quantity = sum(len(rows) for rows in self._queue.values())
         self._queue = {category: [] for category in CATEGORY_ORDER}
+        self._log_activity("limpar_fila", subcategory="fila", quantity=max(1, quantity))
         self.refresh()
 
     @Slot()
@@ -9759,6 +10241,14 @@ class TimeTaskController(QObject):
         self._recorder = None
         self._recorder_checked = False
         self._available = True
+        self._activity_logger: ActivityLogger | None = None
+
+    def setActivityLogger(self, logger: ActivityLogger | None) -> None:
+        self._activity_logger = logger
+
+    def _log_activity(self, action: str, *, subcategory: str, quantity: int = 1, metadata: dict[str, Any] | None = None) -> None:
+        if callable(self._activity_logger):
+            self._activity_logger("macros", action, quantity, metadata or {}, subcategory)
 
     @Slot()
     def ensureLoaded(self) -> None:
@@ -9990,6 +10480,7 @@ class TimeTaskController(QObject):
             self.changed.emit()
             return
         if self._recorder.start_recording():
+            self._log_activity("iniciar_gravacao", subcategory="gravacao", metadata={"macroName": self._macro_name})
             self._record_overlay_visible = True
             self._record_overlay_title = self._t("timetask.overlay_recording")
             self._record_overlay_detail = self._t("timetask.overlay_armed")
@@ -10043,6 +10534,7 @@ class TimeTaskController(QObject):
                 if name_to_save == "macro" or not name_to_save.strip():
                     name_to_save = f"Macro_{time.strftime('%H%M%S')}"
                 path = self._recorder.save_macro(name_to_save)
+                self._log_activity("salvar_macro", subcategory="arquivos", quantity=max(1, len(events)), metadata={"macroName": path.stem, "events": len(events)})
                 self._selected_path = path
                 self._show_replay_overlay(path.stem)
             else:
@@ -10124,6 +10616,7 @@ class TimeTaskController(QObject):
             stock_interval=stock_interval,
         )
         if started:
+            self._log_activity("reproduzir_macro", subcategory="replay", metadata={"macroName": self._selected_path.stem if self._selected_path else "", "speed": speed, "repeat": repeat, "delay": delay})
             self._status = self._t("timetask.overlay_playing")
         else:
             self._status = self._t("timetask.replay_need_foxhole")
@@ -10135,6 +10628,7 @@ class TimeTaskController(QObject):
     def stopReplay(self) -> None:
         if self._recorder:
             self._recorder.stop_replay()
+        self._log_activity("parar_replay", subcategory="replay", metadata={"macroName": self._selected_path.stem if self._selected_path else ""})
         self._replay_overlay_visible = False
         self._status = self._t("timetask.stopped")
         self._sync_poll_timer()
@@ -10319,6 +10813,8 @@ class NotificationsController(QObject):
         self.settings = settings
         self._remaining_seconds = SQUADLOCK_SECONDS
         self._running = False
+        self._activity_logger: ActivityLogger | None = None
+        self._background_mode = False
         self._finished = False
         self._overlay_visible = False
         self._overlay_hold_until = 0.0
@@ -10330,8 +10826,8 @@ class NotificationsController(QObject):
         self._tick_timer.setInterval(1000)
         self._tick_timer.timeout.connect(self._tick)
         self._focus_timer = QTimer(self)
-        self._focus_timer.setInterval(500)
         self._focus_timer.timeout.connect(self._refresh_overlay_visibility)
+        self._sync_focus_timer_interval()
         self._notifications = DictListModel(["key", "labelKey", "active", "detailKey"], self)
         self.refresh()
 
@@ -10437,6 +10933,25 @@ class NotificationsController(QObject):
         self._sync_focus_timer()
         self.changed.emit()
 
+    def _sync_focus_timer_interval(self) -> None:
+        interval = 1500 if self._background_mode else 500
+        if self._focus_timer.interval() != interval:
+            self._focus_timer.setInterval(interval)
+
+    def setBackgroundMode(self, background: bool) -> None:
+        background = bool(background)
+        if self._background_mode == background:
+            return
+        self._background_mode = background
+        self._sync_focus_timer_interval()
+
+    def setActivityLogger(self, logger: ActivityLogger | None) -> None:
+        self._activity_logger = logger
+
+    def _log_activity(self, action: str, *, subcategory: str, metadata: dict[str, Any] | None = None) -> None:
+        if callable(self._activity_logger):
+            self._activity_logger("notificacoes", action, 1, metadata or {}, subcategory)
+
     @Slot()
     def startSquadlock(self) -> None:
         self._remaining_seconds = SQUADLOCK_SECONDS
@@ -10445,6 +10960,7 @@ class NotificationsController(QObject):
         self._tick_timer.start()
         self._refresh_overlay_visibility()
         self._sync_focus_timer()
+        self._log_activity("iniciar_squadlock", subcategory="squadlock", metadata={"seconds": SQUADLOCK_SECONDS})
         self.changed.emit()
 
     @Slot()
@@ -10459,6 +10975,7 @@ class NotificationsController(QObject):
         self._remaining_seconds = SQUADLOCK_SECONDS
         self._set_overlay_visible(False)
         self._sync_focus_timer()
+        self._log_activity("finalizar_squadlock", subcategory="squadlock")
         self.changed.emit()
 
     @Slot(bool)
@@ -10806,12 +11323,31 @@ class OverlayController(QObject):
         self._visible = False
         self._preview_until = 0.0
         self._hotkey_was_down = False
+        self._background_mode = False
         self._last_find_attempt = 0.0
         self.auto_clicker.changed.connect(self._refresh_visibility)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
-        self._timer.start(250)
+        self._sync_timer_interval()
+        self._timer.start()
         self._refresh_visibility()
+
+    def _sync_timer_interval(self) -> None:
+        interval = 500 if self._background_mode else 250
+        if self._timer.interval() != interval:
+            self._timer.setInterval(interval)
+
+    def setBackgroundMode(self, background: bool) -> None:
+        background = bool(background)
+        if self._background_mode == background:
+            return
+        self._background_mode = background
+        self._sync_timer_interval()
+
+    @Slot()
+    def shutdown(self) -> None:
+        self._timer.stop()
+        self._set_overlay_visible(False)
 
     def _clicker_settings(self) -> dict[str, Any]:
         return self.settings.setdefault("auto_clicker", {})
@@ -11867,6 +12403,8 @@ class DebugController(QObject):
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
         super().__init__()
+        self._shutdown_done = False
+        self._background_mode = False
         debug_memory("registry init start")
         self.settings_data = load_settings()
         self.debugController = DebugController(self.settings_data, self)
@@ -11886,8 +12424,19 @@ class ControllerRegistry(QObject):
         self.productionController = ProductionController(self.i18nController, self)
         self.timeTaskController = TimeTaskController(self.i18nController, self)
         self.notificationsController = NotificationsController(self.settings_data, self)
+        for controller in (
+            self.appController,
+            self.settingsController,
+            self.autoClickerController,
+            self.stockpileController,
+            self.productionController,
+            self.timeTaskController,
+            self.notificationsController,
+        ):
+            controller.setActivityLogger(self.chatController.logActivity)
         self.updateController = UpdateController(self.i18nController, self)
         self.i18nController.changed.connect(self.settingsController.notifyExternalChange)
+        self.appController.currentPageChanged.connect(self._sync_runtime_throttles)
         self.i18nController.changed.connect(self.stockpileController.refreshLocalizedTimes)
         self.i18nController.changed.connect(self.itemSearchController.refreshLocalizedTimes)
         self.settingsController.changed.connect(self.notificationsController.refresh)
@@ -11896,8 +12445,32 @@ class ControllerRegistry(QObject):
             QTimer.singleShot(0, self.stockpileController.start)
         
         QTimer.singleShot(2000, self.updateController.check)
+        self._sync_runtime_throttles()
         debug_memory("registry init ready")
         debug_log("app", "registry init ready", {"controllers": "ready"})
+
+    def _sync_runtime_throttles(self) -> None:
+        current_page = self.appController.currentPage
+        self.chatController.setPageActive(current_page == "chat")
+        self.identifyItemController.setPageActive(current_page == "identifyItem")
+
+    def setBackgroundMode(self, background: bool) -> None:
+        background = bool(background)
+        if self._background_mode == background:
+            return
+        self._background_mode = background
+        for controller in (
+            self.appController,
+            self.chatController,
+            self.identifyItemController,
+            self.overlayController,
+            self.notificationsController,
+        ):
+            try:
+                controller.setBackgroundMode(background)
+            except Exception as exc:
+                debug_log("app", "background mode failed", {"controller": type(controller).__name__, "error": str(exc), "background": background})
+        self._sync_runtime_throttles()
 
     def expose(self, engine) -> None:
         context = engine.rootContext()
@@ -11926,10 +12499,20 @@ class ControllerRegistry(QObject):
 
     @Slot()
     def shutdown(self) -> None:
-        self.debugController.shutdown()
-        self.autoClickerController.shutdown()
-        self.stockpileController.shutdown()
-        self.chatController.shutdown()
-        self.identifyItemController.shutdown()
-        self.timeTaskController.shutdown()
-        self.notificationsController.shutdown()
+        if self._shutdown_done:
+            return
+        self._shutdown_done = True
+        for controller in (
+            self.debugController,
+            self.overlayController,
+            self.autoClickerController,
+            self.stockpileController,
+            self.chatController,
+            self.identifyItemController,
+            self.timeTaskController,
+            self.notificationsController,
+        ):
+            try:
+                controller.shutdown()
+            except Exception as exc:
+                debug_log("app", "controller shutdown failed", {"controller": type(controller).__name__, "error": str(exc)})

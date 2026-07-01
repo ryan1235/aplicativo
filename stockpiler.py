@@ -1186,8 +1186,13 @@ class StockpileWatcher:
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
-    def stop(self) -> None:
+    def stop(self, timeout: float = 2.0) -> None:
         self.stop_event.set()
+        thread = self.thread
+        if thread and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=max(0.0, timeout))
+        if thread and not thread.is_alive():
+            self.thread = None
 
     def _status(self, message: str | dict[str, Any]) -> None:
         if isinstance(message, dict):

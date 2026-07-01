@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
@@ -7,6 +7,16 @@ import "../components"
 Rectangle {
     id: root
     color: "transparent"
+
+    property string selectedRange: "month"
+    property var profile: chatController.userProfile || {}
+    property var metrics: chatController.userMetrics || {}
+    property var account: metrics.account || profile
+    property var counters: account.counters || {}
+    property var actions: metrics.actions || {}
+    property var categories: (actions.categories && actions.categories.length) ? actions.categories : (chatController.activityCategories || [])
+    property var topActions: (actions.actions && actions.actions.length) ? actions.actions : (chatController.activityActions || [])
+    property var recentLogs: (metrics.recentLogs && metrics.recentLogs.length) ? metrics.recentLogs : (chatController.activityLogs || [])
 
     function tr(key) {
         i18nController.revision
@@ -20,405 +30,801 @@ Rectangle {
         return fallback || ""
     }
 
+    function loadProfileMetrics() {
+        if (!chatController.apiToken)
+            return
+        chatController.fetchCurrentUserMetrics(selectedRange)
+    }
+
     onVisibleChanged: {
         if (visible) {
             chatController.ensureStarted()
-            chatController.fetchProfile()
+            loadProfileMetrics()
         }
     }
 
-    property var profile: chatController.userProfile || {}
+    Component.onCompleted: loadProfileMetrics()
+
+    function setRange(value) {
+        selectedRange = value
+        loadProfileMetrics()
+    }
+
+    function profileName() {
+        return account.globalName || account.displayName || account.personaname || account.username || chatController.currentUserName || tr("profile.default_user")
+    }
+
+    function profileHandle() {
+        var username = account.username || account.discordUsername || ""
+        if (username)
+            return "@" + username
+        return account.discordId || account.steamId || account.id || tr("profile.unknown_user")
+    }
+
+    function avatarSource() {
+        return safeImageSource(account.avatar || account.discordAvatarUrl || account.avatarfull || account.avatarUrl || account.avatarmedium || chatController.currentUserAvatar, "")
+    }
+
+    function canOpenAdminPanel() {
+        var role = String(account.role || "").toUpperCase()
+        return role === "DEV" || role === "WINNER" || role === "ADMIN"
+    }
+
+    function numberValue(value) {
+        var n = Number(value)
+        if (isNaN(n))
+            return 0
+        return n
+    }
+
+    function compactNumber(value) {
+        var n = numberValue(value)
+        if (n >= 1000000)
+            return (Math.round(n / 100000) / 10) + "M"
+        if (n >= 1000)
+            return (Math.round(n / 100) / 10) + "k"
+        return String(Math.round(n))
+    }
 
     function formatTime(seconds) {
-        if (!seconds || seconds <= 0) return "0s";
-        var d = Math.floor(seconds / (3600*24));
-        var h = Math.floor(seconds % (3600*24) / 3600);
-        var m = Math.floor(seconds % 3600 / 60);
-        
-        var res = [];
-        if (d > 0) res.push(d + "d");
-        if (h > 0) res.push(h + "h");
-        if (m > 0) res.push(m + "m");
-        if (d === 0 && h === 0 && m === 0) res.push(seconds + "s");
-        return res.join(" ");
+        var total = Math.floor(numberValue(seconds))
+        if (total <= 0)
+            return "0m"
+        var days = Math.floor(total / 86400)
+        var hours = Math.floor((total % 86400) / 3600)
+        var minutes = Math.floor((total % 3600) / 60)
+        if (days > 0)
+            return days + "d " + hours + "h"
+        if (hours > 0)
+            return hours + "h " + minutes + "m"
+        if (minutes > 0)
+            return minutes + "m"
+        return total + "s"
     }
 
     function formatDate(isoString) {
-        if (!isoString) return "-";
-        var date = new Date(isoString);
-        return date.toLocaleDateString() + " " + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        if (!isoString)
+            return "-"
+        var date = new Date(isoString)
+        if (isNaN(date.getTime()))
+            return "-"
+        return date.toLocaleDateString() + " " + date.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})
+    }
+
+    function formatRelative(isoString) {
+        if (!isoString)
+            return "-"
+        var date = new Date(isoString)
+        if (isNaN(date.getTime()))
+            return "-"
+        var diff = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000))
+        if (diff < 60)
+            return tr("profile.just_now")
+        if (diff < 3600)
+            return tr("profile.minutes_ago").replace("{count}", Math.floor(diff / 60))
+        if (diff < 86400)
+            return tr("profile.hours_ago").replace("{count}", Math.floor(diff / 3600))
+        return tr("profile.days_ago").replace("{count}", Math.floor(diff / 86400))
+    }
+
+    function loginEvents(rangeName) {
+        var rows = metrics.logins || {}
+        var row = rows[rangeName || selectedRange] || {}
+        return numberValue(row.events)
+    }
+
+    function labelText(item) {
+        if (!item)
+            return "-"
+        return String(item.category || item.action || item.series || item.bucket || item.label || "-")
+    }
+
+    function actionLabel(item) {
+        if (!item)
+            return "-"
+        var category = String(item.category || "")
+        var action = String(item.action || "")
+        if (category && action)
+            return category + " / " + action
+        return category || action || "-"
+    }
+
+    function barMax(rows, key) {
+        var max = 1
+        for (var i = 0; i < rows.length; i++) {
+            var value = numberValue(rows[i] ? rows[i][key] : 0)
+            if (value > max)
+                max = value
+        }
+        return max
+    }
+
+    function barRatio(value, max) {
+        if (!max || max <= 0)
+            return 0
+        return Math.max(0.05, Math.min(1, numberValue(value) / max))
+    }
+
+    function mentionTotal() {
+        return numberValue(counters.mentionsReceived) + numberValue(counters.mentionsSent)
+    }
+
+    function lastLogText() {
+        if (!recentLogs || recentLogs.length === 0)
+            return tr("profile.no_data")
+        var item = recentLogs[0]
+        return actionLabel(item) + " x" + compactNumber(item.quantity || 1)
     }
 
     ScrollView {
         anchors.fill: parent
-        contentWidth: availableWidth
         clip: true
+        contentWidth: availableWidth
 
         ColumnLayout {
-            // Utilizando quase todo o espaÃ§o disponÃ­vel
             width: parent.width - 40
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.margins: 20
-            spacing: 24
+            spacing: 16
 
-            // Top Header Card
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 320
-                radius: 12
-                color: settingsController.backgroundColor
-                border.color: settingsController.controlColor
+                Layout.preferredHeight: root.width > 980 ? 286 : (root.width > 680 ? 430 : 680)
+                radius: settingsController.cardRadius
+                color: settingsController.surfaceColor
+                border.color: settingsController.borderColor
                 border.width: 1
                 clip: true
 
-                // Banner
                 Rectangle {
-                    id: bannerRect
-                    width: parent.width
-                    height: 140
-                    color: profile.accentColor ? profile.accentColor : settingsController.surfaceRaisedColor
-                    
-                    Image {
-                        anchors.fill: parent
-                        // Fallback pra imagem bonitona da web se nÃ£o tiver banner
-                        source: safeImageSource(profile.banner, "https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=1200&auto=format&fit=crop")
-                        fillMode: Image.PreserveAspectCrop
-                        visible: true
-                    }
-                    
-                    // Gradient overlay for smoother transition
-                    Rectangle {
-                        anchors.fill: parent
-                        gradient: Gradient {
-                            GradientStop { position: 0.0; color: "transparent" }
-                            GradientStop { position: 1.0; color: settingsController.backgroundColor }
-                        }
-                    }
-                }
-
-                // Avatar
-                Rectangle {
-                    id: avatarContainer
-                    width: 120
-                    height: 120
-                    radius: 60
-                    color: settingsController.controlColor
-                    border.color: settingsController.backgroundColor
-                    border.width: 6
-                    anchors.bottom: bannerRect.bottom
-                    anchors.bottomMargin: -60
                     anchors.left: parent.left
-                    anchors.leftMargin: 30
-
-                    Rectangle {
-                        id: maskAvatar
-                        anchors.fill: parent
-                        anchors.margins: 2
-                        radius: 56
-                        visible: false
-                    }
-                    Image {
-                        id: imgAvatar
-                        anchors.fill: maskAvatar
-                        source: safeImageSource(profile.avatarfull || profile.avatarUrl || profile.avatarmedium || chatController.currentUserAvatar, "")
-                        fillMode: Image.PreserveAspectCrop
-                        visible: false
-                    }
-                    OpacityMask {
-                        anchors.fill: maskAvatar
-                        source: imgAvatar
-                        maskSource: maskAvatar
-                        visible: imgAvatar.source != ""
-                    }
-                }
-
-                // Logout Button
-                Rectangle {
-                    width: 100
-                    height: 36
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    anchors.margins: 16
-                    radius: 18
-                    color: logoutHover.containsMouse ? settingsController.dangerColor : settingsController.controlColor
-                    border.color: logoutHover.containsMouse ? settingsController.dangerColor : "transparent"
-                    border.width: 1
-                    Behavior on color { ColorAnimation { duration: 150 } }
-                    
-                    RowLayout {
-                        anchors.centerIn: parent
-                        spacing: 6
-                        Text { text: tr("profile.logout"); color: settingsController.textColor; font.family: "Segoe UI"; font.bold: true; font.pixelSize: 13 }
-                    }
-                    MouseArea {
-                        id: logoutHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            chatController.logout()
-                            appController.setCurrentPage("chat")
-                        }
+                    height: 142
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#b10f6d" }
+                        GradientStop { position: 0.48; color: settingsController.accentPanelColor }
+                        GradientStop { position: 1.0; color: settingsController.accentColor }
                     }
                 }
 
-                // Info Section
-                ColumnLayout {
+                Rectangle {
                     anchors.left: parent.left
-                    anchors.leftMargin: 30
-                    anchors.top: avatarContainer.bottom
-                    anchors.topMargin: 15
-                    spacing: 4
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: 142
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 1.0; color: settingsController.surfaceColor }
+                    }
+                }
 
-                    RowLayout {
-                        spacing: 12
+                RowLayout {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.margins: 22
+                    spacing: 18
+
+                    Rectangle {
+                        width: 108
+                        height: 108
+                        radius: 54
+                        color: settingsController.controlColor
+                        border.color: account.online ? settingsController.successColor : settingsController.borderColor
+                        border.width: 3
+                        Layout.alignment: Qt.AlignTop
+
+                        Rectangle {
+                            id: avatarMask
+                            anchors.fill: parent
+                            anchors.margins: 5
+                            radius: 50
+                            visible: false
+                        }
+                        Image {
+                            id: avatarImage
+                            anchors.fill: avatarMask
+                            source: avatarSource()
+                            fillMode: Image.PreserveAspectCrop
+                            visible: false
+                        }
+                        OpacityMask {
+                            anchors.fill: avatarMask
+                            source: avatarImage
+                            maskSource: avatarMask
+                            visible: avatarImage.source !== ""
+                        }
                         Text {
-                            text: profile.globalName || profile.displayName || chatController.currentUserName || tr("profile.default_user")
+                            anchors.centerIn: parent
+                            visible: avatarImage.source === ""
+                            text: profileName().charAt(0).toUpperCase()
                             color: settingsController.textColor
                             font.family: "Segoe UI"
-                            font.pixelSize: 28
+                            font.pixelSize: 32
                             font.bold: true
                         }
-                        Rectangle {
-                            visible: profile.role !== undefined && profile.role !== null && profile.role !== ""
-                            color: settingsController.accentColor
-                            radius: 6
-                            Layout.preferredHeight: 22
-                            Layout.preferredWidth: roleText.implicitWidth + 16
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
                             Text {
-                                id: roleText
-                                anchors.centerIn: parent
-                                text: profile.role || ""
-                                color: settingsController.backgroundColor
-                                font.pixelSize: 12
+                                text: profileName()
+                                color: settingsController.textColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 28
                                 font.bold: true
-                                font.letterSpacing: 0.5
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: "@" + (profile.username || chatController.currentUserName || tr("profile.unknown_user"))
-                        color: settingsController.mutedTextColor
-                        font.family: "Segoe UI"
-                        font.pixelSize: 15
-                    }
-                }
-            }
-
-            // Two Columns Layout
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 24
-
-                // Left Col - Stats & Info
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 250
-                    radius: 12
-                    color: settingsController.backgroundColor
-                    border.color: settingsController.controlColor
-                    border.width: 1
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 24
-                        spacing: 16
-
-                        Text {
-                            text: tr("profile.overview")
-                            color: settingsController.textColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-                        
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 1
-                            color: settingsController.controlColor
-                        }
-
-                        // SubstituÃ­do GridLayout por ColumnLayout -> RowLayout para evitar cortes de texto longo
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 14
-
-                            RowLayout {
+                                wrapMode: Text.WordWrap
                                 Layout.fillWidth: true
-                                Text { text: tr("profile.stock_updates"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
-                                Item { Layout.fillWidth: true }
-                                Text { text: (profile.stockUpdateHelpCount || 0).toString(); color: settingsController.accentColor; font.bold: true; font.pixelSize: 14 }
+                                maximumLineCount: 2
                             }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text { text: tr("profile.online_time"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
-                                Item { Layout.fillWidth: true }
-                                Text { text: formatTime(profile.totalOnlineSeconds); color: settingsController.accentColor; font.bold: true; font.pixelSize: 14 }
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Text { text: tr("profile.last_login"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
-                                Item { Layout.fillWidth: true }
-                                Text { 
-                                    text: formatDate(profile.lastLoginAt)
+                            Rectangle {
+                                visible: String(account.role || "") !== ""
+                                height: 24
+                                width: roleText.implicitWidth + 18
+                                radius: 6
+                                color: settingsController.accentPanelColor
+                                border.color: settingsController.accentColor
+
+                                Text {
+                                    id: roleText
+                                    anchors.centerIn: parent
+                                    text: String(account.role || "")
                                     color: settingsController.accentColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
                                     font.bold: true
-                                    font.pixelSize: 14
-                                    elide: Text.ElideRight
-                                    Layout.maximumWidth: 200
-                                }
-                            }
-                            
-                            RowLayout {
-                                Layout.fillWidth: true
-                                visible: profile.createdAt !== undefined
-                                Text { text: tr("profile.created_at"); color: settingsController.mutedTextColor; font.pixelSize: 14 }
-                                Item { Layout.fillWidth: true }
-                                Text { 
-                                    text: formatDate(profile.createdAt)
-                                    color: settingsController.accentColor
-                                    font.bold: true
-                                    font.pixelSize: 14 
-                                    elide: Text.ElideRight
-                                    Layout.maximumWidth: 200
                                 }
                             }
                         }
-                        
-                        Item { Layout.fillHeight: true }
-                    }
-                }
-
-                // Right Col - Regiment
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 250
-                    radius: 12
-                    color: settingsController.backgroundColor
-                    border.color: settingsController.controlColor
-                    border.width: 1
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 24
-                        spacing: 16
 
                         Text {
-                            text: tr("profile.regiment")
-                            color: settingsController.textColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 18
-                            font.bold: true
-                        }
-                        
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 1
-                            color: settingsController.controlColor
-                        }
-                        
-                        Text {
-                            text: tr("profile.regiment_hint")
+                            text: profileHandle()
                             color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 14
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+
+                        Text {
+                            text: tr("profile.summary_title")
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
                             font.pixelSize: 13
                             wrapMode: Text.WordWrap
                             Layout.fillWidth: true
+                            Layout.maximumWidth: 760
                         }
 
-                        PrimaryComboBox {
-                            id: regimentCombo
+                        Flow {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 44
-                            model: [tr("profile.regiment_none"), "STORM", "WRG", "LIDA", "7CMD", "FELB", "GDO", "DOGZ", "REQ"]
-                            
-                            Component.onCompleted: {
-                                var current = profile.regiment || tr("profile.regiment_none");
-                                var idx = find(current);
-                                if (idx === -1) idx = 0;
-                                currentIndex = idx;
+                            spacing: 8
+
+                            Repeater {
+                                model: [
+                                    account.online ? tr("profile.online_now") : tr("profile.offline_now"),
+                                    account.regiment || tr("profile.no_regiment"),
+                                    account.panelAccessLevel !== undefined ? tr("profile.access_level") + ": " + account.panelAccessLevel : tr("profile.access_level_unknown"),
+                                    account.appVersion ? tr("profile.app_version").replace("{version}", account.appVersion) : ""
+                                ].filter(function(item) { return String(item || "") !== "" })
+
+                                delegate: Rectangle {
+                                    height: 30
+                                    width: chipText.implicitWidth + 20
+                                    radius: 8
+                                    color: index === 0 && account.online ? settingsController.accentPanelColor : settingsController.controlColor
+                                    border.color: index === 0 && account.online ? settingsController.successColor : settingsController.borderColor
+
+                                    Text {
+                                        id: chipText
+                                        anchors.centerIn: parent
+                                        text: String(modelData)
+                                        color: index === 0 && account.online ? settingsController.successColor : settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+                                }
                             }
-                            
-                            // Elegant ComboBox styling
-                            background: Rectangle {
-                                color: settingsController.surfaceRaisedColor
-                                radius: 6
-                                border.color: regimentCombo.activeFocus ? settingsController.accentColor : settingsController.controlColor
-                                border.width: 1
-                            }
-                            contentItem: Text {
-                                text: regimentCombo.currentText
-                                color: settingsController.textColor
-                                font.pixelSize: 14
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignTop
+                        Layout.preferredWidth: 210
+                        spacing: 8
+
+                        Rectangle {
+                            visible: canOpenAdminPanel()
+                            Layout.fillWidth: true
+                            height: 36
+                            radius: 8
+                            color: adminHover.containsMouse ? settingsController.accentHoverColor : settingsController.accentColor
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: tr("profile.open_admin")
+                                color: settingsController.textInverseColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 13
                                 font.bold: true
-                                verticalAlignment: Text.AlignVCenter
-                                anchors.left: parent.left
-                                anchors.leftMargin: 12
+                            }
+
+                            MouseArea {
+                                id: adminHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: appController.openAdminPanel(chatController.apiToken)
                             }
                         }
 
-                        Item { Layout.fillHeight: true }
-
-                        PrimaryButton {
-                            id: updateBtn
-                            text: tr("profile.update_regiment")
+                        Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 44
-                            onClicked: {
-                                var val = regimentCombo.currentText;
-                                if (val === tr("profile.regiment_none")) val = "";
-                                chatController.updateRegiment(val)
-                                updateBtn.text = tr("profile.saved_success")
-                                updateTimer.start()
+                            height: 36
+                            radius: 8
+                            color: logoutHover.containsMouse ? settingsController.dangerColor : settingsController.controlColor
+                            border.color: logoutHover.containsMouse ? settingsController.dangerColor : settingsController.borderColor
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: tr("profile.logout")
+                                color: settingsController.textColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 13
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: logoutHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    chatController.logout()
+                                    appController.setCurrentPage("chat")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                GridLayout {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 18
+                    columns: root.width > 980 ? 4 : 2
+                    columnSpacing: 10
+                    rowSpacing: 10
+
+                    MetricCard {
+                        Layout.fillWidth: true
+                        title: tr("profile.total_online")
+                        value: formatTime(account.totalOnlineSeconds)
+                        detail: tr("profile.last_presence").replace("{time}", formatRelative(account.lastPresenceAt || account.updatedAt))
+                        accent: settingsController.accentColor
+                        valuePixelSize: 20
+                    }
+                    MetricCard {
+                        Layout.fillWidth: true
+                        title: tr("profile.account_age")
+                        value: compactNumber(account.accountAgeDays || 0) + "d"
+                        detail: tr("profile.created_at_short").replace("{date}", formatDate(account.createdAt))
+                        accent: settingsController.infoColor
+                        valuePixelSize: 20
+                    }
+                    MetricCard {
+                        Layout.fillWidth: true
+                        title: tr("profile.login_metric")
+                        value: compactNumber(loginEvents(selectedRange))
+                        detail: tr("profile.last_login_short").replace("{date}", formatRelative(account.lastLoginAt))
+                        accent: settingsController.successColor
+                        valuePixelSize: 20
+                    }
+                    MetricCard {
+                        Layout.fillWidth: true
+                        title: tr("profile.latest_title")
+                        value: lastLogText()
+                        detail: tr("profile.period_label_" + selectedRange)
+                        accent: settingsController.warningColor
+                        valuePixelSize: 18
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 54
+                radius: settingsController.cardRadius
+                color: settingsController.surfaceColor
+                border.color: settingsController.borderColor
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 8
+
+                    Text {
+                        text: tr("profile.period")
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+
+                    Repeater {
+                        model: [
+                            {key: "today", label: tr("profile.period_today")},
+                            {key: "week", label: tr("profile.period_week")},
+                            {key: "month", label: tr("profile.period_month")},
+                            {key: "total", label: tr("profile.period_total")}
+                        ]
+
+                        delegate: Rectangle {
+                            height: 34
+                            width: periodText.implicitWidth + 24
+                            radius: 8
+                            color: selectedRange === modelData.key ? settingsController.accentPanelColor : settingsController.controlColor
+                            border.color: selectedRange === modelData.key ? settingsController.accentColor : settingsController.borderColor
+
+                            Text {
+                                id: periodText
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: selectedRange === modelData.key ? settingsController.accentColor : settingsController.textColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 12
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: setRange(modelData.key)
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: metrics.generatedAt ? tr("profile.updated_at").replace("{time}", formatRelative(metrics.generatedAt)) : ""
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                    }
+                }
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: root.width > 1040 ? 4 : root.width > 720 ? 2 : 1
+                columnSpacing: 12
+                rowSpacing: 12
+
+                MetricCard {
+                    Layout.fillWidth: true
+                    title: tr("profile.metric_events")
+                    value: compactNumber(actions.totalEvents || 0)
+                    detail: tr("profile.metric_events_detail")
+                    accent: settingsController.successColor
+                }
+                MetricCard {
+                    Layout.fillWidth: true
+                    title: tr("profile.metric_quantity")
+                    value: compactNumber(actions.totalQuantity || 0)
+                    detail: tr("profile.metric_quantity_detail")
+                    accent: settingsController.accentColor
+                }
+                MetricCard {
+                    Layout.fillWidth: true
+                    title: tr("profile.messages")
+                    value: compactNumber(counters.messages || 0)
+                    detail: tr("profile.messages_detail").replace("{count}", compactNumber(counters.whisperMessages || 0))
+                    accent: settingsController.infoColor
+                }
+                MetricCard {
+                    Layout.fillWidth: true
+                    title: tr("profile.interactions")
+                    value: compactNumber(numberValue(counters.messageReactions) + mentionTotal())
+                    detail: tr("profile.interactions_detail").replace("{count}", compactNumber(counters.newsViews || 0))
+                    accent: settingsController.warningColor
+                }
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: root.width > 900 ? 2 : 1
+                columnSpacing: 14
+                rowSpacing: 14
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 300
+                    radius: settingsController.cardRadius
+                    color: settingsController.surfaceColor
+                    border.color: settingsController.borderColor
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                text: tr("profile.graph_categories")
+                                color: settingsController.textColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 18
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: tr("profile.graph_categories_hint")
+                                color: settingsController.mutedTextColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 11
                             }
                         }
 
-                        Timer {
-                            id: updateTimer
-                            interval: 2000
-                            onTriggered: updateBtn.text = tr("profile.update_regiment")
+                        Text {
+                            visible: categories.length === 0
+                            text: tr("profile.no_data")
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                        }
+
+                        Repeater {
+                            model: categories
+
+                            delegate: ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                visible: index < 5
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Text {
+                                        text: labelText(modelData)
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: compactNumber(modelData.totalEvents || modelData.totalQuantity || 0)
+                                        color: settingsController.accentColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 9
+                                    radius: 5
+                                    color: settingsController.controlColor
+
+                                    Rectangle {
+                                        width: parent.width * barRatio(modelData.totalEvents || modelData.totalQuantity || 0, barMax(categories, "totalEvents"))
+                                        height: parent.height
+                                        radius: 5
+                                        color: settingsController.accentColor
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 300
+                    radius: settingsController.cardRadius
+                    color: settingsController.surfaceColor
+                    border.color: settingsController.borderColor
+                    border.width: 1
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        spacing: 12
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Text {
+                                text: tr("profile.top_actions")
+                                color: settingsController.textColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 18
+                                font.bold: true
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: tr("profile.top_actions_hint")
+                                color: settingsController.mutedTextColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 11
+                            }
+                        }
+
+                        Text {
+                            visible: topActions.length === 0
+                            text: tr("profile.no_data")
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                        }
+
+                        Repeater {
+                            model: topActions
+
+                            delegate: Rectangle {
+                                Layout.fillWidth: true
+                                height: 38
+                                visible: index < 5
+                                radius: 8
+                                color: index % 2 === 0 ? settingsController.backgroundColor : settingsController.controlColor
+                                border.color: settingsController.borderColor
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    spacing: 10
+
+                                    Text {
+                                        text: actionLabel(modelData)
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Text {
+                                        text: compactNumber(modelData.totalEvents || 0) + " / " + compactNumber(modelData.totalQuantity || 0)
+                                        color: settingsController.successColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        font.bold: true
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-            
-            // Painel Administrativo
+
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 60
-                radius: 12
-                color: settingsController.controlColor
-                border.color: settingsController.accentColor
+                implicitHeight: 340
+                radius: settingsController.cardRadius
+                color: settingsController.surfaceColor
+                border.color: settingsController.borderColor
                 border.width: 1
-                visible: chatController.canOpenAdminPanel
+                clip: true
 
-                RowLayout {
+                ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 16
                     spacing: 12
 
-                    Text {
-                        text: tr("profile.admin_panel")
-                        color: settingsController.accentColor
-                        font.family: "Segoe UI"
-                        font.pixelSize: 16
-                        font.bold: true
+                    RowLayout {
                         Layout.fillWidth: true
+                        Text {
+                            text: tr("profile.recent_logs")
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 18
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: tr("profile.recent_logs_hint")
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                        }
                     }
 
-                    PrimaryButton {
-                        text: tr("profile.open_panel")
-                        Layout.preferredWidth: 150
-                        Layout.preferredHeight: 36
-                        onClicked: appController.openAdminPanel(chatController.apiToken)
+                    Text {
+                        visible: recentLogs.length === 0
+                        text: tr("profile.no_data")
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 13
+                    }
+
+                    Repeater {
+                        model: Math.min(recentLogs.length, 5)
+
+                        delegate: Rectangle {
+                            property var rowData: recentLogs[index] || {}
+                            Layout.fillWidth: true
+                            height: 36
+                            radius: 8
+                            color: index % 2 === 0 ? settingsController.backgroundColor : settingsController.controlColor
+                            border.color: settingsController.borderColor
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 10
+
+                                Text {
+                                    text: String(rowData.category || "-")
+                                    color: settingsController.accentColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    Layout.preferredWidth: 120
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: String(rowData.action || "-")
+                                    color: settingsController.textColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: "x" + compactNumber(rowData.quantity || 1)
+                                    color: settingsController.successColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    Layout.preferredWidth: 54
+                                    horizontalAlignment: Text.AlignRight
+                                }
+                                Text {
+                                    text: formatRelative(rowData.occurredAt || rowData.createdAt)
+                                    color: settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 11
+                                    Layout.preferredWidth: 120
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
                     }
                 }
             }
-            
-            Item { Layout.preferredHeight: 40 }
         }
     }
 }
-
-

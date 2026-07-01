@@ -22,6 +22,10 @@ SENSITIVE_KEYS = {
     "code_verifier",
     "clientsecret",
     "client_secret",
+    "autologinkey",
+    "auto_login_key",
+    "accesspassword",
+    "access_password",
     "password",
     "secret",
 }

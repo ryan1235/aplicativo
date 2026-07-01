@@ -6,32 +6,32 @@
     <title>GG Coalition - Painel Web</title>
     <style>
       :root {
-        --bg: #11100d;
-        --surface: #191913;
-        --surface-2: #222218;
-        --surface-3: #2d2c20;
-        --line: rgba(236, 226, 196, 0.15);
-        --line-strong: rgba(236, 226, 196, 0.28);
-        --line-soft: rgba(236, 226, 196, 0.08);
-        --panel: rgba(25, 25, 19, 0.9);
-        --panel-2: rgba(34, 34, 24, 0.82);
-        --control-bg: rgba(8, 8, 6, 0.58);
-        --row-hover: rgba(236, 226, 196, 0.055);
-        --accent-soft: rgba(97, 214, 200, 0.1);
-        --accent-line: rgba(97, 214, 200, 0.28);
+        --bg: #0a0f10;
+        --surface: #101817;
+        --surface-2: #15211f;
+        --surface-3: #20312e;
+        --line: rgba(161, 210, 201, 0.15);
+        --line-strong: rgba(161, 210, 201, 0.3);
+        --line-soft: rgba(161, 210, 201, 0.08);
+        --panel: rgba(13, 22, 21, 0.9);
+        --panel-2: rgba(20, 34, 32, 0.84);
+        --control-bg: rgba(4, 10, 10, 0.62);
+        --row-hover: rgba(97, 214, 200, 0.07);
+        --accent-soft: rgba(97, 214, 200, 0.12);
+        --accent-line: rgba(97, 214, 200, 0.32);
         --danger-soft: rgba(230, 109, 109, 0.1);
         --danger-line: rgba(230, 109, 109, 0.34);
         --success-soft: rgba(111, 211, 141, 0.1);
         --success-line: rgba(111, 211, 141, 0.34);
-        --text: #f5efe0;
-        --muted: #b9ad93;
-        --muted-2: #847a66;
+        --text: #f3fbf8;
+        --muted: #a9bbb5;
+        --muted-2: #748982;
         --accent: #61d6c8;
         --accent-2: #e6b450;
         --danger: #e66d6d;
         --success: #6fd38d;
         --purple: #b59cff;
-        --ink: #080806;
+        --ink: #061514;
         --radius: 8px;
         --shadow: 0 20px 60px rgba(0, 0, 0, 0.36);
       }
@@ -342,7 +342,7 @@
 
       .metrics {
         display: grid;
-        grid-template-columns: repeat(4, minmax(160px, 1fr));
+        grid-template-columns: repeat(5, minmax(150px, 1fr));
         gap: 12px;
       }
 
@@ -402,9 +402,16 @@
         color: var(--accent);
       }
 
+      .metric-detail {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
       .toolbar {
         display: grid;
-        grid-template-columns: minmax(240px, 1fr) 170px 170px auto;
+        grid-template-columns: minmax(220px, 1fr) 170px 170px 170px auto;
         gap: 10px;
         padding: 12px;
         align-items: center;
@@ -413,6 +420,89 @@
 
       .news-toolbar {
         grid-template-columns: minmax(240px, 1fr) 190px auto auto;
+      }
+
+      .dashboard-toolbar {
+        grid-template-columns: minmax(420px, 1fr) 220px 112px;
+        align-items: stretch;
+        background: var(--panel);
+        border-color: var(--line);
+      }
+
+      .dashboard-toolbar .btn.primary {
+        min-height: 44px;
+        align-self: end;
+        border-color: var(--line-strong);
+        background: var(--surface-3);
+        color: var(--text);
+      }
+
+      .dashboard-toolbar .btn.primary:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .dashboard-toolbar .field select {
+        border-color: var(--line);
+        background: var(--control-bg);
+      }
+
+      #home-page .filter-group > span,
+      #home-page .select-with-caption span {
+        color: var(--muted);
+      }
+
+      .filter-group {
+        min-width: 0;
+        display: grid;
+        gap: 6px;
+      }
+
+      .filter-group > span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .range-tabs {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 6px;
+        background: rgba(3, 11, 12, 0.6);
+      }
+
+      .range-tabs button {
+        min-height: 34px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .range-tabs button:hover,
+      .range-tabs button.active {
+        color: var(--ink);
+        border-color: var(--accent);
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      }
+
+      .select-with-caption {
+        display: grid;
+        gap: 6px;
+      }
+
+      .select-with-caption span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
       }
 
       .field {
@@ -565,10 +655,21 @@
         align-items: center;
         gap: 12px;
         min-width: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        text-align: left;
+        cursor: pointer;
       }
 
       .user-cell > div {
         min-width: 0;
+      }
+
+      .user-cell:hover .user-name,
+      .user-cell:focus-visible .user-name {
+        color: var(--accent);
       }
 
       .avatar {
@@ -660,6 +761,390 @@
         color: var(--muted);
         font-size: 13px;
         font-weight: 900;
+      }
+
+      .activity-panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .dashboard-hero {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(180deg, var(--accent-soft), transparent 210px),
+          var(--panel);
+        padding: 18px;
+        display: grid;
+        gap: 16px;
+        overflow: hidden;
+      }
+
+      .dashboard-hero-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .dashboard-hero h2 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.15;
+      }
+
+      .dashboard-hero p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .spark-grid,
+      .chart-grid,
+      .insight-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .spark-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .spark-card,
+      .chart-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent),
+          var(--panel);
+        padding: 14px;
+        min-width: 0;
+      }
+
+      #home-page .metric {
+        border-color: var(--line);
+        background: var(--panel);
+      }
+
+      #home-page .metric::after {
+        background: linear-gradient(90deg, var(--accent), transparent);
+      }
+
+      #home-page .metric-value.accent,
+      #home-page .rank-value {
+        color: var(--accent);
+      }
+
+      .spark-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .spark-card strong {
+        display: block;
+        margin-top: 10px;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .spark-card small {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .chart-grid {
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+      }
+
+      .insight-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .chart-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .chart-head strong {
+        font-size: 15px;
+      }
+
+      .chart-head span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .canvas-wrap {
+        height: 260px;
+        min-width: 0;
+      }
+
+      .chart-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      @keyframes panelIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes accentSweep {
+        from {
+          background-position: 0% 50%;
+        }
+        to {
+          background-position: 100% 50%;
+        }
+      }
+
+      #home-page .metric,
+      #home-page .toolbar,
+      #home-page .dashboard-hero,
+      #home-page .spark-card,
+      #home-page .chart-card {
+        animation: panelIn 0.34s ease both;
+      }
+
+      #home-page .metric,
+      #home-page .spark-card,
+      #home-page .chart-card,
+      #home-page .rank-row {
+        transition:
+          transform 0.18s ease,
+          border-color 0.18s ease,
+          background 0.18s ease;
+      }
+
+      #home-page .spark-card:hover,
+      #home-page .chart-card:hover,
+      #home-page .rank-row:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent-line);
+      }
+
+      #home-page .metric::after {
+        background-size: 180% 100%;
+        animation: accentSweep 4s ease-in-out infinite alternate;
+      }
+
+      #home-activity-chart {
+        cursor: crosshair;
+      }
+
+      .rank-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .rank-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        padding: 9px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+      }
+
+      .rank-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .rank-meta {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rank-value {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .activity-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .activity-controls select {
+        min-width: 240px;
+      }
+
+      .activity-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .activity-shell {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel-2);
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .activity-columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+        gap: 12px;
+      }
+
+      .bar-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .bar-row {
+        display: grid;
+        gap: 4px;
+      }
+
+      .bar-row-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        min-width: 0;
+      }
+
+      .bar-row-head span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .bar-track {
+        height: 10px;
+        border-radius: 999px;
+        background: var(--surface-2);
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      }
+
+      .log-list {
+        display: grid;
+        gap: 8px;
+        max-height: 240px;
+        overflow: auto;
+      }
+
+      .log-row {
+        display: grid;
+        grid-template-columns: 90px minmax(0, 1fr) 56px 150px;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+      }
+
+      .log-category {
+        color: var(--accent);
+        font-weight: 900;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .log-action {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .log-quantity {
+        color: var(--success);
+        font-weight: 900;
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .log-time {
+        color: var(--muted);
+        font-size: 11px;
+        text-align: right;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .online-list {
+        display: grid;
+        gap: 8px;
+        max-height: 240px;
+        overflow: auto;
+      }
+
+      .online-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+      }
+
+      .online-row strong {
+        display: block;
+        min-width: 0;
+        font-size: 12px;
+        line-height: 1.2;
+      }
+
+      .online-row > div:first-child {
+        min-width: 0;
       }
 
       .news-category-tabs {
@@ -1011,6 +1496,142 @@
         justify-content: flex-end;
       }
 
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        display: none;
+        place-items: center;
+        padding: 22px;
+        background: rgba(0, 0, 0, 0.62);
+      }
+
+      .modal-backdrop.open {
+        display: grid;
+      }
+
+      .user-modal {
+        width: min(860px, 100%);
+        max-height: min(760px, calc(100vh - 44px));
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        animation: panelIn 0.24s ease both;
+      }
+
+      .user-modal-hero {
+        padding: 18px;
+        border-bottom: 1px solid var(--line-soft);
+        background:
+          linear-gradient(135deg, var(--accent-soft), transparent 56%),
+          linear-gradient(180deg, var(--panel-2), var(--panel));
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .user-modal-profile {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .user-modal-profile .avatar {
+        width: 64px;
+        height: 64px;
+      }
+
+      .user-modal-title {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.1;
+      }
+
+      .user-modal-body {
+        min-height: 0;
+        overflow: auto;
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .user-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .user-detail-card {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+        padding: 12px;
+      }
+
+      .user-detail-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .user-detail-card strong {
+        display: block;
+        margin-top: 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 18px;
+      }
+
+      .user-detail-columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+      }
+
+      .user-detail-section {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+        padding: 14px;
+      }
+
+      .user-detail-section h3 {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+
+      .user-detail-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .user-detail-item {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .user-detail-item strong {
+        min-width: 0;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
       .notice {
         padding: 13px;
         color: var(--muted);
@@ -1070,7 +1691,16 @@
 
         .toolbar,
         .news-toolbar,
+        .dashboard-toolbar,
         .markdown-workbench {
+          grid-template-columns: 1fr;
+        }
+
+        .spark-grid,
+        .chart-grid,
+        .insight-grid,
+        .activity-columns,
+        .user-detail-columns {
           grid-template-columns: 1fr;
         }
 
@@ -1086,7 +1716,9 @@
         }
 
         .metrics,
-        .form-grid {
+        .spark-grid,
+        .form-grid,
+        .user-detail-grid {
           grid-template-columns: 1fr;
         }
 
@@ -1101,6 +1733,31 @@
         .topbar {
           align-items: flex-start;
           flex-direction: column;
+        }
+
+        .range-tabs {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .user-modal-hero {
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #home-page .metric,
+        #home-page .toolbar,
+        #home-page .dashboard-hero,
+        #home-page .spark-card,
+        #home-page .chart-card {
+          animation: none;
+        }
+
+        #home-page .metric,
+        #home-page .spark-card,
+        #home-page .chart-card,
+        #home-page .rank-row {
+          transition: none;
         }
       }
     </style>
@@ -1131,13 +1788,17 @@
         </section>
 
         <nav class="nav" aria-label="Navegacao do painel">
-          <button class="active" type="button" data-page="users">
-            <span data-i18n="nav.users">Usuarios</span>
+          <button class="active" type="button" data-page="home">
+            <span data-i18n="nav.home">Inicio</span>
             <span>01</span>
+          </button>
+          <button type="button" data-page="users">
+            <span data-i18n="nav.users">Usuarios</span>
+            <span>02</span>
           </button>
           <button type="button" data-page="news">
             <span data-i18n="nav.news">Avisos</span>
-            <span>02</span>
+            <span>03</span>
           </button>
         </nav>
 
@@ -1150,14 +1811,161 @@
       <main class="main">
         <header class="topbar">
           <div class="page-title">
-            <h1 id="page-heading" data-i18n="users.heading">Gestao de Usuarios</h1>
-            <p id="page-description" data-i18n="users.description">Edite cargo, bloqueio e permissoes dos usuarios conectados ao chat.</p>
+            <h1 id="page-heading" data-i18n="home.heading">Visao geral</h1>
+            <p id="page-description" data-i18n="home.description">Acompanhe atividade total, usuarios online e tendencias do aplicativo.</p>
           </div>
           <div id="connection-status" class="status-pill warn" data-i18n="state.initializing">Inicializando painel...</div>
         </header>
 
         <section class="content">
-          <div id="users-page" class="page">
+          <div id="home-page" class="page">
+            <div class="metrics">
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_online_now">Online agora</div>
+                <div id="home-online-count" class="metric-value accent">0</div>
+                <div class="metric-detail" data-i18n="home.metric_online_now_hint">usuarios ativos neste momento</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_login_today">Logaram hoje</div>
+                <div id="home-login-today" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_login_today_hint">usuarios unicos hoje</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_login_week">Logaram na semana</div>
+                <div id="home-login-week" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_login_week_hint">usuarios unicos na semana</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_login_month">Logaram no mes</div>
+                <div id="home-login-month" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_login_month_hint">usuarios unicos no mes</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_pages">Paginas acessadas</div>
+                <div id="home-pages-count" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_pages_hint">aberturas no periodo</div>
+              </div>
+            </div>
+
+            <div class="toolbar dashboard-toolbar">
+              <div class="filter-group">
+                <span data-i18n="home.range_label">Janela dos dados</span>
+                <div class="range-tabs" aria-label="Janela de analise">
+                  <button class="active" type="button" data-home-range="today" data-i18n="home.range_today">Hoje</button>
+                  <button type="button" data-home-range="week" data-i18n="home.range_week">Semana</button>
+                  <button type="button" data-home-range="month" data-i18n="home.range_month">Mes</button>
+                  <button type="button" data-home-range="year" data-i18n="home.range_year">Ano</button>
+                  <button type="button" data-home-range="total" data-i18n="home.range_total">Total</button>
+                </div>
+              </div>
+              <label class="field select-with-caption">
+                <span data-i18n="home.group_by">Agrupar atividade</span>
+                <select id="home-split-select" aria-label="Selecionar agrupamento">
+                  <option value="category" data-i18n="home.split_category">Por categoria</option>
+                  <option value="action" data-i18n="home.split_action">Por acao</option>
+                  <option value="user" data-i18n="home.split_user">Por usuario</option>
+                </select>
+              </label>
+              <button id="home-refresh" class="btn primary" type="button" data-i18n="home.refresh">Atualizar</button>
+            </div>
+
+            <section class="dashboard-hero" aria-label="Resumo geral">
+              <div class="dashboard-hero-head">
+                <div>
+                  <h2 data-i18n="home.dashboard_title">Saude do aplicativo</h2>
+                  <div id="home-summary-text" class="user-meta" data-i18n="home.summary">Carregando indicadores globais.</div>
+                </div>
+                <span class="user-meta" data-i18n="home.summary_hint">Baseado em /gg-logs</span>
+              </div>
+
+              <div class="spark-grid">
+                <div class="spark-card">
+                  <span data-i18n="home.spark_total_users">Contas totais</span>
+                  <strong id="home-users-count">0</strong>
+                  <small data-i18n="home.spark_total_users_hint">usuarios cadastrados</small>
+                </div>
+                <div class="spark-card">
+                  <span data-i18n="home.spark_active_accounts">Contas ativas</span>
+                  <strong id="home-active-accounts">0</strong>
+                  <small data-i18n="home.spark_active_accounts_hint">sem bloqueio</small>
+                </div>
+                <div class="spark-card">
+                  <span data-i18n="home.spark_total_events">Eventos no periodo</span>
+                  <strong id="home-total-events">0</strong>
+                  <small id="home-total-quantity">0</small>
+                </div>
+                <div class="spark-card">
+                  <span data-i18n="home.spark_created_today">Criadas hoje</span>
+                  <strong id="home-created-today">0</strong>
+                  <small id="home-blocked-accounts">0 bloqueadas</small>
+                </div>
+              </div>
+
+              <div class="chart-grid">
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.timeseries_title">Movimento do app</strong>
+                    <span data-i18n="home.chart_events_hint">passe o mouse nos pontos</span>
+                  </div>
+                  <div class="canvas-wrap">
+                    <canvas id="home-activity-chart" class="chart-canvas"></canvas>
+                  </div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.login_chart_title">Comparativo de logins</strong>
+                    <span data-i18n="home.login_chart_hint">hoje, semana, 3 meses e ano</span>
+                  </div>
+                  <div class="canvas-wrap">
+                    <canvas id="home-login-chart" class="chart-canvas"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <div class="insight-grid">
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.pages_title">Paginas mais acessadas</strong>
+                    <span data-i18n="home.pages_hint">navegacao</span>
+                  </div>
+                  <div id="home-top-pages" class="rank-list"></div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.categories_title">Categorias</strong>
+                    <span data-i18n="home.categories_hint">por volume</span>
+                  </div>
+                  <div id="home-categories" class="rank-list"></div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.top_users_title">Usuarios mais ativos</strong>
+                    <span data-i18n="home.top_users_hint">eventos</span>
+                  </div>
+                  <div id="home-top-users" class="rank-list"></div>
+                </div>
+              </div>
+
+              <div class="activity-columns">
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.actions_title">Acoes</strong>
+                    <span data-i18n="home.actions_hint">eventos / volume</span>
+                  </div>
+                  <div id="home-actions" class="rank-list"></div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.logs_title">Logs recentes</strong>
+                    <span data-i18n="home.logs_hint">ultimos eventos globais</span>
+                  </div>
+                  <div id="home-logs" class="log-list"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div id="users-page" class="page hidden">
             <div class="metrics">
               <div class="metric">
                 <div class="metric-label" data-i18n="users.metric_total">Usuarios</div>
@@ -1387,9 +2195,63 @@
       </aside>
     </div>
 
+    <div id="user-detail-backdrop" class="modal-backdrop">
+      <section class="user-modal" role="dialog" aria-modal="true" aria-labelledby="user-detail-title">
+        <header class="user-modal-hero">
+          <div class="user-modal-profile">
+            <div id="user-detail-avatar" class="avatar avatar-fallback">?</div>
+            <div>
+              <h2 id="user-detail-title" class="user-modal-title" data-i18n="user_detail.title">Detalhes do usuario</h2>
+              <div id="user-detail-meta" class="user-meta">-</div>
+              <div id="user-detail-badges" class="news-card-meta"></div>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button id="user-detail-edit" class="btn" type="button" data-i18n="action.edit">Editar</button>
+            <button id="user-detail-close" class="btn" type="button" data-i18n="drawer.close">Fechar</button>
+          </div>
+        </header>
+        <div class="user-modal-body">
+          <div id="user-detail-status" class="notice" data-i18n="user_detail.loading">Buscando informacoes do usuario...</div>
+          <div class="user-detail-grid">
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.total_events">Eventos</span>
+              <strong id="user-detail-events">0</strong>
+            </div>
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.total_quantity">Volume</span>
+              <strong id="user-detail-quantity">0</strong>
+            </div>
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.categories">Categorias</span>
+              <strong id="user-detail-categories-count">0</strong>
+            </div>
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.last_seen">Ultima atividade</span>
+              <strong id="user-detail-last">-</strong>
+            </div>
+          </div>
+          <div class="user-detail-columns">
+            <section class="user-detail-section">
+              <h3 data-i18n="user_detail.account">Conta</h3>
+              <div id="user-detail-info" class="user-detail-list"></div>
+            </section>
+            <section class="user-detail-section">
+              <h3 data-i18n="user_detail.top_categories">Categorias recentes</h3>
+              <div id="user-detail-categories" class="bar-list"></div>
+            </section>
+          </div>
+          <section class="user-detail-section">
+            <h3 data-i18n="user_detail.recent_logs">Logs recentes</h3>
+            <div id="user-detail-logs" class="log-list"></div>
+          </section>
+        </div>
+      </section>
+    </div>
+
     <div id="toast" class="toast"></div>
 
-    <script src="i18n.js"></script>
+    <script src="i18n.js?v=20260701-admin-dashboard"></script>
     <script>
       const hiddenText = (values, mask = 71) =>
         String.fromCharCode(...values.map((value) => value ^ mask));
@@ -1410,12 +2272,29 @@
       const catalog = window.ADMIN_I18N || {};
 
       const state = {
-        activePage: "users",
+        activePage: "home",
         me: null,
         users: [],
         news: [],
         selectedUser: null,
+        detailUser: null,
+        detailRequestId: 0,
         selectedNews: null,
+        homePeriod: "day",
+        homeRange: "today",
+        homeSplitBy: "category",
+        homeLoading: false,
+        homeLoaded: false,
+        homeOverview: {},
+        homeSummary: {},
+        homeCategories: [],
+        homeActions: [],
+        homeUsers: [],
+        homeTimeseries: [],
+        homeLogs: [],
+        homePageLogs: [],
+        homeLoginLogs: [],
+        homeOnlineUsers: [],
         loading: false,
         newsLoading: false,
         newsCategory: "",
@@ -1431,8 +2310,32 @@
         navButtons: Array.from(document.querySelectorAll(".nav button[data-page]")),
         pageHeading: document.getElementById("page-heading"),
         pageDescription: document.getElementById("page-description"),
+        homePage: document.getElementById("home-page"),
         usersPage: document.getElementById("users-page"),
         newsPage: document.getElementById("news-page"),
+        homeRangeButtons: Array.from(document.querySelectorAll("[data-home-range]")),
+        homeSplitSelect: document.getElementById("home-split-select"),
+        homeRefresh: document.getElementById("home-refresh"),
+        homeTotalQuantity: document.getElementById("home-total-quantity"),
+        homeTotalEvents: document.getElementById("home-total-events"),
+        homeOnlineCount: document.getElementById("home-online-count"),
+        homeLoginToday: document.getElementById("home-login-today"),
+        homeLoginWeek: document.getElementById("home-login-week"),
+        homeLoginMonth: document.getElementById("home-login-month"),
+        homePagesCount: document.getElementById("home-pages-count"),
+        homeUsersCount: document.getElementById("home-users-count"),
+        homeActiveAccounts: document.getElementById("home-active-accounts"),
+        homeCreatedToday: document.getElementById("home-created-today"),
+        homeBlockedAccounts: document.getElementById("home-blocked-accounts"),
+        homeSummaryText: document.getElementById("home-summary-text"),
+        homeActivityChart: document.getElementById("home-activity-chart"),
+        homeLoginChart: document.getElementById("home-login-chart"),
+        homeOnlineUsers: document.getElementById("home-online-users"),
+        homeCategories: document.getElementById("home-categories"),
+        homeActions: document.getElementById("home-actions"),
+        homeTopPages: document.getElementById("home-top-pages"),
+        homeTopUsers: document.getElementById("home-top-users"),
+        homeLogs: document.getElementById("home-logs"),
         status: document.getElementById("connection-status"),
         profileName: document.getElementById("profile-name"),
         profileMeta: document.getElementById("profile-meta"),
@@ -1445,6 +2348,15 @@
         nextPage: document.getElementById("next-page"),
         pageInfo: document.getElementById("page-info"),
         paginationControls: document.getElementById("pagination-controls"),
+        activityUserSelect: document.getElementById("activity-user-select"),
+        activityRefresh: document.getElementById("activity-refresh"),
+        activityTotalQuantity: document.getElementById("activity-total-quantity"),
+        activityTotalEvents: document.getElementById("activity-total-events"),
+        activityCategoriesCount: document.getElementById("activity-categories-count"),
+        activityCategories: document.getElementById("activity-categories"),
+        activityTimeseries: document.getElementById("activity-timeseries"),
+        activityUserLogs: document.getElementById("activity-user-logs"),
+        activitySummaryText: document.getElementById("activity-summary-text"),
         search: document.getElementById("search-input"),
         roleFilter: document.getElementById("role-filter"),
         statusFilter: document.getElementById("status-filter"),
@@ -1462,6 +2374,21 @@
         blockReason: document.getElementById("block-reason"),
         saveRole: document.getElementById("save-role"),
         toggleBlock: document.getElementById("toggle-block"),
+        userDetailBackdrop: document.getElementById("user-detail-backdrop"),
+        userDetailAvatar: document.getElementById("user-detail-avatar"),
+        userDetailTitle: document.getElementById("user-detail-title"),
+        userDetailMeta: document.getElementById("user-detail-meta"),
+        userDetailBadges: document.getElementById("user-detail-badges"),
+        userDetailClose: document.getElementById("user-detail-close"),
+        userDetailEdit: document.getElementById("user-detail-edit"),
+        userDetailStatus: document.getElementById("user-detail-status"),
+        userDetailEvents: document.getElementById("user-detail-events"),
+        userDetailQuantity: document.getElementById("user-detail-quantity"),
+        userDetailCategoriesCount: document.getElementById("user-detail-categories-count"),
+        userDetailLast: document.getElementById("user-detail-last"),
+        userDetailInfo: document.getElementById("user-detail-info"),
+        userDetailCategories: document.getElementById("user-detail-categories"),
+        userDetailLogs: document.getElementById("user-detail-logs"),
         toast: document.getElementById("toast"),
         newsSearch: document.getElementById("news-search"),
         newsStatusFilter: document.getElementById("news-status-filter"),
@@ -1507,6 +2434,55 @@
         render();
       });
       els.refresh.addEventListener("click", loadUsers);
+      els.homeRefresh.addEventListener("click", loadHomeDashboard);
+      els.homeRangeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          state.homeRange = button.dataset.homeRange || "today";
+          els.homeRangeButtons.forEach((item) => item.classList.toggle("active", item === button));
+          loadHomeDashboard();
+        });
+      });
+      els.homeSplitSelect.addEventListener("change", () => {
+        state.homeSplitBy = els.homeSplitSelect.value || "category";
+        loadHomeDashboard();
+      });
+      els.homeActivityChart.addEventListener("mousemove", (event) => {
+        const points = els.homeActivityChart.__chartPoints || [];
+        if (!points.length) return;
+        const rect = els.homeActivityChart.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        let nearest = -1;
+        let distance = Infinity;
+        points.forEach((point, index) => {
+          const current = Math.hypot(point.x - x, point.y - y);
+          if (current < distance) {
+            nearest = index;
+            distance = current;
+          }
+        });
+        const nextIndex = distance <= 34 ? nearest : -1;
+        if (els.homeActivityChart.__hoverIndex !== nextIndex) {
+          els.homeActivityChart.__hoverIndex = nextIndex;
+          drawLineChart(els.homeActivityChart, state.homeTimeseries, {
+            valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
+            labelOf: (row) => String(row.bucket || row.series || row.category || row.action || "-"),
+            valueLabel: t("home.chart_value_label"),
+            limit: 10,
+          });
+        }
+      });
+      els.homeActivityChart.addEventListener("mouseleave", () => {
+        if (els.homeActivityChart.__hoverIndex !== -1) {
+          els.homeActivityChart.__hoverIndex = -1;
+          drawLineChart(els.homeActivityChart, state.homeTimeseries, {
+            valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
+            labelOf: (row) => String(row.bucket || row.series || row.category || row.action || "-"),
+            valueLabel: t("home.chart_value_label"),
+            limit: 10,
+          });
+        }
+      });
       els.prevPage.addEventListener("click", () => {
         if (state.currentPage > 1) {
           state.currentPage -= 1;
@@ -1523,6 +2499,15 @@
       els.closeDrawer.addEventListener("click", closeDrawer);
       els.drawer.addEventListener("click", (event) => {
         if (event.target === els.drawer) closeDrawer();
+      });
+      els.userDetailBackdrop.addEventListener("click", (event) => {
+        if (event.target === els.userDetailBackdrop) closeUserDetailModal();
+      });
+      els.userDetailClose.addEventListener("click", closeUserDetailModal);
+      els.userDetailEdit.addEventListener("click", () => {
+        const user = state.detailUser;
+        closeUserDetailModal();
+        if (user) openDrawer(user);
       });
       els.saveRole.addEventListener("click", saveRole);
       els.toggleBlock.addEventListener("click", toggleBlock);
@@ -1546,7 +2531,13 @@
       els.newsRetryButton.addEventListener("click", retryNewsTranslations);
       els.newsArchiveButton.addEventListener("click", archiveNews);
       document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeDrawer();
+        if (event.key === "Escape") {
+          if (els.userDetailBackdrop.classList.contains("open")) closeUserDetailModal();
+          else closeDrawer();
+        }
+      });
+      window.addEventListener("resize", () => {
+        if (state.activePage === "home" && state.homeLoaded) renderHomeDashboard();
       });
 
       boot();
@@ -1631,11 +2622,12 @@
       }
 
       function switchPage(page) {
-        const next = page === "news" ? "news" : "users";
+        const next = ["home", "users", "news"].includes(page) ? page : "home";
         state.activePage = next;
         els.navButtons.forEach((button) => {
           button.classList.toggle("active", button.dataset.page === next);
         });
+        els.homePage.classList.toggle("hidden", next !== "home");
         els.usersPage.classList.toggle("hidden", next !== "users");
         els.newsPage.classList.toggle("hidden", next !== "news");
         if (next === "news") {
@@ -1646,8 +2638,14 @@
           setNewsMode(state.newsMode);
           return;
         }
-        els.pageHeading.textContent = t("users.heading");
-        els.pageDescription.textContent = t("users.description");
+        if (next === "users") {
+          els.pageHeading.textContent = t("users.heading");
+          els.pageDescription.textContent = t("users.description");
+          return;
+        }
+        els.pageHeading.textContent = t("home.heading");
+        els.pageDescription.textContent = t("home.description");
+        if (!state.homeLoaded && !state.homeLoading) loadHomeDashboard();
       }
 
       async function boot() {
@@ -1682,6 +2680,7 @@
           }
           setStatus(t("status.auth_as", { name: displayName(state.me), role: myRole }), "ok");
           await loadUsers();
+          await loadHomeDashboard();
         } catch (error) {
           setStatus(t("error.auth", { message: error.message }), "error");
           setEmpty(t("error.auth_empty"));
@@ -1729,6 +2728,997 @@
         }
       }
 
+      function activityUserRows() {
+        if (Array.isArray(state.users) && state.users.length) {
+          return state.users;
+        }
+        return Array.isArray(state.activityUsers)
+          ? state.activityUsers.map((entry) => entry.user || entry).filter(Boolean)
+          : [];
+      }
+
+      function activityUserId(user) {
+        return String(user?.id || user?.discordId || user?.userId || "").trim();
+      }
+
+      function syncActivityUserSelect() {
+        if (!els.activityUserSelect) return;
+        const rows = activityUserRows();
+        const selected = state.activitySelectedUserId || activityUserId(state.me) || activityUserId(rows[0]) || "";
+        els.activityUserSelect.textContent = "";
+        const fragment = document.createDocumentFragment();
+        const seen = new Set();
+        [state.me, ...rows].forEach((user) => {
+          const id = activityUserId(user);
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = `${displayName(user)} (${normalizeRole(user?.role || "MEMBER")})`;
+          fragment.appendChild(option);
+        });
+        if (!fragment.childNodes.length) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = t("activity.no_user");
+          fragment.appendChild(option);
+        }
+        els.activityUserSelect.appendChild(fragment);
+        if (selected) {
+          els.activityUserSelect.value = selected;
+          state.activitySelectedUserId = selected;
+        }
+      }
+
+      function maxActivityValue(rows, key) {
+        let max = 1;
+        rows.forEach((row) => {
+          const value = Number(row && row[key]) || 0;
+          if (value > max) max = value;
+        });
+        return max;
+      }
+
+      function renderActivityBars() {
+        els.activityCategories.textContent = "";
+        const rows = (Array.isArray(state.activityCategories) ? state.activityCategories : []).slice(0, 5);
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("activity.empty");
+          els.activityCategories.appendChild(empty);
+          return;
+        }
+        const maxValue = Math.max(maxActivityValue(rows, "totalQuantity"), maxActivityValue(rows, "totalEvents"));
+        rows.forEach((row) => {
+          const wrap = document.createElement("div");
+          wrap.className = "bar-row";
+          const head = document.createElement("div");
+          head.className = "bar-row-head";
+          const name = document.createElement("span");
+          name.textContent = row.category || row.action || row.series || "-";
+          const value = document.createElement("span");
+          value.textContent = String(row.totalQuantity || row.totalEvents || 0);
+          head.append(name, value);
+          const track = document.createElement("div");
+          track.className = "bar-track";
+          const fill = document.createElement("div");
+          fill.className = "bar-fill";
+          fill.style.width = `${Math.max(8, Math.round(((Number(row.totalQuantity || row.totalEvents || 0) || 0) / maxValue) * 100))}%`;
+          track.appendChild(fill);
+          wrap.append(head, track);
+          els.activityCategories.appendChild(wrap);
+        });
+      }
+
+      function renderActivityLogs() {
+        els.activityUserLogs.textContent = "";
+        const rows = Array.isArray(state.activityLogs) ? state.activityLogs.slice(0, 8) : [];
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("activity.empty");
+          els.activityUserLogs.appendChild(empty);
+          return;
+        }
+        rows.forEach((row) => {
+          const line = document.createElement("div");
+          line.className = "log-row";
+          const category = document.createElement("div");
+          category.className = "log-category";
+          category.textContent = row.category || "-";
+          const action = document.createElement("div");
+          action.className = "log-action";
+          action.textContent = row.action || "-";
+          const quantity = document.createElement("div");
+          quantity.className = "log-quantity";
+          quantity.textContent = String(row.quantity || 1);
+          const time = document.createElement("div");
+          time.className = "log-time";
+          time.textContent = formatDate(row.occurredAt || row.createdAt);
+          line.append(category, action, quantity, time);
+          els.activityUserLogs.appendChild(line);
+        });
+      }
+
+      function renderActivityTimeseries() {
+        if (!els.activityTimeseries) return;
+        els.activityTimeseries.textContent = "";
+        const rows = Array.isArray(state.activityTimeseries) ? state.activityTimeseries.slice(0, 6) : [];
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("activity.empty");
+          els.activityTimeseries.appendChild(empty);
+          return;
+        }
+        const maxValue = maxActivityValue(rows, "totalEvents");
+        rows.forEach((row) => {
+          const wrap = document.createElement("div");
+          wrap.className = "bar-row";
+          const head = document.createElement("div");
+          head.className = "bar-row-head";
+          const name = document.createElement("span");
+          name.textContent = `${row.bucket || "-"} / ${row.series || "-"}`;
+          const value = document.createElement("span");
+          value.textContent = String(row.totalEvents || 0);
+          head.append(name, value);
+          const track = document.createElement("div");
+          track.className = "bar-track";
+          const fill = document.createElement("div");
+          fill.className = "bar-fill";
+          fill.style.width = `${Math.max(8, Math.round(((Number(row.totalEvents || 0) || 0) / maxValue) * 100))}%`;
+          track.appendChild(fill);
+          wrap.append(head, track);
+          els.activityTimeseries.appendChild(wrap);
+        });
+      }
+
+      function renderActivityDashboard() {
+        const summary = state.activitySummary || {};
+        els.activityTotalQuantity.textContent = String(summary.totalQuantity || 0);
+        els.activityTotalEvents.textContent = String(summary.totalEvents || 0);
+        els.activityCategoriesCount.textContent = String((state.activityCategories || []).length);
+        const topCategory = (state.activityCategories && state.activityCategories[0] && (state.activityCategories[0].category || state.activityCategories[0].action)) || "-";
+        const topUser = (state.activityUsers && state.activityUsers[0] && (state.activityUsers[0].user && displayName(state.activityUsers[0].user))) || (state.activityUsers[0] && state.activityUsers[0].userId) || "-";
+        els.activitySummaryText.textContent = `${topCategory} / ${topUser}`;
+        renderActivityBars();
+        renderActivityTimeseries();
+        renderActivityLogs();
+      }
+
+      async function loadActivityUser(userId) {
+        const id = String(userId || "").trim();
+        if (!id) return;
+        state.activitySelectedUserId = id;
+        try {
+          const [stats, logs] = await Promise.all([
+            request(`/gg-logs/users/${encodeURIComponent(id)}/stats`),
+            request(`/gg-logs?userId=${encodeURIComponent(id)}&take=8`),
+          ]);
+          state.activityUserStats = stats || {};
+          state.activityCategories = Array.isArray(stats.categories) ? stats.categories : [];
+          state.activityLogs = Array.isArray(logs.logs) ? logs.logs : [];
+          renderActivityDashboard();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }
+
+      async function loadActivityDashboard() {
+        if (state.activityLoading || !token) return;
+        state.activityLoading = true;
+        els.activityRefresh.disabled = true;
+        try {
+          const [summary, categories, users, timeseries] = await Promise.all([
+            request("/gg-logs/stats/summary"),
+            request("/gg-logs/stats/categories"),
+            request("/gg-logs/stats/users?limit=10"),
+            request("/gg-logs/stats/timeseries?period=day&splitBy=category"),
+          ]);
+          state.activitySummary = summary || {};
+          state.activityCategories = Array.isArray(categories.categories) ? categories.categories : [];
+          state.activityUsers = Array.isArray(users.users) ? users.users : [];
+          state.activityTimeseries = Array.isArray(timeseries.points) ? timeseries.points : [];
+          syncActivityUserSelect();
+          renderActivityDashboard();
+          const selectedId = state.activitySelectedUserId || activityUserId(state.me) || activityUserId((state.activityUsers || [])[0]);
+          if (selectedId) {
+            await loadActivityUser(selectedId);
+          }
+        } catch (error) {
+          toast(error.message, "error");
+        } finally {
+          state.activityLoading = false;
+          els.activityRefresh.disabled = false;
+        }
+      }
+
+      function selectedHomePeriod() {
+        if (state.homeRange === "year" || state.homeRange === "total") return "month";
+        return "day";
+      }
+
+      function selectedHomeRange() {
+        return state.homeRange || "today";
+      }
+
+      function selectedHomeSplitBy() {
+        return els.homeSplitSelect && els.homeSplitSelect.value ? els.homeSplitSelect.value : state.homeSplitBy || "category";
+      }
+
+      function renderBarList(container, rows, options = {}) {
+        if (!container) return;
+        container.textContent = "";
+        const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = options.emptyText || t("home.empty");
+          container.appendChild(empty);
+          return;
+        }
+        const valueKey = options.valueKey || "totalQuantity";
+        const altValueKey = options.altValueKey || "totalEvents";
+        const maxValue = Math.max(...list.map((row) => Number(row[valueKey] ?? row[altValueKey] ?? 0)), 1);
+        list.slice(0, options.limit || 5).forEach((row) => {
+          const wrap = document.createElement("div");
+          wrap.className = "bar-row";
+          const head = document.createElement("div");
+          head.className = "bar-row-head";
+          const label = document.createElement("span");
+          label.textContent = options.label ? options.label(row) : (row.category || row.action || row.series || row.bucket || "-");
+          const value = document.createElement("span");
+          value.textContent = String(Number(row[valueKey] ?? row[altValueKey] ?? 0));
+          head.append(label, value);
+          const track = document.createElement("div");
+          track.className = "bar-track";
+          const fill = document.createElement("div");
+          fill.className = "bar-fill";
+          fill.style.width = `${Math.max(8, Math.round(((Number(row[valueKey] ?? row[altValueKey] ?? 0) || 0) / maxValue) * 100))}%`;
+          track.appendChild(fill);
+          wrap.append(head, track);
+          container.appendChild(wrap);
+        });
+      }
+
+      function renderLogList(container, rows, emptyText) {
+        if (!container) return;
+        container.textContent = "";
+        const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = emptyText || t("home.empty");
+          container.appendChild(empty);
+          return;
+        }
+        list.forEach((row) => {
+          const line = document.createElement("div");
+          line.className = "log-row";
+          const category = document.createElement("div");
+          category.className = "log-category";
+          category.textContent = row.category || row.categoria || "-";
+          const action = document.createElement("div");
+          action.className = "log-action";
+          action.textContent = row.action || row.acao || "-";
+          const quantity = document.createElement("div");
+          quantity.className = "log-quantity";
+          quantity.textContent = String(row.quantity || row.quantidade || 1);
+          const time = document.createElement("div");
+          time.className = "log-time";
+          time.textContent = formatDate(row.occurredAt || row.ocorridoEm || row.createdAt);
+          line.append(category, action, quantity, time);
+          container.appendChild(line);
+        });
+      }
+
+      function renderOnlineUsers() {
+        const container = els.homeOnlineUsers;
+        if (!container) return;
+        container.textContent = "";
+        const rows = Array.isArray(state.users)
+          ? state.users.filter((user) => String(user?.status || "").toUpperCase() === "ACTIVE" && !isBlocked(user))
+          : [];
+        state.homeOnlineUsers = rows;
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("home.online_empty");
+          container.appendChild(empty);
+          return;
+        }
+        rows.slice(0, 8).forEach((user) => {
+          const row = document.createElement("div");
+          row.className = "online-row";
+          const left = document.createElement("div");
+          const name = document.createElement("strong");
+          name.textContent = displayName(user);
+          const meta = document.createElement("div");
+          meta.className = "user-meta";
+          meta.textContent = userMeta(user);
+          left.append(name, meta);
+          const badge = document.createElement("span");
+          badge.className = `badge role-${normalizeRole(user.role || "MEMBER").toLowerCase()}`;
+          badge.textContent = t("state.online");
+          row.append(left, badge);
+          container.appendChild(row);
+        });
+      }
+
+      function cssVar(name, fallback = "") {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+      }
+
+      function compactNumber(value) {
+        const number = Number(value) || 0;
+        if (number >= 1000000) return `${Math.round(number / 100000) / 10}M`;
+        if (number >= 1000) return `${Math.round(number / 100) / 10}k`;
+        return String(Math.round(number));
+      }
+
+      function renderRankList(container, rows, options = {}) {
+        if (!container) return;
+        container.textContent = "";
+        const list = Array.isArray(rows) ? rows.filter(Boolean).slice(0, options.limit || 6) : [];
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = options.emptyText || t("home.empty");
+          container.appendChild(empty);
+          return;
+        }
+        list.forEach((row, index) => {
+          const item = document.createElement("div");
+          item.className = "rank-row";
+          const left = document.createElement("div");
+          const name = document.createElement("div");
+          name.className = "rank-name";
+          name.textContent = options.label ? options.label(row, index) : (row.category || row.action || row.series || row.bucket || "-");
+          const meta = document.createElement("div");
+          meta.className = "rank-meta";
+          meta.textContent = options.meta ? options.meta(row, index) : "";
+          left.append(name, meta);
+          const value = document.createElement("div");
+          value.className = "rank-value";
+          value.textContent = options.value ? options.value(row, index) : compactNumber(row.totalEvents ?? row.totalQuantity ?? row.quantity ?? 0);
+          item.append(left, value);
+          container.appendChild(item);
+        });
+      }
+
+      function resizeCanvas(canvas) {
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width || canvas.clientWidth || 640));
+        const height = Math.max(180, Math.floor(rect.height || canvas.clientHeight || 260));
+        canvas.width = Math.floor(width * ratio);
+        canvas.height = Math.floor(height * ratio);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        return { ctx, width, height };
+      }
+
+      function drawBars(canvas, rows, options = {}) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const list = (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, options.limit || 8);
+        const bg = cssVar("--panel", "#111827");
+        const muted = cssVar("--muted", "#94a3b8");
+        const text = cssVar("--text", "#f8fafc");
+        const accent = cssVar("--accent", "#61d6c8");
+        const accent2 = cssVar("--accent-2", "#e6b450");
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        if (!list.length) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const valueOf = options.valueOf || ((row) => Number(row.totalEvents ?? row.totalQuantity ?? 0) || 0);
+        const labelOf = options.labelOf || ((row) => String(row.bucket || row.series || row.category || row.action || "-"));
+        const max = Math.max(...list.map(valueOf), 1);
+        const pad = { left: 36, right: 18, top: 18, bottom: 44 };
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+        const gap = 10;
+        const barW = Math.max(16, (plotW - gap * (list.length - 1)) / list.length);
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 3; i += 1) {
+          const y = pad.top + (plotH / 3) * i;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(width - pad.right, y);
+          ctx.stroke();
+        }
+        list.forEach((row, index) => {
+          const value = valueOf(row);
+          const barH = Math.max(4, (value / max) * plotH);
+          const x = pad.left + index * (barW + gap);
+          const y = pad.top + plotH - barH;
+          const gradient = ctx.createLinearGradient(0, y, 0, y + barH);
+          gradient.addColorStop(0, accent2);
+          gradient.addColorStop(1, accent);
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.roundRect(x, y, barW, barH, 7);
+          ctx.fill();
+          ctx.fillStyle = text;
+          ctx.font = "700 11px Segoe UI";
+          ctx.textAlign = "center";
+          ctx.fillText(compactNumber(value), x + barW / 2, Math.max(12, y - 6));
+          ctx.save();
+          ctx.translate(x + barW / 2, height - 12);
+          ctx.rotate(-0.35);
+          ctx.fillStyle = muted;
+          ctx.font = "10px Segoe UI";
+          const label = labelOf(row);
+          ctx.fillText(label.length > 14 ? `${label.slice(0, 13)}...` : label, 0, 0);
+          ctx.restore();
+        });
+      }
+
+      function drawHorizontalBars(canvas, rows, options = {}) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const valueOf = options.valueOf || ((row) => Number(row.totalEvents ?? row.totalQuantity ?? row.value ?? 0) || 0);
+        const labelOf = options.labelOf || ((row) => String(row.series || row.category || row.action || row.bucket || "-"));
+        const list = (Array.isArray(rows) ? rows : [])
+          .filter((row) => row && (options.showZero || valueOf(row) > 0))
+          .slice(0, options.limit || 6);
+        if (!options.preserveOrder) {
+          list.sort((a, b) => valueOf(b) - valueOf(a));
+        }
+        const bg = cssVar("--panel", "#111827");
+        const muted = cssVar("--muted", "#94a3b8");
+        const text = cssVar("--text", "#f3fbf8");
+        const accent = cssVar("--accent", "#61d6c8");
+        const accent2 = cssVar("--accent-2", "#e6b450");
+        const line = cssVar("--line", "rgba(255,255,255,0.14)");
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        if (!list.length) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const max = Math.max(...list.map(valueOf), 1);
+        const pad = { left: 22, right: 24, top: 18, bottom: 18 };
+        const rowH = Math.min(42, Math.max(30, (height - pad.top - pad.bottom) / list.length));
+        const barLeft = Math.min(180, Math.max(112, width * 0.22));
+        const barRight = width - pad.right - 46;
+        const barW = Math.max(120, barRight - barLeft);
+        list.forEach((row, index) => {
+          const y = pad.top + index * rowH;
+          const value = valueOf(row);
+          const fillW = value > 0 ? Math.max(6, (value / max) * barW) : 0;
+          const label = labelOf(row);
+          ctx.fillStyle = muted;
+          ctx.font = "700 12px Segoe UI";
+          ctx.textAlign = "left";
+          ctx.fillText(label.length > 22 ? `${label.slice(0, 21)}...` : label, pad.left, y + 20);
+          ctx.fillStyle = line;
+          ctx.beginPath();
+          ctx.roundRect(barLeft, y + 8, barW, 12, 6);
+          ctx.fill();
+          if (fillW > 0) {
+            const gradient = ctx.createLinearGradient(barLeft, 0, barLeft + fillW, 0);
+            gradient.addColorStop(0, accent);
+            gradient.addColorStop(1, accent2);
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.roundRect(barLeft, y + 8, fillW, 12, 6);
+            ctx.fill();
+          }
+          ctx.fillStyle = text;
+          ctx.font = "900 12px Segoe UI";
+          ctx.textAlign = "right";
+          ctx.fillText(compactNumber(value), width - pad.right, y + 20);
+        });
+      }
+
+      function drawLineChart(canvas, rows, options = {}) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const valueOf = options.valueOf || ((row) => Number(row.totalEvents ?? row.totalQuantity ?? row.value ?? 0) || 0);
+        const labelOf = options.labelOf || ((row) => String(row.bucket || row.series || row.category || row.action || "-"));
+        const list = (Array.isArray(rows) ? rows : []).filter((row) => row && valueOf(row) >= 0).slice(0, options.limit || 9);
+        const bg = cssVar("--panel", "#111827");
+        const panel2 = cssVar("--panel-2", "#182235");
+        const line = cssVar("--line-strong", "rgba(255,255,255,0.16)");
+        const muted = cssVar("--muted", "#94a3b8");
+        const text = cssVar("--text", "#f8fafc");
+        const accent = cssVar("--accent", "#61d6c8");
+        const accent2 = cssVar("--accent-2", "#e6b450");
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        canvas.__chartPoints = [];
+        if (!list.length) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const values = list.map(valueOf);
+        const max = Math.max(...values, 1);
+        const min = Math.min(...values, 0);
+        const spread = Math.max(1, max - min);
+        const pad = { left: 54, right: 24, top: 22, bottom: 48 };
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+        ctx.strokeStyle = line;
+        ctx.lineWidth = 1;
+        ctx.fillStyle = muted;
+        ctx.font = "11px Segoe UI";
+        ctx.textAlign = "right";
+        for (let i = 0; i <= 4; i += 1) {
+          const y = pad.top + (plotH / 4) * i;
+          const value = max - (spread / 4) * i;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(width - pad.right, y);
+          ctx.stroke();
+          ctx.fillText(compactNumber(value), pad.left - 10, y + 4);
+        }
+        const points = list.map((row, index) => {
+          const x = pad.left + (list.length === 1 ? plotW / 2 : (plotW / (list.length - 1)) * index);
+          const y = pad.top + plotH - ((valueOf(row) - min) / spread) * plotH;
+          return { x, y, row, value: valueOf(row), label: labelOf(row) };
+        });
+        const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+        gradient.addColorStop(0, cssVar("--accent-soft", "rgba(97,214,200,0.22)"));
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          if (index === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        });
+        ctx.lineTo(points[points.length - 1].x, pad.top + plotH);
+        ctx.lineTo(points[0].x, pad.top + plotH);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        const strokeGradient = ctx.createLinearGradient(pad.left, 0, width - pad.right, 0);
+        strokeGradient.addColorStop(0, accent);
+        strokeGradient.addColorStop(1, accent2);
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          if (index === 0) ctx.moveTo(point.x, point.y);
+          else ctx.lineTo(point.x, point.y);
+        });
+        ctx.strokeStyle = strokeGradient;
+        ctx.lineWidth = 4;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke();
+        const hoverIndex = Number.isInteger(canvas.__hoverIndex) ? canvas.__hoverIndex : -1;
+        points.forEach((point, index) => {
+          const active = index === hoverIndex;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, active ? 7 : 5, 0, Math.PI * 2);
+          ctx.fillStyle = active ? accent2 : accent;
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = bg;
+          ctx.stroke();
+          ctx.fillStyle = muted;
+          ctx.font = "11px Segoe UI";
+          ctx.textAlign = "center";
+          const label = point.label.length > 12 ? `${point.label.slice(0, 11)}...` : point.label;
+          ctx.fillText(label, point.x, height - 18);
+        });
+        canvas.__chartPoints = points;
+        if (hoverIndex >= 0 && points[hoverIndex]) {
+          const point = points[hoverIndex];
+          const title = point.label;
+          const value = `${compactNumber(point.value)} ${options.valueLabel || t("home.chart_value_label")}`;
+          ctx.font = "900 12px Segoe UI";
+          const boxW = Math.max(ctx.measureText(title).width, ctx.measureText(value).width) + 28;
+          const boxH = 54;
+          const boxX = Math.min(Math.max(12, point.x - boxW / 2), width - boxW - 12);
+          const boxY = Math.max(12, point.y - boxH - 18);
+          ctx.fillStyle = panel2;
+          ctx.strokeStyle = line;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(boxX, boxY, boxW, boxH, 8);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = text;
+          ctx.textAlign = "left";
+          ctx.font = "900 12px Segoe UI";
+          ctx.fillText(title, boxX + 14, boxY + 22);
+          ctx.fillStyle = accent;
+          ctx.font = "900 13px Segoe UI";
+          ctx.fillText(value, boxX + 14, boxY + 41);
+        }
+      }
+
+      function drawDonut(canvas, rows) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const list = (Array.isArray(rows) ? rows : []).filter((row) => Number(row.value) > 0);
+        const bg = cssVar("--panel", "#111827");
+        const text = cssVar("--text", "#f8fafc");
+        const muted = cssVar("--muted", "#94a3b8");
+        const colors = [cssVar("--accent", "#61d6c8"), cssVar("--accent-2", "#e6b450"), cssVar("--success", "#6fd38d")];
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        const total = list.reduce((sum, row) => sum + Number(row.value || 0), 0);
+        if (!total) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const cx = width / 2;
+        const cy = Math.min(height / 2, 118);
+        const radius = Math.min(width, height) * 0.29;
+        let start = -Math.PI / 2;
+        list.forEach((row, index) => {
+          const angle = (Number(row.value || 0) / total) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, start, start + angle);
+          ctx.lineWidth = 28;
+          ctx.strokeStyle = colors[index % colors.length];
+          ctx.stroke();
+          start += angle;
+        });
+        ctx.fillStyle = text;
+        ctx.font = "900 28px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.fillText(compactNumber(total), cx, cy + 8);
+        ctx.fillStyle = muted;
+        ctx.font = "12px Segoe UI";
+        ctx.fillText(t("home.login_chart_center"), cx, cy + 30);
+        list.forEach((row, index) => {
+          const y = height - 58 + index * 20;
+          ctx.fillStyle = colors[index % colors.length];
+          ctx.fillRect(20, y - 9, 10, 10);
+          ctx.fillStyle = muted;
+          ctx.textAlign = "left";
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(`${row.label}: ${compactNumber(row.value)}`, 38, y);
+        });
+      }
+
+      function pageNameFromLog(row) {
+        const meta = row && typeof row.metadata === "object" ? row.metadata : {};
+        return String(meta.page || meta.currentPage || meta.route || row.page || row.action || "-");
+      }
+
+      function pageAccessRows() {
+        const map = new Map();
+        const rows = Array.isArray(state.homePageLogs) ? state.homePageLogs : [];
+        rows.forEach((row) => {
+          const page = pageNameFromLog(row);
+          if (!page || page === "-") return;
+          const current = map.get(page) || { page, totalEvents: 0, totalQuantity: 0 };
+          current.totalEvents += 1;
+          current.totalQuantity += Number(row.quantity || 1) || 1;
+          map.set(page, current);
+        });
+        return Array.from(map.values()).sort((a, b) => b.totalEvents - a.totalEvents);
+      }
+
+      function dateFromLog(row) {
+        const raw = row?.occurredAt || row?.ocorridoEm || row?.createdAt || row?.updatedAt;
+        const date = raw ? new Date(raw) : null;
+        return date && !Number.isNaN(date.getTime()) ? date : null;
+      }
+
+      function loginUserKey(row) {
+        const meta = row && typeof row.metadata === "object" ? row.metadata : {};
+        const user = row && typeof row.user === "object" ? row.user : {};
+        return String(
+          row?.userId ||
+            row?.usuarioId ||
+            row?.discordId ||
+            row?.steamId ||
+            user.id ||
+            user.discordId ||
+            meta.userId ||
+            meta.discordId ||
+            meta.steamId ||
+            "",
+        );
+      }
+
+      function uniqueLoginCount(rows, predicate) {
+        const unique = new Set();
+        let events = 0;
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const date = dateFromLog(row);
+          if (!date || !predicate(date)) return;
+          events += Number(row.quantity || row.quantidade || 1) || 1;
+          const key = loginUserKey(row);
+          if (key) unique.add(key);
+        });
+        return unique.size || events;
+      }
+
+      function monthStart(date, offset = 0) {
+        return new Date(date.getFullYear(), date.getMonth() + offset, 1);
+      }
+
+      function monthLabel(date) {
+        const label = new Intl.DateTimeFormat(language, { month: "short" }).format(date);
+        return label.replace(".", "").replace(/^./, (value) => value.toUpperCase());
+      }
+
+      function loginComparisonRows(logins) {
+        const rows = [];
+        const now = new Date();
+        const loginLogs = Array.isArray(state.homeLoginLogs) ? state.homeLoginLogs : [];
+        rows.push({ bucket: t("home.range_today"), totalEvents: logins.today?.uniqueUsers ?? logins.today?.events ?? 0 });
+        rows.push({ bucket: t("home.range_week"), totalEvents: logins.week?.uniqueUsers ?? logins.week?.events ?? 0 });
+        for (let offset = 0; offset < 3; offset += 1) {
+          const start = monthStart(now, -offset);
+          const end = monthStart(now, 1 - offset);
+          const fallback = offset === 0 ? (logins.month?.uniqueUsers ?? logins.month?.events ?? 0) : 0;
+          const value = offset === 0 ? fallback : uniqueLoginCount(loginLogs, (date) => date >= start && date < end);
+          rows.push({ bucket: monthLabel(start), totalEvents: value });
+        }
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        const nextYear = new Date(now.getFullYear() + 1, 0, 1);
+        const yearValue =
+          logins.year?.uniqueUsers ??
+          logins.year?.events ??
+          uniqueLoginCount(loginLogs, (date) => date >= yearStart && date < nextYear);
+        rows.push({ bucket: t("home.range_year"), totalEvents: yearValue });
+        return rows;
+      }
+
+      function renderHomeDashboard() {
+        const summary = state.homeSummary || {};
+        const overview = state.homeOverview || {};
+        const accounts = overview.accounts || {};
+        const logins = overview.logins || {};
+        const onlineNow = Number(overview.online?.total ?? 0) || 0;
+        const pages = pageAccessRows();
+        els.homeOnlineCount.textContent = compactNumber(onlineNow);
+        els.homeLoginToday.textContent = compactNumber(logins.today?.uniqueUsers ?? logins.today?.events ?? 0);
+        els.homeLoginWeek.textContent = compactNumber(logins.week?.uniqueUsers ?? logins.week?.events ?? 0);
+        els.homeLoginMonth.textContent = compactNumber(logins.month?.uniqueUsers ?? logins.month?.events ?? 0);
+        els.homePagesCount.textContent = compactNumber(pages.reduce((sum, row) => sum + Number(row.totalEvents || 0), 0));
+        els.homeUsersCount.textContent = compactNumber(accounts.total ?? (Array.isArray(state.users) ? state.users.length : 0));
+        els.homeActiveAccounts.textContent = compactNumber(accounts.active ?? Math.max(0, state.users.length - state.users.filter(isBlocked).length));
+        els.homeCreatedToday.textContent = compactNumber(accounts.created?.today ?? 0);
+        els.homeBlockedAccounts.textContent = t("home.blocked_hint", { count: compactNumber(accounts.blocked ?? state.users.filter(isBlocked).length) });
+        els.homeTotalQuantity.textContent = t("home.quantity_hint", { count: compactNumber(summary.totalQuantity || overview.actions?.totalQuantity || 0) });
+        els.homeTotalEvents.textContent = compactNumber(summary.totalEvents || overview.actions?.totalEvents || 0);
+        const topCategory = (state.homeCategories[0] && (state.homeCategories[0].category || state.homeCategories[0].action || state.homeCategories[0].series)) || "-";
+        const topAction = (state.homeActions[0] && (state.homeActions[0].action || state.homeActions[0].category || state.homeActions[0].series)) || "-";
+        const topUser = (state.homeUsers[0] && (state.homeUsers[0].user && displayName(state.homeUsers[0].user))) || (state.homeUsers[0] && state.homeUsers[0].userId) || "-";
+        els.homeSummaryText.textContent = t("home.summary_loaded", { category: topCategory, action: topAction, user: topUser });
+        drawLineChart(els.homeActivityChart, state.homeTimeseries, {
+          valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
+          labelOf: (row) => String(row.bucket || row.series || row.category || row.action || "-"),
+          valueLabel: t("home.chart_value_label"),
+          limit: 10,
+        });
+        drawHorizontalBars(
+          els.homeLoginChart,
+          loginComparisonRows(logins),
+          {
+            valueOf: (row) => Number(row.totalEvents || 0) || 0,
+            labelOf: (row) => row.bucket,
+            limit: 6,
+            preserveOrder: true,
+            showZero: true,
+          },
+        );
+        renderRankList(els.homeTopPages, pages, {
+          emptyText: t("home.pages_empty"),
+          label: (row) => row.page,
+          meta: (row) => t("home.page_access_meta"),
+          value: (row) => compactNumber(row.totalEvents),
+        });
+        renderRankList(els.homeCategories, state.homeCategories, {
+          emptyText: t("home.empty"),
+          label: (row) => row.category || "-",
+          meta: (row) => t("home.events_volume", { events: compactNumber(row.totalEvents || 0), volume: compactNumber(row.totalQuantity || 0) }),
+          value: (row) => compactNumber(row.totalQuantity || row.totalEvents || 0),
+        });
+        renderRankList(els.homeTopUsers, state.homeUsers, {
+          emptyText: t("home.empty"),
+          label: (row) => displayName(row.user || row),
+          meta: (row) => userMeta(row.user || row),
+          value: (row) => compactNumber(row.totalEvents || row.totalQuantity || 0),
+        });
+        renderRankList(els.homeActions, state.homeActions, {
+          emptyText: t("home.empty"),
+          label: (row) => `${row.category || "-"} / ${row.action || "-"}`,
+          meta: (row) => t("home.events_volume", { events: compactNumber(row.totalEvents || 0), volume: compactNumber(row.totalQuantity || 0) }),
+          value: (row) => compactNumber(row.totalEvents || row.totalQuantity || 0),
+        });
+        renderOnlineUsers();
+        renderLogList(els.homeLogs, state.homeLogs, t("home.logs_empty"));
+      }
+
+      async function loadHomeDashboard() {
+        if (state.homeLoading || !token) return;
+        state.homeLoading = true;
+        els.homeRefresh.disabled = true;
+        const range = selectedHomeRange();
+        const period = selectedHomePeriod();
+        const splitBy = selectedHomeSplitBy();
+        state.homeRange = range;
+        state.homePeriod = period;
+        state.homeSplitBy = splitBy;
+        try {
+          const queryRange = `range=${encodeURIComponent(range)}`;
+          const [overview, summary, categories, actions, users, timeseries, logs, pageLogs, loginLogs] = await Promise.all([
+            optionalRequest(`/gg-logs/stats/overview?${queryRange}&limit=10`),
+            optionalRequest(`/gg-logs/stats/summary?${queryRange}`),
+            optionalRequest(`/gg-logs/stats/categories?${queryRange}`),
+            optionalRequest(`/gg-logs/stats/actions?${queryRange}`),
+            optionalRequest(`/gg-logs/stats/users?${queryRange}&limit=10`),
+            optionalRequest(`/gg-logs/stats/timeseries?${queryRange}&period=${encodeURIComponent(period)}&splitBy=${encodeURIComponent(splitBy)}`),
+            optionalRequest(`/gg-logs?${queryRange}&take=10`),
+            optionalRequest(`/gg-logs?${queryRange}&category=navegacao&action=abrir_pagina&take=120`),
+            optionalRequest("/gg-logs?range=year&category=auth&take=600"),
+          ]);
+          state.homeOverview = overview || {};
+          state.homeSummary = summary || {};
+          state.homeCategories = Array.isArray(categories.categories) ? categories.categories : [];
+          state.homeActions = Array.isArray(actions.actions) ? actions.actions : [];
+          state.homeUsers = Array.isArray(users.users) ? users.users : [];
+          state.homeTimeseries = Array.isArray(timeseries.points) ? timeseries.points : [];
+          state.homeLogs = Array.isArray(logs.logs) ? logs.logs : [];
+          state.homePageLogs = Array.isArray(pageLogs.logs) ? pageLogs.logs : [];
+          state.homeLoginLogs = Array.isArray(loginLogs.logs) ? loginLogs.logs : [];
+          state.homeLoaded = true;
+          renderHomeDashboard();
+        } catch (error) {
+          toast(error.message, "error");
+        } finally {
+          state.homeLoading = false;
+          els.homeRefresh.disabled = false;
+        }
+      }
+
+      async function openUserDetailModal(user) {
+        const baseUser = user || {};
+        const requestId = state.detailRequestId + 1;
+        state.detailRequestId = requestId;
+        state.detailUser = baseUser;
+        els.userDetailBackdrop.classList.add("open");
+        renderUserDetailModal(baseUser, {}, [], true);
+        const adminId = String(baseUser.id || "").trim();
+        const activityId = activityUserId(baseUser);
+        try {
+          const [detailPayload, statsPayload, logsPayload] = await Promise.all([
+            adminId ? optionalRequest(`/chat/admin/users/${encodeURIComponent(adminId)}`) : {},
+            activityId ? optionalRequest(`/gg-logs/users/${encodeURIComponent(activityId)}/stats`) : {},
+            activityId ? optionalRequest(`/gg-logs?userId=${encodeURIComponent(activityId)}&take=8`) : {},
+          ]);
+          if (state.detailRequestId !== requestId) return;
+          const freshUser = normalizeUserDetailPayload(detailPayload, baseUser);
+          state.detailUser = freshUser;
+          renderUserDetailModal(
+            freshUser,
+            statsPayload || {},
+            Array.isArray(logsPayload.logs) ? logsPayload.logs : [],
+            false,
+          );
+        } catch (error) {
+          if (state.detailRequestId !== requestId) return;
+          renderUserDetailModal(baseUser, {}, [], false, error.message);
+        }
+      }
+
+      function closeUserDetailModal() {
+        els.userDetailBackdrop.classList.remove("open");
+        state.detailRequestId += 1;
+      }
+
+      function normalizeUserDetailPayload(payload, fallback) {
+        const candidate = payload?.user || payload?.profile || payload?.data || payload;
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate) || !Object.keys(candidate).length) {
+          return fallback || {};
+        }
+        return { ...(fallback || {}), ...candidate };
+      }
+
+      function setUserDetailAvatar(user) {
+        els.userDetailAvatar.textContent = "";
+        const src = user?.avatar || user?.avatarUrl || user?.avatarfull || user?.avatarmedium || "";
+        if (src) {
+          els.userDetailAvatar.className = "avatar";
+          const img = document.createElement("img");
+          img.src = src;
+          img.alt = "";
+          img.referrerPolicy = "no-referrer";
+          img.onerror = () => {
+            els.userDetailAvatar.className = "avatar avatar-fallback";
+            els.userDetailAvatar.textContent = initials(displayName(user));
+          };
+          els.userDetailAvatar.appendChild(img);
+          return;
+        }
+        els.userDetailAvatar.className = "avatar avatar-fallback";
+        els.userDetailAvatar.textContent = initials(displayName(user));
+      }
+
+      function renderUserDetailModal(user, stats = {}, logs = [], loading = false, errorMessage = "") {
+        const latest = logs[0];
+        const categories = Array.isArray(stats.categories) ? stats.categories : [];
+        setUserDetailAvatar(user);
+        els.userDetailTitle.textContent = displayName(user);
+        els.userDetailMeta.textContent = userMeta(user);
+        els.userDetailBadges.textContent = "";
+        [
+          normalizeRole(user.role) || "MEMBER",
+          isBlocked(user) ? t("status.blocked") : t("status.active"),
+          appVersionOf(user) || "",
+        ]
+          .filter(Boolean)
+          .forEach((label) => {
+            const badge = document.createElement("span");
+            badge.textContent = label;
+            badge.className = `badge ${label === t("status.blocked") ? "role-winner" : "role-member"}`;
+            els.userDetailBadges.appendChild(badge);
+          });
+        els.userDetailStatus.textContent = loading
+          ? t("user_detail.loading")
+          : errorMessage
+            ? t("user_detail.partial", { message: errorMessage })
+            : t("user_detail.loaded");
+        els.userDetailEvents.textContent = compactNumber(stats.totalEvents || logs.length || 0);
+        els.userDetailQuantity.textContent = compactNumber(stats.totalQuantity || logs.reduce((sum, row) => sum + (Number(row.quantity || row.quantidade || 1) || 1), 0));
+        els.userDetailCategoriesCount.textContent = compactNumber(categories.length);
+        els.userDetailLast.textContent = formatDate(
+          latest?.occurredAt ||
+            latest?.ocorridoEm ||
+            latest?.createdAt ||
+            user?.lastLoginAt ||
+            user?.updatedAt ||
+            user?.createdAt,
+        );
+        renderUserDetailInfo(user);
+        renderBarList(els.userDetailCategories, categories, {
+          emptyText: t("users.activity_empty"),
+          valueKey: "totalQuantity",
+          limit: 6,
+        });
+        renderLogList(els.userDetailLogs, logs, t("users.activity_empty"));
+      }
+
+      function renderUserDetailInfo(user) {
+        els.userDetailInfo.textContent = "";
+        [
+          [t("details.id"), user.id || "-"],
+          [t("details.discord"), user.discordId || user.discordUsername || "-"],
+          [t("details.steam"), user.steamId || "-"],
+          [t("details.regiment"), user.regiment || "-"],
+          [t("details.app_version"), appVersionOf(user) || "-"],
+          [t("details.status"), isBlocked(user) ? t("status.blocked") : t("status.active")],
+          [t("details.last_login"), formatDate(user.lastLoginAt || user.updatedAt || user.createdAt)],
+        ].forEach(([label, value]) => {
+          const item = document.createElement("div");
+          item.className = "user-detail-item";
+          const left = document.createElement("span");
+          left.textContent = label;
+          const right = document.createElement("strong");
+          right.textContent = value;
+          item.append(left, right);
+          els.userDetailInfo.appendChild(item);
+        });
+      }
+
       function render() {
         const rows = filteredUsers();
         els.body.textContent = "";
@@ -1771,8 +3761,11 @@
 
       function userCell(user) {
         const td = document.createElement("td");
-        const wrap = document.createElement("div");
+        const wrap = document.createElement("button");
         wrap.className = "user-cell";
+        wrap.type = "button";
+        wrap.title = t("user_detail.open");
+        wrap.addEventListener("click", () => openUserDetailModal(user));
         const avatar = avatarElement(user);
         const text = document.createElement("div");
         const name = document.createElement("div");
@@ -2420,6 +4413,15 @@
           throw new Error(message);
         }
         return data;
+      }
+
+      async function optionalRequest(path, fallback = {}) {
+        try {
+          return await request(path);
+        } catch (error) {
+          console.warn(`Optional admin metric failed: ${path}`, error);
+          return fallback;
+        }
       }
 
       function filteredUsers() {

@@ -202,6 +202,8 @@ class AutoClicker:
         self.menu_callback = None
 
         self.stop_event = threading.Event()
+        self._stop_lock = threading.Lock()
+        self._stopped = False
         self.key_was_down: dict[int, bool] = {}
         self.foxhole_hotkey_context_cache_until = 0.0
         self.foxhole_hotkey_context_cache_active = False
@@ -480,6 +482,10 @@ class AutoClicker:
         self.status_callback(self.status_text())
 
     def stop(self) -> None:
+        with self._stop_lock:
+            if self._stopped:
+                return
+            self._stopped = True
         self.pause()
         self.disable_fixed_click("stop")
         self.disable_move_click("stop")
@@ -513,6 +519,21 @@ class AutoClicker:
             self.right_mouse_action_queue.put(None)
         except Exception:
             pass
+        current_thread = threading.current_thread()
+        for thread in (
+            self.monitor_thread,
+            self.click_thread,
+            self.keyboard_hook_thread,
+            self.mouse_hook_thread,
+            self.right_mouse_action_thread,
+        ):
+            if thread is current_thread or not thread.is_alive():
+                continue
+            try:
+                thread.join(timeout=0.8)
+            except RuntimeError:
+                pass
+        self.menu_callback = None
         self.log("Parando AutoClicker")
 
     def status_text(self) -> str:

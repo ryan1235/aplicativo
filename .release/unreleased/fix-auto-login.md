@@ -2,36 +2,37 @@
 type: fix
 area: auth
 version: v0.0.0
-user_visible: false
-risk: low
+user_visible: true
+risk: medium
 requires_manual_test: true
 ---
 
 # Summary
 
-Fixed auto-login failing after the introduction of OAuth.
+Fixed secure Discord auto-login after the OAuth migration.
 
 # User impact
 
-Returning users who previously authorized the app via Discord will now be automatically logged in again without needing to click the connect button or interact with the OAuth popup.
+Returning users with a valid OAuth session key can be logged in automatically without falling back to legacy Discord, login, or Steam authentication endpoints.
 
 # Technical notes
 
-When the new OAuth flow was added to `_connect_with_discord`, the legacy flow that authenticated returning users via their saved Discord ID was accidentally bypassed. 
-- Restored `_auth_with_discord(self._discord_auth_payload(saved_discord_id))` execution in the background worker when `allow_oauth=False` and a saved ID is present.
-- Updated `autoConnectWithSavedDiscord` and `_maybe_auto_connect` to properly set `self._discord_login_required = False` during auto-connect, allowing the UI to progress.
-- `connectWithDiscord` (manual login) continues to use the new `_auth_with_discord_oauth()` path exclusively.
+- Auto-connect now uses only `POST /chat/auth/auto-login` when a DPAPI-protected `autoLoginKey` exists.
+- Manual Discord login continues to use only `POST /chat/auth/discord/oauth`.
+- Removed a duplicated broken `connectWithDiscord` block that referenced undefined `result`, `user`, and `token` values.
+- Successful auth responses persist `autoLoginKey`/`accessPassword` via DPAPI for future secure auto-login.
+- Logout and reauthentication-required auto-login failures clear the local DPAPI credential blob.
 
 # Changed files
 
 - `qt_controllers.py`
+- `debug_logging.py`
 
 # Validation performed
 
-- Re-examined `ensureStarted` and QML triggers to ensure auto-login executes on app launch (specifically via `Main.qml`).
-- Verified the backend POST fallback logic for `discordId` auth remains functional.
-- Used review agent to ensure no security gaps.
+- `py -m py_compile qt_controllers.py debug_logging.py secure_store.py`
+- Searched active code for legacy `/chat/auth/discord`, `/chat/auth/login`, `/chat/auth/steam`, and `/chat/auth/local` usage outside historical dump/patch files.
 
 # Release note draft
 
-Corrigido falha no login automático do Discord para usuários já autenticados.
+Corrigido o login seguro do Discord para usar OAuth e auto-login seguro sem retornar aos endpoints antigos.

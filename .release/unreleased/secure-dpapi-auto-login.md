@@ -18,15 +18,16 @@ Auto-login is now completely secure and relies on an OS-encrypted session key ra
 # Technical notes
 
 - Created `secure_store.py` leveraging Windows DPAPI (`ctypes.windll.crypt32.CryptProtectData`) to securely encrypt the `autoLoginKey` and `accessPassword` bound to the active Windows user.
-- Updated the OAuth flow to capture and encrypt the keys returned by `/chat/auth/discord/oauth`.
+- Updated the OAuth/auth result handling to capture and encrypt the keys returned by `/chat/auth/discord/oauth`.
 - Re-routed the auto-login thread (`worker` inside `_connect_with_discord`) to attempt `POST /chat/auth/auto-login` with the decrypted keys instead of building a fallback payload.
 - In case of 401/403 (invalid keys), the secure DPAPI blob is deleted locally, and the client gracefully reverts to the interactive OAuth prompt without falling back to the legacy endpoint.
-- Removed deprecated `clientSecret` from local `felb_settings.json`.
+- Redacted `autoLoginKey`, `accessPassword`, and related aliases from login/debug logging.
 
 # Changed files
 
-- `secure_store.py` (New)
+- `secure_store.py`
 - `qt_controllers.py`
+- `debug_logging.py`
 
 # Validation performed
 

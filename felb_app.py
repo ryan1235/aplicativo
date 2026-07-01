@@ -127,20 +127,19 @@ def configure_qt() -> None:
     QApplication.setAttribute(Qt.AA_DontCreateNativeWidgetSiblings, True)
 
 
-import ctypes
-
-# Global reference to keep the timer alive
-_memory_timer = None
-
-def restrict_memory_to_200mb():
+def trim_runtime_memory(engine: QQmlApplicationEngine | None = None) -> None:
     try:
-        import ctypes
-        kernel32 = ctypes.windll.kernel32
-        current_process = kernel32.GetCurrentProcess()
-        # Soft limit: 50MB to 250MB
-        min_size = 50 * 1024 * 1024
-        max_size = 250 * 1024 * 1024
-        kernel32.SetProcessWorkingSetSize(current_process, min_size, max_size)
+        if engine is not None:
+            engine.collectGarbage()
+            engine.trimComponentCache()
+    except RuntimeError:
+        pass
+    except Exception:
+        pass
+    try:
+        import gc
+
+        gc.collect()
     except Exception:
         pass
 
@@ -169,7 +168,6 @@ def main() -> int:
         return 0
 
     app = QApplication(sys.argv)
-    restrict_memory_to_200mb()
     
     app.setQuitOnLastWindowClosed(False)
     app.setApplicationName(APP_TITLE)
@@ -191,15 +189,9 @@ def main() -> int:
         engine.rootObjects()[0].setProperty("visible", False)
 
     def on_state_changed(state: Qt.ApplicationState) -> None:
+        registry.setBackgroundMode(state != Qt.ApplicationState.ApplicationActive)
         if state == Qt.ApplicationState.ApplicationHidden:
-            import gc
-            gc.collect()
-            engine.trimComponentCache()
-            try:
-                import ctypes
-                ctypes.windll.psapi.EmptyWorkingSet(ctypes.windll.kernel32.GetCurrentProcess())
-            except Exception:
-                pass
+            trim_runtime_memory(engine)
     app.applicationStateChanged.connect(on_state_changed)
 
     app.aboutToQuit.connect(registry.shutdown)
@@ -207,6 +199,7 @@ def main() -> int:
         return app.exec()
     finally:
         registry.shutdown()
+        trim_runtime_memory(engine)
         release_single_instance_mutex(mutex)
 
 
