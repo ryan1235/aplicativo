@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 import "../components"
 
 Flickable {
@@ -104,19 +105,28 @@ Flickable {
                 anchors.fill: parent
                 source: appController.assetUrl("img/wallpeper.png")
                 fillMode: Image.PreserveAspectCrop
-                opacity: 0.28
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: "#E6000000" }
+                    GradientStop { position: 0.5; color: "#80000000" }
+                    GradientStop { position: 0.8; color: "transparent" }
+                }
             }
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 22
-                spacing: 10
+                anchors.margins: 28
+                spacing: 12
 
                 Text {
                     text: tr("home.title")
-                    color: settingsController.textColor
+                    color: "#FFFFFF"
                     font.family: "Segoe UI"
-                    font.pixelSize: 28
+                    font.pixelSize: 32
                     font.bold: true
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
@@ -124,11 +134,11 @@ Flickable {
 
                 Text {
                     text: tr("home.body")
-                    color: settingsController.mutedTextColor
+                    color: "#E0E0E0"
                     font.family: "Segoe UI"
-                    font.pixelSize: 13
+                    font.pixelSize: 14
                     wrapMode: Text.WordWrap
-                    Layout.maximumWidth: 760
+                    Layout.maximumWidth: 500
                     Layout.fillWidth: true
                 }
 
@@ -176,12 +186,14 @@ Flickable {
 
             MetricCard {
                 Layout.fillWidth: true
+                emoji: "🎮"
                 title: tr("home.metric_steam")
                 value: steamController.personaName
                 detail: steamController.steamId || tr("sidebar.searching_steam")
             }
             MetricCard {
                 Layout.fillWidth: true
+                emoji: "🖱️"
                 title: tr("home.metric_auto_clicker")
                 value: autoClickerController.running ? tr("home.state_running") : tr("home.state_paused")
                 detail: autoClickerController.status
@@ -189,13 +201,65 @@ Flickable {
             }
             MetricCard {
                 Layout.fillWidth: true
-                title: tr("home.metric_stockpile")
-                value: stockpileController.running ? tr("home.state_watching") : tr("home.state_idle")
-                detail: stockpileController.lastResponse
+                emoji: "🌐"
+                title: tr("home.online_title")
+                value: chatController.onlineRows ? chatController.onlineRows.length + " " + tr("home.online_count_suffix") : "0 " + tr("home.online_count_suffix")
+                detail: chatController.onlineRows && chatController.onlineRows.length > 0 ? tr("home.online_detail_active") : tr("home.online_detail_empty")
                 accent: settingsController.successColor
+                textRightMargin: chatController.onlineRows && chatController.onlineRows.length > 0 ? 120 : 0
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.rightMargin: 18
+                    spacing: -8
+
+                    Repeater {
+                        model: chatController.onlineUsersModel
+                        delegate: Rectangle {
+                            visible: index < 5
+                            width: 32
+                            height: 32
+                            radius: 16
+                            color: settingsController.surfaceColor
+                            border.color: settingsController.accentColor
+                            border.width: 2
+                            z: 100 - index
+                            clip: true
+
+                            Image {
+                                id: avatarImage
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                source: model.avatar || appController.assetUrl("img/iconmenu/generic.png")
+                                fillMode: Image.PreserveAspectCrop
+                                visible: false
+                            }
+
+                            OpacityMask {
+                                anchors.fill: avatarImage
+                                source: avatarImage
+                                maskSource: Rectangle {
+                                    width: avatarImage.width
+                                    height: avatarImage.height
+                                    radius: 14
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                acceptedButtons: Qt.NoButton
+                                ToolTip.visible: containsMouse
+                                ToolTip.text: model.name || ""
+                            }
+                        }
+                    }
+                }
             }
             MetricCard {
                 Layout.fillWidth: true
+                emoji: "🔔"
                 title: tr("home.metric_updates")
                 value: appController.version
                 detail: updateController.status
