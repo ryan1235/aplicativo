@@ -110,6 +110,17 @@ for lang, updates in translations.items():
             data = json.load(f)
         
         for k, v in updates.items():
+            if 'content' in k:
+                # Reformat markdown to be less cramped
+                v = v.replace("### ", "---\n## ")
+                v = v.replace("\n1. ", "\n\n1. ")
+                v = v.replace("\n2. ", "\n\n2. ")
+                v = v.replace("\n3. ", "\n\n3. ")
+                v = v.replace("\n4. ", "\n\n4. ")
+                v = v.replace("\n5. ", "\n\n5. ")
+                v = v.replace("\n6. ", "\n\n6. ")
+                v = v.replace("\n* ", "\n\n* ")
+                # Sometimes startup tips use ## instead of ###. Don't touch startup tips if it doesn't have ###, but if it has *, we spaced it out.
             data[k] = v
             
         with open(file_path, 'w', encoding='utf-8') as f:

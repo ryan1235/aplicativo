@@ -968,61 +968,172 @@ ApplicationWindow {
         id: tutorialDialog
         modal: true
         visible: appController.tutorialDialogVisible
-        width: Math.min(600, window.width - 48)
-        height: Math.min(560, window.height - 48)
+        width: Math.min(640, window.width - 48)
+        height: Math.min(640, window.height - 48)
         x: Math.round((window.width - width) / 2)
         y: Math.round((window.height - height) / 2)
-        title: appController.tutorialDialogTitle
         closePolicy: Popup.CloseOnEscape
         onRejected: appController.dismissTutorial()
 
         background: Rectangle {
-            radius: 8
+            radius: 16
             color: settingsController.surfaceColor
-            border.color: settingsController.borderColor
+            border.color: "transparent"
+            
+            Rectangle { 
+                anchors.fill: parent
+                radius: 16
+                color: "transparent"
+                border.color: settingsController.accentColor
+                border.width: 1
+                opacity: 0.2
+            }
+            
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                color: Qt.rgba(0, 0, 0, 0.7)
+                radius: 36
+                samples: 73
+            }
         }
 
-        contentItem: ColumnLayout {
-            spacing: 12
-            Text {
-                text: appController.tutorialDialogTitle
-                color: settingsController.textColor
-                font.family: "Segoe UI"
-                font.pixelSize: 19
-                font.bold: true
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
+        header: Item {
+            implicitHeight: 64
+            
+            Rectangle {
+                anchors.fill: parent
+                radius: 16
+                color: "transparent"
+                clip: true
+                
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: parent.height
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: settingsController.accentColor }
+                        GradientStop { position: 1.0; color: "transparent" }
+                    }
+                    opacity: 0.15
+                }
             }
-            TextArea {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                text: appController.tutorialDialogBody
-                textFormat: TextEdit.MarkdownText
-                readOnly: true
-                selectByMouse: true
-                color: settingsController.textColor
-                font.family: "Segoe UI"
-                font.pixelSize: 12
-                wrapMode: TextArea.Wrap
-                background: Rectangle {
-                    radius: 7
-                    color: settingsController.backgroundColor
-                    border.color: settingsController.borderColor
+            
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: settingsController.borderColor
+                opacity: 0.5
+            }
+            
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 24
+                anchors.rightMargin: 16
+                spacing: 14
+                
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: 8
+                    color: "transparent"
+                    border.color: settingsController.accentColor
+                    border.width: 1
+                    
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 8
+                        color: settingsController.accentColor
+                        opacity: 0.15
+                    }
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: "?"
+                        color: settingsController.accentColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 18
+                        font.bold: true
+                    }
+                }
+                
+                Text {
+                    text: appController.tutorialDialogTitle
+                    color: settingsController.textColor
+                    font.family: "Segoe UI"
+                    font.pixelSize: 18
+                    font.bold: true
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: 16
+                    color: closeHoverArea.containsMouse ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
+                    Behavior on color { ColorAnimation { duration: 150 } }
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✕"
+                        color: closeHoverArea.containsMouse ? settingsController.textColor : settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 14
+                    }
+                    
+                    MouseArea {
+                        id: closeHoverArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: appController.dismissTutorial()
+                        cursorShape: Qt.PointingHandCursor
+                    }
+                }
+            }
+        }
+
+        contentItem: Item {
+            ScrollView {
+                anchors.fill: parent
+                anchors.margins: 24
+                anchors.topMargin: 16
+                anchors.bottomMargin: 0
+                clip: true
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                TextArea {
+                    text: appController.tutorialDialogBody
+                    textFormat: TextEdit.MarkdownText
+                    readOnly: true
+                    selectByMouse: true
+                    color: settingsController.textColor
+                    font.family: "Segoe UI"
+                    font.pixelSize: 15
+                    wrapMode: TextArea.Wrap
+                    background: Item {} 
                 }
             }
         }
 
         footer: Item {
-            implicitHeight: 58
+            implicitHeight: 72
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
-                anchors.bottomMargin: 18
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                anchors.bottomMargin: 24
+                anchors.topMargin: 8
                 Item { Layout.fillWidth: true }
                 PrimaryButton {
                     text: tr("release.ok")
-                    Layout.preferredWidth: 128
+                    Layout.preferredWidth: 140
+                    Layout.preferredHeight: 40
+                    fill: settingsController.accentColor
+                    hoverFill: settingsController.accentHoverColor
+                    textFill: settingsController.textInverseColor
                     onClicked: appController.dismissTutorial()
                 }
             }
