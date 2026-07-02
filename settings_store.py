@@ -69,6 +69,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "squadlock_overlay_enabled": True,
         "squadlock_x": None,
         "squadlock_y": None,
+        "custom": [],
     },
     "discord": {
         "id": "",
@@ -84,7 +85,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "last_tips_version": "",
         "chat_discord": {
             "clientId": "",
-            "clientSecret": "",
             "redirectPort": 53624,
         },
         "stockpile_sound_enabled": True,
@@ -100,6 +100,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "tools": True,
             "config": True,
         },
+    },
+    "debug": {
+        "enabled": False,
+        "hotkey": "Ctrl+Shift+D",
     },
     "time_task": {
         "overlay_record_x": None,
@@ -166,6 +170,10 @@ def load_settings() -> dict[str, Any]:
     settings["app"]["chat_discord"] = {
         **DEFAULT_SETTINGS["app"]["chat_discord"],
         **loaded.get("app", {}).get("chat_discord", {}),
+    }
+    settings["debug"] = {
+        **DEFAULT_SETTINGS["debug"],
+        **loaded.get("debug", {}),
     }
     legacy_discord = loaded.get("app", {}).get("chat_discord", {})
     if not settings["discord"].get("id") and legacy_discord.get("discordId"):

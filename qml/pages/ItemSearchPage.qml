@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -10,7 +10,15 @@ Item {
     property bool wide: width >= 1120
     property int scrollBarContentPadding: 14
 
-    Component.onCompleted: itemSearchController.ensureLoaded()
+    Component.onCompleted: {
+        itemSearchController.ensureLoaded()
+        if (itemSearchController.query !== "") {
+            Qt.callLater(function() {
+                search.forceActiveFocus()
+                search.selectAll()
+            })
+        }
+    }
 
     function tr(key) {
         i18nController.revision
@@ -138,14 +146,32 @@ Item {
                             anchors.rightMargin: 10
                             spacing: 10
 
-                            Text {
-                                text: "Search"
-                                color: search.activeFocus ? settingsController.accentColor : settingsController.mutedTextColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 11
-                                font.bold: true
-                                Layout.preferredWidth: 52
-                                horizontalAlignment: Text.AlignHCenter
+                            Item {
+                                Layout.preferredWidth: 34
+                                Layout.preferredHeight: 34
+
+                                Canvas {
+                                    id: searchIcon
+                                    anchors.centerIn: parent
+                                    width: 18
+                                    height: 18
+                                    property color strokeColor: search.activeFocus ? settingsController.accentColor : settingsController.mutedTextColor
+                                    onStrokeColorChanged: requestPaint()
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.strokeStyle = strokeColor
+                                        ctx.lineWidth = 2
+                                        ctx.lineCap = "round"
+                                        ctx.beginPath()
+                                        ctx.arc(7.5, 7.5, 5.5, 0, Math.PI * 2)
+                                        ctx.stroke()
+                                        ctx.beginPath()
+                                        ctx.moveTo(12, 12)
+                                        ctx.lineTo(16, 16)
+                                        ctx.stroke()
+                                    }
+                                }
                             }
 
                             TextField {
@@ -371,7 +397,7 @@ Item {
         GridLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            columns: root.wide ? 2 : 1
+            columns: (itemSearchController.query !== "" || itemSearchController.selectedName !== "") && root.wide ? 2 : 1
             columnSpacing: 12
             rowSpacing: 12
 
@@ -379,6 +405,87 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: root.wide ? 320 : 250
+                visible: itemSearchController.query === "" && itemSearchController.selectedName === ""
+                radius: settingsController.cardRadius
+                color: settingsController.surfaceColor
+                border.color: settingsController.borderColor
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 28
+
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 120
+                        height: 120
+                        radius: 60
+                        color: settingsController.accentPanelColor
+                        border.color: settingsController.accentColor
+                        border.width: 1
+
+                        Item {
+                            anchors.centerIn: parent
+                            width: 60
+                            height: 60
+
+                            Canvas {
+                                anchors.fill: parent
+                                property color strokeColor: settingsController.accentColor
+                                onStrokeColorChanged: requestPaint()
+                                onPaint: {
+                                    var ctx = getContext("2d")
+                                    ctx.clearRect(0, 0, width, height)
+                                    ctx.strokeStyle = strokeColor
+                                    ctx.lineWidth = 4
+                                    ctx.lineCap = "round"
+                                    ctx.lineJoin = "round"
+
+                                    ctx.beginPath()
+                                    ctx.arc(26, 26, 16, 0, Math.PI * 2)
+                                    ctx.stroke()
+
+                                    ctx.beginPath()
+                                    ctx.moveTo(38, 38)
+                                    ctx.lineTo(52, 52)
+                                    ctx.stroke()
+                                }
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 10
+
+                        Text {
+                            text: trOr("item_search.welcome_title", "Bem-vindo à Busca de Itens")
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 24
+                            font.bold: true
+                            Layout.alignment: Qt.AlignHCenter
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Text {
+                            text: trOr("item_search.welcome_subtitle", "Pesquise ou escolha um item para ver em quais estoques ele está disponível.")
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 15
+                            Layout.alignment: Qt.AlignHCenter
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            Layout.maximumWidth: 380
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: root.wide ? 320 : 250
+                visible: itemSearchController.query !== "" || itemSearchController.selectedName !== ""
                 radius: settingsController.cardRadius
                 color: settingsController.surfaceColor
                 border.color: settingsController.borderColor
@@ -465,8 +572,8 @@ Item {
 
                                 ColumnLayout {
                                     Layout.fillWidth: model.rowType === "region"
-                                    Layout.preferredWidth: model.rowType === "region" ? -1 : Math.min(220, Math.max(145, results.width * 0.15))
-                                    Layout.minimumWidth: model.rowType === "region" ? 0 : 135
+                                    Layout.preferredWidth: model.rowType === "region" ? -1 : 120
+                                    Layout.minimumWidth: model.rowType === "region" ? 0 : 85
                                     Layout.alignment: Qt.AlignVCenter
                                     spacing: 1
 
@@ -476,7 +583,7 @@ Item {
                                             : model.code || "-"
                                         color: settingsController.textColor
                                         font.family: "Segoe UI"
-                                        font.pixelSize: model.rowType === "region" ? 13 : 16
+                                        font.pixelSize: model.rowType === "region" ? 14 : 16
                                         font.bold: true
                                         Layout.fillWidth: true
                                         elide: Text.ElideRight
@@ -486,7 +593,6 @@ Item {
                                 Text {
                                     visible: model.rowType !== "region"
                                     Layout.fillWidth: true
-                                    Layout.minimumWidth: 150
                                     Layout.alignment: Qt.AlignVCenter
                                     text: model.place || model.warehouse || "-"
                                     color: settingsController.textColor
@@ -495,47 +601,46 @@ Item {
                                     font.bold: true
                                     horizontalAlignment: Text.AlignLeft
                                     verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideMiddle
+                                    elide: Text.ElideRight
                                 }
 
                                 ColumnLayout {
                                     visible: model.rowType !== "region"
-                                    Layout.preferredWidth: Math.min(390, Math.max(285, results.rowWidth * 0.31))
-                                    Layout.minimumWidth: 250
                                     Layout.alignment: Qt.AlignVCenter
-                                    spacing: 0
-
-                                    Text {
-                                        Layout.fillWidth: true
-                                        text: tr("item_search.last_update").replace("{value}", model.updatedAt || "-")
-                                        color: settingsController.mutedTextColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 12
-                                        horizontalAlignment: Text.AlignRight
-                                        verticalAlignment: Text.AlignVCenter
-                                        elide: Text.ElideRight
-                                    }
+                                    Layout.rightMargin: 4
+                                    spacing: 1
 
                                     Text {
                                         visible: model.updatedAgo !== ""
                                         Layout.fillWidth: true
                                         text: model.updatedAgo
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignRight
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: model.updatedAt || "-"
                                         color: settingsController.mutedTextColor
                                         font.family: "Segoe UI"
                                         font.pixelSize: 11
                                         horizontalAlignment: Text.AlignRight
                                         verticalAlignment: Text.AlignVCenter
-                                        elide: Text.ElideRight
                                     }
                                 }
 
                                 Rectangle {
                                     visible: model.rowType !== "region"
-                                    Layout.preferredWidth: 106
+                                    Layout.preferredWidth: 80
                                     Layout.preferredHeight: 38
                                     radius: Math.min(8, settingsController.cardRadius)
                                     color: settingsController.accentPanelColor
                                     border.color: settingsController.accentColor
+                                    border.width: 1
 
                                     Text {
                                         anchors.fill: parent
@@ -545,7 +650,7 @@ Item {
                                         font.family: "Segoe UI"
                                         font.pixelSize: 16
                                         font.bold: true
-                                        horizontalAlignment: Text.AlignRight
+                                        horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
                                     }
                                 }
@@ -575,6 +680,7 @@ Item {
                 Layout.fillHeight: true
                 Layout.preferredWidth: root.wide ? Math.min(520, Math.max(430, root.width * 0.3)) : root.width
                 Layout.minimumHeight: root.wide ? 320 : 250
+                visible: itemSearchController.query !== "" || itemSearchController.selectedName !== ""
                 radius: settingsController.cardRadius
                 color: settingsController.surfaceColor
                 border.color: settingsController.borderColor
@@ -644,6 +750,17 @@ Item {
                                     color: settingsController.textColor
                                     font.family: "Segoe UI"
                                     font.pixelSize: 17
+                                    font.bold: true
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Text {
+                                    visible: itemSearchController.wikiDisplayTitle !== "" && itemSearchController.wikiDisplayTitle !== itemSearchController.wikiName
+                                    text: itemSearchController.wikiDisplayTitle
+                                    color: settingsController.accentColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 11
                                     font.bold: true
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap

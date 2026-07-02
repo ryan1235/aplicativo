@@ -3,24 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GG Coalition - Admin</title>
+    <title>GG Coalition - Painel Web</title>
     <style>
       :root {
-        --bg: #060b13;
-        --panel: #0b1423;
-        --panel-2: #101c30;
-        --panel-3: #14243b;
-        --line: #223a5b;
-        --line-soft: rgba(138, 180, 255, 0.16);
-        --text: #edf6ff;
-        --muted: #94a8c4;
-        --muted-2: #6f849f;
-        --accent: #5eead4;
-        --blue: #8ab4ff;
-        --yellow: #ffd166;
-        --danger: #fb7185;
-        --success: #34d399;
-        --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+        --bg: #0a0f10;
+        --surface: #101817;
+        --surface-2: #15211f;
+        --surface-3: #20312e;
+        --line: rgba(161, 210, 201, 0.15);
+        --line-strong: rgba(161, 210, 201, 0.3);
+        --line-soft: rgba(161, 210, 201, 0.08);
+        --panel: rgba(13, 22, 21, 0.9);
+        --panel-2: rgba(20, 34, 32, 0.84);
+        --control-bg: rgba(4, 10, 10, 0.62);
+        --row-hover: rgba(97, 214, 200, 0.07);
+        --accent-soft: rgba(97, 214, 200, 0.12);
+        --accent-line: rgba(97, 214, 200, 0.32);
+        --danger-soft: rgba(230, 109, 109, 0.1);
+        --danger-line: rgba(230, 109, 109, 0.34);
+        --success-soft: rgba(111, 211, 141, 0.1);
+        --success-line: rgba(111, 211, 141, 0.34);
+        --text: #f3fbf8;
+        --muted: #a9bbb5;
+        --muted-2: #748982;
+        --accent: #61d6c8;
+        --accent-2: #e6b450;
+        --danger: #e66d6d;
+        --success: #6fd38d;
+        --purple: #b59cff;
+        --ink: #061514;
+        --radius: 8px;
+        --shadow: 0 20px 60px rgba(0, 0, 0, 0.36);
       }
 
       * {
@@ -35,19 +48,10 @@
       body {
         margin: 0;
         color: var(--text);
-        background:
-          radial-gradient(
-            circle at 10% 18%,
-            rgba(94, 234, 212, 0.1),
-            transparent 24rem
-          ),
-          radial-gradient(
-            circle at 88% 8%,
-            rgba(138, 180, 255, 0.12),
-            transparent 24rem
-          ),
-          var(--bg);
-        font-family: "Segoe UI", Arial, sans-serif;
+        background: var(--bg);
+        font-family:
+          Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Arial,
+          sans-serif;
         overflow: hidden;
       }
 
@@ -65,13 +69,14 @@
       .app {
         height: 100%;
         display: grid;
-        grid-template-columns: 256px minmax(0, 1fr);
+        grid-template-columns: 290px minmax(0, 1fr);
       }
 
       .sidebar {
+        min-width: 0;
         border-right: 1px solid var(--line);
-        background: rgba(8, 16, 30, 0.92);
-        padding: 22px 18px;
+        background: linear-gradient(180deg, var(--surface), var(--bg));
+        padding: 20px;
         display: flex;
         flex-direction: column;
         gap: 18px;
@@ -81,31 +86,87 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        padding-bottom: 18px;
-        border-bottom: 1px solid var(--line-soft);
       }
 
-      .brand-mark {
+      .brand-mark,
+      .profile-avatar,
+      .avatar {
         width: 42px;
         height: 42px;
-        border-radius: 10px;
+        border-radius: var(--radius);
         display: grid;
         place-items: center;
-        color: #06221d;
-        background: linear-gradient(135deg, var(--accent), var(--blue));
-        font-weight: 800;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: var(--ink);
+        font-weight: 900;
+        flex: 0 0 auto;
+        overflow: hidden;
       }
 
       .brand-title {
-        font-size: 15px;
-        font-weight: 800;
-        letter-spacing: 0.02em;
+        font-size: 16px;
+        line-height: 1.1;
+        font-weight: 900;
       }
 
-      .brand-subtitle {
-        margin-top: 2px;
-        font-size: 12px;
+      .brand-subtitle,
+      .profile-meta,
+      .user-meta {
         color: var(--muted);
+        font-size: 12px;
+      }
+
+      .profile-panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+        overflow: hidden;
+      }
+
+      .profile-row {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .profile-row > div {
+        min-width: 0;
+      }
+
+      .profile-avatar img,
+      .avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .profile-name,
+      .user-name {
+        min-width: 0;
+        font-weight: 900;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text);
+      }
+
+      .profile-meta {
+        margin-top: 3px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.35;
+      }
+
+      .profile-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
       }
 
       .nav {
@@ -114,36 +175,50 @@
       }
 
       .nav button,
-      .sidebar-card {
-        width: 100%;
+      .mode-button,
+      .news-mode-button,
+      .category-chip,
+      .btn {
+        min-height: 40px;
         border: 1px solid transparent;
-        border-radius: 8px;
-        background: transparent;
-        color: var(--muted);
-        text-align: left;
+        border-radius: var(--radius);
+        transition:
+          background 0.16s ease,
+          border-color 0.16s ease,
+          color 0.16s ease,
+          transform 0.16s ease;
       }
 
       .nav button {
-        padding: 12px 12px;
-        font-weight: 700;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: transparent;
+        color: var(--muted);
+        padding: 11px 12px;
+        text-align: left;
+        font-weight: 800;
       }
 
+      .nav button:hover,
       .nav button.active {
-        color: var(--accent);
-        border-color: var(--line);
+        color: var(--text);
+        border-color: var(--line-strong);
         background: var(--panel-2);
       }
 
       .sidebar-card {
         margin-top: auto;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
         padding: 14px;
-        background: rgba(16, 28, 48, 0.72);
-        border-color: var(--line-soft);
+        background: var(--panel);
       }
 
       .sidebar-card strong {
         display: block;
-        margin-bottom: 5px;
+        margin-bottom: 7px;
         font-size: 12px;
         color: var(--text);
       }
@@ -152,7 +227,7 @@
         display: block;
         color: var(--muted);
         font-size: 12px;
-        line-height: 1.35;
+        line-height: 1.45;
       }
 
       .main {
@@ -160,17 +235,20 @@
         min-height: 0;
         display: flex;
         flex-direction: column;
+        background:
+          linear-gradient(180deg, var(--control-bg), transparent 240px),
+          var(--bg);
       }
 
       .topbar {
-        min-height: 72px;
+        min-height: 82px;
         border-bottom: 1px solid var(--line);
-        background: rgba(8, 16, 30, 0.76);
+        background: var(--bg);
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 20px;
-        padding: 16px 26px;
+        gap: 18px;
+        padding: 18px 28px;
       }
 
       .page-title {
@@ -179,148 +257,256 @@
 
       .page-title h1 {
         margin: 0;
-        font-size: 22px;
-        line-height: 1.2;
+        font-size: 24px;
+        line-height: 1.15;
+        letter-spacing: 0;
       }
 
       .page-title p {
-        margin: 5px 0 0;
+        margin: 6px 0 0;
         color: var(--muted);
         font-size: 13px;
       }
 
-      .status-pill {
-        flex: 0 0 auto;
-        max-width: 360px;
-        border: 1px solid var(--line);
+      .status-pill,
+      .badge {
+        display: inline-flex;
+        align-items: center;
         border-radius: 999px;
-        padding: 8px 12px;
-        color: var(--muted);
+        border: 1px solid var(--line);
         background: var(--panel);
+        color: var(--muted);
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 900;
+      }
+
+      .status-pill {
+        max-width: 420px;
+        min-height: 34px;
+        padding: 7px 12px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .status-pill.ok {
-        color: var(--accent);
-        border-color: rgba(94, 234, 212, 0.35);
+        color: var(--success);
+        border-color: var(--success-line);
       }
 
       .status-pill.warn {
-        color: var(--yellow);
-        border-color: rgba(255, 209, 102, 0.35);
+        color: var(--accent-2);
+        border-color: var(--accent-line);
       }
 
       .status-pill.error {
         color: var(--danger);
-        border-color: rgba(251, 113, 133, 0.35);
+        border-color: var(--danger-line);
       }
 
       .content {
         min-height: 0;
         overflow: auto;
-        padding: 24px 26px;
-        display: flex;
-        flex-direction: column;
+        padding: 24px 28px 30px;
+        scrollbar-color: var(--line-strong) transparent;
+        scrollbar-width: thin;
+      }
+
+      .content::-webkit-scrollbar,
+      .table-shell::-webkit-scrollbar,
+      .news-list::-webkit-scrollbar,
+      .preview-box::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+
+      .content::-webkit-scrollbar-thumb,
+      .table-shell::-webkit-scrollbar-thumb,
+      .news-list::-webkit-scrollbar-thumb,
+      .preview-box::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background: var(--line-strong);
+        background-clip: padding-box;
       }
 
       .page {
         min-height: 0;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        gap: 16px;
       }
 
       .page.hidden {
         display: none;
       }
 
-      #news-page {
-        overflow: hidden;
-      }
-
       .metrics {
         display: grid;
-        grid-template-columns: repeat(4, minmax(150px, 1fr));
+        grid-template-columns: repeat(5, minmax(150px, 1fr));
         gap: 12px;
-        margin-bottom: 18px;
       }
 
       .metric,
       .toolbar,
       .table-shell,
-      .empty-state {
+      .pagination,
+      .section-card,
+      .drawer,
+      .empty-state,
+      .notice,
+      .markdown-pane {
         border: 1px solid var(--line);
-        border-radius: 8px;
-        background: rgba(11, 20, 35, 0.9);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+        border-radius: var(--radius);
+        background: var(--panel);
+        box-shadow: 0 14px 38px rgba(0, 0, 0, 0.2);
       }
 
       .metric {
+        min-height: 112px;
         padding: 16px;
+        display: grid;
+        align-content: space-between;
+        background:
+          linear-gradient(180deg, var(--panel-2), var(--panel)),
+          var(--surface);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .metric::after {
+        content: "";
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 0;
+        height: 2px;
+        background: linear-gradient(90deg, var(--accent), transparent);
+        opacity: 0.65;
       }
 
       .metric-label {
         color: var(--muted);
-        font-size: 12px;
-        font-weight: 800;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0;
         text-transform: uppercase;
       }
 
       .metric-value {
-        margin-top: 9px;
-        font-size: 30px;
-        font-weight: 800;
+        font-size: 34px;
+        line-height: 1;
+        font-weight: 900;
       }
 
       .metric-value.accent {
         color: var(--accent);
       }
 
+      .metric-detail {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
       .toolbar {
         display: grid;
-        grid-template-columns: minmax(220px, 1fr) 150px 150px auto;
+        grid-template-columns: minmax(220px, 1fr) 170px 170px 170px auto;
         gap: 10px;
         padding: 12px;
-        margin-bottom: 18px;
+        align-items: center;
+        background: var(--panel);
+      }
+
+      .news-toolbar {
+        grid-template-columns: minmax(240px, 1fr) 190px auto auto;
+      }
+
+      .dashboard-toolbar {
+        grid-template-columns: minmax(320px, 1fr) 180px;
+        align-items: stretch;
+        background: var(--panel);
+        border-color: var(--line);
+      }
+
+      .dashboard-toolbar .btn.primary {
+        min-height: 44px;
+        align-self: end;
+        border-color: var(--line-strong);
+        background: var(--surface-3);
+        color: var(--text);
+      }
+
+      .dashboard-toolbar .btn.primary:hover {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .dashboard-toolbar .field select {
+        border-color: var(--line);
+        background: var(--control-bg);
+      }
+
+      #home-page .filter-group > span,
+      #home-page .select-with-caption span {
+        color: var(--muted);
+      }
+
+      .filter-group {
+        min-width: 0;
+        display: grid;
+        gap: 6px;
+      }
+
+      .filter-group > span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .range-tabs {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 6px;
+        background: rgba(3, 11, 12, 0.6);
+      }
+
+      .range-tabs button {
+        min-height: 34px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .range-tabs button:hover,
+      .range-tabs button.active {
+        color: var(--ink);
+        border-color: var(--accent);
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      }
+
+      .select-with-caption {
+        display: grid;
+        gap: 6px;
+      }
+
+      .select-with-caption span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
       }
 
       .field {
-        position: relative;
-      }
-
-      .field input,
-      .field select,
-      .field textarea {
-        width: 100%;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #071020;
-        color: var(--text);
-        padding: 11px 12px;
-        outline: none;
-      }
-
-      .field textarea {
-        min-height: 94px;
-        resize: vertical;
-      }
-
-      textarea.news-body {
-        width: 100%;
-        border: 0;
-        background: #071020;
-        color: var(--text);
-        padding: 12px;
-        outline: none;
-        resize: vertical;
-        min-height: 360px;
-        font-family: "Consolas", "Courier New", monospace;
-        line-height: 1.45;
-        border-radius: 0 0 8px 8px;
+        min-width: 0;
       }
 
       .field label {
@@ -328,42 +514,66 @@
         margin: 0 0 7px;
         color: var(--muted);
         font-size: 12px;
-        font-weight: 800;
+        font-weight: 900;
+      }
+
+      .field input,
+      .field select,
+      .field textarea,
+      textarea.news-body {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+        color: var(--text);
+        padding: 11px 12px;
+        outline: none;
+        min-height: 44px;
+      }
+
+      .field input:focus,
+      .field select:focus,
+      .field textarea:focus,
+      textarea.news-body:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(97, 214, 200, 0.1);
+      }
+
+      .field textarea {
+        min-height: 108px;
+        resize: vertical;
       }
 
       .btn {
-        border: 1px solid var(--line);
-        border-radius: 8px;
+        border-color: var(--line);
         background: var(--panel-2);
         color: var(--text);
-        padding: 10px 12px;
+        padding: 10px 13px;
         font-size: 13px;
-        font-weight: 800;
-        transition:
-          background 0.14s ease,
-          border-color 0.14s ease,
-          color 0.14s ease;
+        font-weight: 900;
+        white-space: nowrap;
+        box-shadow: none;
       }
 
       .btn:hover {
-        background: var(--panel-3);
-        border-color: var(--blue);
+        border-color: var(--line-strong);
+        background: var(--surface-3);
       }
 
       .btn.primary {
-        background: var(--accent);
-        color: #04201d;
         border-color: var(--accent);
+        background: var(--accent);
+        color: #06211d;
       }
 
       .btn.danger {
         color: var(--danger);
-        border-color: rgba(251, 113, 133, 0.35);
+        border-color: var(--danger-line);
       }
 
       .btn.success {
         color: var(--success);
-        border-color: rgba(52, 211, 153, 0.35);
+        border-color: var(--success-line);
       }
 
       .btn:disabled {
@@ -372,142 +582,152 @@
       }
 
       .table-shell {
-        min-height: 200px;
-        flex: 1;
+        min-height: 280px;
         overflow: auto;
-      }
-
-      .pagination {
-        display: flex;
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 12px;
-        padding: 12px 16px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: rgba(11, 20, 35, 0.9);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
-        margin-top: 12px;
-      }
-
-      .pagination span {
-        color: var(--muted);
-        font-size: 13px;
-        font-weight: 800;
+        background: var(--panel);
       }
 
       table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
       }
 
       th,
       td {
-        padding: 14px 16px;
+        padding: 13px 16px;
         border-bottom: 1px solid var(--line-soft);
         text-align: left;
         vertical-align: middle;
+      }
+
+      th:nth-child(1),
+      td:nth-child(1) {
+        width: 38%;
+      }
+
+      th:nth-child(2),
+      td:nth-child(2) {
+        width: 115px;
+      }
+
+      th:nth-child(3),
+      td:nth-child(3) {
+        width: 95px;
+      }
+
+      th:nth-child(4),
+      td:nth-child(4) {
+        width: 88px;
+      }
+
+      th:nth-child(5),
+      td:nth-child(5) {
+        width: 170px;
+      }
+
+      th:nth-child(6),
+      td:nth-child(6) {
+        width: 180px;
       }
 
       th {
         position: sticky;
         top: 0;
         z-index: 1;
-        background: #101c30;
+        background: var(--surface-2);
         color: var(--muted);
         font-size: 11px;
-        letter-spacing: 0.05em;
+        letter-spacing: 0;
         text-transform: uppercase;
       }
 
       tbody tr {
-        transition: background 0.12s ease;
+        transition: background 0.14s ease;
       }
 
       tbody tr:hover {
-        background: rgba(20, 36, 59, 0.48);
+        background: var(--row-hover);
       }
 
       .user-cell {
         display: flex;
         align-items: center;
         gap: 12px;
-        min-width: 240px;
+        min-width: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .user-cell > div {
+        min-width: 0;
+      }
+
+      .user-cell:hover .user-name,
+      .user-cell:focus-visible .user-name {
+        color: var(--accent);
       }
 
       .avatar {
-        width: 38px;
-        height: 38px;
-        border-radius: 9px;
-        object-fit: cover;
-        background: var(--panel-3);
+        background: var(--surface-3);
+        color: var(--accent);
         border: 1px solid var(--line);
-        flex: 0 0 auto;
       }
 
       .avatar-fallback {
-        display: grid;
-        place-items: center;
         color: var(--accent);
-        font-weight: 800;
-      }
-
-      .user-name {
-        font-weight: 800;
+        font-weight: 900;
       }
 
       .user-meta {
         margin-top: 3px;
-        color: var(--muted-2);
-        font-size: 12px;
-        max-width: 330px;
+        max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .badge {
-        display: inline-flex;
-        align-items: center;
-        min-height: 26px;
-        border-radius: 999px;
+        min-height: 27px;
         padding: 4px 10px;
-        font-size: 12px;
-        font-weight: 800;
-        border: 1px solid transparent;
       }
 
       .role-dev {
         color: var(--accent);
-        background: rgba(94, 234, 212, 0.1);
-        border-color: rgba(94, 234, 212, 0.22);
+        background: var(--accent-soft);
+        border-color: var(--accent-line);
       }
 
       .role-winner {
-        color: var(--yellow);
-        background: rgba(255, 209, 102, 0.1);
-        border-color: rgba(255, 209, 102, 0.22);
+        color: var(--accent-2);
+        background: var(--panel-2);
+        border-color: var(--line-strong);
       }
 
       .role-admin {
-        color: var(--blue);
-        background: rgba(138, 180, 255, 0.1);
-        border-color: rgba(138, 180, 255, 0.22);
+        color: var(--purple);
+        background: rgba(181, 156, 255, 0.1);
+        border-color: rgba(181, 156, 255, 0.25);
       }
 
       .role-member {
         color: var(--muted);
-        background: rgba(148, 168, 196, 0.1);
-        border-color: rgba(148, 168, 196, 0.18);
+        background: var(--panel-2);
+        border-color: var(--line);
       }
 
       .state-active {
         color: var(--success);
+        font-weight: 900;
       }
 
       .state-blocked {
         color: var(--danger);
+        font-weight: 900;
       }
 
       .row-actions {
@@ -516,34 +736,455 @@
         gap: 8px;
       }
 
-      .empty-state {
-        padding: 34px;
-        text-align: center;
-        color: var(--muted);
+      .row-actions .btn {
+        min-width: 78px;
+        padding-left: 10px;
+        padding-right: 10px;
       }
 
-      .news-layout {
-        min-height: 0;
-        flex: 1;
-        display: block;
+      .empty-state {
+        margin: 14px;
+        padding: 30px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      .pagination span {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .activity-panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .dashboard-hero {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(180deg, var(--accent-soft), transparent 210px),
+          var(--panel);
+        padding: 18px;
+        display: grid;
+        gap: 16px;
         overflow: hidden;
+      }
+
+      .dashboard-hero-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .dashboard-hero h2 {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.15;
+      }
+
+      .dashboard-hero p {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .spark-grid,
+      .chart-grid,
+      .insight-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .spark-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .spark-card,
+      .chart-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent),
+          var(--panel);
+        padding: 14px;
+        min-width: 0;
+      }
+
+      #home-page .metric {
+        border-color: var(--line);
+        background: var(--panel);
+      }
+
+      #home-page .metric::after {
+        background: linear-gradient(90deg, var(--accent), transparent);
+      }
+
+      #home-page .metric-value.accent,
+      #home-page .rank-value {
+        color: var(--accent);
+      }
+
+      .spark-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .spark-card strong {
+        display: block;
+        margin-top: 10px;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .spark-card small {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .chart-grid {
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+      }
+
+      .insight-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .chart-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .chart-head strong {
+        font-size: 15px;
+      }
+
+      .chart-head span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .canvas-wrap {
+        height: 260px;
+        min-width: 0;
+      }
+
+      .chart-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      @keyframes panelIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes accentSweep {
+        from {
+          background-position: 0% 50%;
+        }
+        to {
+          background-position: 100% 50%;
+        }
+      }
+
+      #home-page .metric,
+      #home-page .toolbar,
+      #home-page .dashboard-hero,
+      #home-page .spark-card,
+      #home-page .chart-card {
+        animation: panelIn 0.34s ease both;
+      }
+
+      #home-page .metric,
+      #home-page .spark-card,
+      #home-page .chart-card,
+      #home-page .rank-row {
+        transition:
+          transform 0.18s ease,
+          border-color 0.18s ease,
+          background 0.18s ease;
+      }
+
+      #home-page .spark-card:hover,
+      #home-page .chart-card:hover,
+      #home-page .rank-row:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent-line);
+      }
+
+      #home-page .metric::after {
+        background-size: 180% 100%;
+        animation: accentSweep 4s ease-in-out infinite alternate;
+      }
+
+      #home-activity-chart {
+        cursor: crosshair;
+      }
+
+      .rank-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .rank-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        padding: 9px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+      }
+
+      .rank-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .rank-meta {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rank-value {
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .activity-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .activity-controls select {
+        min-width: 240px;
+      }
+
+      .activity-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .activity-shell {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel-2);
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .activity-columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+        gap: 12px;
+      }
+
+      .bar-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .bar-row {
+        display: grid;
+        gap: 4px;
+      }
+
+      .bar-row-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        min-width: 0;
+      }
+
+      .bar-row-head span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .bar-track {
+        height: 10px;
+        border-radius: 999px;
+        background: var(--surface-2);
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      }
+
+      .log-list {
+        display: grid;
+        gap: 8px;
+        max-height: 240px;
+        overflow: auto;
+      }
+
+      .log-row {
+        display: grid;
+        grid-template-columns: 90px minmax(0, 1fr) 56px 150px;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+      }
+
+      .log-category {
+        color: var(--accent);
+        font-weight: 900;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .log-action {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .log-quantity {
+        color: var(--success);
+        font-weight: 900;
+        font-size: 12px;
+        text-align: center;
+      }
+
+      .log-time {
+        color: var(--muted);
+        font-size: 11px;
+        text-align: right;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .online-list {
+        display: grid;
+        gap: 8px;
+        max-height: 240px;
+        overflow: auto;
+      }
+
+      .online-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 10px;
+        border: 1px solid var(--line-soft);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+      }
+
+      .online-row strong {
+        display: block;
+        min-width: 0;
+        font-size: 12px;
+        line-height: 1.2;
+      }
+
+      .online-row > div:first-child {
+        min-width: 0;
+      }
+
+      .news-category-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .news-category-tabs.hidden {
+        display: none;
+      }
+
+      .category-chip {
+        min-height: 34px;
+        border-color: var(--line);
+        background: var(--panel);
+        color: var(--muted);
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .category-chip.active {
+        color: #06211d;
+        background: var(--accent);
+        border-color: var(--accent);
       }
 
       .news-mode-switch {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-        margin: 0 0 14px;
+        gap: 8px;
         border: 1px solid var(--line);
-        border-radius: 8px;
-        background: rgba(7, 16, 32, 0.72);
+        border-radius: var(--radius);
         padding: 6px;
+        background: var(--control-bg);
       }
 
       .news-mode-button {
-        min-height: 42px;
-        border: 1px solid transparent;
-        border-radius: 7px;
+        border-color: transparent;
         background: transparent;
         color: var(--muted);
         font-weight: 900;
@@ -552,28 +1193,16 @@
       .news-mode-button.active {
         border-color: var(--accent);
         background: var(--accent);
-        color: #041611;
+        color: #06211d;
+      }
+
+      .news-layout {
+        min-height: 0;
       }
 
       .section-card {
         min-height: 0;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: rgba(11, 20, 35, 0.9);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
         overflow: hidden;
-      }
-
-      .news-list-card {
-        min-height: 0;
-        height: 100%;
-      }
-
-      .news-editor-card {
-        min-height: 0;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
       }
 
       .news-list-card.hidden,
@@ -582,7 +1211,8 @@
       }
 
       .section-head {
-        padding: 14px;
+        min-height: 54px;
+        padding: 14px 16px;
         border-bottom: 1px solid var(--line-soft);
         display: flex;
         align-items: center;
@@ -591,81 +1221,56 @@
       }
 
       .section-head strong {
-        font-size: 13px;
+        font-size: 14px;
       }
 
       .news-list {
-        min-height: 0;
-        height: calc(100% - 50px);
-        max-height: none;
+        max-height: calc(100vh - 350px);
+        min-height: 260px;
         overflow: auto;
-        padding: 10px;
+        padding: 12px;
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         align-content: start;
-        gap: 8px;
-      }
-
-      .news-category-tabs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 0 0 16px;
-      }
-
-      .news-category-tabs.hidden {
-        display: none;
-      }
-
-      .category-chip {
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: rgba(11, 20, 35, 0.9);
-        color: var(--muted);
-        padding: 8px 12px;
-        font-size: 12px;
-        font-weight: 800;
-      }
-
-      .category-chip.active {
-        color: #05201d;
-        background: var(--accent);
-        border-color: var(--accent);
+        gap: 10px;
       }
 
       .news-group-title {
-        margin: 6px 2px 2px;
-        color: var(--blue);
+        grid-column: 1 / -1;
+        margin: 10px 2px 0;
+        color: var(--accent-2);
         font-size: 11px;
         font-weight: 900;
+        letter-spacing: 0;
         text-transform: uppercase;
-        letter-spacing: 0.06em;
       }
 
       .news-card {
         width: 100%;
-        border: 1px solid var(--line-soft);
-        border-radius: 8px;
-        background: linear-gradient(180deg, rgba(12, 25, 43, 0.98), rgba(7, 16, 32, 0.98));
+        min-height: 112px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel-2);
         color: var(--text);
-        padding: 10px;
+        padding: 13px;
         text-align: left;
       }
 
+      .news-card:hover,
       .news-card.active {
         border-color: var(--accent);
-        background: rgba(94, 234, 212, 0.08);
+        background: var(--accent-soft);
       }
 
       .news-card-title {
-        font-weight: 800;
+        font-weight: 900;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
       .news-card-meta {
-        margin-top: 6px;
+        margin-top: 10px;
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
@@ -673,43 +1278,38 @@
         font-size: 11px;
       }
 
+      .news-card-meta span {
+        border: 1px solid var(--line-soft);
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: var(--control-bg);
+      }
+
       .news-editor {
-        min-height: 0;
-        overflow: auto;
-        padding: 18px;
         display: grid;
         gap: 16px;
-        flex: 1;
+        padding: 16px;
       }
 
       .form-grid {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
       }
 
       .form-grid .wide {
+        grid-column: span 2;
+      }
+
+      .form-grid .full {
         grid-column: 1 / -1;
       }
 
-      .editor-actions {
-        position: sticky;
-        bottom: -18px;
-        z-index: 2;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: flex-end;
-        gap: 10px;
-        border-top: 1px solid var(--line-soft);
-        background: rgba(11, 20, 35, 0.96);
-        padding: 12px 0 0;
-      }
-
       .editor-summary {
-        border: 1px solid var(--line-soft);
+        border: 1px solid var(--accent-line);
         border-radius: 8px;
         padding: 12px;
-        background: linear-gradient(135deg, rgba(94, 234, 212, 0.08), rgba(138, 180, 255, 0.07));
+        background: var(--accent-soft);
         color: var(--muted);
         font-size: 12px;
         line-height: 1.45;
@@ -717,27 +1317,23 @@
 
       .markdown-workbench {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
         gap: 12px;
       }
 
       .markdown-pane {
         min-width: 0;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: #071020;
         overflow: hidden;
       }
 
       .markdown-pane-head {
-        min-height: 42px;
+        min-height: 46px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
         border-bottom: 1px solid var(--line-soft);
-        background: rgba(16, 28, 48, 0.75);
-        padding: 8px 10px;
+        padding: 9px 10px;
       }
 
       .markdown-pane-head strong {
@@ -748,13 +1344,14 @@
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
+        justify-content: flex-end;
       }
 
       .markdown-toolbar button {
         min-width: 32px;
-        height: 28px;
+        height: 30px;
         border: 1px solid var(--line);
-        border-radius: 6px;
+        border-radius: 7px;
         background: var(--panel-2);
         color: var(--text);
         font-size: 12px;
@@ -766,50 +1363,41 @@
         color: var(--accent);
       }
 
+      textarea.news-body {
+        min-height: 410px;
+        resize: vertical;
+        border: 0;
+        border-radius: 0;
+        font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+        line-height: 1.5;
+      }
+
       .preview-box {
-        min-height: 360px;
-        max-height: 520px;
+        min-height: 410px;
+        max-height: 570px;
         overflow: auto;
         padding: 16px;
-        color: #dcecff;
-        line-height: 1.45;
-      }
-
-      .preview-box strong {
         color: var(--text);
+        line-height: 1.5;
       }
 
-      .preview-box em {
-        color: var(--blue);
+      .preview-box p,
+      .preview-box h1,
+      .preview-box h2,
+      .preview-box h3 {
+        margin-top: 0;
       }
 
       .preview-box a {
         color: var(--accent);
-        font-weight: 800;
-      }
-
-      .preview-box h1,
-      .preview-box h2,
-      .preview-box h3 {
-        margin: 0 0 10px;
-        color: var(--text);
-      }
-
-      .preview-box p {
-        margin: 0 0 12px;
-      }
-
-      .preview-box ul,
-      .preview-box ol {
-        margin: 0 0 12px 22px;
-        padding: 0;
+        font-weight: 900;
       }
 
       .preview-box code {
-        border: 1px solid var(--line-soft);
-        border-radius: 5px;
-        padding: 2px 5px;
-        background: rgba(94, 234, 212, 0.08);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 2px 6px;
+        background: var(--accent-soft);
         color: var(--accent);
       }
 
@@ -817,14 +1405,8 @@
         margin: 0 0 12px;
         border-left: 3px solid var(--accent);
         padding: 8px 10px;
-        background: rgba(94, 234, 212, 0.06);
+        background: var(--accent-soft);
         color: var(--muted);
-      }
-
-      .preview-box hr {
-        border: 0;
-        border-top: 1px solid var(--line);
-        margin: 16px 0;
       }
 
       .preview-media {
@@ -834,29 +1416,8 @@
         object-fit: contain;
         border: 1px solid var(--line);
         border-radius: 8px;
-        background: rgba(2, 8, 18, 0.7);
+        background: var(--control-bg);
         margin: 0 0 12px;
-      }
-
-      .preview-box table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 0 0 12px;
-        overflow: hidden;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-      }
-
-      .preview-box th,
-      .preview-box td {
-        border-bottom: 1px solid var(--line-soft);
-        padding: 8px 10px;
-        text-align: left;
-      }
-
-      .preview-box th {
-        color: var(--accent);
-        background: rgba(94, 234, 212, 0.08);
       }
 
       .news-views {
@@ -866,11 +1427,20 @@
         white-space: pre-line;
       }
 
+      .editor-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 10px;
+        border-top: 1px solid var(--line-soft);
+        padding-top: 14px;
+      }
+
       .drawer-backdrop {
         position: fixed;
         inset: 0;
         display: none;
-        background: rgba(2, 6, 12, 0.6);
+        background: rgba(8, 8, 6, 0.66);
         z-index: 20;
       }
 
@@ -882,59 +1452,191 @@
         position: absolute;
         top: 0;
         right: 0;
-        width: min(460px, 100vw);
+        width: min(480px, 100vw);
         height: 100%;
-        border-left: 1px solid var(--line);
-        background: #081020;
-        box-shadow: var(--shadow);
+        border-radius: 0;
         display: flex;
         flex-direction: column;
       }
 
-      .drawer-header {
+      .drawer-header,
+      .drawer-footer {
+        padding: 18px;
+        border-bottom: 1px solid rgba(236, 226, 196, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .drawer-header h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+
+      .drawer-header p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .drawer-body {
+        min-height: 0;
+        overflow: auto;
+        padding: 18px;
+        display: grid;
+        align-content: start;
+        gap: 14px;
+      }
+
+      .drawer-footer {
+        margin-top: auto;
+        border-top: 1px solid rgba(236, 226, 196, 0.1);
+        border-bottom: 0;
+        justify-content: flex-end;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 35;
+        display: none;
+        place-items: center;
         padding: 22px;
-        border-bottom: 1px solid var(--line);
+        background: rgba(0, 0, 0, 0.62);
+      }
+
+      .modal-backdrop.open {
+        display: grid;
+      }
+
+      .user-modal {
+        width: min(860px, 100%);
+        max-height: min(760px, calc(100vh - 44px));
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        animation: panelIn 0.24s ease both;
+      }
+
+      .user-modal-hero {
+        padding: 18px;
+        border-bottom: 1px solid var(--line-soft);
+        background:
+          linear-gradient(135deg, var(--accent-soft), transparent 56%),
+          linear-gradient(180deg, var(--panel-2), var(--panel));
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 16px;
       }
 
-      .drawer-header h2 {
+      .user-modal-profile {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .user-modal-profile .avatar {
+        width: 64px;
+        height: 64px;
+      }
+
+      .user-modal-title {
         margin: 0;
-        font-size: 19px;
+        font-size: 22px;
+        line-height: 1.1;
       }
 
-      .drawer-header p {
-        margin: 6px 0 0;
-        color: var(--muted);
-        font-size: 12px;
-        overflow-wrap: anywhere;
-      }
-
-      .drawer-body {
+      .user-modal-body {
         min-height: 0;
         overflow: auto;
-        padding: 22px;
+        padding: 16px;
         display: grid;
-        gap: 16px;
+        gap: 14px;
       }
 
-      .drawer-footer {
-        border-top: 1px solid var(--line);
-        padding: 16px 22px;
-        display: flex;
+      .user-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 10px;
       }
 
-      .notice {
+      .user-detail-card {
+        min-width: 0;
         border: 1px solid var(--line);
-        border-radius: 8px;
+        border-radius: var(--radius);
+        background: var(--control-bg);
         padding: 12px;
-        background: rgba(16, 28, 48, 0.72);
+      }
+
+      .user-detail-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 900;
+        text-transform: uppercase;
+      }
+
+      .user-detail-card strong {
+        display: block;
+        margin-top: 8px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 18px;
+      }
+
+      .user-detail-columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+      }
+
+      .user-detail-section {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--control-bg);
+        padding: 14px;
+      }
+
+      .user-detail-section h3 {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+
+      .user-detail-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .user-detail-item {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 10px;
         color: var(--muted);
         font-size: 12px;
-        line-height: 1.45;
+      }
+
+      .user-detail-item strong {
+        min-width: 0;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .notice {
+        padding: 13px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
         white-space: pre-line;
       }
 
@@ -942,22 +1644,19 @@
         position: fixed;
         left: 50%;
         bottom: 22px;
+        z-index: 40;
         transform: translateX(-50%) translateY(20px);
-        min-width: 280px;
-        max-width: min(560px, calc(100vw - 32px));
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 12px 14px;
-        color: var(--text);
-        background: #0b1423;
-        box-shadow: var(--shadow);
         opacity: 0;
         pointer-events: none;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #222218;
+        color: var(--text);
+        padding: 12px 14px;
+        box-shadow: var(--shadow);
         transition:
-          opacity 0.16s ease,
-          transform 0.16s ease;
-        z-index: 30;
-        font-size: 13px;
+          opacity 0.18s ease,
+          transform 0.18s ease;
       }
 
       .toast.show {
@@ -966,22 +1665,69 @@
       }
 
       .toast.error {
-        border-color: rgba(251, 113, 133, 0.4);
+        border-color: rgba(230, 109, 109, 0.5);
         color: var(--danger);
       }
 
-      @media (max-width: 920px) {
-        body {
-          overflow: auto;
-        }
-
+      @media (max-width: 1080px) {
         .app {
-          min-height: 100%;
           grid-template-columns: 1fr;
         }
 
         .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar-card {
           display: none;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .toolbar,
+        .news-toolbar,
+        .dashboard-toolbar,
+        .markdown-workbench {
+          grid-template-columns: 1fr;
+        }
+
+        .spark-grid,
+        .chart-grid,
+        .insight-grid,
+        .activity-columns,
+        .user-detail-columns {
+          grid-template-columns: 1fr;
+        }
+
+        body {
+          overflow: auto;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .topbar,
+        .content {
+          padding: 16px;
+        }
+
+        .metrics,
+        .spark-grid,
+        .form-grid,
+        .user-detail-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .form-grid .wide {
+          grid-column: 1;
+        }
+
+        .status-pill {
+          max-width: 100%;
         }
 
         .topbar {
@@ -989,39 +1735,29 @@
           flex-direction: column;
         }
 
-        .status-pill {
-          max-width: 100%;
-        }
-
-        .metrics {
+        .range-tabs {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .toolbar {
-          grid-template-columns: 1fr;
-        }
-
-        .form-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .markdown-workbench {
-          grid-template-columns: 1fr;
-        }
-
-        .table-shell {
-          overflow: auto;
+        .user-modal-hero {
+          flex-direction: column;
         }
       }
 
-      @media (max-width: 560px) {
-        .metrics {
-          grid-template-columns: 1fr;
+      @media (prefers-reduced-motion: reduce) {
+        #home-page .metric,
+        #home-page .toolbar,
+        #home-page .dashboard-hero,
+        #home-page .spark-card,
+        #home-page .chart-card {
+          animation: none;
         }
 
-        th,
-        td {
-          padding: 12px;
+        #home-page .metric,
+        #home-page .spark-card,
+        #home-page .chart-card,
+        #home-page .rank-row {
+          transition: none;
         }
       }
     </style>
@@ -1030,183 +1766,329 @@
     <div class="app">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand-mark">GG</div>
+          <img class="brand-mark" src="/img/ggimege.gif" alt="GG" style="object-fit: cover; background: transparent;" />
           <div>
-            <div class="brand-title">Painel Administrativo</div>
+            <div class="brand-title" data-i18n="app.title">Painel Web</div>
+            <div class="brand-subtitle" data-i18n="app.subtitle">GG Coalition Admin</div>
           </div>
         </div>
-        <nav class="nav">
-          <button class="active" type="button" data-page="users">Usuários</button>
-          <button type="button" data-page="news">Notícias</button>
+
+        <section class="profile-panel" aria-label="Perfil do usuario">
+          <div class="profile-row">
+            <div id="profile-avatar" class="profile-avatar">GG</div>
+            <div>
+              <div id="profile-name" class="profile-name" data-i18n="profile.loading">Validando acesso</div>
+              <div id="profile-meta" class="profile-meta" data-i18n="profile.waiting">Aguardando perfil...</div>
+            </div>
+          </div>
+          <div class="profile-foot">
+            <span id="profile-role" class="badge role-member" data-i18n="profile.session">Sessao</span>
+            <span id="profile-status" class="profile-meta" data-i18n="profile.connecting">Conectando</span>
+          </div>
+        </section>
+
+        <nav class="nav" aria-label="Navegacao do painel">
+          <button class="active" type="button" data-page="home">
+            <span data-i18n="nav.home">Inicio</span>
+            <span>01</span>
+          </button>
+          <button type="button" data-page="users">
+            <span data-i18n="nav.users">Usuarios</span>
+            <span>02</span>
+          </button>
+          <button type="button" data-page="news">
+            <span data-i18n="nav.news">Avisos</span>
+            <span>03</span>
+          </button>
         </nav>
+
         <div class="sidebar-card">
-          <strong>Acesso permitido</strong>
-          <span
-            >Contas com nivel minimo de painel podem entrar. A API valida a
-            sessÃ£o antes de qualquer ediÃ§Ã£o.</span
-          >
+          <strong data-i18n="sidebar.access_title">Acesso administrativo</strong>
+          <span data-i18n="sidebar.access_body">O painel valida sua sessao pela API antes de liberar qualquer acao de cargo, bloqueio ou publicacao.</span>
         </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div class="page-title">
-            <h1 id="page-heading">Gestão de Usuários</h1>
-            <p id="page-description">
-              Edite cargo, bloqueio e permissÃµes dos usuÃ¡rios conectados ao
-              chat.
-            </p>
+            <h1 id="page-heading" data-i18n="home.heading">Visao geral</h1>
+            <p id="page-description" data-i18n="home.description">Acompanhe atividade total, usuarios online e tendencias do aplicativo.</p>
           </div>
-          <div id="connection-status" class="status-pill warn">
-            Inicializando painel...
-          </div>
+          <div id="connection-status" class="status-pill warn" data-i18n="state.initializing">Inicializando painel...</div>
         </header>
 
         <section class="content">
-          <div id="users-page" class="page">
-          <div class="metrics">
-            <div class="metric">
-              <div class="metric-label">UsuÃ¡rios</div>
-              <div id="metric-total" class="metric-value accent">0</div>
+          <div id="home-page" class="page">
+            <div class="metrics">
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_online_now">Online agora</div>
+                <div id="home-online-count" class="metric-value accent">0</div>
+                <div class="metric-detail" data-i18n="home.metric_online_now_hint">usuarios ativos neste momento</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_login_today">Logaram hoje</div>
+                <div id="home-login-today" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_login_today_hint">usuarios unicos hoje</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_login_week">Logaram na semana</div>
+                <div id="home-login-week" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_login_week_hint">usuarios unicos na semana</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_login_month">Logaram no mes</div>
+                <div id="home-login-month" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_login_month_hint">usuarios unicos no mes</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="home.metric_pages">Paginas acessadas</div>
+                <div id="home-pages-count" class="metric-value">0</div>
+                <div class="metric-detail" data-i18n="home.metric_pages_hint">aberturas no periodo</div>
+              </div>
             </div>
-            <div class="metric">
-              <div class="metric-label">Ativos</div>
-              <div id="metric-active" class="metric-value">0</div>
+
+            <div class="toolbar dashboard-toolbar">
+              <div class="filter-group">
+                <span data-i18n="home.range_label">Janela dos dados</span>
+                <div class="range-tabs" aria-label="Janela de analise">
+                  <button class="active" type="button" data-home-range="today" data-i18n="home.range_today">Hoje</button>
+                  <button type="button" data-home-range="week" data-i18n="home.range_week">Semana</button>
+                  <button type="button" data-home-range="month" data-i18n="home.range_month">Mes</button>
+                  <button type="button" data-home-range="year" data-i18n="home.range_year">Ano</button>
+                  <button type="button" data-home-range="total" data-i18n="home.range_total">Total</button>
+                </div>
+              </div>
+              <label class="field select-with-caption">
+                <span data-i18n="home.period_label">Agrupar tempo</span>
+                <select id="home-period-select" aria-label="Selecionar periodo">
+                  <option value="" data-i18n="home.period_auto">Automatico</option>
+                  <option value="hour" data-i18n="home.period_hour">Por horas</option>
+                  <option value="day" data-i18n="home.period_day">Por dias</option>
+                  <option value="month" data-i18n="home.period_month">Por meses</option>
+                </select>
+              </label>
             </div>
-            <div class="metric">
-              <div class="metric-label">Bloqueados</div>
-              <div id="metric-blocked" class="metric-value">0</div>
-            </div>
-            <div class="metric">
-              <div class="metric-label">Equipe</div>
-              <div id="metric-staff" class="metric-value">0</div>
-            </div>
+
+            <section class="dashboard-hero" aria-label="Resumo geral">
+              <div class="dashboard-hero-head">
+                <div>
+                  <h2 data-i18n="home.dashboard_title">Saude do aplicativo</h2>
+                  <div id="home-summary-text" class="user-meta" data-i18n="home.summary">Carregando indicadores globais.</div>
+                </div>
+                <span class="user-meta" data-i18n="home.summary_hint">Baseado em /gg-logs</span>
+              </div>
+
+              <div class="spark-grid">
+                <div class="spark-card">
+                  <span data-i18n="home.spark_total_users">Contas totais</span>
+                  <strong id="home-users-count">0</strong>
+                  <small data-i18n="home.spark_total_users_hint">usuarios cadastrados</small>
+                </div>
+                <div class="spark-card">
+                  <span data-i18n="home.spark_active_accounts">Contas ativas</span>
+                  <strong id="home-active-accounts">0</strong>
+                  <small data-i18n="home.spark_active_accounts_hint">sem bloqueio</small>
+                </div>
+                <div class="spark-card">
+                  <span data-i18n="home.spark_total_events">Eventos no periodo</span>
+                  <strong id="home-total-events">0</strong>
+                  <small id="home-total-quantity">0</small>
+                </div>
+                <div class="spark-card">
+                  <span data-i18n="home.spark_created_today">Criadas hoje</span>
+                  <strong id="home-created-today">0</strong>
+                  <small id="home-blocked-accounts">0 bloqueadas</small>
+                </div>
+              </div>
+
+              <div class="chart-grid">
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.timeseries_title">Movimento do app</strong>
+                    <span data-i18n="home.chart_events_hint">passe o mouse nos pontos</span>
+                  </div>
+                  <div class="canvas-wrap">
+                    <canvas id="home-activity-chart" class="chart-canvas"></canvas>
+                  </div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.login_chart_title">Comparativo de logins</strong>
+                    <span data-i18n="home.login_chart_hint">hoje, semana, 3 meses e ano</span>
+                  </div>
+                  <div class="canvas-wrap">
+                    <canvas id="home-login-chart" class="chart-canvas"></canvas>
+                  </div>
+                </div>
+              </div>
+
+              <div class="insight-grid">
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.pages_title">Paginas mais acessadas</strong>
+                    <span data-i18n="home.pages_hint">navegacao</span>
+                  </div>
+                  <div id="home-top-pages" class="rank-list"></div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.categories_title">Categorias</strong>
+                    <span data-i18n="home.categories_hint">por volume</span>
+                  </div>
+                  <div id="home-categories" class="rank-list"></div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.top_users_title">Usuarios mais ativos</strong>
+                    <span data-i18n="home.top_users_hint">eventos</span>
+                  </div>
+                  <div id="home-top-users" class="rank-list"></div>
+                </div>
+              </div>
+
+              <div class="activity-columns">
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.actions_title">Acoes</strong>
+                    <span data-i18n="home.actions_hint">eventos / volume</span>
+                  </div>
+                  <div id="home-actions" class="rank-list"></div>
+                </div>
+                <div class="chart-card">
+                  <div class="chart-head">
+                    <strong data-i18n="home.logs_title">Logs recentes</strong>
+                    <span data-i18n="home.logs_hint">ultimos eventos globais</span>
+                  </div>
+                  <div id="home-logs" class="log-list"></div>
+                </div>
+              </div>
+            </section>
           </div>
 
-          <div class="toolbar">
-            <div class="field">
-              <input
-                id="search-input"
-                type="search"
-                placeholder="Buscar por nome, Discord ID, Steam ID ou regimento"
-              />
+          <div id="users-page" class="page hidden">
+            <div class="metrics">
+              <div class="metric">
+                <div class="metric-label" data-i18n="users.metric_total">Usuarios</div>
+                <div id="metric-total" class="metric-value accent">0</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="users.metric_active">Ativos</div>
+                <div id="metric-active" class="metric-value">0</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="users.metric_blocked">Bloqueados</div>
+                <div id="metric-blocked" class="metric-value">0</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label" data-i18n="users.metric_staff">Equipe</div>
+                <div id="metric-staff" class="metric-value">0</div>
+              </div>
             </div>
-            <div class="field">
-              <select id="role-filter" aria-label="Filtrar por cargo">
-                <option value="">Todos os cargos</option>
-                <option value="DEV">DEV</option>
-                <option value="WINNER">WINNER</option>
-                <option value="ADMIN">ADMIN</option>
-                <option value="MEMBER">MEMBER</option>
-              </select>
-            </div>
-            <div class="field">
-              <select id="status-filter" aria-label="Filtrar por status">
-                <option value="">Todos os status</option>
-                <option value="ACTIVE">Ativos</option>
-                <option value="BLOCKED">Bloqueados</option>
-              </select>
-            </div>
-            <button id="refresh-button" class="btn primary" type="button">
-              Atualizar
-            </button>
-          </div>
 
-          <div class="table-shell">
-            <table>
-              <thead>
-                <tr>
-                  <th>UsuÃ¡rio</th>
-                  <th>Cargo</th>
-                  <th>Status</th>
-                  <th>VersÃ£o</th>
-                  <th>Ãšltimo login</th>
-                  <th style="text-align: right">AÃ§Ãµes</th>
-                </tr>
-              </thead>
-              <tbody id="users-body"></tbody>
-            </table>
-            <div id="empty-state" class="empty-state" hidden>
-              Nenhum usuÃ¡rio encontrado.
+            <div class="toolbar">
+              <div class="field">
+                <input id="search-input" type="search" placeholder="Buscar por nome, Discord ID, Steam ID ou regimento" data-i18n-placeholder="users.search_placeholder" />
+              </div>
+              <div class="field">
+                <select id="role-filter" aria-label="Filtrar por cargo">
+                  <option value="" data-i18n="filter.all_roles">Todos os cargos</option>
+                  <option value="DEV">DEV</option>
+                  <option value="WINNER">WINNER</option>
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="MEMBER">MEMBER</option>
+                </select>
+              </div>
+              <div class="field">
+                <select id="status-filter" aria-label="Filtrar por status">
+                  <option value="" data-i18n="filter.all_status">Todos os status</option>
+                  <option value="ACTIVE" data-i18n="filter.active">Ativos</option>
+                  <option value="BLOCKED" data-i18n="filter.blocked">Bloqueados</option>
+                </select>
+              </div>
+              <button id="refresh-button" class="btn primary" type="button" data-i18n="action.refresh">Atualizar</button>
             </div>
-          </div>
 
-          <div class="pagination" id="pagination-controls" style="display: none;">
-            <button id="prev-page" class="btn" type="button">Anterior</button>
-            <span id="page-info">PÃ¡gina 1 de 1</span>
-            <button id="next-page" class="btn" type="button">PrÃ³ximo</button>
-          </div>
+            <div class="table-shell">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-i18n="table.user">Usuario</th>
+                    <th data-i18n="table.role">Cargo</th>
+                    <th data-i18n="table.status">Status</th>
+                    <th data-i18n="table.version">Versao</th>
+                    <th data-i18n="table.last_login">Ultimo login</th>
+                    <th style="text-align: right" data-i18n="table.actions">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody id="users-body"></tbody>
+              </table>
+              <div id="empty-state" class="empty-state" hidden data-i18n="empty.users">Nenhum usuario encontrado.</div>
+            </div>
+
+            <div class="pagination" id="pagination-controls" style="display: none">
+              <button id="prev-page" class="btn" type="button" data-i18n="pagination.previous">Anterior</button>
+              <span id="page-info">Pagina 1 de 1</span>
+              <button id="next-page" class="btn" type="button" data-i18n="pagination.next">Proximo</button>
+            </div>
           </div>
 
           <div id="news-page" class="page hidden">
-            <div class="toolbar">
+            <div class="toolbar news-toolbar">
               <div class="field">
-                <input
-                  id="news-search"
-                  type="search"
-                  placeholder="Buscar noticias por titulo, tipo ou status"
-                />
+                <input id="news-search" type="search" placeholder="Buscar avisos por titulo, tipo ou status" data-i18n-placeholder="news.search_placeholder" />
               </div>
               <div class="field">
-                <select id="news-status-filter" aria-label="Filtrar noticias por status">
-                  <option value="">Todos os status</option>
-                  <option value="draft">Rascunho</option>
-                  <option value="scheduled">Agendada</option>
-                  <option value="published">Publicada</option>
-                  <option value="archived">Arquivada</option>
-                  <option value="translation_pending">Traducao pendente</option>
+                <select id="news-status-filter" aria-label="Filtrar avisos por status">
+                  <option value="" data-i18n="news.all_status">Todos os status</option>
+                  <option value="draft" data-i18n="news.status_draft">Rascunho</option>
+                  <option value="scheduled" data-i18n="news.status_scheduled">Agendada</option>
+                  <option value="published" data-i18n="news.status_published">Publicada</option>
+                  <option value="archived" data-i18n="news.status_archived">Arquivada</option>
+                  <option value="translation_pending" data-i18n="news.status_translation_pending">Traducao pendente</option>
                 </select>
               </div>
-              <button id="new-news-button" class="btn primary" type="button">
-                Nova noticia
-              </button>
-              <button id="refresh-news-button" class="btn" type="button">
-                Atualizar
-              </button>
+              <button id="new-news-button" class="btn primary" type="button" data-i18n="news.new">Novo aviso</button>
+              <button id="refresh-news-button" class="btn" type="button" data-i18n="action.refresh">Atualizar</button>
             </div>
 
             <div id="news-category-tabs" class="news-category-tabs"></div>
 
-            <div class="news-mode-switch" aria-label="Alternar area de noticias">
-              <button id="news-review-mode" class="news-mode-button active" type="button">
-                Revisar avisos
-              </button>
-              <button id="news-create-mode" class="news-mode-button" type="button">
-                Criar aviso
-              </button>
+            <div class="news-mode-switch" aria-label="Alternar area de avisos">
+              <button id="news-review-mode" class="news-mode-button active" type="button" data-i18n="news.review_mode">Central de avisos</button>
+              <button id="news-create-mode" class="news-mode-button" type="button" data-i18n="news.editor_mode">Editor</button>
             </div>
 
             <div class="news-layout">
               <div id="news-list-card" class="section-card news-list-card">
                 <div class="section-head">
-                  <strong>Noticias</strong>
+                  <strong data-i18n="news.list_title">Avisos publicados e rascunhos</strong>
                   <span id="news-count" class="user-meta">0 itens</span>
                 </div>
                 <div id="news-list" class="news-list">
-                  <div id="news-empty" class="empty-state">Nenhuma noticia carregada.</div>
+                  <div id="news-empty" class="empty-state" data-i18n="news.empty">Nenhum aviso carregado.</div>
                 </div>
               </div>
 
               <div id="news-editor-card" class="section-card news-editor-card hidden">
                 <div class="section-head">
-                  <strong id="news-editor-title">Nova noticia</strong>
+                  <strong id="news-editor-title" data-i18n="news.editor_new">Novo aviso</strong>
                   <span id="news-editor-status" class="badge role-member">draft</span>
                 </div>
                 <form id="news-form" class="news-editor">
                   <input id="news-id" type="hidden" />
                   <div class="form-grid">
                     <div class="field wide">
-                      <label for="news-title">Titulo</label>
-                      <input id="news-title" type="text" placeholder="Janela de manutencao" required />
+                      <label for="news-title" data-i18n="news.title">Titulo</label>
+                      <input id="news-title" type="text" placeholder="Janela de manutencao" data-i18n-placeholder="news.title_placeholder" required />
                     </div>
                     <div class="field">
-                      <label for="news-type">Tipo</label>
-                      <input id="news-type" type="text" placeholder="update" value="general" />
+                      <label for="news-type" data-i18n="news.type">Tipo</label>
+                      <input id="news-type" type="text" placeholder="update" data-i18n-placeholder="news.type_placeholder" value="general" />
                     </div>
                     <div class="field">
-                      <label for="news-source-locale">Idioma original</label>
+                      <label for="news-source-locale" data-i18n="news.source_locale">Idioma original</label>
                       <select id="news-source-locale">
-                        <option value="">Detectar automaticamente</option>
+                        <option value="" data-i18n="news.detect_auto">Detectar automaticamente</option>
                         <option value="pt-BR">pt-BR</option>
                         <option value="en-US">en-US</option>
                         <option value="es-ES">es-ES</option>
@@ -1214,73 +2096,64 @@
                       </select>
                     </div>
                     <div class="field">
-                      <label for="news-status">Status</label>
+                      <label for="news-status" data-i18n="news.status">Status</label>
                       <select id="news-status">
-                        <option value="draft">Rascunho</option>
-                        <option value="published">Publicar agora</option>
-                        <option value="scheduled">Agendar</option>
-                        <option value="archived">Arquivar</option>
+                        <option value="draft" data-i18n="news.status_draft">Rascunho</option>
+                        <option value="published" data-i18n="news.publish_now">Publicar agora</option>
+                        <option value="scheduled" data-i18n="news.schedule">Agendar</option>
+                        <option value="archived" data-i18n="news.archive">Arquivar</option>
                       </select>
                     </div>
                     <div class="field">
-                      <label for="news-starts-at">Inicia em</label>
+                      <label for="news-starts-at" data-i18n="news.starts_at">Inicia em</label>
                       <input id="news-starts-at" type="datetime-local" />
                     </div>
                     <div class="field wide">
-                      <label for="news-image">Imagem</label>
+                      <label for="news-image" data-i18n="news.image">Imagem</label>
                       <input id="news-image" type="file" accept="image/*" />
                     </div>
                   </div>
 
-                  <div class="editor-summary">
-                    A noticia sera traduzida pelo backend. Use o preview para conferir a estrutura antes de salvar.
-                  </div>
+                  <div class="editor-summary" data-i18n="news.summary">A API cuida da publicacao e das traducoes. Revise o preview antes de salvar para garantir que o aviso vai aparecer bem dentro do aplicativo.</div>
 
                   <div class="markdown-workbench">
                     <div class="markdown-pane">
                       <div class="markdown-pane-head">
-                        <strong>Editor Markdown</strong>
+                        <strong data-i18n="news.markdown_editor">Editor Markdown</strong>
                         <div class="markdown-toolbar" aria-label="Ferramentas Markdown">
-                          <button type="button" data-md="heading">H</button>
-                          <button type="button" data-md="bold">B</button>
-                          <button type="button" data-md="italic">I</button>
-                          <button type="button" data-md="link">Link</button>
-                          <button type="button" data-md="image">Imagem</button>
-                          <button type="button" data-md="video">Video</button>
-                          <button type="button" data-md="file">Anexo</button>
-                          <button type="button" data-md="list">Lista</button>
-                          <button type="button" data-md="table">Tabela</button>
-                          <button type="button" data-md="quote">"</button>
-                          <button type="button" data-md="code">Code</button>
-                          <button type="button" data-md="divider">Linha</button>
+                          <button type="button" title="Titulo" data-md="heading">H</button>
+                          <button type="button" title="Negrito" data-md="bold">B</button>
+                          <button type="button" title="Italico" data-md="italic">I</button>
+                          <button type="button" title="Link" data-md="link">Link</button>
+                          <button type="button" title="Imagem" data-md="image">Img</button>
+                          <button type="button" title="Video" data-md="video">Video</button>
+                          <button type="button" title="Anexo" data-md="file">Anexo</button>
+                          <button type="button" title="Lista" data-md="list">Lista</button>
+                          <button type="button" title="Tabela" data-md="table">Tabela</button>
+                          <button type="button" title="Citacao" data-md="quote">"</button>
+                          <button type="button" title="Codigo" data-md="code">Code</button>
+                          <button type="button" title="Linha" data-md="divider">Linha</button>
                         </div>
                       </div>
-                      <textarea
-                        id="news-body"
-                        class="news-body"
-                        placeholder="# Titulo do aviso&#10;&#10;Escreva o aviso em **Markdown**..."
-                        required
-                      ></textarea>
+                      <textarea id="news-body" class="news-body" placeholder="# Titulo do aviso&#10;&#10;Escreva o aviso em **Markdown**..." data-i18n-placeholder="news.body_placeholder" required></textarea>
                     </div>
 
                     <div class="markdown-pane">
                       <div class="markdown-pane-head">
-                        <strong>Preview</strong>
-                        <span class="user-meta">Atualiza automaticamente</span>
+                        <strong data-i18n="news.preview">Preview</strong>
+                        <span class="user-meta" data-i18n="news.preview_hint">Atualiza automaticamente</span>
                       </div>
-                      <div class="preview-box" id="news-preview">
-                        A previa aparece enquanto voce escreve.
-                      </div>
+                      <div class="preview-box" id="news-preview" data-i18n="news.preview_empty">A previa aparece enquanto voce escreve.</div>
                     </div>
                   </div>
 
                   <div id="news-views" class="news-views"></div>
 
                   <div class="editor-actions">
-                    <button id="news-views-button" class="btn" type="button">Visualizacoes</button>
-                    <button id="news-retry-button" class="btn" type="button">Retry traducoes</button>
-                    <button id="news-archive-button" class="btn danger" type="button">Arquivar</button>
-                    <button id="news-save-button" class="btn primary" type="submit">Salvar noticia</button>
+                    <button id="news-views-button" class="btn" type="button" data-i18n="news.views">Visualizacoes</button>
+                    <button id="news-retry-button" class="btn" type="button" data-i18n="news.retry">Retry traducoes</button>
+                    <button id="news-archive-button" class="btn danger" type="button" data-i18n="news.archive">Arquivar</button>
+                    <button id="news-save-button" class="btn primary" type="submit" data-i18n="news.save">Salvar aviso</button>
                   </div>
                 </form>
               </div>
@@ -1291,22 +2164,17 @@
     </div>
 
     <div id="drawer-backdrop" class="drawer-backdrop">
-      <aside
-        class="drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="drawer-title"
-      >
+      <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
         <div class="drawer-header">
           <div>
-            <h2 id="drawer-title">Editar usuÃ¡rio</h2>
+            <h2 id="drawer-title" data-i18n="drawer.title">Editar usuario</h2>
             <p id="drawer-subtitle"></p>
           </div>
-          <button id="close-drawer" class="btn" type="button">Fechar</button>
+          <button id="close-drawer" class="btn" type="button" data-i18n="drawer.close">Fechar</button>
         </div>
         <div class="drawer-body">
           <div class="field">
-            <label for="edit-role">Cargo</label>
+            <label for="edit-role" data-i18n="drawer.role">Cargo</label>
             <select id="edit-role">
               <option value="MEMBER">MEMBER</option>
               <option value="WINNER">WINNER</option>
@@ -1315,27 +2183,75 @@
             </select>
           </div>
           <div class="field">
-            <label for="block-reason">Motivo do bloqueio</label>
-            <textarea
-              id="block-reason"
-              placeholder="Informe o motivo quando for bloquear o usuÃ¡rio"
-            ></textarea>
+            <label for="block-reason" data-i18n="drawer.block_reason">Motivo do bloqueio</label>
+            <textarea id="block-reason" placeholder="Informe o motivo quando for bloquear o usuario" data-i18n-placeholder="drawer.block_placeholder"></textarea>
           </div>
           <div class="notice" id="drawer-details"></div>
         </div>
         <div class="drawer-footer">
-          <button id="save-role" class="btn primary" type="button">
-            Salvar cargo
-          </button>
-          <button id="toggle-block" class="btn danger" type="button">
-            Bloquear
-          </button>
+          <button id="save-role" class="btn primary" type="button" data-i18n="drawer.save_role">Salvar cargo</button>
+          <button id="toggle-block" class="btn danger" type="button" data-i18n="drawer.block">Bloquear</button>
         </div>
       </aside>
     </div>
 
+    <div id="user-detail-backdrop" class="modal-backdrop">
+      <section class="user-modal" role="dialog" aria-modal="true" aria-labelledby="user-detail-title">
+        <header class="user-modal-hero">
+          <div class="user-modal-profile">
+            <div id="user-detail-avatar" class="avatar avatar-fallback">?</div>
+            <div>
+              <h2 id="user-detail-title" class="user-modal-title" data-i18n="user_detail.title">Detalhes do usuario</h2>
+              <div id="user-detail-meta" class="user-meta">-</div>
+              <div id="user-detail-badges" class="news-card-meta"></div>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button id="user-detail-edit" class="btn" type="button" data-i18n="action.edit">Editar</button>
+            <button id="user-detail-close" class="btn" type="button" data-i18n="drawer.close">Fechar</button>
+          </div>
+        </header>
+        <div class="user-modal-body">
+          <div id="user-detail-status" class="notice" data-i18n="user_detail.loading">Buscando informacoes do usuario...</div>
+          <div class="user-detail-grid">
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.total_events">Eventos</span>
+              <strong id="user-detail-events">0</strong>
+            </div>
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.total_quantity">Volume</span>
+              <strong id="user-detail-quantity">0</strong>
+            </div>
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.categories">Categorias</span>
+              <strong id="user-detail-categories-count">0</strong>
+            </div>
+            <div class="user-detail-card">
+              <span data-i18n="user_detail.last_seen">Ultima atividade</span>
+              <strong id="user-detail-last">-</strong>
+            </div>
+          </div>
+          <div class="user-detail-columns">
+            <section class="user-detail-section">
+              <h3 data-i18n="user_detail.account">Conta</h3>
+              <div id="user-detail-info" class="user-detail-list"></div>
+            </section>
+            <section class="user-detail-section">
+              <h3 data-i18n="user_detail.top_categories">Categorias recentes</h3>
+              <div id="user-detail-categories" class="bar-list"></div>
+            </section>
+          </div>
+          <section class="user-detail-section">
+            <h3 data-i18n="user_detail.recent_logs">Logs recentes</h3>
+            <div id="user-detail-logs" class="log-list"></div>
+          </section>
+        </div>
+      </section>
+    </div>
+
     <div id="toast" class="toast"></div>
 
+    <script src="i18n.js?v=20260702-admin-dashboard-v2"></script>
     <script>
       const hiddenText = (values, mask = 71) =>
         String.fromCharCode(...values.map((value) => value ^ mask));
@@ -1343,7 +2259,6 @@
         47, 51, 51, 55, 52, 125, 104, 104, 38, 53, 36, 47, 55, 46, 63, 34, 43,
         105, 52, 54, 50, 38, 53, 34, 48, 34, 37, 105, 38, 55, 55,
       ]);
-      const ACCESS_ROLES = new Set(["DEV", "WINNER", "ADMIN"]);
       const ADMIN_CONTROL_ROLES = new Set(["DEV", "WINNER"]);
       const NEWS_STAFF_ROLES = new Set(["DEV", "WINNER", "ADMIN"]);
       const EDITABLE_ROLES = new Set(["MEMBER", "WINNER", "DEV", "ADMIN"]);
@@ -1352,17 +2267,34 @@
       const token = params.get("token") || "";
       const encodedApi = params.get("api") || "";
       const legacyApi = params.get("apiUrl") || "";
-      const apiUrl = normalizeUrl(
-        encodedApi ? decodeApi(encodedApi) : legacyApi || DEFAULT_API,
-      );
+      const apiUrl = normalizeUrl(encodedApi ? decodeApi(encodedApi) : legacyApi || DEFAULT_API);
+      const language = normalizeLanguage(params.get("lang") || navigator.language || "pt");
+      const catalog = window.ADMIN_I18N || {};
 
       const state = {
-        activePage: "users",
+        activePage: "home",
         me: null,
         users: [],
         news: [],
         selectedUser: null,
+        detailUser: null,
+        detailRequestId: 0,
         selectedNews: null,
+        homePeriod: "day",
+        homeRange: "today",
+        homeSplitBy: "category",
+        homeLoading: false,
+        homeLoaded: false,
+        homeOverview: {},
+        homeSummary: {},
+        homeCategories: [],
+        homeActions: [],
+        homeUsers: [],
+        homeTimeseries: [],
+        homeLogs: [],
+        homePageLogs: [],
+        homeLoginLogs: [],
+        homeOnlineUsers: [],
         loading: false,
         newsLoading: false,
         newsCategory: "",
@@ -1371,19 +2303,59 @@
         itemsPerPage: 50,
       };
 
+      applyThemeFromQuery();
+      translatePage();
+
       const els = {
         navButtons: Array.from(document.querySelectorAll(".nav button[data-page]")),
         pageHeading: document.getElementById("page-heading"),
         pageDescription: document.getElementById("page-description"),
+        homePage: document.getElementById("home-page"),
         usersPage: document.getElementById("users-page"),
         newsPage: document.getElementById("news-page"),
+        homeRangeButtons: Array.from(document.querySelectorAll("[data-home-range]")),
+        homePeriodSelect: document.getElementById("home-period-select"),
+        homeTotalQuantity: document.getElementById("home-total-quantity"),
+        homeTotalEvents: document.getElementById("home-total-events"),
+        homeOnlineCount: document.getElementById("home-online-count"),
+        homeLoginToday: document.getElementById("home-login-today"),
+        homeLoginWeek: document.getElementById("home-login-week"),
+        homeLoginMonth: document.getElementById("home-login-month"),
+        homePagesCount: document.getElementById("home-pages-count"),
+        homeUsersCount: document.getElementById("home-users-count"),
+        homeActiveAccounts: document.getElementById("home-active-accounts"),
+        homeCreatedToday: document.getElementById("home-created-today"),
+        homeBlockedAccounts: document.getElementById("home-blocked-accounts"),
+        homeSummaryText: document.getElementById("home-summary-text"),
+        homeActivityChart: document.getElementById("home-activity-chart"),
+        homeLoginChart: document.getElementById("home-login-chart"),
+        homeOnlineUsers: document.getElementById("home-online-users"),
+        homeCategories: document.getElementById("home-categories"),
+        homeActions: document.getElementById("home-actions"),
+        homeTopPages: document.getElementById("home-top-pages"),
+        homeTopUsers: document.getElementById("home-top-users"),
+        homeLogs: document.getElementById("home-logs"),
         status: document.getElementById("connection-status"),
+        profileName: document.getElementById("profile-name"),
+        profileMeta: document.getElementById("profile-meta"),
+        profileAvatar: document.getElementById("profile-avatar"),
+        profileRole: document.getElementById("profile-role"),
+        profileStatus: document.getElementById("profile-status"),
         body: document.getElementById("users-body"),
         empty: document.getElementById("empty-state"),
         prevPage: document.getElementById("prev-page"),
         nextPage: document.getElementById("next-page"),
         pageInfo: document.getElementById("page-info"),
         paginationControls: document.getElementById("pagination-controls"),
+        activityUserSelect: document.getElementById("activity-user-select"),
+        activityRefresh: document.getElementById("activity-refresh"),
+        activityTotalQuantity: document.getElementById("activity-total-quantity"),
+        activityTotalEvents: document.getElementById("activity-total-events"),
+        activityCategoriesCount: document.getElementById("activity-categories-count"),
+        activityCategories: document.getElementById("activity-categories"),
+        activityTimeseries: document.getElementById("activity-timeseries"),
+        activityUserLogs: document.getElementById("activity-user-logs"),
+        activitySummaryText: document.getElementById("activity-summary-text"),
         search: document.getElementById("search-input"),
         roleFilter: document.getElementById("role-filter"),
         statusFilter: document.getElementById("status-filter"),
@@ -1401,6 +2373,21 @@
         blockReason: document.getElementById("block-reason"),
         saveRole: document.getElementById("save-role"),
         toggleBlock: document.getElementById("toggle-block"),
+        userDetailBackdrop: document.getElementById("user-detail-backdrop"),
+        userDetailAvatar: document.getElementById("user-detail-avatar"),
+        userDetailTitle: document.getElementById("user-detail-title"),
+        userDetailMeta: document.getElementById("user-detail-meta"),
+        userDetailBadges: document.getElementById("user-detail-badges"),
+        userDetailClose: document.getElementById("user-detail-close"),
+        userDetailEdit: document.getElementById("user-detail-edit"),
+        userDetailStatus: document.getElementById("user-detail-status"),
+        userDetailEvents: document.getElementById("user-detail-events"),
+        userDetailQuantity: document.getElementById("user-detail-quantity"),
+        userDetailCategoriesCount: document.getElementById("user-detail-categories-count"),
+        userDetailLast: document.getElementById("user-detail-last"),
+        userDetailInfo: document.getElementById("user-detail-info"),
+        userDetailCategories: document.getElementById("user-detail-categories"),
+        userDetailLogs: document.getElementById("user-detail-logs"),
         toast: document.getElementById("toast"),
         newsSearch: document.getElementById("news-search"),
         newsStatusFilter: document.getElementById("news-status-filter"),
@@ -1433,26 +2420,94 @@
         newsSaveButton: document.getElementById("news-save-button"),
       };
 
-      els.search.addEventListener("input", () => { state.currentPage = 1; render(); });
-      els.roleFilter.addEventListener("change", () => { state.currentPage = 1; render(); });
-      els.statusFilter.addEventListener("change", () => { state.currentPage = 1; render(); });
+      els.search.addEventListener("input", () => {
+        state.currentPage = 1;
+        render();
+      });
+      els.roleFilter.addEventListener("change", () => {
+        state.currentPage = 1;
+        render();
+      });
+      els.statusFilter.addEventListener("change", () => {
+        state.currentPage = 1;
+        render();
+      });
       els.refresh.addEventListener("click", loadUsers);
+      els.homeRangeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          state.homeRange = button.dataset.homeRange || "today";
+          els.homeRangeButtons.forEach((item) => item.classList.toggle("active", item === button));
+          loadHomeDashboard();
+        });
+      });
+
+      els.homePeriodSelect.addEventListener("change", () => {
+        loadHomeDashboard();
+      });
+      els.homeActivityChart.addEventListener("mousemove", (event) => {
+        const points = els.homeActivityChart.__chartPoints || [];
+        if (!points.length) return;
+        const rect = els.homeActivityChart.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        let nearest = -1;
+        let distance = Infinity;
+        points.forEach((point, index) => {
+          const current = Math.hypot(point.x - x, point.y - y);
+          if (current < distance) {
+            nearest = index;
+            distance = current;
+          }
+        });
+        const nextIndex = distance <= 34 ? nearest : -1;
+        if (els.homeActivityChart.__hoverIndex !== nextIndex) {
+          els.homeActivityChart.__hoverIndex = nextIndex;
+          const paddedTimeseries = smartPadTimeseries(state.homeTimeseries, state.homeRange, selectedHomePeriod());
+          drawLineChart(els.homeActivityChart, paddedTimeseries, {
+            valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
+            labelOf: (row) => row._label,
+            valueLabel: t("home.chart_value_label"),
+            limit: 31,
+          });
+        }
+      });
+      els.homeActivityChart.addEventListener("mouseleave", () => {
+        if (els.homeActivityChart.__hoverIndex !== -1) {
+          els.homeActivityChart.__hoverIndex = -1;
+          const paddedTimeseries = smartPadTimeseries(state.homeTimeseries, state.homeRange, selectedHomePeriod());
+          drawLineChart(els.homeActivityChart, paddedTimeseries, {
+            valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
+            labelOf: (row) => row._label,
+            valueLabel: t("home.chart_value_label"),
+            limit: 31,
+          });
+        }
+      });
       els.prevPage.addEventListener("click", () => {
         if (state.currentPage > 1) {
-          state.currentPage--;
+          state.currentPage -= 1;
           render();
         }
       });
       els.nextPage.addEventListener("click", () => {
         const totalPages = Math.ceil(filteredUsers().length / state.itemsPerPage);
         if (state.currentPage < totalPages) {
-          state.currentPage++;
+          state.currentPage += 1;
           render();
         }
       });
       els.closeDrawer.addEventListener("click", closeDrawer);
       els.drawer.addEventListener("click", (event) => {
         if (event.target === els.drawer) closeDrawer();
+      });
+      els.userDetailBackdrop.addEventListener("click", (event) => {
+        if (event.target === els.userDetailBackdrop) closeUserDetailModal();
+      });
+      els.userDetailClose.addEventListener("click", closeUserDetailModal);
+      els.userDetailEdit.addEventListener("click", () => {
+        const user = state.detailUser;
+        closeUserDetailModal();
+        if (user) openDrawer(user);
       });
       els.saveRole.addEventListener("click", saveRole);
       els.toggleBlock.addEventListener("click", toggleBlock);
@@ -1476,76 +2531,179 @@
       els.newsRetryButton.addEventListener("click", retryNewsTranslations);
       els.newsArchiveButton.addEventListener("click", archiveNews);
       document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeDrawer();
+        if (event.key === "Escape") {
+          if (els.userDetailBackdrop.classList.contains("open")) closeUserDetailModal();
+          else closeDrawer();
+        }
+      });
+      window.addEventListener("resize", () => {
+        if (state.activePage === "home" && state.homeLoaded) renderHomeDashboard();
       });
 
       boot();
 
+      function t(key, values = {}) {
+        const table = catalog[language] || catalog.pt || {};
+        const fallback = catalog.pt || {};
+        let value = table[key] || fallback[key] || key;
+        Object.entries(values).forEach(([name, replacement]) => {
+          value = value.replaceAll(`{${name}}`, String(replacement));
+        });
+        return value;
+      }
+
+      function translatePage() {
+        document.documentElement.lang = language;
+        document.querySelectorAll("[data-i18n]").forEach((node) => {
+          node.textContent = t(node.dataset.i18n);
+        });
+        document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+          node.placeholder = t(node.dataset.i18nPlaceholder);
+        });
+        document.querySelectorAll("[data-i18n-title]").forEach((node) => {
+          node.title = t(node.dataset.i18nTitle);
+        });
+      }
+
+      function applyThemeFromQuery() {
+        const theme = parseTheme(params.get("theme") || "");
+        if (!theme) return;
+        const root = document.documentElement;
+        const map = {
+          background: "--bg",
+          surface: "--surface",
+          surface_alt: "--surface-2",
+          surface_raised: "--surface-3",
+          text: "--text",
+          muted_text: "--muted",
+          disabled_text: "--muted-2",
+          accent: "--accent",
+          warning: "--accent-2",
+          danger: "--danger",
+          success: "--success",
+          info: "--purple",
+          text_inverse: "--ink",
+        };
+        Object.entries(map).forEach(([key, cssVar]) => {
+          if (isHex(theme[key])) root.style.setProperty(cssVar, theme[key]);
+        });
+        if (isHex(theme.border)) {
+          root.style.setProperty("--line", hexToRgba(theme.border, 0.42));
+          root.style.setProperty("--line-strong", hexToRgba(theme.border, 0.68));
+          root.style.setProperty("--line-soft", hexToRgba(theme.border, 0.16));
+        }
+        if (isHex(theme.surface)) {
+          root.style.setProperty("--panel", hexToRgba(theme.surface, 0.9));
+        }
+        if (isHex(theme.surface_raised || theme.surface_alt || theme.surface)) {
+          root.style.setProperty("--panel-2", hexToRgba(theme.surface_raised || theme.surface_alt || theme.surface, 0.86));
+        }
+        if (isHex(theme.background)) {
+          root.style.setProperty("--control-bg", hexToRgba(theme.background, 0.58));
+        }
+        if (isHex(theme.text)) {
+          root.style.setProperty("--row-hover", hexToRgba(theme.text, 0.055));
+        }
+        if (isHex(theme.accent)) {
+          root.style.setProperty("--accent-soft", hexToRgba(theme.accent, 0.1));
+          root.style.setProperty("--accent-line", hexToRgba(theme.accent, 0.32));
+        }
+        if (isHex(theme.danger)) {
+          root.style.setProperty("--danger-soft", hexToRgba(theme.danger, 0.1));
+          root.style.setProperty("--danger-line", hexToRgba(theme.danger, 0.36));
+        }
+        if (isHex(theme.success)) {
+          root.style.setProperty("--success-soft", hexToRgba(theme.success, 0.1));
+          root.style.setProperty("--success-line", hexToRgba(theme.success, 0.36));
+        }
+        if (Number.isFinite(Number(theme.card_radius))) {
+          root.style.setProperty("--radius", `${Math.max(0, Math.min(18, Number(theme.card_radius)))}px`);
+        }
+      }
+
       function switchPage(page) {
-        const next = page === "news" ? "news" : "users";
+        const next = ["home", "users", "news"].includes(page) ? page : "home";
         state.activePage = next;
         els.navButtons.forEach((button) => {
           button.classList.toggle("active", button.dataset.page === next);
         });
+        els.homePage.classList.toggle("hidden", next !== "home");
         els.usersPage.classList.toggle("hidden", next !== "users");
         els.newsPage.classList.toggle("hidden", next !== "news");
         if (next === "news") {
-          els.pageHeading.textContent = "Gestao de Noticias";
-          els.pageDescription.textContent =
-            "Crie, edite, publique, agende e reprocese traducoes dos avisos do aplicativo.";
+          els.pageHeading.textContent = t("news.heading");
+          els.pageDescription.textContent = t("news.description");
           if (!state.news.length && !state.newsLoading) loadNews();
           if (!state.selectedNews) newNews(false);
           setNewsMode(state.newsMode);
-        } else {
-          els.pageHeading.textContent = "Gestao de Usuarios";
-          els.pageDescription.textContent =
-            "Edite cargo, bloqueio e permissoes dos usuarios conectados ao chat.";
+          return;
         }
+        if (next === "users") {
+          els.pageHeading.textContent = t("users.heading");
+          els.pageDescription.textContent = t("users.description");
+          return;
+        }
+        els.pageHeading.textContent = t("home.heading");
+        els.pageDescription.textContent = t("home.description");
+        if (!state.homeLoaded && !state.homeLoading) loadHomeDashboard();
       }
 
       async function boot() {
+        updateProfileCard(null, t("profile.connecting"));
         if (!token) {
-          setStatus(
-            "Token ausente. Abra o painel pelo aplicativo apÃ³s login Discord.",
-            "error",
-          );
-          setEmpty(
-            "Abra o painel pelo GG Coalition para receber uma sessÃ£o vÃ¡lida.",
-          );
+          setStatus(t("error.token"), "error");
+          setEmpty(t("error.token_empty"));
+          updateProfileCard(null, t("state.no_token"));
           return;
         }
         if (!apiUrl) {
-          setStatus("API ausente.", "error");
-          setEmpty("NÃ£o foi possÃ­vel resolver a URL da API.");
+          setStatus(t("error.api"), "error");
+          setEmpty(t("error.api_empty"));
+          updateProfileCard(null, t("state.api_missing"));
           return;
         }
 
         try {
-          setStatus("Validando sessÃ£o administrativa...", "warn");
+          setStatus(t("status.validating"), "warn");
           const profileResponse = await request("/chat/profile");
           state.me = profileResponse.profile || profileResponse;
           if (profileResponse.panelAccess && !state.me.panelAccess) {
             state.me.panelAccess = profileResponse.panelAccess;
           }
           const myRole = normalizeRole(state.me.role);
+          updateProfileCard(state.me, t("state.online"));
           if (!canLoginPanel(state.me)) {
-            setStatus(
-              `Acesso negado para cargo ${myRole || "desconhecido"} / nivel ${accessLevel(state.me)}.`,
-              "error",
-            );
-            setEmpty(
-              "Sua conta nao possui nivel minimo para acessar o painel.",
-            );
+            setStatus(t("error.access", { role: myRole || t("status.unknown"), level: accessLevel(state.me) }), "error");
+            setEmpty(t("error.access_empty"));
+            updateProfileCard(state.me, t("state.no_access"));
             return;
           }
-          setStatus(
-            `Autenticado como ${displayName(state.me)} (${myRole}).`,
-            "ok",
-          );
+          setStatus(t("status.auth_as", { name: displayName(state.me), role: myRole }), "ok");
           await loadUsers();
+          await loadHomeDashboard();
         } catch (error) {
-          setStatus(`Falha ao validar sessÃ£o: ${error.message}`, "error");
-          setEmpty("NÃ£o foi possÃ­vel autenticar sua sessÃ£o administrativa.");
+          setStatus(t("error.auth", { message: error.message }), "error");
+          setEmpty(t("error.auth_empty"));
+          updateProfileCard(null, t("state.failure"));
+        }
+      }
+
+      function updateProfileCard(user, status) {
+        const role = normalizeRole(user?.role || "");
+        els.profileName.textContent = user ? displayName(user) : t("profile.fallback");
+        els.profileMeta.textContent = user
+          ? userMeta(user)
+          : t("profile.fallback_meta");
+        els.profileRole.textContent = role || t("profile.session");
+        els.profileRole.className = `badge role-${(role || "member").toLowerCase()}`;
+        els.profileStatus.textContent = status || "Online";
+        els.profileAvatar.textContent = "";
+        const avatar = user ? avatarElement(user) : null;
+        if (avatar) {
+          avatar.className = "";
+          els.profileAvatar.appendChild(avatar);
+        } else {
+          els.profileAvatar.textContent = user ? initials(displayName(user)) : "GG";
         }
       }
 
@@ -1553,35 +2711,1137 @@
         if (state.loading) return;
         state.loading = true;
         els.refresh.disabled = true;
-        setStatus("Carregando usuÃ¡rios...", "warn");
+        setStatus(t("state.loading_users"), "warn");
         try {
           const data = await request("/chat/admin/users?take=250");
           state.users = Array.isArray(data.users) ? data.users : [];
           state.currentPage = 1;
           updateMetrics(data.total);
-          setStatus(
-            `API conectada. ${state.users.length} usuÃ¡rios carregados.`,
-            "ok",
-          );
+          setStatus(t("state.connected", { count: state.users.length }), "ok");
           render();
         } catch (error) {
-          setStatus(`Erro ao carregar usuÃ¡rios: ${error.message}`, "error");
-          setEmpty("A API recusou ou falhou ao carregar a lista de usuÃ¡rios.");
+          setStatus(t("error.users", { message: error.message }), "error");
+          setEmpty(t("error.users_empty"));
         } finally {
           state.loading = false;
           els.refresh.disabled = false;
         }
       }
 
+      function activityUserRows() {
+        if (Array.isArray(state.users) && state.users.length) {
+          return state.users;
+        }
+        return Array.isArray(state.activityUsers)
+          ? state.activityUsers.map((entry) => entry.user || entry).filter(Boolean)
+          : [];
+      }
+
+      function activityUserId(user) {
+        return String(user?.id || user?.discordId || user?.userId || "").trim();
+      }
+
+      function syncActivityUserSelect() {
+        if (!els.activityUserSelect) return;
+        const rows = activityUserRows();
+        const selected = state.activitySelectedUserId || activityUserId(state.me) || activityUserId(rows[0]) || "";
+        els.activityUserSelect.textContent = "";
+        const fragment = document.createDocumentFragment();
+        const seen = new Set();
+        [state.me, ...rows].forEach((user) => {
+          const id = activityUserId(user);
+          if (!id || seen.has(id)) return;
+          seen.add(id);
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = `${displayName(user)} (${normalizeRole(user?.role || "MEMBER")})`;
+          fragment.appendChild(option);
+        });
+        if (!fragment.childNodes.length) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = t("activity.no_user");
+          fragment.appendChild(option);
+        }
+        els.activityUserSelect.appendChild(fragment);
+        if (selected) {
+          els.activityUserSelect.value = selected;
+          state.activitySelectedUserId = selected;
+        }
+      }
+
+      function maxActivityValue(rows, key) {
+        let max = 1;
+        rows.forEach((row) => {
+          const value = Number(row && row[key]) || 0;
+          if (value > max) max = value;
+        });
+        return max;
+      }
+
+      function renderActivityBars() {
+        els.activityCategories.textContent = "";
+        const rows = (Array.isArray(state.activityCategories) ? state.activityCategories : []).slice(0, 5);
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("activity.empty");
+          els.activityCategories.appendChild(empty);
+          return;
+        }
+        const maxValue = Math.max(maxActivityValue(rows, "totalQuantity"), maxActivityValue(rows, "totalEvents"));
+        rows.forEach((row) => {
+          const wrap = document.createElement("div");
+          wrap.className = "bar-row";
+          const head = document.createElement("div");
+          head.className = "bar-row-head";
+          const name = document.createElement("span");
+          name.textContent = row.category || row.action || row.series || "-";
+          const value = document.createElement("span");
+          value.textContent = String(row.totalQuantity || row.totalEvents || 0);
+          head.append(name, value);
+          const track = document.createElement("div");
+          track.className = "bar-track";
+          const fill = document.createElement("div");
+          fill.className = "bar-fill";
+          fill.style.width = `${Math.max(8, Math.round(((Number(row.totalQuantity || row.totalEvents || 0) || 0) / maxValue) * 100))}%`;
+          track.appendChild(fill);
+          wrap.append(head, track);
+          els.activityCategories.appendChild(wrap);
+        });
+      }
+
+      function renderActivityLogs() {
+        els.activityUserLogs.textContent = "";
+        const rows = Array.isArray(state.activityLogs) ? state.activityLogs.slice(0, 8) : [];
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("activity.empty");
+          els.activityUserLogs.appendChild(empty);
+          return;
+        }
+        rows.forEach((row) => {
+          const line = document.createElement("div");
+          line.className = "log-row";
+          const category = document.createElement("div");
+          category.className = "log-category";
+          category.textContent = row.category || "-";
+          const action = document.createElement("div");
+          action.className = "log-action";
+          action.textContent = row.action || "-";
+          const quantity = document.createElement("div");
+          quantity.className = "log-quantity";
+          quantity.textContent = String(row.quantity || 1);
+          const time = document.createElement("div");
+          time.className = "log-time";
+          time.textContent = formatDate(row.occurredAt || row.createdAt);
+          line.append(category, action, quantity, time);
+          els.activityUserLogs.appendChild(line);
+        });
+      }
+
+      function renderActivityTimeseries() {
+        if (!els.activityTimeseries) return;
+        els.activityTimeseries.textContent = "";
+        const rows = Array.isArray(state.activityTimeseries) ? state.activityTimeseries.slice(0, 6) : [];
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("activity.empty");
+          els.activityTimeseries.appendChild(empty);
+          return;
+        }
+        const maxValue = maxActivityValue(rows, "totalEvents");
+        rows.forEach((row) => {
+          const wrap = document.createElement("div");
+          wrap.className = "bar-row";
+          const head = document.createElement("div");
+          head.className = "bar-row-head";
+          const name = document.createElement("span");
+          name.textContent = `${row.bucket || "-"} / ${row.series || "-"}`;
+          const value = document.createElement("span");
+          value.textContent = String(row.totalEvents || 0);
+          head.append(name, value);
+          const track = document.createElement("div");
+          track.className = "bar-track";
+          const fill = document.createElement("div");
+          fill.className = "bar-fill";
+          fill.style.width = `${Math.max(8, Math.round(((Number(row.totalEvents || 0) || 0) / maxValue) * 100))}%`;
+          track.appendChild(fill);
+          wrap.append(head, track);
+          els.activityTimeseries.appendChild(wrap);
+        });
+      }
+
+      function renderActivityDashboard() {
+        const summary = state.activitySummary || {};
+        els.activityTotalQuantity.textContent = String(summary.totalQuantity || 0);
+        els.activityTotalEvents.textContent = String(summary.totalEvents || 0);
+        els.activityCategoriesCount.textContent = String((state.activityCategories || []).length);
+        const topCategory = (state.activityCategories && state.activityCategories[0] && (state.activityCategories[0].category || state.activityCategories[0].action)) || "-";
+        const topUser = (state.activityUsers && state.activityUsers[0] && (state.activityUsers[0].user && displayName(state.activityUsers[0].user))) || (state.activityUsers[0] && state.activityUsers[0].userId) || "-";
+        els.activitySummaryText.textContent = `${topCategory} / ${topUser}`;
+        renderActivityBars();
+        renderActivityTimeseries();
+        renderActivityLogs();
+      }
+
+      async function loadActivityUser(userId) {
+        const id = String(userId || "").trim();
+        if (!id) return;
+        state.activitySelectedUserId = id;
+        try {
+          const [stats, logs] = await Promise.all([
+            request(`/gg-logs/users/${encodeURIComponent(id)}/stats`),
+            request(`/gg-logs?userId=${encodeURIComponent(id)}&take=8`),
+          ]);
+          state.activityUserStats = stats || {};
+          state.activityCategories = Array.isArray(stats.categories) ? stats.categories : [];
+          state.activityLogs = Array.isArray(logs.logs) ? logs.logs : [];
+          renderActivityDashboard();
+        } catch (error) {
+          toast(error.message, "error");
+        }
+      }
+
+      async function loadActivityDashboard() {
+        if (state.activityLoading || !token) return;
+        state.activityLoading = true;
+        els.activityRefresh.disabled = true;
+        try {
+          const [summary, categories, users, timeseries] = await Promise.all([
+            request("/gg-logs/stats/summary"),
+            request("/gg-logs/stats/categories"),
+            request("/gg-logs/stats/users?limit=10"),
+            request("/gg-logs/stats/timeseries?period=day&splitBy=category"),
+          ]);
+          state.activitySummary = summary || {};
+          state.activityCategories = Array.isArray(categories.categories) ? categories.categories : [];
+          state.activityUsers = Array.isArray(users.users) ? users.users : [];
+          state.activityTimeseries = Array.isArray(timeseries.points) ? timeseries.points : [];
+          syncActivityUserSelect();
+          renderActivityDashboard();
+          const selectedId = state.activitySelectedUserId || activityUserId(state.me) || activityUserId((state.activityUsers || [])[0]);
+          if (selectedId) {
+            await loadActivityUser(selectedId);
+          }
+        } catch (error) {
+          toast(error.message, "error");
+        } finally {
+          state.activityLoading = false;
+          els.activityRefresh.disabled = false;
+        }
+      }
+
+      function selectedHomePeriod() {
+        if (els.homePeriodSelect && els.homePeriodSelect.value) {
+          return els.homePeriodSelect.value;
+        }
+        if (state.homeRange === "today") return "hour";
+        if (state.homeRange === "week" || state.homeRange === "month") return "day";
+        return "month";
+      }
+
+      function selectedHomeRange() {
+        return state.homeRange || "today";
+      }
+
+      function selectedHomeSplitBy() {
+        return "category";
+      }
+
+      function renderBarList(container, rows, options = {}) {
+        if (!container) return;
+        container.textContent = "";
+        const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = options.emptyText || t("home.empty");
+          container.appendChild(empty);
+          return;
+        }
+        const valueKey = options.valueKey || "totalQuantity";
+        const altValueKey = options.altValueKey || "totalEvents";
+        const maxValue = Math.max(...list.map((row) => Number(row[valueKey] ?? row[altValueKey] ?? 0)), 1);
+        list.slice(0, options.limit || 5).forEach((row) => {
+          const wrap = document.createElement("div");
+          wrap.className = "bar-row";
+          const head = document.createElement("div");
+          head.className = "bar-row-head";
+          const label = document.createElement("span");
+          label.textContent = options.label ? options.label(row) : (row.category || row.action || row.series || row.bucket || "-");
+          const value = document.createElement("span");
+          value.textContent = String(Number(row[valueKey] ?? row[altValueKey] ?? 0));
+          head.append(label, value);
+          const track = document.createElement("div");
+          track.className = "bar-track";
+          const fill = document.createElement("div");
+          fill.className = "bar-fill";
+          fill.style.width = `${Math.max(8, Math.round(((Number(row[valueKey] ?? row[altValueKey] ?? 0) || 0) / maxValue) * 100))}%`;
+          track.appendChild(fill);
+          wrap.append(head, track);
+          container.appendChild(wrap);
+        });
+      }
+
+      function renderLogList(container, rows, emptyText) {
+        if (!container) return;
+        container.textContent = "";
+        const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = emptyText || t("home.empty");
+          container.appendChild(empty);
+          return;
+        }
+        list.forEach((row) => {
+          const line = document.createElement("div");
+          line.className = "log-row";
+          const category = document.createElement("div");
+          category.className = "log-category";
+          category.textContent = row.category || row.categoria || "-";
+          const action = document.createElement("div");
+          action.className = "log-action";
+          action.textContent = row.action || row.acao || "-";
+          const quantity = document.createElement("div");
+          quantity.className = "log-quantity";
+          quantity.textContent = String(row.quantity || row.quantidade || 1);
+          const time = document.createElement("div");
+          time.className = "log-time";
+          time.textContent = formatDate(row.occurredAt || row.ocorridoEm || row.createdAt);
+          line.append(category, action, quantity, time);
+          container.appendChild(line);
+        });
+      }
+
+      function renderOnlineUsers() {
+        const container = els.homeOnlineUsers;
+        if (!container) return;
+        container.textContent = "";
+        const rows = Array.isArray(state.users)
+          ? state.users.filter((user) => String(user?.status || "").toUpperCase() === "ACTIVE" && !isBlocked(user))
+          : [];
+        state.homeOnlineUsers = rows;
+        if (!rows.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = t("home.online_empty");
+          container.appendChild(empty);
+          return;
+        }
+        rows.slice(0, 8).forEach((user) => {
+          const row = document.createElement("div");
+          row.className = "online-row";
+          const left = document.createElement("div");
+          const name = document.createElement("strong");
+          name.textContent = displayName(user);
+          const meta = document.createElement("div");
+          meta.className = "user-meta";
+          meta.textContent = userMeta(user);
+          left.append(name, meta);
+          const badge = document.createElement("span");
+          badge.className = `badge role-${normalizeRole(user.role || "MEMBER").toLowerCase()}`;
+          badge.textContent = t("state.online");
+          row.append(left, badge);
+          container.appendChild(row);
+        });
+      }
+
+      function cssVar(name, fallback = "") {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+      }
+
+      function compactNumber(value) {
+        const number = Number(value) || 0;
+        if (number >= 1000000) return `${Math.round(number / 100000) / 10}M`;
+        if (number >= 1000) return `${Math.round(number / 100) / 10}k`;
+        return String(Math.round(number));
+      }
+
+      function renderRankList(container, rows, options = {}) {
+        if (!container) return;
+        container.textContent = "";
+        const list = Array.isArray(rows) ? rows.filter(Boolean).slice(0, options.limit || 6) : [];
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "user-meta";
+          empty.textContent = options.emptyText || t("home.empty");
+          container.appendChild(empty);
+          return;
+        }
+        list.forEach((row, index) => {
+          const item = document.createElement("div");
+          item.className = "rank-row";
+          const left = document.createElement("div");
+          const name = document.createElement("div");
+          name.className = "rank-name";
+          name.textContent = options.label ? options.label(row, index) : (row.category || row.action || row.series || row.bucket || "-");
+          const meta = document.createElement("div");
+          meta.className = "rank-meta";
+          meta.textContent = options.meta ? options.meta(row, index) : "";
+          left.append(name, meta);
+          const value = document.createElement("div");
+          value.className = "rank-value";
+          value.textContent = options.value ? options.value(row, index) : compactNumber(row.totalEvents ?? row.totalQuantity ?? row.quantity ?? 0);
+          item.append(left, value);
+          container.appendChild(item);
+        });
+      }
+
+      function resizeCanvas(canvas) {
+        if (!canvas) return null;
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width || canvas.clientWidth || 640));
+        const height = Math.max(180, Math.floor(rect.height || canvas.clientHeight || 260));
+        canvas.width = Math.floor(width * ratio);
+        canvas.height = Math.floor(height * ratio);
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        return { ctx, width, height };
+      }
+
+      function drawBars(canvas, rows, options = {}) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const list = (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, options.limit || 8);
+        const bg = cssVar("--panel", "#111827");
+        const muted = cssVar("--muted", "#94a3b8");
+        const text = cssVar("--text", "#f8fafc");
+        const accent = cssVar("--accent", "#61d6c8");
+        const accent2 = cssVar("--accent-2", "#e6b450");
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        if (!list.length) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const valueOf = options.valueOf || ((row) => Number(row.totalEvents ?? row.totalQuantity ?? 0) || 0);
+        const labelOf = options.labelOf || ((row) => String(row.bucket || row.series || row.category || row.action || "-"));
+        const max = Math.max(...list.map(valueOf), 1);
+        const pad = { left: 36, right: 18, top: 18, bottom: 44 };
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+        const gap = 10;
+        const barW = Math.max(16, (plotW - gap * (list.length - 1)) / list.length);
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 3; i += 1) {
+          const y = pad.top + (plotH / 3) * i;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(width - pad.right, y);
+          ctx.stroke();
+        }
+        list.forEach((row, index) => {
+          const value = valueOf(row);
+          const barH = Math.max(4, (value / max) * plotH);
+          const x = pad.left + index * (barW + gap);
+          const y = pad.top + plotH - barH;
+          const gradient = ctx.createLinearGradient(0, y, 0, y + barH);
+          gradient.addColorStop(0, accent2);
+          gradient.addColorStop(1, accent);
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.roundRect(x, y, barW, barH, 7);
+          ctx.fill();
+          ctx.fillStyle = text;
+          ctx.font = "700 11px Segoe UI";
+          ctx.textAlign = "center";
+          ctx.fillText(compactNumber(value), x + barW / 2, Math.max(12, y - 6));
+          ctx.save();
+          ctx.translate(x + barW / 2, height - 12);
+          ctx.rotate(-0.35);
+          ctx.fillStyle = muted;
+          ctx.font = "10px Segoe UI";
+          const label = labelOf(row);
+          ctx.fillText(label.length > 14 ? `${label.slice(0, 13)}...` : label, 0, 0);
+          ctx.restore();
+        });
+      }
+
+      function drawHorizontalBars(canvas, rows, options = {}) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const valueOf = options.valueOf || ((row) => Number(row.totalEvents ?? row.totalQuantity ?? row.value ?? 0) || 0);
+        const labelOf = options.labelOf || ((row) => String(row.series || row.category || row.action || row.bucket || "-"));
+        const list = (Array.isArray(rows) ? rows : [])
+          .filter((row) => row && (options.showZero || valueOf(row) > 0))
+          .slice(0, options.limit || 6);
+        if (!options.preserveOrder) {
+          list.sort((a, b) => valueOf(b) - valueOf(a));
+        }
+        const bg = cssVar("--panel", "#111827");
+        const muted = cssVar("--muted", "#94a3b8");
+        const text = cssVar("--text", "#f3fbf8");
+        const accent = cssVar("--accent", "#61d6c8");
+        const accent2 = cssVar("--accent-2", "#e6b450");
+        const line = cssVar("--line", "rgba(255,255,255,0.14)");
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        if (!list.length) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const max = Math.max(...list.map(valueOf), 1);
+        const pad = { left: 22, right: 24, top: 18, bottom: 18 };
+        const rowH = Math.min(42, Math.max(30, (height - pad.top - pad.bottom) / list.length));
+        const barLeft = Math.min(180, Math.max(112, width * 0.22));
+        const barRight = width - pad.right - 46;
+        const barW = Math.max(120, barRight - barLeft);
+        list.forEach((row, index) => {
+          const y = pad.top + index * rowH;
+          const value = valueOf(row);
+          const fillW = value > 0 ? Math.max(6, (value / max) * barW) : 0;
+          const label = labelOf(row);
+          ctx.fillStyle = muted;
+          ctx.font = "700 12px Segoe UI";
+          ctx.textAlign = "left";
+          ctx.fillText(label.length > 22 ? `${label.slice(0, 21)}...` : label, pad.left, y + 20);
+          ctx.fillStyle = line;
+          ctx.beginPath();
+          ctx.roundRect(barLeft, y + 8, barW, 12, 6);
+          ctx.fill();
+          if (fillW > 0) {
+            const gradient = ctx.createLinearGradient(barLeft, 0, barLeft + fillW, 0);
+            gradient.addColorStop(0, accent);
+            gradient.addColorStop(1, accent2);
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.roundRect(barLeft, y + 8, fillW, 12, 6);
+            ctx.fill();
+          }
+          ctx.fillStyle = text;
+          ctx.font = "900 12px Segoe UI";
+          ctx.textAlign = "right";
+          ctx.fillText(compactNumber(value), width - pad.right, y + 20);
+        });
+      }
+
+      function drawLineChart(canvas, rows, options = {}) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const valueOf = options.valueOf || ((row) => Number(row.totalEvents ?? row.totalQuantity ?? row.value ?? 0) || 0);
+        const labelOf = options.labelOf || ((row) => String(row.bucket || row.series || row.category || row.action || "-"));
+        const list = (Array.isArray(rows) ? rows : []).filter((row) => row && valueOf(row) >= 0).slice(0, options.limit || 9);
+        const bg = cssVar("--panel", "#111827");
+        const panel2 = cssVar("--panel-2", "#182235");
+        const line = cssVar("--line-strong", "rgba(255,255,255,0.16)");
+        const muted = cssVar("--muted", "#94a3b8");
+        const text = cssVar("--text", "#f8fafc");
+        const accent = cssVar("--accent", "#61d6c8");
+        const accent2 = cssVar("--accent-2", "#e6b450");
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        canvas.__chartPoints = [];
+        if (!list.length) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const values = list.map(valueOf);
+        const max = Math.max(...values, 1);
+        const min = Math.min(...values, 0);
+        const spread = Math.max(1, max - min);
+        const pad = { left: 54, right: 24, top: 22, bottom: 48 };
+        const plotW = width - pad.left - pad.right;
+        const plotH = height - pad.top - pad.bottom;
+        ctx.strokeStyle = line;
+        ctx.lineWidth = 1;
+        ctx.fillStyle = muted;
+        ctx.font = "11px Segoe UI";
+        ctx.textAlign = "right";
+        for (let i = 0; i <= 4; i += 1) {
+          const y = pad.top + (plotH / 4) * i;
+          const value = max - (spread / 4) * i;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(width - pad.right, y);
+          ctx.stroke();
+          ctx.fillText(compactNumber(value), pad.left - 10, y + 4);
+        }
+        const points = list.map((row, index) => {
+          const x = pad.left + (list.length === 1 ? plotW / 2 : (plotW / (list.length - 1)) * index);
+          const y = pad.top + plotH - ((valueOf(row) - min) / spread) * plotH;
+          return { x, y, row, value: valueOf(row), label: labelOf(row) };
+        });
+        const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+        gradient.addColorStop(0, cssVar("--accent-soft", "rgba(97,214,200,0.22)"));
+        gradient.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.beginPath();
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 0; i < points.length - 1; i++) {
+            const xMid = (points[i].x + points[i + 1].x) / 2;
+            ctx.bezierCurveTo(xMid, points[i].y, xMid, points[i + 1].y, points[i + 1].x, points[i + 1].y);
+          }
+          ctx.lineTo(points[points.length - 1].x, pad.top + plotH);
+          ctx.lineTo(points[0].x, pad.top + plotH);
+        }
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        const strokeGradient = ctx.createLinearGradient(pad.left, 0, width - pad.right, 0);
+        strokeGradient.addColorStop(0, accent);
+        strokeGradient.addColorStop(1, accent2);
+        ctx.beginPath();
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 0; i < points.length - 1; i++) {
+            const xMid = (points[i].x + points[i + 1].x) / 2;
+            ctx.bezierCurveTo(xMid, points[i].y, xMid, points[i + 1].y, points[i + 1].x, points[i + 1].y);
+          }
+        }
+        ctx.strokeStyle = strokeGradient;
+        ctx.lineWidth = 4;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.stroke();
+        const hoverIndex = Number.isInteger(canvas.__hoverIndex) ? canvas.__hoverIndex : -1;
+        points.forEach((point, index) => {
+          const active = index === hoverIndex;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, active ? 7 : 5, 0, Math.PI * 2);
+          ctx.fillStyle = active ? accent2 : accent;
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = bg;
+          ctx.stroke();
+          ctx.fillStyle = muted;
+          ctx.font = "11px Segoe UI";
+          ctx.textAlign = "center";
+          const label = point.label.length > 12 ? `${point.label.slice(0, 11)}...` : point.label;
+          ctx.fillText(label, point.x, height - 18);
+        });
+        canvas.__chartPoints = points;
+        if (hoverIndex >= 0 && points[hoverIndex]) {
+          const point = points[hoverIndex];
+          const title = point.label;
+          const value = `${compactNumber(point.value)} ${options.valueLabel || t("home.chart_value_label")}`;
+          ctx.font = "900 12px Segoe UI";
+          const boxW = Math.max(ctx.measureText(title).width, ctx.measureText(value).width) + 28;
+          const boxH = 54;
+          const boxX = Math.min(Math.max(12, point.x - boxW / 2), width - boxW - 12);
+          const boxY = Math.max(12, point.y - boxH - 18);
+          ctx.fillStyle = panel2;
+          ctx.strokeStyle = line;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.roundRect(boxX, boxY, boxW, boxH, 8);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = text;
+          ctx.textAlign = "left";
+          ctx.font = "900 12px Segoe UI";
+          ctx.fillText(title, boxX + 14, boxY + 22);
+          ctx.fillStyle = accent;
+          ctx.font = "900 13px Segoe UI";
+          ctx.fillText(value, boxX + 14, boxY + 41);
+        }
+      }
+
+      function drawDonut(canvas, rows) {
+        const setup = resizeCanvas(canvas);
+        if (!setup) return;
+        const { ctx, width, height } = setup;
+        const list = (Array.isArray(rows) ? rows : []).filter((row) => Number(row.value) > 0);
+        const bg = cssVar("--panel", "#111827");
+        const text = cssVar("--text", "#f8fafc");
+        const muted = cssVar("--muted", "#94a3b8");
+        const colors = [cssVar("--accent", "#61d6c8"), cssVar("--accent-2", "#e6b450"), cssVar("--success", "#6fd38d")];
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+        const total = list.reduce((sum, row) => sum + Number(row.value || 0), 0);
+        if (!total) {
+          ctx.fillStyle = muted;
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(t("home.empty"), 18, 30);
+          return;
+        }
+        const cx = width / 2;
+        const cy = Math.min(height / 2, 118);
+        const radius = Math.min(width, height) * 0.29;
+        let start = -Math.PI / 2;
+        list.forEach((row, index) => {
+          const angle = (Number(row.value || 0) / total) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, start, start + angle);
+          ctx.lineWidth = 28;
+          ctx.strokeStyle = colors[index % colors.length];
+          ctx.stroke();
+          start += angle;
+        });
+        ctx.fillStyle = text;
+        ctx.font = "900 28px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.fillText(compactNumber(total), cx, cy + 8);
+        ctx.fillStyle = muted;
+        ctx.font = "12px Segoe UI";
+        ctx.fillText(t("home.login_chart_center"), cx, cy + 30);
+        list.forEach((row, index) => {
+          const y = height - 58 + index * 20;
+          ctx.fillStyle = colors[index % colors.length];
+          ctx.fillRect(20, y - 9, 10, 10);
+          ctx.fillStyle = muted;
+          ctx.textAlign = "left";
+          ctx.font = "12px Segoe UI";
+          ctx.fillText(`${row.label}: ${compactNumber(row.value)}`, 38, y);
+        });
+      }
+
+      function pageNameFromLog(row) {
+        const meta = row && typeof row.metadata === "object" ? row.metadata : {};
+        return String(meta.page || meta.currentPage || meta.route || row.page || row.action || "-");
+      }
+
+      function pageAccessRows() {
+        const map = new Map();
+        const rows = Array.isArray(state.homePageLogs) ? state.homePageLogs : [];
+        rows.forEach((row) => {
+          const page = pageNameFromLog(row);
+          if (!page || page === "-") return;
+          const current = map.get(page) || { page, totalEvents: 0, totalQuantity: 0 };
+          current.totalEvents += 1;
+          current.totalQuantity += Number(row.quantity || 1) || 1;
+          map.set(page, current);
+        });
+        return Array.from(map.values()).sort((a, b) => b.totalEvents - a.totalEvents);
+      }
+
+      function dateFromLog(row) {
+        const raw = row?.occurredAt || row?.ocorridoEm || row?.createdAt || row?.updatedAt;
+        const date = raw ? new Date(raw) : null;
+        return date && !Number.isNaN(date.getTime()) ? date : null;
+      }
+
+      function loginUserKey(row) {
+        const meta = row && typeof row.metadata === "object" ? row.metadata : {};
+        const user = row && typeof row.user === "object" ? row.user : {};
+        return String(
+          row?.userId ||
+            row?.usuarioId ||
+            row?.discordId ||
+            row?.steamId ||
+            user.id ||
+            user.discordId ||
+            meta.userId ||
+            meta.discordId ||
+            meta.steamId ||
+            "",
+        );
+      }
+
+      function uniqueLoginCount(rows, predicate) {
+        const unique = new Set();
+        let events = 0;
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+          const date = dateFromLog(row);
+          if (!date || !predicate(date)) return;
+          events += Number(row.quantity || row.quantidade || 1) || 1;
+          const key = loginUserKey(row);
+          if (key) unique.add(key);
+        });
+        return unique.size || events;
+      }
+
+      function monthStart(date, offset = 0) {
+        return new Date(date.getFullYear(), date.getMonth() + offset, 1);
+      }
+
+      function monthLabel(date) {
+        const label = new Intl.DateTimeFormat(language, { month: "short" }).format(date);
+        return label.replace(".", "").replace(/^./, (value) => value.toUpperCase());
+      }
+
+      function loginComparisonRows(logins) {
+        const rows = [];
+        const now = new Date();
+        const loginLogs = Array.isArray(state.homeLoginLogs) ? state.homeLoginLogs : [];
+        rows.push({ bucket: t("home.range_today"), totalEvents: logins.today?.uniqueUsers ?? logins.today?.events ?? 0 });
+        rows.push({ bucket: t("home.range_week"), totalEvents: logins.week?.uniqueUsers ?? logins.week?.events ?? 0 });
+        for (let offset = 0; offset < 3; offset += 1) {
+          const start = monthStart(now, -offset);
+          const end = monthStart(now, 1 - offset);
+          const fallback = offset === 0 ? (logins.month?.uniqueUsers ?? logins.month?.events ?? 0) : 0;
+          const value = offset === 0 ? fallback : uniqueLoginCount(loginLogs, (date) => date >= start && date < end);
+          rows.push({ bucket: monthLabel(start), totalEvents: value });
+        }
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        const nextYear = new Date(now.getFullYear() + 1, 0, 1);
+        const yearValue =
+          logins.year?.uniqueUsers ??
+          logins.year?.events ??
+          uniqueLoginCount(loginLogs, (date) => date >= yearStart && date < nextYear);
+        rows.push({ bucket: t("home.range_year"), totalEvents: yearValue });
+        return rows;
+      }
+
+      function smartPadTimeseries(raw, range, period) {
+        if (!raw || !raw.length) return [];
+        const map = {};
+        raw.forEach((r) => {
+          if (r && r.bucket) map[r.bucket] = r;
+        });
+
+        const padded = [];
+
+        if (range === "today" || period === "hour") {
+          let matchedAny = false;
+          for (let i = 0; i < 24; i++) {
+            const hh = String(i).padStart(2, "0");
+            const key = Object.keys(map).find((k) => {
+              if (k === hh || k === `${hh}:00`) return true;
+              const timeMatch = String(k).match(/(?:T| )(\d{2})(?::\d{2})?(?::\d{2})?(?:\.\d+)?Z?$/);
+              if (timeMatch && timeMatch[1] === hh) return true;
+              return false;
+            });
+            const val = key ? map[key] : { bucket: `${hh}:00`, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${hh}:00` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            const hasOnlyDates = raw.every((r) => r.bucket && String(r.bucket).length <= 10);
+            if (hasOnlyDates) {
+              const currentHour = new Date().getHours();
+              let sumEvents = 0;
+              let sumQuantity = 0;
+              raw.forEach((r) => {
+                sumEvents += r.totalEvents || 0;
+                sumQuantity += r.totalQuantity || 0;
+              });
+              padded[currentHour].totalEvents = sumEvents;
+              padded[currentHour].totalQuantity = sumQuantity;
+              return padded;
+            }
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        if (range === "week" && period === "day") {
+          const today = new Date();
+          let matchedAny = false;
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date(today.getTime() - i * 86400000);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            const dateStr = `${yyyy}-${mm}-${dd}`;
+            const key = Object.keys(map).find((k) => String(k).startsWith(dateStr));
+            const val = key ? map[key] : { bucket: dateStr, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${dd}/${mm}` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        if (range === "month" && period === "day") {
+          const today = new Date();
+          let matchedAny = false;
+          for (let i = 29; i >= 0; i--) {
+            const d = new Date(today.getTime() - i * 86400000);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            const dateStr = `${yyyy}-${mm}-${dd}`;
+            const key = Object.keys(map).find((k) => String(k).startsWith(dateStr));
+            const val = key ? map[key] : { bucket: dateStr, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${dd}/${mm}` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        if (range === "year" || period === "month") {
+          const today = new Date();
+          const monthsNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+          let matchedAny = false;
+          for (let i = 11; i >= 0; i--) {
+            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const monthStr = `${yyyy}-${mm}`;
+            const key = Object.keys(map).find((k) => String(k).startsWith(monthStr));
+            const val = key ? map[key] : { bucket: monthStr, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${monthsNames[d.getMonth()]}/${String(yyyy).slice(2)}` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+      }
+
+      function renderHomeDashboard() {
+        const summary = state.homeSummary || {};
+        const overview = state.homeOverview || {};
+        const accounts = overview.accounts || {};
+        const logins = overview.logins || {};
+        const onlineNow = Number(overview.online?.total ?? 0) || 0;
+        const pages = pageAccessRows();
+        els.homeOnlineCount.textContent = compactNumber(onlineNow);
+        els.homeLoginToday.textContent = compactNumber(logins.today?.uniqueUsers ?? logins.today?.events ?? 0);
+        els.homeLoginWeek.textContent = compactNumber(logins.week?.uniqueUsers ?? logins.week?.events ?? 0);
+        els.homeLoginMonth.textContent = compactNumber(logins.month?.uniqueUsers ?? logins.month?.events ?? 0);
+        els.homePagesCount.textContent = compactNumber(pages.reduce((sum, row) => sum + Number(row.totalEvents || 0), 0));
+        els.homeUsersCount.textContent = compactNumber(accounts.total ?? (Array.isArray(state.users) ? state.users.length : 0));
+        els.homeActiveAccounts.textContent = compactNumber(accounts.active ?? Math.max(0, state.users.length - state.users.filter(isBlocked).length));
+        els.homeCreatedToday.textContent = compactNumber(accounts.created?.today ?? 0);
+        els.homeBlockedAccounts.textContent = t("home.blocked_hint", { count: compactNumber(accounts.blocked ?? state.users.filter(isBlocked).length) });
+        els.homeTotalQuantity.textContent = t("home.quantity_hint", { count: compactNumber(summary.totalQuantity || overview.actions?.totalQuantity || 0) });
+        els.homeTotalEvents.textContent = compactNumber(summary.totalEvents || overview.actions?.totalEvents || 0);
+        const topCategory = (state.homeCategories[0] && (state.homeCategories[0].category || state.homeCategories[0].action || state.homeCategories[0].series)) || "-";
+        const topAction = (state.homeActions[0] && (state.homeActions[0].action || state.homeActions[0].category || state.homeActions[0].series)) || "-";
+        const topUser = (state.homeUsers[0] && (state.homeUsers[0].user && displayName(state.homeUsers[0].user))) || (state.homeUsers[0] && state.homeUsers[0].userId) || "-";
+        els.homeSummaryText.textContent = t("home.summary_loaded", { category: topCategory, action: topAction, user: topUser });
+        const paddedTimeseries = smartPadTimeseries(state.homeTimeseries, state.homeRange, selectedHomePeriod());
+        drawLineChart(els.homeActivityChart, paddedTimeseries, {
+          valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
+          labelOf: (row) => row._label,
+          valueLabel: t("home.chart_value_label"),
+          limit: 31,
+        });
+        drawHorizontalBars(
+          els.homeLoginChart,
+          loginComparisonRows(logins),
+          {
+            valueOf: (row) => Number(row.totalEvents || 0) || 0,
+            labelOf: (row) => row.bucket,
+            limit: 6,
+            preserveOrder: true,
+            showZero: true,
+          },
+        );
+        renderRankList(els.homeTopPages, pages, {
+          emptyText: t("home.pages_empty"),
+          label: (row) => row.page,
+          meta: (row) => t("home.page_access_meta"),
+          value: (row) => compactNumber(row.totalEvents),
+        });
+        renderRankList(els.homeCategories, state.homeCategories, {
+          emptyText: t("home.empty"),
+          label: (row) => row.category || "-",
+          meta: (row) => t("home.events_volume", { events: compactNumber(row.totalEvents || 0), volume: compactNumber(row.totalQuantity || 0) }),
+          value: (row) => compactNumber(row.totalQuantity || row.totalEvents || 0),
+        });
+        renderRankList(els.homeTopUsers, state.homeUsers, {
+          emptyText: t("home.empty"),
+          label: (row) => displayName(row.user || row),
+          meta: (row) => userMeta(row.user || row),
+          value: (row) => compactNumber(row.totalEvents || row.totalQuantity || 0),
+        });
+        renderRankList(els.homeActions, state.homeActions, {
+          emptyText: t("home.empty"),
+          label: (row) => `${row.category || "-"} / ${row.action || "-"}`,
+          meta: (row) => t("home.events_volume", { events: compactNumber(row.totalEvents || 0), volume: compactNumber(row.totalQuantity || 0) }),
+          value: (row) => compactNumber(row.totalEvents || row.totalQuantity || 0),
+        });
+        renderOnlineUsers();
+        renderLogList(els.homeLogs, state.homeLogs, t("home.logs_empty"));
+      }
+
+      async function loadHomeDashboard() {
+        if (state.homeLoading || !token) return;
+        state.homeLoading = true;
+        const range = selectedHomeRange();
+        const period = selectedHomePeriod();
+        const splitBy = selectedHomeSplitBy();
+        state.homeRange = range;
+        state.homePeriod = period;
+        state.homeSplitBy = splitBy;
+        try {
+          const queryRange = `range=${encodeURIComponent(range)}`;
+          const [overview, summary, categories, actions, users, timeseries, logs, pageLogs, loginLogs] = await Promise.all([
+            optionalRequest(`/gg-logs/stats/overview?${queryRange}&limit=10`),
+            optionalRequest(`/gg-logs/stats/summary?${queryRange}`),
+            optionalRequest(`/gg-logs/stats/categories?${queryRange}`),
+            optionalRequest(`/gg-logs/stats/actions?${queryRange}`),
+            optionalRequest(`/gg-logs/stats/users?${queryRange}&limit=10`),
+            optionalRequest(`/gg-logs/stats/timeseries?${queryRange}&period=${encodeURIComponent(period)}${splitBy ? `&splitBy=${encodeURIComponent(splitBy)}` : ""}`),
+            optionalRequest(`/gg-logs?${queryRange}&take=10`),
+            optionalRequest(`/gg-logs?${queryRange}&category=navegacao&action=abrir_pagina&take=120`),
+            optionalRequest("/gg-logs?range=year&category=auth&take=600"),
+          ]);
+          state.homeOverview = overview || {};
+          state.homeSummary = summary || {};
+          state.homeCategories = Array.isArray(categories.categories) ? categories.categories : [];
+          state.homeActions = Array.isArray(actions.actions) ? actions.actions : [];
+          state.homeUsers = Array.isArray(users.users) ? users.users : [];
+          state.homeTimeseries = Array.isArray(timeseries.points) ? timeseries.points : [];
+          state.homeLogs = Array.isArray(logs.logs) ? logs.logs : [];
+          state.homePageLogs = Array.isArray(pageLogs.logs) ? pageLogs.logs : [];
+          state.homeLoginLogs = Array.isArray(loginLogs.logs) ? loginLogs.logs : [];
+          state.homeLoaded = true;
+          renderHomeDashboard();
+        } catch (error) {
+          toast(error.message, "error");
+        } finally {
+          state.homeLoading = false;
+        }
+      }
+
+      async function openUserDetailModal(user) {
+        const baseUser = user || {};
+        const requestId = state.detailRequestId + 1;
+        state.detailRequestId = requestId;
+        state.detailUser = baseUser;
+        els.userDetailBackdrop.classList.add("open");
+        renderUserDetailModal(baseUser, {}, [], true);
+        const adminId = String(baseUser.id || "").trim();
+        const activityId = activityUserId(baseUser);
+        try {
+          const [detailPayload, statsPayload, logsPayload] = await Promise.all([
+            adminId ? optionalRequest(`/chat/admin/users/${encodeURIComponent(adminId)}`) : {},
+            activityId ? optionalRequest(`/gg-logs/users/${encodeURIComponent(activityId)}/stats`) : {},
+            activityId ? optionalRequest(`/gg-logs?userId=${encodeURIComponent(activityId)}&take=8`) : {},
+          ]);
+          if (state.detailRequestId !== requestId) return;
+          const freshUser = normalizeUserDetailPayload(detailPayload, baseUser);
+          state.detailUser = freshUser;
+          renderUserDetailModal(
+            freshUser,
+            statsPayload || {},
+            Array.isArray(logsPayload.logs) ? logsPayload.logs : [],
+            false,
+          );
+        } catch (error) {
+          if (state.detailRequestId !== requestId) return;
+          renderUserDetailModal(baseUser, {}, [], false, error.message);
+        }
+      }
+
+      function closeUserDetailModal() {
+        els.userDetailBackdrop.classList.remove("open");
+        state.detailRequestId += 1;
+      }
+
+      function normalizeUserDetailPayload(payload, fallback) {
+        const candidate = payload?.user || payload?.profile || payload?.data || payload;
+        if (!candidate || typeof candidate !== "object" || Array.isArray(candidate) || !Object.keys(candidate).length) {
+          return fallback || {};
+        }
+        return { ...(fallback || {}), ...candidate };
+      }
+
+      function setUserDetailAvatar(user) {
+        els.userDetailAvatar.textContent = "";
+        const src = user?.avatar || user?.avatarUrl || user?.avatarfull || user?.avatarmedium || "";
+        if (src) {
+          els.userDetailAvatar.className = "avatar";
+          const img = document.createElement("img");
+          img.src = src;
+          img.alt = "";
+          img.referrerPolicy = "no-referrer";
+          img.onerror = () => {
+            els.userDetailAvatar.className = "avatar avatar-fallback";
+            els.userDetailAvatar.textContent = initials(displayName(user));
+          };
+          els.userDetailAvatar.appendChild(img);
+          return;
+        }
+        els.userDetailAvatar.className = "avatar avatar-fallback";
+        els.userDetailAvatar.textContent = initials(displayName(user));
+      }
+
+      function renderUserDetailModal(user, stats = {}, logs = [], loading = false, errorMessage = "") {
+        const latest = logs[0];
+        const categories = Array.isArray(stats.categories) ? stats.categories : [];
+        setUserDetailAvatar(user);
+        els.userDetailTitle.textContent = displayName(user);
+        els.userDetailMeta.textContent = userMeta(user);
+        els.userDetailBadges.textContent = "";
+        [
+          normalizeRole(user.role) || "MEMBER",
+          isBlocked(user) ? t("status.blocked") : t("status.active"),
+          appVersionOf(user) || "",
+        ]
+          .filter(Boolean)
+          .forEach((label) => {
+            const badge = document.createElement("span");
+            badge.textContent = label;
+            badge.className = `badge ${label === t("status.blocked") ? "role-winner" : "role-member"}`;
+            els.userDetailBadges.appendChild(badge);
+          });
+        els.userDetailStatus.textContent = loading
+          ? t("user_detail.loading")
+          : errorMessage
+            ? t("user_detail.partial", { message: errorMessage })
+            : t("user_detail.loaded");
+        els.userDetailEvents.textContent = compactNumber(stats.totalEvents || logs.length || 0);
+        els.userDetailQuantity.textContent = compactNumber(stats.totalQuantity || logs.reduce((sum, row) => sum + (Number(row.quantity || row.quantidade || 1) || 1), 0));
+        els.userDetailCategoriesCount.textContent = compactNumber(categories.length);
+        els.userDetailLast.textContent = formatDate(
+          latest?.occurredAt ||
+            latest?.ocorridoEm ||
+            latest?.createdAt ||
+            user?.lastLoginAt ||
+            user?.updatedAt ||
+            user?.createdAt,
+        );
+        renderUserDetailInfo(user);
+        renderBarList(els.userDetailCategories, categories, {
+          emptyText: t("users.activity_empty"),
+          valueKey: "totalQuantity",
+          limit: 6,
+        });
+        renderLogList(els.userDetailLogs, logs, t("users.activity_empty"));
+      }
+
+      function renderUserDetailInfo(user) {
+        els.userDetailInfo.textContent = "";
+        [
+          [t("details.id"), user.id || "-"],
+          [t("details.discord"), user.discordId || user.discordUsername || "-"],
+          [t("details.steam"), user.steamId || "-"],
+          [t("details.regiment"), user.regiment || "-"],
+          [t("details.app_version"), appVersionOf(user) || "-"],
+          [t("details.status"), isBlocked(user) ? t("status.blocked") : t("status.active")],
+          [t("details.last_login"), formatDate(user.lastLoginAt || user.updatedAt || user.createdAt)],
+        ].forEach(([label, value]) => {
+          const item = document.createElement("div");
+          item.className = "user-detail-item";
+          const left = document.createElement("span");
+          left.textContent = label;
+          const right = document.createElement("strong");
+          right.textContent = value;
+          item.append(left, right);
+          els.userDetailInfo.appendChild(item);
+        });
+      }
+
       function render() {
         const rows = filteredUsers();
         els.body.textContent = "";
         els.empty.hidden = rows.length > 0;
-        
+
         if (rows.length === 0) {
           els.empty.textContent = state.users.length
-            ? "Nenhum usuÃ¡rio combina com os filtros."
-            : "Nenhum usuÃ¡rio carregado.";
+            ? t("empty.users")
+            : t("empty.users");
           els.paginationControls.style.display = "none";
           return;
         }
@@ -1590,18 +3850,15 @@
         if (state.currentPage > totalPages) state.currentPage = totalPages;
         if (state.currentPage < 1) state.currentPage = 1;
 
-        els.pageInfo.textContent = `PÃ¡gina ${state.currentPage} de ${totalPages}`;
+        els.pageInfo.textContent = t("pagination.page", { current: state.currentPage, total: totalPages });
         els.prevPage.disabled = state.currentPage === 1;
         els.nextPage.disabled = state.currentPage === totalPages;
         els.paginationControls.style.display = totalPages > 1 ? "flex" : "none";
 
         const startIndex = (state.currentPage - 1) * state.itemsPerPage;
         const pageRows = rows.slice(startIndex, startIndex + state.itemsPerPage);
-
         const fragment = document.createDocumentFragment();
-        for (const user of pageRows) {
-          fragment.appendChild(userRow(user));
-        }
+        pageRows.forEach((user) => fragment.appendChild(userRow(user)));
         els.body.appendChild(fragment);
       }
 
@@ -1618,9 +3875,11 @@
 
       function userCell(user) {
         const td = document.createElement("td");
-        const wrap = document.createElement("div");
+        const wrap = document.createElement("button");
         wrap.className = "user-cell";
-
+        wrap.type = "button";
+        wrap.title = t("user_detail.open");
+        wrap.addEventListener("click", () => openUserDetailModal(user));
         const avatar = avatarElement(user);
         const text = document.createElement("div");
         const name = document.createElement("div");
@@ -1636,22 +3895,19 @@
       }
 
       function avatarElement(user) {
-        const src =
-          user.avatar ||
-          user.avatarUrl ||
-          user.avatarfull ||
-          user.avatarmedium ||
-          "";
+        const src = user?.avatar || user?.avatarUrl || user?.avatarfull || user?.avatarmedium || "";
         if (src) {
+          const imgWrap = document.createElement("div");
+          imgWrap.className = "avatar";
           const img = document.createElement("img");
-          img.className = "avatar";
           img.src = src;
           img.alt = "";
           img.referrerPolicy = "no-referrer";
           img.onerror = () => {
-            img.replaceWith(fallbackAvatar(user));
+            imgWrap.replaceWith(fallbackAvatar(user));
           };
-          return img;
+          imgWrap.appendChild(img);
+          return imgWrap;
         }
         return fallbackAvatar(user);
       }
@@ -1678,7 +3934,7 @@
         const status = document.createElement("div");
         const blocked = isBlocked(user);
         status.className = blocked ? "state-blocked" : "state-active";
-        status.textContent = blocked ? "Bloqueado" : "Ativo";
+        status.textContent = blocked ? t("status.blocked") : t("status.active");
         td.appendChild(status);
         if (blocked && user.blockedReason) {
           const reason = document.createElement("div");
@@ -1692,18 +3948,15 @@
       function dateCell(user) {
         const td = document.createElement("td");
         td.style.color = "var(--muted)";
-        td.textContent = formatDate(
-          user.lastLoginAt || user.updatedAt || user.createdAt,
-        );
+        td.textContent = formatDate(user.lastLoginAt || user.updatedAt || user.createdAt);
         return td;
       }
 
       function appVersionCell(user) {
         const td = document.createElement("td");
-        const version = appVersionOf(user);
         const badge = document.createElement("span");
         badge.className = "badge role-member";
-        badge.textContent = version || "-";
+        badge.textContent = appVersionOf(user) || "-";
         td.appendChild(badge);
         return td;
       }
@@ -1715,12 +3968,12 @@
         const edit = document.createElement("button");
         edit.className = "btn";
         edit.type = "button";
-        edit.textContent = "Editar";
+        edit.textContent = t("action.edit");
         edit.addEventListener("click", () => openDrawer(user));
         const block = document.createElement("button");
         block.className = isBlocked(user) ? "btn success" : "btn danger";
         block.type = "button";
-        block.textContent = isBlocked(user) ? "Desbloquear" : "Bloquear";
+        block.textContent = isBlocked(user) ? t("drawer.unblock") : t("drawer.block");
         block.addEventListener("click", () => openDrawer(user));
         wrap.append(edit, block);
         td.appendChild(wrap);
@@ -1734,9 +3987,7 @@
         els.drawerSubtitle.textContent = userMeta(user);
         els.editRole.value = normalizeRole(user.role) || "MEMBER";
         els.blockReason.value = user.blockedReason || "";
-        els.toggleBlock.textContent = blocked
-          ? "Desbloquear usuÃ¡rio"
-          : "Bloquear usuÃ¡rio";
+        els.toggleBlock.textContent = blocked ? t("drawer.unblock") : t("drawer.block");
         els.toggleBlock.className = blocked ? "btn success" : "btn danger";
         els.drawerDetails.textContent = detailsText(user);
         els.drawer.classList.add("open");
@@ -1752,45 +4003,30 @@
         if (!user) return;
         const role = normalizeRole(els.editRole.value);
         if (!EDITABLE_ROLES.has(role)) {
-          toast("Cargo invÃ¡lido.", "error");
+          toast(t("toast.role_invalid"), "error");
           return;
         }
         if (role === normalizeRole(user.role)) {
-          toast("Cargo jÃ¡ estÃ¡ atualizado.");
+          toast(t("toast.role_same"));
           return;
         }
-        await mutateUser(
-          `/chat/admin/users/${encodeURIComponent(user.id)}/role`,
-          "PATCH",
-          { role },
-          "Cargo atualizado.",
-        );
+        await mutateUser(`/chat/admin/users/${encodeURIComponent(user.id)}/role`, "PATCH", { role }, t("toast.role_saved"));
       }
 
       async function toggleBlock() {
         const user = state.selectedUser;
         if (!user) return;
         if (isBlocked(user)) {
-          await mutateUser(
-            `/chat/admin/users/${encodeURIComponent(user.id)}/unblock`,
-            "PATCH",
-            null,
-            "UsuÃ¡rio desbloqueado.",
-          );
+          await mutateUser(`/chat/admin/users/${encodeURIComponent(user.id)}/unblock`, "PATCH", null, t("toast.user_unblocked"));
           return;
         }
         const reason = els.blockReason.value.trim();
         if (!reason) {
-          toast("Informe um motivo para bloquear.", "error");
+          toast(t("toast.reason_required"), "error");
           els.blockReason.focus();
           return;
         }
-        await mutateUser(
-          `/chat/admin/users/${encodeURIComponent(user.id)}/block`,
-          "PATCH",
-          { reason },
-          "UsuÃ¡rio bloqueado.",
-        );
+        await mutateUser(`/chat/admin/users/${encodeURIComponent(user.id)}/block`, "PATCH", { reason }, t("toast.user_blocked"));
       }
 
       async function mutateUser(path, method, payload, message) {
@@ -1813,7 +4049,7 @@
         if (state.newsLoading) return;
         state.newsLoading = true;
         els.newsRefresh.disabled = true;
-        setStatus("Carregando noticias...", "warn");
+        setStatus(t("state.loading_news"), "warn");
         try {
           const data = await request("/admin/news?take=100");
           state.news = Array.isArray(data)
@@ -1823,14 +4059,13 @@
               : Array.isArray(data.items)
                 ? data.items
                 : [];
-          setStatus(`Noticias carregadas: ${state.news.length}.`, "ok");
+          setStatus(t("state.news_loaded", { count: state.news.length }), "ok");
           renderNews();
         } catch (error) {
-          setStatus(`Erro ao carregar noticias: ${error.message}`, "error");
+          setStatus(t("error.news", { message: error.message }), "error");
           els.newsList.textContent = "";
           els.newsEmpty.hidden = false;
-          els.newsEmpty.textContent =
-            "A API ainda nao retornou a listagem administrativa de noticias.";
+          els.newsEmpty.textContent = t("error.news_empty");
           els.newsList.appendChild(els.newsEmpty);
         } finally {
           state.newsLoading = false;
@@ -1842,19 +4077,18 @@
         renderNewsCategories();
         const rows = filteredNews();
         els.newsList.textContent = "";
-        els.newsCount.textContent = `${rows.length} item(ns)`;
+        els.newsCount.textContent = t("news.items", { count: rows.length });
         if (!rows.length) {
           els.newsEmpty.hidden = false;
           els.newsEmpty.textContent = state.news.length
-            ? "Nenhuma noticia combina com os filtros."
-            : "Nenhuma noticia carregada.";
+            ? t("news.no_match")
+            : t("news.empty");
           els.newsList.appendChild(els.newsEmpty);
           return;
         }
         els.newsEmpty.hidden = true;
         const fragment = document.createDocumentFragment();
-        const groups = groupNewsByType(rows);
-        groups.forEach(([type, items]) => {
+        groupNewsByType(rows).forEach(([type, items]) => {
           const title = document.createElement("div");
           title.className = "news-group-title";
           title.textContent = type || "general";
@@ -1982,7 +4216,7 @@
           } else {
             await request(path, { method, payload });
           }
-          toast(id ? "Noticia atualizada." : "Noticia criada.");
+          toast(id ? t("toast.news_updated") : t("toast.news_created"));
           await loadNews();
         } catch (error) {
           toast(error.message, "error");
@@ -1994,12 +4228,12 @@
       async function archiveNews() {
         const id = els.newsId.value.trim();
         if (!id) {
-          toast("Salve a noticia antes de arquivar.", "error");
+          toast(t("toast.news_save_first"), "error");
           return;
         }
         try {
           await request(`/admin/news/${encodeURIComponent(id)}`, { method: "DELETE" });
-          toast("Noticia arquivada.");
+          toast(t("toast.news_archived"));
           newNews(false);
           setNewsMode("review");
           await loadNews();
@@ -2011,14 +4245,14 @@
       async function retryNewsTranslations() {
         const id = els.newsId.value.trim();
         if (!id) {
-          toast("Selecione uma noticia salva.", "error");
+          toast(t("toast.news_select"), "error");
           return;
         }
         try {
           await request(`/admin/news/${encodeURIComponent(id)}/translations/retry`, {
             method: "POST",
           });
-          toast("Retry de traducoes enviado.");
+          toast(t("toast.retry_sent"));
           await loadNews();
         } catch (error) {
           toast(error.message, "error");
@@ -2028,7 +4262,7 @@
       async function loadNewsViews() {
         const id = els.newsId.value.trim();
         if (!id) {
-          toast("Selecione uma noticia salva.", "error");
+          toast(t("toast.news_select"), "error");
           return;
         }
         try {
@@ -2047,7 +4281,7 @@
                   return `${displayName(user)} - ${formatDate(view.viewedAt || view.createdAt || user.viewedAt || user.createdAt)}`;
                 })
                 .join("\n")
-            : "Nenhuma visualizacao registrada.";
+            : t("views.none");
         } catch (error) {
           toast(error.message, "error");
         }
@@ -2069,8 +4303,8 @@
       function updateEditorState() {
         const status = els.newsStatus.value || "draft";
         els.newsEditorTitle.textContent = els.newsId.value
-          ? `Editar: ${els.newsTitle.value || "noticia"}`
-          : "Nova noticia";
+          ? t("news.editor_edit", { title: els.newsTitle.value || t("news.editor_new").toLowerCase() })
+          : t("news.editor_new");
         els.newsEditorStatus.textContent = status;
         els.newsEditorStatus.className = `badge ${newsStatusClass(status)}`;
         const hasId = Boolean(els.newsId.value.trim());
@@ -2159,13 +4393,7 @@
 
       function normalizeNewsStatus(status) {
         const value = String(status || "draft").trim().toLowerCase();
-        return [
-          "draft",
-          "scheduled",
-          "published",
-          "archived",
-          "translation_pending",
-        ].includes(value)
+        return ["draft", "scheduled", "published", "archived", "translation_pending"].includes(value)
           ? value
           : "draft";
       }
@@ -2174,37 +4402,13 @@
         const value = normalizeNewsStatus(status);
         if (value === "published") return "role-dev";
         if (value === "scheduled") return "role-winner";
-        if (value === "archived") return "role-member";
         if (value === "translation_pending") return "role-admin";
         return "role-member";
       }
 
-      function normalizeSlug(value) {
-        return String(value || "general")
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9_-]+/g, "-")
-          .replace(/^-+|-+$/g, "")
-          .slice(0, 40) || "general";
-      }
-
-      function toDatetimeLocal(value) {
-        if (!value) return "";
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return "";
-        const pad = (number) => String(number).padStart(2, "0");
-        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-      }
-
-      function fromDatetimeLocal(value) {
-        if (!value) return "";
-        const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? "" : date.toISOString();
-      }
-
       function markdownPreview(value) {
         const text = String(value || "").trim();
-        if (!text) return "<p>A previa aparece enquanto voce escreve.</p>";
+        if (!text) return `<p>${escapeHtml(t("news.preview_empty"))}</p>`;
         const lines = text.split(/\r?\n/);
         const html = [];
         let list = null;
@@ -2215,8 +4419,7 @@
           }
         };
         for (let index = 0; index < lines.length; index += 1) {
-          const raw = lines[index];
-          const line = raw.trimEnd();
+          const line = lines[index].trimEnd();
           if (!line.trim()) {
             closeList();
             continue;
@@ -2286,35 +4489,18 @@
           );
         const [head = [], ...body] = parsed;
         const headers = head.map((cell) => `<th>${cell}</th>`).join("");
-        const bodyRows = body
-          .map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`)
-          .join("");
+        const bodyRows = body.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("");
         return `<table><thead><tr>${headers}</tr></thead><tbody>${bodyRows}</tbody></table>`;
       }
 
       function inlineMarkdown(value) {
         return escapeHtml(value)
-          .replace(
-            /@\[video\]\((https?:\/\/[^)\s]+)\)/g,
-            '<video class="preview-media" controls src="$1"></video>',
-          )
-          .replace(
-            /!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g,
-            '<img class="preview-media" src="$2" alt="$1" />',
-          )
+          .replace(/@\[video\]\((https?:\/\/[^)\s]+)\)/g, '<video class="preview-media" controls src="$1"></video>')
+          .replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)/g, '<img class="preview-media" src="$2" alt="$1" />')
           .replace(/`([^`]+)`/g, "<code>$1</code>")
           .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
           .replace(/\*([^*]+)\*/g, "<em>$1</em>")
           .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
-      }
-
-      function escapeHtml(value) {
-        return String(value)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;")
-          .replace(/'/g, "&#039;");
       }
 
       async function request(path, options = {}) {
@@ -2337,15 +4523,19 @@
         const text = await response.text();
         const data = parseJson(text);
         if (!response.ok) {
-          const message =
-            data.message ||
-            data.reason ||
-            data.error ||
-            text ||
-            `HTTP ${response.status}`;
+          const message = data.message || data.reason || data.error || text || `HTTP ${response.status}`;
           throw new Error(message);
         }
         return data;
+      }
+
+      async function optionalRequest(path, fallback = {}) {
+        try {
+          return await request(path);
+        } catch (error) {
+          console.warn(`Optional admin metric failed: ${path}`, error);
+          return fallback;
+        }
       }
 
       function filteredUsers() {
@@ -2372,9 +4562,7 @@
       }
 
       function updateMetrics(totalFromApi) {
-        const total = Number.isFinite(Number(totalFromApi))
-          ? Number(totalFromApi)
-          : state.users.length;
+        const total = Number.isFinite(Number(totalFromApi)) ? Number(totalFromApi) : state.users.length;
         const blocked = state.users.filter(isBlocked).length;
         const staff = state.users.filter((user) =>
           ADMIN_CONTROL_ROLES.has(normalizeRole(user.role)) || normalizeRole(user.role) === "ADMIN",
@@ -2407,61 +4595,55 @@
 
       function displayName(user) {
         return String(
-          user.displayName ||
-            user.globalName ||
-            user.name ||
-            user.personaName ||
-            user.personaname ||
-            user.discordUsername ||
-            user.username ||
+          user?.displayName ||
+            user?.globalName ||
+            user?.name ||
+            user?.personaName ||
+            user?.personaname ||
+            user?.discordUsername ||
+            user?.username ||
             "Sem nome",
         );
       }
 
       function userMeta(user) {
         const parts = [];
-        if (user.regiment) parts.push(`[${user.regiment}]`);
-        if (user.discordId) parts.push(`Discord ${user.discordId}`);
-        if (user.steamId) parts.push(`Steam ${user.steamId}`);
+        if (user?.regiment) parts.push(`[${user.regiment}]`);
+        if (user?.discordId) parts.push(`Discord ${user.discordId}`);
+        if (user?.steamId) parts.push(`Steam ${user.steamId}`);
         if (appVersionOf(user)) parts.push(`App ${appVersionOf(user)}`);
-        return parts.join(" â€¢ ") || user.id || "Sem identificadores";
+        return parts.join(" - ") || user?.id || t("meta.no_ids");
       }
 
       function appVersionOf(user) {
         return String(
-          user.appVersion ||
-            user.app_version ||
-            user.clientVersion ||
-            user.client_version ||
-            user.version ||
+          user?.appVersion ||
+            user?.app_version ||
+            user?.clientVersion ||
+            user?.client_version ||
+            user?.version ||
             "",
         ).trim();
       }
 
       function detailsText(user) {
         return [
-          `ID: ${user.id || "-"}`,
-          `Discord: ${user.discordId || user.discordUsername || "-"}`,
-          `Steam: ${user.steamId || "-"}`,
-          `Regimento: ${user.regiment || "-"}`,
-          `Versao do app: ${appVersionOf(user) || "-"}`,
-          `Status: ${isBlocked(user) ? "Bloqueado" : "Ativo"}`,
-          `Ãšltimo login: ${formatDate(user.lastLoginAt || user.updatedAt || user.createdAt)}`,
+          `${t("details.id")}: ${user.id || "-"}`,
+          `${t("details.discord")}: ${user.discordId || user.discordUsername || "-"}`,
+          `${t("details.steam")}: ${user.steamId || "-"}`,
+          `${t("details.regiment")}: ${user.regiment || "-"}`,
+          `${t("details.app_version")}: ${appVersionOf(user) || "-"}`,
+          `${t("details.status")}: ${isBlocked(user) ? t("status.blocked") : t("status.active")}`,
+          `${t("details.last_login")}: ${formatDate(user.lastLoginAt || user.updatedAt || user.createdAt)}`,
         ].join("\n");
       }
 
       function normalizeRole(role) {
-        return String(role || "MEMBER")
-          .trim()
-          .toUpperCase();
+        return String(role || "").trim().toUpperCase();
       }
 
       function accessLevel(user) {
-        const raw =
-          user?.panelAccess?.accessLevel ??
-          user?.panelAccessLevel ??
-          user?.accessLevel ??
-          0;
+        const raw = user?.panelAccess?.accessLevel ?? user?.panelAccessLevel ?? user?.accessLevel ?? 0;
         const number = Number.parseInt(raw, 10);
         return Number.isFinite(number) ? number : 0;
       }
@@ -2478,14 +4660,11 @@
       }
 
       function isBlocked(user) {
-        return (
-          String(user.status || "").toUpperCase() === "BLOCKED" ||
-          Boolean(user.blockedAt)
-        );
+        return String(user?.status || "").toUpperCase() === "BLOCKED" || Boolean(user?.blockedAt);
       }
 
       function formatDate(value) {
-        if (!value) return "Nunca";
+        if (!value) return t("status.never");
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return String(value);
         return date.toLocaleString("pt-BR", {
@@ -2509,12 +4688,77 @@
         );
       }
 
+      function normalizeSlug(value) {
+        return (
+          String(value || "general")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 40) || "general"
+        );
+      }
+
+      function toDatetimeLocal(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "";
+        const pad = (number) => String(number).padStart(2, "0");
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      }
+
+      function fromDatetimeLocal(value) {
+        if (!value) return "";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
       function decodeApi(value) {
         try {
           return atob(value.replace(/-/g, "+").replace(/_/g, "/"));
         } catch (_error) {
           return "";
         }
+      }
+
+      function parseTheme(value) {
+        if (!value) return null;
+        try {
+          const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+          const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+          const json = atob(padded);
+          const parsed = JSON.parse(json);
+          return parsed && typeof parsed === "object" ? parsed : null;
+        } catch (_error) {
+          return null;
+        }
+      }
+
+      function isHex(value) {
+        return /^#[0-9a-fA-F]{6}$/.test(String(value || ""));
+      }
+
+      function hexToRgba(value, alpha) {
+        const hex = String(value || "").replace("#", "");
+        const r = Number.parseInt(hex.slice(0, 2), 16);
+        const g = Number.parseInt(hex.slice(2, 4), 16);
+        const b = Number.parseInt(hex.slice(4, 6), 16);
+        const a = Math.max(0, Math.min(1, Number(alpha)));
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+      }
+
+      function normalizeLanguage(value) {
+        const code = String(value || "pt").split(/[-_]/, 1)[0].toLowerCase();
+        return ["pt", "en", "es", "fr"].includes(code) ? code : "pt";
       }
 
       function normalizeUrl(value) {

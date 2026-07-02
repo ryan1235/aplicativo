@@ -14,6 +14,15 @@ Flickable {
         return i18nController.t(key)
     }
 
+    function openItemSearch(itemName) {
+        var name = String(itemName || "").trim()
+        if (name === "" || name === "-")
+            return
+        itemSearchController.ensureLoaded()
+        itemSearchController.search(name)
+        appController.setCurrentPage("itemSearch")
+    }
+
     Component.onCompleted: stockpileController.refreshApiSnapshot()
 
     ColumnLayout {
@@ -330,15 +339,17 @@ Flickable {
                                     delegate: Rectangle {
                                         property var itemRow: modelData
                                         property real scaleFactor: stockpileController.hudScale
+                                        property bool hovered: false
                                         width: 72 * scaleFactor
                                         height: 27 * scaleFactor
                                         radius: 2
+                                        clip: false
                                         color: "transparent"
                                         border.color: "transparent"
                                         border.width: 0
                                         Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.scrimColor; opacity: 0.3 }
-                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.15 : 0.03; Behavior on opacity { NumberAnimation { duration: 100 } } }
-                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: tileMouse.containsMouse ? 0.8 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 100 } } }
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: settingsController.accentColor; opacity: hovered ? 0.24 : 0.03; Behavior on opacity { NumberAnimation { duration: 100 } } }
+                                        Rectangle { anchors.fill: parent; radius: parent.radius; color: "transparent"; border.color: settingsController.accentColor; opacity: hovered ? 0.95 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 100 } } }
                                         Behavior on width { NumberAnimation { duration: 100 } }
                                         Behavior on height { NumberAnimation { duration: 100 } }
 
@@ -350,6 +361,8 @@ Flickable {
                                             height: 22 * scaleFactor
                                             source: itemRow.icon || ""
                                             fillMode: Image.PreserveAspectFit
+                                            scale: hovered ? 1.08 : 1.0
+                                            Behavior on scale { NumberAnimation { duration: 100 } }
                                         }
                                         Rectangle {
                                             anchors.right: parent.right
@@ -360,8 +373,8 @@ Flickable {
                                             border.color: "transparent"
                                             border.width: 0
                                             Rectangle { anchors.fill: parent; color: settingsController.scrimColor; opacity: 0.2 }
-                                            Rectangle { anchors.fill: parent; color: settingsController.accentColor; opacity: 0.05 }
-                                            Rectangle { anchors.fill: parent; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.15; border.width: 1 }
+                                            Rectangle { anchors.fill: parent; color: settingsController.accentColor; opacity: hovered ? 0.14 : 0.05; Behavior on opacity { NumberAnimation { duration: 100 } } }
+                                            Rectangle { anchors.fill: parent; color: "transparent"; border.color: settingsController.accentColor; opacity: hovered ? 0.45 : 0.15; border.width: 1; Behavior on opacity { NumberAnimation { duration: 100 } } }
                                             Text {
                                                 anchors.centerIn: parent
                                                 text: String(itemRow.quantity || 0)
@@ -375,9 +388,60 @@ Flickable {
                                             id: tileMouse
                                             anchors.fill: parent
                                             hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onContainsMouseChanged: parent.hovered = containsMouse
+                                            onClicked: root.openItemSearch(itemRow.name)
                                         }
-                                        ToolTip.visible: tileMouse.containsMouse
-                                        ToolTip.text: (itemRow.name || "-") + " | " + (itemRow.category || "-")
+                                        Rectangle {
+                                            id: hoverCard
+                                            z: 20
+                                            visible: hovered
+                                            opacity: hovered ? 1 : 0
+                                            x: 0
+                                            y: -height - 7
+                                            width: Math.min(240, Math.max(136, Math.max(hoverTitle.implicitWidth, hoverMeta.implicitWidth) + 22))
+                                            height: hoverContent.implicitHeight + 12
+                                            radius: 5
+                                            color: settingsController.surfaceColor
+                                            border.color: settingsController.accentColor
+                                            border.width: 1
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: parent.radius
+                                                color: settingsController.accentColor
+                                                opacity: 0.06
+                                            }
+
+                                            ColumnLayout {
+                                                id: hoverContent
+                                                anchors.fill: parent
+                                                anchors.margins: 6
+                                                spacing: 3
+
+                                                Text {
+                                                    id: hoverTitle
+                                                    Layout.fillWidth: true
+                                                    text: itemRow.name || "-"
+                                                    color: settingsController.textColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Text {
+                                                    id: hoverMeta
+                                                    Layout.fillWidth: true
+                                                    text: (itemRow.category || "-") + " | " + String(itemRow.quantity || 0)
+                                                    color: settingsController.mutedTextColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 10
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

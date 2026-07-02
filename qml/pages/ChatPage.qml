@@ -720,14 +720,38 @@ Rectangle {
                                 }
 
                                 AnimatedImage {
+                                    id: messageGif
                                     visible: rowMediaUrl !== "" && rowIsGif
                                     source: rowMediaUrl
-                                    playing: visible
+                                    playing: false
                                     asynchronous: true
                                     Layout.preferredWidth: Math.min(420, messageList.width - 48)
                                     Layout.preferredHeight: visible ? 200 : 0
                                     fillMode: Image.PreserveAspectFit
                                     cache: false
+                                    function updatePlayback() {
+                                        playing = visible && status === Image.Ready
+                                    }
+                                    Component.onCompleted: updatePlayback()
+                                    onVisibleChanged: updatePlayback()
+                                    onStatusChanged: {
+                                        updatePlayback()
+                                    }
+                                    onCurrentFrameChanged: {
+                                        if (playing && frameCount > 1 && currentFrame >= frameCount - 1)
+                                            messageGifLoop.restart()
+                                    }
+                                    Timer {
+                                        id: messageGifLoop
+                                        interval: 16
+                                        repeat: false
+                                        onTriggered: {
+                                            if (messageGif.visible && messageGif.status === Image.Ready) {
+                                                messageGif.currentFrame = 0
+                                                messageGif.updatePlayback()
+                                            }
+                                        }
+                                    }
                                 }
 
                                 Image {

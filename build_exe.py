@@ -7,12 +7,14 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import zipfile
 
 
 APP_NAME = "GG Coalition"
 UPDATER_NAME = "GG Updater"
+WEB_INSTALLER_NAME = "GG Coalition Web Setup"
 
 ROOT = Path(__file__).resolve().parent
 DIST_DIR = ROOT / "dist"
@@ -34,6 +36,70 @@ PACKAGE_PATHS = [
     LOCAL_DEPS,
     Path.home() / "AppData" / "Roaming" / "Python" / "Python314" / "site-packages",
     Path.home() / "AppData" / "Local" / "Python" / "pythoncore-3.14-64" / "Lib" / "site-packages",
+]
+
+NUITKA_BLOAT_ARGS = [
+    "--python-flag=no_docstrings",
+    "--python-flag=no_asserts",
+    "--nofollow-import-to=*.tests",
+    "--nofollow-import-to=*.testing",
+    "--nofollow-import-to=numpy.testing",
+    "--nofollow-import-to=numpy.tests",
+    "--nofollow-import-to=numpy._core.tests",
+    "--nofollow-import-to=numpy.typing.tests",
+    "--nofollow-import-to=PIL.ImageShow",
+    "--noinclude-pytest-mode=nofollow",
+    "--noinclude-unittest-mode=nofollow",
+    "--noinclude-pydoc-mode=nofollow",
+    "--noinclude-setuptools-mode=nofollow",
+    "--noinclude-qt-translations",
+]
+
+UNUSED_QML_DIRS = [
+    "PySide6/qml/Qt3D/**",
+    "PySide6/qml/QtCharts/**",
+    "PySide6/qml/QtDataVisualization/**",
+    "PySide6/qml/QtGraphs/**",
+    "PySide6/qml/QtLocation/**",
+    "PySide6/qml/QtMultimedia/**",
+    "PySide6/qml/QtPdf/**",
+    "PySide6/qml/QtQuick/VirtualKeyboard/**",
+    "PySide6/qml/QtQuick3D/**",
+    "PySide6/qml/QtWebEngine/**",
+]
+
+UNUSED_QT_DLLS = [
+    "qt63d*.dll",
+    "qt6charts*.dll",
+    "qt6datavisualization*.dll",
+    "qt6graphs*.dll",
+    "qt6location*.dll",
+    "qt6multimedia*.dll",
+    "qt6pdf*.dll",
+    "qt6quick3d*.dll",
+    "qt6virtualkeyboard*.dll",
+    "qt6webengine*.dll",
+]
+
+APP_PYSIDE_MODULES = [
+    "PySide6.QtCore",
+    "PySide6.QtGui",
+    "PySide6.QtQml",
+    "PySide6.QtNetwork",
+    "PySide6.QtWidgets",
+    "PySide6.QtWebSockets",
+]
+
+QT_PLUGIN_FAMILIES = [
+    "generic",
+    "iconengines",
+    "imageformats",
+    "networkinformation",
+    "platforminputcontexts",
+    "platforms",
+    "styles",
+    "tls",
+    "vectorimageformats",
 ]
 
 
@@ -83,12 +149,71 @@ def quote_inno(value: str | Path) -> str:
 
 
 def app_version() -> str:
-    for source in ("qt_controllers.py", "felb_app.py"):
+    for source in ("app_metadata.py", "qt_controllers.py", "felb_app.py"):
         text = (ROOT / source).read_text(encoding="utf-8-sig")
         match = re.search(r'^APP_VERSION\s*=\s*"([^"]+)"', text, flags=re.MULTILINE)
         if match:
             return match.group(1)
     return "1.0.0"
+
+
+def version_tuple(version: str) -> tuple[int, int, int, int]:
+    parts: list[int] = []
+    for part in version.split("."):
+        try:
+            parts.append(int(re.sub(r"\D.*$", "", part) or "0"))
+        except ValueError:
+            parts.append(0)
+    while len(parts) < 4:
+        parts.append(0)
+    return tuple(parts[:4])
+
+
+def write_pyinstaller_version_file(
+    target: Path,
+    *,
+    product_name: str,
+    file_description: str,
+    version: str,
+) -> Path:
+    major, minor, patch, build = version_tuple(version)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        f"""# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=({major}, {minor}, {patch}, {build}),
+    prodvers=({major}, {minor}, {patch}, {build}),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        '040904B0',
+        [
+          StringStruct('CompanyName', 'GG Coalition'),
+          StringStruct('FileDescription', '{file_description}'),
+          StringStruct('FileVersion', '{version}'),
+          StringStruct('InternalName', '{product_name}'),
+          StringStruct('LegalCopyright', 'GG Coalition'),
+          StringStruct('OriginalFilename', '{product_name}.exe'),
+          StringStruct('ProductName', '{product_name}'),
+          StringStruct('ProductVersion', '{version}')
+        ]
+      )
+    ]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
+""",
+        encoding="utf-8",
+    )
+    return target
 
 
 def has_nuitka() -> bool:
@@ -138,7 +263,8 @@ def remove_tree(path: Path) -> None:
     for attempt in range(3):
         try:
             shutil.rmtree(path)
-            return
+            if not path.exists():
+                return
         except PermissionError as exc:
             if attempt < 2:
                 time.sleep(0.6)
@@ -148,6 +274,13 @@ def remove_tree(path: Path) -> None:
                 "Feche o GG Coalition, feche o GG Updater e confira se eles nao estao na bandeja do Windows.\n"
                 f"Detalhe: {exc}"
             ) from exc
+        if attempt < 2:
+            time.sleep(0.6)
+            continue
+        raise SystemExit(
+            f"Nao consegui limpar {path}.\n"
+            "Apague essa pasta gerada ou feche qualquer build ainda rodando antes de tentar novamente."
+        )
 
 
 def ensure_icon() -> Path | None:
@@ -228,6 +361,10 @@ def standalone_exe_path(script_name: str, output_name: str) -> Path:
     return standalone_output_dir(script_name) / output_name
 
 
+def onefile_exe_path(output_name: str) -> Path:
+    return DIST_DIR / output_name
+
+
 def build_app() -> Path:
     clean_nuitka_target("felb_app.py")
     icon_path = ensure_icon()
@@ -245,7 +382,8 @@ def build_app() -> Path:
         f"--product-name={APP_NAME}",
         f"--file-description={APP_NAME} - Aplicativo",
         "--copyright=GG Coalition",
-        "--include-package=PySide6",
+        *NUITKA_BLOAT_ARGS,
+        *(f"--include-module={module}" for module in APP_PYSIDE_MODULES),
         "--include-package=pygvas",
         "--include-package=pydantic",
         "--include-package=pydantic_core",
@@ -254,7 +392,10 @@ def build_app() -> Path:
         "--include-package=numpy",
         "--include-package=cv2",
         "--enable-plugin=pyside6",
+        f"--include-qt-plugins={','.join(QT_PLUGIN_FAMILIES)}",
         "--include-qt-plugins=qml",
+        *(f"--noinclude-data-files={pattern}" for pattern in UNUSED_QML_DIRS),
+        *(f"--noinclude-dlls={pattern}" for pattern in UNUSED_QT_DLLS),
         f"--output-dir={DIST_DIR}",
         f"--output-filename={output.name}",
         *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
@@ -285,9 +426,12 @@ def build_updater() -> Path:
         f"--product-name={UPDATER_NAME}",
         f"--file-description={UPDATER_NAME} - Atualizador",
         "--copyright=GG Coalition",
+        *NUITKA_BLOAT_ARGS,
         *( [f"--windows-icon-from-ico={icon_path}"] if icon_path else [] ),
         "--enable-plugin=pyside6",
-        "--include-qt-plugins=qml",
+        f"--include-qt-plugins={','.join(QT_PLUGIN_FAMILIES)}",
+        *(f"--noinclude-data-files={pattern}" for pattern in UNUSED_QML_DIRS),
+        *(f"--noinclude-dlls={pattern}" for pattern in UNUSED_QT_DLLS),
         f"--output-dir={DIST_DIR}",
         f"--output-filename={output.name}",
         str(ROOT / "updater.py"),
@@ -296,6 +440,67 @@ def build_updater() -> Path:
     run(command)
     if not output.exists():
         raise SystemExit(f"Build do updater finalizou, mas o executavel nao foi encontrado em: {output}")
+    return output
+
+
+def build_web_installer() -> Path:
+    clean_nuitka_target("web_installer.py")
+    icon_path = ensure_icon()
+    gif_path = ICON_GIF if ICON_GIF.exists() else None
+    RELEASE_DIR.mkdir(exist_ok=True)
+    output = RELEASE_DIR / f"{WEB_INSTALLER_NAME}.exe"
+    work_dir = BUILD_DIR / "pyinstaller-web"
+    version = app_version()
+    version_file = write_pyinstaller_version_file(
+        work_dir / "web_installer_version_info.txt",
+        product_name=WEB_INSTALLER_NAME,
+        file_description=f"{WEB_INSTALLER_NAME} - Instalador online",
+        version=version,
+    )
+    stale_release_dir = RELEASE_DIR / WEB_INSTALLER_NAME
+    if stale_release_dir.exists():
+        remove_tree(stale_release_dir)
+    stale_zip = RELEASE_DIR / "GG-Coalition-Web-Setup-Standalone.zip"
+    if stale_zip.exists():
+        stale_zip.unlink()
+    if output.exists():
+        output.unlink()
+
+    command = [
+        sys.executable,
+        "-m",
+        "PyInstaller",
+        "--onefile",
+        "--noconsole",
+        "--noconfirm",
+        "--clean",
+        "--noupx",
+        "--name",
+        WEB_INSTALLER_NAME,
+        "--version-file",
+        str(version_file),
+        *( [f"--icon={icon_path}"] if icon_path else [] ),
+        *( [f"--add-data={icon_path};img"] if icon_path else [] ),
+        *( [f"--add-data={gif_path};img"] if gif_path else [] ),
+        "--distpath",
+        str(RELEASE_DIR),
+        "--workpath",
+        str(work_dir),
+        "--specpath",
+        str(work_dir),
+        str(ROOT / "web_installer.py"),
+    ]
+
+    run(command)
+    if not output.exists():
+        raise SystemExit(f"Build do instalador online finalizou, mas o executavel nao foi encontrado em: {output}")
+
+    dist_dir = DIST_DIR / WEB_INSTALLER_NAME
+    if dist_dir.exists():
+        remove_tree(dist_dir)
+    DIST_DIR.mkdir(exist_ok=True)
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(output, dist_dir / output.name)
     return output
 
 
@@ -588,6 +793,12 @@ def main() -> int:
         help="Generate an Inno Setup installer that installs or updates the app.",
     )
 
+    parser.add_argument(
+        "--web-installer",
+        action="store_true",
+        help="Build only the online bootstrap installer that downloads the latest GitHub release.",
+    )
+
     args = parser.parse_args()
 
     if args.clean:
@@ -605,6 +816,13 @@ def main() -> int:
         raise SystemExit(
             "Nuitka nao esta instalado. Rode: py build_exe.py --install --clean --zip"
         )
+
+    if args.web_installer:
+        installer = build_web_installer()
+        if args.sign:
+            sign_single_file(installer, args.cert_subject, args.timestamp_url, args.no_timestamp)
+        print(f"\nInstalador online criado em: {installer}")
+        return 0
 
     outputs = [build_app()]
 

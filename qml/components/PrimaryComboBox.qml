@@ -28,7 +28,7 @@ ComboBox {
     delegate: ItemDelegate {
         id: delegateItem
         property bool isObjectRow: typeof modelData === "object"
-        property bool isHeaderRow: isObjectRow && modelData.type === "header"
+        property bool isHeaderRow: isObjectRow && (modelData.type === "header" || modelData.type === "region_header")
         property string primaryText: isObjectRow ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
         property string secondaryText: isObjectRow ? (modelData.subText || "") : ""
         property string trailingText: isObjectRow ? (modelData.sideTextKey ? control.tr(modelData.sideTextKey) : (modelData.sideText || "")) : ""

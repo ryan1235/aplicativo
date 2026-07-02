@@ -14,6 +14,12 @@ class AdminHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ADMIN_DIR), **kwargs)
 
+    def translate_path(self, path):
+        if path.startswith("/img/"):
+            rel_path = path[5:]
+            return str(BASE_DIR / "img" / rel_path)
+        return super().translate_path(path)
+
     def log_message(self, format, *args):
         # Mute default logging to avoid terminal spam
         pass

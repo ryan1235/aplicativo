@@ -7,6 +7,7 @@ Rectangle {
     id: root
     color: "transparent"
     property int scrollBarContentPadding: 14
+    property bool compactPlanningLayout: width < 1120
 
     Component.onCompleted: productionController.ensureLoaded()
 
@@ -229,16 +230,20 @@ Rectangle {
             }
         }
 
-        RowLayout {
+        GridLayout {
+            id: planningLayout
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.minimumHeight: 560
-            spacing: 8
+            Layout.minimumHeight: root.compactPlanningLayout ? 980 : 560
+            columns: root.compactPlanningLayout ? 1 : 2
+            columnSpacing: 8
+            rowSpacing: 8
 
             Rectangle {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.minimumWidth: 620
+                Layout.fillHeight: !root.compactPlanningLayout
+                Layout.minimumWidth: root.compactPlanningLayout ? 0 : 620
+                Layout.preferredHeight: root.compactPlanningLayout ? Math.max(420, Math.min(560, root.height * 0.55)) : 560
                 radius: 8
                 color: "transparent"
                 border.color: "transparent"
@@ -351,9 +356,10 @@ Rectangle {
             }
 
             Rectangle {
-                Layout.preferredWidth: Math.min(520, Math.max(440, root.width * 0.32))
-                Layout.minimumWidth: 420
-                Layout.maximumWidth: 540
+                Layout.fillWidth: root.compactPlanningLayout
+                Layout.preferredWidth: root.compactPlanningLayout ? planningLayout.width : Math.min(520, Math.max(440, root.width * 0.32))
+                Layout.minimumWidth: root.compactPlanningLayout ? 0 : 420
+                Layout.maximumWidth: root.compactPlanningLayout ? 16777215 : 540
                 Layout.fillHeight: true
                 radius: 8
                 color: "transparent"
