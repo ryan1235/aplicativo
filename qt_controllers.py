@@ -13066,6 +13066,147 @@ class DebugController(QObject):
     def shutdown(self) -> None:
         self._stop_event.set()
         debug_log("debug", "shutdown", {}, force=self._enabled)
+class CustomNotificationsController(QObject):
+    changed = Signal()
+
+    def __init__(self, settings: dict[str, Any], parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.settings = settings
+        self._items = []
+        self._list_model = DictListModel(["id", "name", "duration", "active", "sound", "showOverlay", "remaining", "progress"], self)
+        self._tick_timer = QTimer(self)
+        self._tick_timer.setInterval(1000)
+        self._tick_timer.timeout.connect(self._tick)
+        self.load()
+
+    @Property(QObject, constant=True)
+    def model(self) -> DictListModel:
+        return self._list_model
+
+    @Property(bool, notify=changed)
+    def hasOverlayItems(self) -> bool:
+        return any(item.get("showOverlay", False) for item in self._items)
+
+    @Property('QVariantList', notify=changed)
+    def availableImages(self) -> list[str]:
+        img_dir = Path("img")
+        if img_dir.exists():
+            return [p.name for p in img_dir.glob("*.png")] + [p.name for p in img_dir.glob("*.jpg")]
+        return []
+
+    def load(self) -> None:
+        notifications_settings = self.settings.get("notifications", {})
+        self._items = notifications_settings.get("custom", [])
+        for item in self._items:
+            item.setdefault("remaining", item.get("duration", 0))
+            if item.get("active") and item.get("remaining", 0) > 0:
+                self._tick_timer.start()
+        self._update_model()
+
+    def save(self) -> None:
+        notifications_settings = self.settings.setdefault("notifications", {})
+        notifications_settings["custom"] = self._items
+        save_settings(self.settings)
+
+    def _update_model(self) -> None:
+        model_items = []
+        for item in self._items:
+            dur = item.get("duration", 1)
+            rem = item.get("remaining", 0)
+            progress = 1.0 - (rem / dur) if dur > 0 else 0.0
+            model_items.append({
+                "id": item.get("id"),
+                "name": item.get("name", "Timer"),
+                "duration": item.get("duration"),
+                "active": item.get("active"),
+                "sound": item.get("sound"),
+                "showOverlay": item.get("showOverlay", False),
+                "remaining": rem,
+                "progress": progress
+            })
+        self._list_model.set_items(model_items)
+        self.changed.emit()
+
+    @Slot(str, int, bool, bool, bool)
+    def createNotification(self, name: str, duration: int, active: bool, sound: bool, show_overlay: bool) -> None:
+        import uuid
+        new_item = {
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "duration": duration,
+            "active": active,
+            "sound": sound,
+            "showOverlay": show_overlay,
+            "remaining": duration
+        }
+        self._items.append(new_item)
+        if active and duration > 0:
+            self._tick_timer.start()
+        self.save()
+        self._update_model()
+
+    @Slot(str, bool)
+    def toggleActive(self, item_id: str, active: bool) -> None:
+        for item in self._items:
+            if item.get("id") == item_id:
+                item["active"] = active
+                if active and item.get("remaining", 0) <= 0:
+                    item["remaining"] = item.get("duration", 0)
+                break
+        self.save()
+        self._update_model()
+        if any(i.get("active") and i.get("remaining", 0) > 0 for i in self._items):
+            self._tick_timer.start()
+
+    @Slot(str)
+    def resetNotification(self, item_id: str) -> None:
+        for item in self._items:
+            if item.get("id") == item_id:
+                item["remaining"] = item.get("duration", 0)
+                item["active"] = True
+                break
+        self.save()
+        self._update_model()
+        if any(i.get("active") and i.get("remaining", 0) > 0 for i in self._items):
+            self._tick_timer.start()
+
+    @Slot(str)
+    def finishNotification(self, item_id: str) -> None:
+        for item in self._items:
+            if item.get("id") == item_id:
+                item["remaining"] = 0
+                item["active"] = False
+                break
+        self.save()
+        self._update_model()
+
+    @Slot(str)
+    def deleteNotification(self, item_id: str) -> None:
+        self._items = [i for i in self._items if i.get("id") != item_id]
+        self.save()
+        self._update_model()
+
+    def _tick(self) -> None:
+        any_active = False
+        for item in self._items:
+            if item.get("active") and item.get("remaining", 0) > 0:
+                item["remaining"] -= 1
+                any_active = True
+                if item["remaining"] <= 0:
+                    item["active"] = False
+                    if item.get("sound", False):
+                        play_sound("squad")
+        if not any_active:
+            self._tick_timer.stop()
+        self._update_model()
+
+    @Slot()
+    def shutdown(self) -> None:
+        self._tick_timer.stop()
+        self.save()
+
+    def setActivityLogger(self, logger) -> None:
+        pass
 
 
 class ControllerRegistry(QObject):
@@ -13092,6 +13233,7 @@ class ControllerRegistry(QObject):
         self.productionController = ProductionController(self.i18nController, self)
         self.timeTaskController = TimeTaskController(self.i18nController, self)
         self.notificationsController = NotificationsController(self.settings_data, self)
+        self.customNotificationsController = CustomNotificationsController(self.settings_data, self)
         for controller in (
             self.appController,
             self.settingsController,
@@ -13100,6 +13242,7 @@ class ControllerRegistry(QObject):
             self.productionController,
             self.timeTaskController,
             self.notificationsController,
+            self.customNotificationsController,
         ):
             controller.setActivityLogger(self.chatController.logActivity)
         self.updateController = UpdateController(self.i18nController, self)
@@ -13159,6 +13302,7 @@ class ControllerRegistry(QObject):
             "productionController",
             "timeTaskController",
             "notificationsController",
+            "customNotificationsController",
             "updateController",
         ):
             context.setContextProperty(name, getattr(self, name))

@@ -69,6 +69,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "squadlock_overlay_enabled": True,
         "squadlock_x": None,
         "squadlock_y": None,
+        "custom": [],
     },
     "discord": {
         "id": "",

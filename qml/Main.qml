@@ -2378,9 +2378,9 @@ ApplicationWindow {
 
     Window {
         id: squadlockOverlayWindow
-        width: 148
-        height: notificationsController.squadlockFinished ? 118 : 82
-        visible: notificationsController.overlayVisible
+        width: Math.max(148, overlayContentLayout.implicitWidth + 24)
+        height: Math.max(82, overlayContentLayout.implicitHeight + 14)
+        visible: overlayController.visible && (notificationsController.overlayVisible || customNotificationsController.hasOverlayItems)
         color: "transparent"
         transientParent: null
         flags: window.interactiveOverlayFlags
@@ -2407,6 +2407,7 @@ ApplicationWindow {
         Component.onCompleted: placeFromSettings()
         onVisibleChanged: if (visible) placeFromSettings()
         onHeightChanged: if (visible) clampToScreen()
+        onWidthChanged: if (visible) clampToScreen()
 
         Rectangle {
             anchors.fill: parent
@@ -2443,67 +2444,114 @@ ApplicationWindow {
             }
 
             ColumnLayout {
+                id: overlayContentLayout
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
                 anchors.topMargin: 5
                 anchors.bottomMargin: 8
                 spacing: 1
 
-                Text {
-                    text: window.tr("notifications.overlay_title")
-                    color: settingsController.secondaryTextColor
-                    font.family: "Segoe UI"
-                    font.pixelSize: 9
-                    font.bold: true
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-                Text {
-                    text: notificationsController.timeText
-                    color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.textColor
-                    font.family: "Segoe UI"
-                    font.pixelSize: 21
-                    font.bold: true
-                    Layout.fillWidth: true
-                }
-                Text {
-                    text: notificationsController.squadlockFinished ? window.tr("notifications.finished") : window.tr("notifications.vehicle")
-                    color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.disabledTextColor
-                    font.family: "Segoe UI"
-                    font.pixelSize: 9
-                    font.bold: true
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: notificationsController.squadlockFinished ? 28 : 0
-                    visible: notificationsController.squadlockFinished
-                    spacing: 6
-
-                    PrimaryButton {
-                        text: window.tr("notifications.reset")
+                ColumnLayout {
+                    visible: notificationsController.overlayVisible
+                    spacing: 1
+                    Text {
+                        text: window.tr("notifications.overlay_title")
+                        color: settingsController.secondaryTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 11
+                        font.bold: true
                         Layout.fillWidth: true
-                        implicitHeight: 24
-                        fill: Qt.rgba(0,0,0,0.4)
-                        hoverFill: Qt.rgba(1,1,1,0.1)
-                        textFill: settingsController.accentColor
-                        font.pixelSize: 9
-                        onPressed: notificationsController.holdOverlayVisible(1500)
-                        onClicked: notificationsController.resetSquadlock()
                     }
-                    PrimaryButton {
-                        text: window.tr("notifications.finish")
+                    Text {
+                        text: notificationsController.timeText
+                        color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.textColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 22
+                        font.bold: true
                         Layout.fillWidth: true
-                        implicitHeight: 24
-                        fill: settingsController.accentColor
-                        hoverFill: settingsController.accentHoverColor
-                        textFill: settingsController.textInverseColor
-                        font.pixelSize: 9
-                        onPressed: notificationsController.holdOverlayVisible(1500)
-                        onClicked: notificationsController.finishSquadlock()
+                    }
+                    Text {
+                        text: notificationsController.squadlockFinished ? window.tr("notifications.finished") : window.tr("notifications.vehicle")
+                        color: notificationsController.squadlockFinished ? settingsController.successColor : settingsController.disabledTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 10
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: notificationsController.squadlockFinished ? 28 : 0
+                        visible: notificationsController.squadlockFinished
+                        spacing: 6
+
+                        PrimaryButton {
+                            text: window.tr("notifications.reset")
+                            Layout.fillWidth: true
+                            implicitHeight: 24
+                            fill: Qt.rgba(0,0,0,0.4)
+                            hoverFill: Qt.rgba(1,1,1,0.1)
+                            textFill: settingsController.accentColor
+                            font.pixelSize: 10
+                            onPressed: notificationsController.holdOverlayVisible(1500)
+                            onClicked: notificationsController.resetSquadlock()
+                        }
+                        PrimaryButton {
+                            text: window.tr("notifications.finish")
+                            Layout.fillWidth: true
+                            implicitHeight: 24
+                            fill: settingsController.accentColor
+                            hoverFill: settingsController.accentHoverColor
+                            textFill: settingsController.textInverseColor
+                            font.pixelSize: 10
+                            onPressed: notificationsController.holdOverlayVisible(1500)
+                            onClicked: notificationsController.finishSquadlock()
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: customNotificationsController.model
+                    delegate: ColumnLayout {
+                        visible: model.showOverlay
+                        spacing: 1
+                        Layout.topMargin: index === 0 && notificationsController.overlayVisible ? 10 : 6
+                        
+                        Text {
+                            text: model.name
+                            color: settingsController.secondaryTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: {
+                                var r = model.remaining;
+                                var h = Math.floor(r / 3600);
+                                var m = Math.floor((r % 3600) / 60);
+                                var s = r % 60;
+                                var out = "";
+                                if (h > 0) out += h + "h ";
+                                if (m > 0) out += m + "m ";
+                                out += s + "s";
+                                return out;
+                            }
+                            color: model.remaining > 0 ? settingsController.textColor : settingsController.successColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 22
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: model.remaining > 0 ? window.tr("notifications.custom.running") : window.tr("notifications.custom.finished")
+                            color: model.remaining > 0 ? settingsController.disabledTextColor : settingsController.successColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
                     }
                 }
             }

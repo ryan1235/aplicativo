@@ -1,4 +1,4 @@
-﻿import QtQuick
+import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../components"
@@ -38,6 +38,7 @@ Flickable {
             wrapMode: Text.WordWrap
         }
 
+        // Squadlock Block
         Rectangle {
             Layout.fillWidth: true
             radius: 8
@@ -192,6 +193,183 @@ Flickable {
             }
         }
 
+        // Custom Notifications Block (Moved Up)
+        Rectangle {
+            Layout.fillWidth: true
+            radius: 8
+            color: "transparent"
+            border.color: "transparent"
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.scrimColor; opacity: 0.2 }
+            Rectangle { anchors.fill: parent; radius: 8; color: settingsController.accentColor; opacity: 0.035 }
+            Rectangle { anchors.fill: parent; radius: 8; color: "transparent"; border.color: settingsController.accentColor; opacity: 0.2; border.width: 1 }
+            implicitHeight: customNotificationsColumn.implicitHeight + 32
+
+            Popup {
+                id: formModal
+                width: Math.min(parent.width - 40, 500)
+                anchors.centerIn: Overlay.overlay
+                modal: true
+                focus: true
+                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                background: Rectangle {
+                    color: settingsController.backgroundColor || Qt.rgba(0.05, 0.05, 0.07, 1)
+                    radius: 8
+                    border.color: settingsController.accentColor
+                    border.width: 1
+                }
+                contentItem: CustomNotificationForm {
+                    id: customForm
+                    onCanceled: formModal.close()
+                    onSaved: function(name, duration, active, sound, showOverlay) {
+                        customNotificationsController.createNotification(name, duration, active, sound, showOverlay)
+                        formModal.close()
+                    }
+                }
+            }
+
+            ColumnLayout {
+                id: customNotificationsColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 16
+                spacing: 16
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: tr("notifications.custom.title")
+                        color: settingsController.textColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 18
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+                    PrimaryButton {
+                        text: tr("notifications.custom.create_new")
+                        onClicked: formModal.open()
+                    }
+                }
+
+                Repeater {
+                    model: customNotificationsController.model
+                    delegate: Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 70
+                        radius: 7
+                        color: "transparent"
+                        border.color: "transparent"
+                        Rectangle { anchors.fill: parent; radius: 7; color: settingsController.scrimColor; opacity: 0.4 }
+                        Rectangle { anchors.fill: parent; radius: 7; color: "transparent"; border.color: Qt.rgba(1,1,1,0.1); border.width: 1 }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 10
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Text {
+                                    text: model.name
+                                    color: settingsController.textColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                }
+                                RowLayout {
+                                    spacing: 8
+                                    Text {
+                                        text: model.remaining > 0 ? tr("notifications.custom.running") : tr("notifications.custom.finished")
+                                        color: model.remaining > 0 ? settingsController.accentColor : settingsController.successColor
+                                        font.family: "Segoe UI"
+                                        font.bold: true
+                                        font.pixelSize: 12
+                                    }
+                                }
+                                ProgressBar {
+                                    Layout.fillWidth: true
+                                    value: model.progress
+                                    background: Rectangle {
+                                        implicitHeight: 6
+                                        radius: 3
+                                        color: "transparent"
+                                        Rectangle { anchors.fill: parent; radius: 3; color: settingsController.scrimColor; opacity: 0.3 }
+                                    }
+                                    contentItem: Item {
+                                        implicitHeight: 6
+                                        Rectangle {
+                                            width: parent.width * model.progress
+                                            height: parent.height
+                                            radius: 3
+                                            color: model.remaining > 0 ? settingsController.accentColor : settingsController.successColor
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: {
+                                    var r = model.remaining;
+                                    var h = Math.floor(r / 3600);
+                                    var m = Math.floor((r % 3600) / 60);
+                                    var s = r % 60;
+                                    var out = "";
+                                    if (h > 0) out += h + "h ";
+                                    if (m > 0) out += m + "m ";
+                                    out += s + "s";
+                                    return out;
+                                }
+                                color: settingsController.textColor
+                                font.family: "Segoe UI"
+                                font.bold: true
+                                Layout.preferredWidth: 80
+                                horizontalAlignment: Text.AlignRight
+                            }
+
+                            PrimaryButton {
+                                text: model.active ? tr("notifications.custom.pause") : tr("notifications.custom.resume")
+                                fill: model.active ? Qt.rgba(1,0.6,0,0.2) : Qt.rgba(0,1,0,0.2)
+                                hoverFill: model.active ? Qt.rgba(1,0.6,0,0.4) : Qt.rgba(0,1,0,0.4)
+                                textFill: model.active ? "#ffb347" : "#77dd77"
+                                implicitHeight: 28
+                                visible: model.remaining > 0
+                                onClicked: customNotificationsController.toggleActive(model.id, !model.active)
+                            }
+
+                            PrimaryButton {
+                                text: tr("notifications.custom.reset")
+                                fill: Qt.rgba(0,0,0,0.4)
+                                hoverFill: Qt.rgba(1,1,1,0.1)
+                                textFill: settingsController.accentColor
+                                implicitHeight: 28
+                                onClicked: customNotificationsController.resetNotification(model.id)
+                            }
+
+                            PrimaryButton {
+                                text: tr("notifications.custom.finish")
+                                fill: Qt.rgba(0,0,0,0.4)
+                                hoverFill: Qt.rgba(1,1,1,0.1)
+                                textFill: settingsController.accentColor
+                                implicitHeight: 28
+                                onClicked: customNotificationsController.finishNotification(model.id)
+                            }
+
+                            PrimaryButton {
+                                text: tr("notifications.custom.delete")
+                                fill: Qt.rgba(1,0,0,0.2)
+                                hoverFill: Qt.rgba(1,0,0,0.4)
+                                textFill: Qt.rgba(1,0.4,0.4,1)
+                                implicitHeight: 28
+                                onClicked: customNotificationsController.deleteNotification(model.id)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Runtime Alerts Block (Moved Down)
         Rectangle {
             Layout.fillWidth: true
             radius: 8
@@ -265,5 +443,3 @@ Flickable {
         }
     }
 }
-
-

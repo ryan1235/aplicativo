@@ -18,10 +18,10 @@
 
 **Purpose**: Confirm scope, affected files, and verification commands
 
-- [ ] T001 Identify affected Python modules, QML files, translations, settings paths from `plan.md`
-- [ ] T002 Confirm writable data paths and migration needs for this feature in `settings_store.py`
-- [ ] T003 [P] Confirm supported translation catalogs that need updates in `translations/`
-- [ ] T004 [P] Define manual checks for affected flows using `quickstart.md`
+- [x] T001 Identify affected Python modules, QML files, translations, settings paths from `plan.md`
+- [x] T002 Confirm writable data paths and migration needs for this feature in `settings_store.py`
+- [x] T003 [P] Confirm supported translation catalogs that need updates in `translations/`
+- [x] T004 [P] Define manual checks for affected flows using `quickstart.md`
 
 ---
 
@@ -31,9 +31,9 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Establish CustomNotification schema and default settings in `settings_store.py`
-- [ ] T006 [P] Add CustomNotification Python controller and QML bindings in `qt_controllers.py`
-- [ ] T007 Add an image provider or asset model in `qt_controllers.py` to expose `img/` to QML
+- [x] T005 Establish CustomNotification schema and default settings in `settings_store.py`
+- [x] T006 [P] Add CustomNotification Python controller and QML bindings in `qt_controllers.py`
+- [x] T007 Add an image provider or asset model in `qt_controllers.py` to expose `img/` to QML
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -47,21 +47,21 @@
 
 ### Verification for User Story 1
 
-- [ ] T008 [P] [US1] Add Python syntax/import check coverage for `qt_controllers.py`
-- [ ] T009 [P] [US1] Document manual validation step in `quickstart.md` for US1
+- [x] T008 [P] [US1] Add Python syntax/import check coverage for `qt_controllers.py`
+- [x] T009 [P] [US1] Document manual validation step in `quickstart.md` for US1
 
 ### Implementation for User Story 1
 
-- [ ] T010 [P] [US1] Implement custom timer countdown logic and start/stop actions in `qt_controllers.py`
-- [ ] T011 [P] [US1] Update `qml/pages/NotificationsPage.qml` to show a list of custom notifications and a Create button
-- [ ] T012 [P] [US1] Create a form component in `qml/components/CustomNotificationForm.qml` for new custom notification inputs (duration, active toggle)
-- [ ] T013 [P] [US1] Create an image selection card component with search input in `qml/components/ImageSelectionCard.qml` to pick images
-- [ ] T014 [US1] Persist new custom notification data via `settings_store.py` upon saving
-- [ ] T015 [P] [US1] Add translation strings (Create Custom Notification, Select Image, Search Images, Duration, Minutes, Hours, Active, Save, Cancel, No images found) in `translations/pt/translation.json`
-- [ ] T016 [P] [US1] Add translation strings in `translations/en/translation.json`
-- [ ] T017 [P] [US1] Add translation strings in `translations/es/translation.json`
-- [ ] T018 [P] [US1] Add translation strings in `translations/fr/translation.json`
-- [ ] T019 [US1] Run and record the independent validation for User Story 1
+- [x] T010 [P] [US1] Implement custom timer countdown logic and start/stop actions in `qt_controllers.py`
+- [x] T011 [P] [US1] Update `qml/pages/NotificationsPage.qml` to show a list of custom notifications and a Create button
+- [x] T012 [P] [US1] Create a form component in `qml/components/CustomNotificationForm.qml` for new custom notification inputs (duration, active toggle)
+- [x] T013 [P] [US1] Create an image selection card component with search input in `qml/components/ImageSelectionCard.qml` to pick images
+- [x] T014 [US1] Persist new custom notification data via `settings_store.py` upon saving
+- [x] T015 [P] [US1] Add translation strings (Create Custom Notification, Select Image, Search Images, Duration, Minutes, Hours, Active, Save, Cancel, No images found) in `translations/pt/translation.json`
+- [x] T016 [P] [US1] Add translation strings in `translations/en/translation.json`
+- [x] T017 [P] [US1] Add translation strings in `translations/es/translation.json`
+- [x] T018 [P] [US1] Add translation strings in `translations/fr/translation.json`
+- [x] T019 [US1] Run and record the independent validation for User Story 1
 
 **Checkpoint**: User Story 1 is fully functional and independently verified
 
@@ -75,15 +75,15 @@
 
 ### Verification for User Story 2
 
-- [ ] T020 [P] [US2] Add manual check to verify sound playing on timer end
-- [ ] T021 [P] [US2] Check syntax in `qt_controllers.py`
+- [x] T020 [P] [US2] Add manual check to verify sound playing on timer end
+- [x] T021 [P] [US2] Check syntax in `qt_controllers.py`
 
 ### Implementation for User Story 2
 
-- [ ] T022 [P] [US2] Add PlaySound property and audio alert trigger logic in `qt_controllers.py`
-- [ ] T023 [P] [US2] Update `qml/components/CustomNotificationForm.qml` to include the "Play Sound" toggle
-- [ ] T024 [P] [US2] Add translation strings (Play Sound) in all `translations/` catalogs
-- [ ] T025 [US2] Run and record the independent validation for User Story 2
+- [x] T022 [P] [US2] Add PlaySound property and audio alert trigger logic in `qt_controllers.py`
+- [x] T023 [P] [US2] Update `qml/components/CustomNotificationForm.qml` to include the "Play Sound" toggle
+- [x] T024 [P] [US2] Add translation strings (Play Sound) in all `translations/` catalogs
+- [x] T025 [US2] Run and record the independent validation for User Story 2
 
 **Checkpoint**: User Stories 1 and 2 both work independently
 
@@ -93,11 +93,11 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T026 [P] Documentation updates in `README.md` if necessary
-- [ ] T027 [P] Translation consistency check across pt/en/es/fr catalogs
-- [ ] T028 Code cleanup and refactoring within affected files
-- [ ] T029 Run Python syntax/import checks for all touched Python files
-- [ ] T030 Run `quickstart.md` validation to ensure end-to-end functionality
+- [x] T026 [P] Documentation updates in `README.md` if necessary
+- [x] T027 [P] Translation consistency check across pt/en/es/fr catalogs
+- [x] T028 Code cleanup and refactoring within affected files
+- [x] T029 Run Python syntax/import checks for all touched Python files
+- [x] T030 Run `quickstart.md` validation to ensure end-to-end functionality
 
 ---
 
