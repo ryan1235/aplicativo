@@ -3593,6 +3593,11 @@ class StockpileController(QObject):
 
     @Property(str, notify=changed)
     def visualWarehouseUpdatedAt(self) -> str:
+        if self._visual_warehouse == "__ALL__":
+            return "Todos os estoques combinados"
+        if self._visual_warehouse.startswith("__REGION__"):
+            region = self._visual_warehouse[len("__REGION__"):]
+            return f"{region} (Todos os estoques combinados)"
         item = self._visual_warehouse_lookup.get(self._visual_warehouse)
         if item:
             return self._visual_update_label(item)
@@ -3829,9 +3834,9 @@ class StockpileController(QObject):
             str(item.get("name") or "") for item in enriched_warehouses
         ]
         available = [name for name in available if name]
-        if available and self._visual_warehouse not in self._visual_warehouse_lookup:
+        if available and self._visual_warehouse not in self._visual_warehouse_lookup and self._visual_warehouse not in ["__ALL__"] and not self._visual_warehouse.startswith("__REGION__"):
             self._visual_warehouse = available[0]
-        elif not available:
+        elif not available and self._visual_warehouse not in ["__ALL__"] and not self._visual_warehouse.startswith("__REGION__"):
             self._visual_warehouse = ""
 
         self._cached_visual_groups = self._visual_groups()
@@ -3931,8 +3936,15 @@ class StockpileController(QObject):
 
         options: list[dict[str, Any]] = []
         translator = Translator(selected_language(self.settings))
+        
+        options.append({
+            "text": "Todos os Estoques",
+            "id": "__ALL__",
+            "type": "region_header"
+        })
+
         for region in sorted(grouped, key=lambda value: value.lower()):
-            options.append({"text": region, "type": "header"})
+            options.append({"text": region, "type": "region_header", "id": f"__REGION__{region}"})
             for warehouse in grouped[region]:
                 updated_raw = str(warehouse.get("last_update") or warehouse.get("updatedAt") or "")
                 inactive = self._depot_state(warehouse) == "inactive"
@@ -4179,7 +4191,32 @@ class StockpileController(QObject):
 
     def _visual_groups(self) -> list[dict[str, Any]]:
         warehouse = self._visual_warehouse
-        rows = list(self._visual_items_by_warehouse.get(warehouse, []))
+        
+        if warehouse == "__ALL__":
+            rows = []
+            for item_list in self._visual_items_by_warehouse.values():
+                rows.extend(item_list)
+        elif warehouse.startswith("__REGION__"):
+            region = warehouse[len("__REGION__"):]
+            rows = []
+            for wh_name, item_list in self._visual_items_by_warehouse.items():
+                wh_data = self._visual_warehouse_lookup.get(wh_name, {})
+                group_label = str(wh_data.get("groupLabel") or wh_data.get("placePath") or wh_data.get("region") or "Outros")
+                if group_label == region:
+                    rows.extend(item_list)
+        else:
+            rows = list(self._visual_items_by_warehouse.get(warehouse, []))
+
+        if warehouse == "__ALL__" or warehouse.startswith("__REGION__"):
+            merged_items = {}
+            for row in rows:
+                key = self._clean_visual_item_name(row)
+                if key not in merged_items:
+                    merged_items[key] = dict(row)
+                else:
+                    merged_items[key]["quantity"] = int(merged_items[key].get("quantity") or 0) + int(row.get("quantity") or 0)
+            rows = list(merged_items.values())
+
         positive_rows = [item for item in rows if int(item.get("quantity", 0) or 0) > 0]
         rows = positive_rows or rows
         ordered_keys = [
