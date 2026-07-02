@@ -920,6 +920,8 @@
   "wiki.damage_waiting": "Selecione dois tanques",
   "wiki.damage_avg_shots": "Tiros",
   "wiki.damage_selected_ammo": "Municao do duelo",
+  "wiki.welcome_title": "Bem-vindo à Foxhole Wiki",
+  "wiki.welcome_subtitle": "Pesquise ou escolha um item para ver as informações completas.",
   "home.activity.title": "Painel de atividade",
   "home.activity.subtitle": "Resumo dos feitos recentes com logs e graficos curtos.",
   "home.activity.open_profile": "Abrir perfil",

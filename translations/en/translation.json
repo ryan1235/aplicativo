@@ -920,6 +920,8 @@
   "wiki.damage_waiting": "Select two tanks",
   "wiki.damage_avg_shots": "Shots",
   "wiki.damage_selected_ammo": "Duel ammo",
+  "wiki.welcome_title": "Welcome to Foxhole Wiki",
+  "wiki.welcome_subtitle": "Search or choose an item to see its full information.",
   "home.activity.title": "Activity dashboard",
   "home.activity.subtitle": "Recent achievements with compact logs and graphs.",
   "home.activity.open_profile": "Open profile",

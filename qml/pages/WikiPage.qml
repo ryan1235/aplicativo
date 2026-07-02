@@ -304,76 +304,6 @@ Item {
                                 }
                             }
                         }
-
-                        Rectangle {
-                            visible: root.wide
-                            Layout.preferredWidth: 150
-                            Layout.preferredHeight: 52
-                            radius: settingsController.cardRadius
-                            color: settingsController.backgroundColor
-                            border.color: settingsController.borderColor
-
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 0
-
-                                Text {
-                                    text: tr("item_search.available_items")
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-
-                                Text {
-                                    text: itemSearchController.loaded ? String(itemSearchController.statusCount) : "-"
-                                    color: settingsController.successColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 18
-                                    font.bold: true
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            visible: root.wide
-                            Layout.preferredWidth: 220
-                            Layout.preferredHeight: 52
-                            radius: settingsController.cardRadius
-                            color: itemSearchController.statusKey === "item_search.error" ? settingsController.dangerPanelColor : settingsController.backgroundColor
-                            border.color: itemSearchController.statusKey === "item_search.error" ? settingsController.warningColor : settingsController.borderColor
-
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 1
-
-                                Text {
-                                    text: tr("item_search.index_status")
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-
-                                Text {
-                                    text: root.statusText()
-                                    color: itemSearchController.statusKey === "item_search.error" ? settingsController.warningColor : settingsController.textColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
                     }
 
                     ListView {
@@ -456,6 +386,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredWidth: root.wide ? 390 : pageContent.width
                     Layout.alignment: Qt.AlignTop
+                    visible: itemSearchController.wikiName !== ""
                     radius: settingsController.cardRadius
                     color: settingsController.surfaceColor
                     border.color: settingsController.borderColor
@@ -613,78 +544,6 @@ Item {
                             }
 
                             Rectangle {
-                                visible: wikiFieldsRepeater.count > 0
-                                implicitWidth: metaFieldsText.implicitWidth + 20
-                                implicitHeight: 24
-                                radius: Math.min(7, settingsController.cardRadius)
-                                color: settingsController.backgroundColor
-                                border.color: settingsController.borderColor
-
-                                Text {
-                                    id: metaFieldsText
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    text: tr("item_search.wiki_fields") + ": " + String(wikiFieldsRepeater.count)
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Rectangle {
-                                visible: wikiSectionsRepeater.count > 0
-                                implicitWidth: metaSectionsText.implicitWidth + 20
-                                implicitHeight: 24
-                                radius: Math.min(7, settingsController.cardRadius)
-                                color: settingsController.backgroundColor
-                                border.color: settingsController.borderColor
-
-                                Text {
-                                    id: metaSectionsText
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    text: tr("wiki.sections") + ": " + String(wikiSectionsRepeater.count)
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Rectangle {
-                                visible: wikiProductionRepeater.count > 0
-                                implicitWidth: metaProductionText.implicitWidth + 20
-                                implicitHeight: 24
-                                radius: Math.min(7, settingsController.cardRadius)
-                                color: settingsController.backgroundColor
-                                border.color: settingsController.borderColor
-
-                                Text {
-                                    id: metaProductionText
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 10
-                                    anchors.rightMargin: 10
-                                    text: tr("item_search.wiki_production") + ": " + String(wikiProductionRepeater.count)
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Rectangle {
                                 visible: itemSearchController.wikiSourceUrl !== ""
                                 implicitWidth: metaSourceText.implicitWidth + 20
                                 implicitHeight: 24
@@ -771,12 +630,6 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 8
-
-                            PrimaryButton {
-                                Layout.fillWidth: true
-                                text: tr("wiki.damage_open")
-                                onClicked: root.openDamageDialog()
-                            }
 
                             PrimaryButton {
                                 Layout.fillWidth: true
@@ -1029,7 +882,107 @@ Item {
 
             Rectangle {
                 Layout.fillWidth: true
-                visible: wikiFieldsRepeater.count === 0 && wikiProductionRepeater.count === 0 && wikiSectionsRepeater.count === 0
+                Layout.minimumHeight: 320
+                visible: itemSearchController.wikiName === ""
+                radius: settingsController.cardRadius
+                color: settingsController.surfaceColor
+                border.color: settingsController.borderColor
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 28
+
+                    Rectangle {
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 120
+                        height: 120
+                        radius: 60
+                        color: settingsController.accentPanelColor
+                        border.color: settingsController.accentColor
+                        border.width: 1
+
+                        Item {
+                            anchors.centerIn: parent
+                            width: 60
+                            height: 60
+
+                            Canvas {
+                                anchors.fill: parent
+                                property color strokeColor: settingsController.accentColor
+                                onStrokeColorChanged: requestPaint()
+                                onPaint: {
+                                    var ctx = getContext("2d")
+                                    ctx.clearRect(0, 0, width, height)
+                                    ctx.strokeStyle = strokeColor
+                                    ctx.lineWidth = 4
+                                    ctx.lineCap = "round"
+                                    ctx.lineJoin = "round"
+
+                                    ctx.beginPath()
+                                    ctx.moveTo(30, 10)
+                                    ctx.lineTo(30, 50)
+                                    ctx.moveTo(30, 10)
+                                    ctx.quadraticCurveTo(18, 2, 6, 10)
+                                    ctx.lineTo(6, 50)
+                                    ctx.quadraticCurveTo(18, 42, 30, 50)
+                                    ctx.quadraticCurveTo(42, 42, 54, 50)
+                                    ctx.lineTo(54, 10)
+                                    ctx.quadraticCurveTo(42, 2, 30, 10)
+                                    ctx.stroke()
+
+                                    ctx.beginPath()
+                                    ctx.moveTo(14, 20)
+                                    ctx.lineTo(24, 20)
+                                    ctx.moveTo(14, 30)
+                                    ctx.lineTo(24, 30)
+                                    ctx.moveTo(14, 40)
+                                    ctx.lineTo(20, 40)
+                                    ctx.stroke()
+
+                                    ctx.beginPath()
+                                    ctx.moveTo(36, 20)
+                                    ctx.lineTo(46, 20)
+                                    ctx.moveTo(36, 30)
+                                    ctx.lineTo(46, 30)
+                                    ctx.moveTo(36, 40)
+                                    ctx.lineTo(42, 40)
+                                    ctx.stroke()
+                                }
+                            }
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.alignment: Qt.AlignHCenter
+                        spacing: 10
+
+                        Text {
+                            text: tr("wiki.welcome_title")
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 24
+                            font.bold: true
+                            Layout.alignment: Qt.AlignHCenter
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Text {
+                            text: tr("wiki.welcome_subtitle")
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 15
+                            Layout.alignment: Qt.AlignHCenter
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            Layout.maximumWidth: 380
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                visible: itemSearchController.wikiName !== "" && wikiFieldsRepeater.count === 0 && wikiProductionRepeater.count === 0 && wikiSectionsRepeater.count === 0
                 radius: settingsController.cardRadius
                 color: settingsController.surfaceColor
                 border.color: settingsController.borderColor
