@@ -1806,7 +1806,7 @@ class AppController(QObject):
             {"key": "stockpile", "labelKey": "stockpile.nav", "icon": "database", "section": "logistics"},
             {"key": "production", "labelKey": "production.nav", "icon": "factory", "section": "logistics"},
             {"key": "itemSearch", "labelKey": "item_search.nav", "icon": "search", "section": "tools"},
-            {"key": "wiki", "labelKey": "wiki.nav", "icon": "search", "section": "tools"},
+            {"key": "wiki", "labelKey": "wiki.nav", "icon": "wiki.png", "section": "tools"},
             {"key": "identifyItem", "labelKey": "identify.nav", "icon": "target", "section": "tools"},
             {"key": "notifications", "labelKey": "notifications.nav", "icon": "bell", "section": "tools"},
             {"key": "settings", "labelKey": "nav.settings", "icon": "settings", "section": "config"},
@@ -5874,6 +5874,7 @@ class ChatController(QObject):
             self._auth_error_current_level = error_data.get("currentAccessLevel", 0)
             self._auth_error_required_level = error_data.get("requiredAccessLevel", 0)
             self._auth_denied = error_data["category"] == "ACCESS_DENIED"
+            import time
             self._auth_retry_after = time.monotonic() + 30
             self._status = error_data["message"]
             if error_data["category"] in ("REAUTH", "NOT_FOUND"):
@@ -7471,7 +7472,7 @@ class ItemSearchController(QObject):
             }
         ]
         for ammo in self._damage_ammo_rows:
-            if not self._ammo_relevant_for_vehicle(ammo, "tank armour armor vehicle"):
+            if not self._ammo_relevant_for_tank_duel(ammo, "tank armour armor vehicle"):
                 continue
             name = str(ammo.get("name") or "")
             if not name:
@@ -7802,7 +7803,7 @@ class ItemSearchController(QObject):
             )
         )
         for ammo in self._damage_ammo_rows:
-            if not self._ammo_relevant_for_vehicle(ammo, combined_resistance):
+            if not self._ammo_relevant_for_tank_duel(ammo, combined_resistance):
                 continue
             la = self._damage_estimate(right, ammo, penetration_percent)
             ra = self._damage_estimate(left, ammo, penetration_percent)
@@ -8870,11 +8871,11 @@ class ItemSearchController(QObject):
                 {"label": "Dados insuficientes", "value": "HP de um ou ambos os tanques é desconhecido. Abra cada tanque na Wiki primeiro.", "kind": "warning"},
             ]
 
-        # Filter ammo to only those relevant for vehicle-vs-vehicle duels
+        # Filter ammo to tank-mounted calibres for tank-vs-tank duels.
         left_res  = self._normalize_search_text(left.get("resistance_type") or left.get("detail") or "")
         right_res = self._normalize_search_text(right.get("resistance_type") or right.get("detail") or "")
         combined_res = left_res + " " + right_res
-        relevant_ammos = [a for a in self._damage_ammo_rows if self._ammo_relevant_for_vehicle(a, combined_res)]
+        relevant_ammos = [a for a in self._damage_ammo_rows if self._ammo_relevant_for_tank_duel(a, combined_res)]
 
         if not relevant_ammos:
             relevant_ammos = self._damage_ammo_rows  # fallback: use all if filter returns nothing
@@ -8894,6 +8895,7 @@ class ItemSearchController(QObject):
                 "right_attack": ra,
                 "left_score": ls,
                 "right_score": rs,
+                "total_score": (self._damage_number(ls) or 9999) + (self._damage_number(rs) or 9999),
                 "diff": diff,
             })
 
@@ -8927,8 +8929,14 @@ class ItemSearchController(QObject):
             winner_kind  = "note"
             loser_kind   = "note"
 
-        # Best single ammo result
-        best = results[0]  # highest diff = most favourable for A
+        # Same criterion used by Auto: fastest combined duel.
+        best = min(
+            results,
+            key=lambda r: (
+                r.get("total_score") or 9999,
+                -(self._damage_number(r["ammo"].get("damage")) or 0),
+            ),
+        )
         best_ammo_name = str(best["ammo"].get("name") or "-")
         best_ls = best["left_score"]
         best_rs = best["right_score"]
@@ -8940,15 +8948,7 @@ class ItemSearchController(QObject):
              "kind": winner_kind},
         ]
 
-        # Best ammo detail
-        if best["diff"] > 0:
-            rows.append({"label": f"Melhor munição para {left_name}", "value": best_ammo_name, "kind": "success"})
-        elif best["diff"] < 0:
-            # If best for A is actually negative, the best for A overall is from the right_wins side
-            best_for_a = results[-1] if right_wins else results[0]
-            rows.append({"label": "Melhor munição encontrada", "value": str(best_for_a["ammo"].get("name") or "-"), "kind": "warning"})
-        else:
-            rows.append({"label": "Melhor munição", "value": best_ammo_name, "kind": "note"})
+        rows.append({"label": "Municao auto", "value": best_ammo_name, "kind": "note"})
 
         rows.append({"label": f"{left_name} destrói {right_name} com {best_ammo_name}", "value": f"{best_ls} tiros", "kind": "success"})
         rows.append({"label": f"{right_name} destrói {left_name} com {best_ammo_name}", "value": f"{best_rs} tiros", "kind": "warning"})
@@ -8978,6 +8978,30 @@ class ItemSearchController(QObject):
         rows.append({"label": "Nota", "value": "Baseado em HP banco/wiki + dano por munição. Não considera cadência, distância, ângulo, reparo ou tripulação.", "kind": "note"})
         return rows
 
+    @classmethod
+    def _ammo_relevant_for_tank_duel(cls, ammo: dict[str, Any], combined_resistance: str) -> bool:
+        if not cls._ammo_relevant_for_vehicle(ammo, combined_resistance):
+            return False
+        text = cls._normalize_search_text(
+            " ".join(
+                str(value)
+                for value in (
+                    ammo.get("name"),
+                    ammo.get("detail"),
+                    ammo.get("damage_type"),
+                )
+                if value
+            )
+        )
+        blocked = (
+            "mine", "torpedo", "grenade", "flask", "sticky", "rpg", "rocket",
+            "satchel", "charge", "havoc", "mammon", "tremola", "ignifist",
+        )
+        if any(token in text for token in blocked):
+            return False
+        tank_calibres = ("12 7mm", "14 5mm", "20mm", "30mm", "40mm", "68mm", "75mm", "94 5mm")
+        return any(calibre in text for calibre in tank_calibres)
+
     @staticmethod
     def _ammo_relevant_for_vehicle(ammo: dict[str, Any], combined_resistance: str) -> bool:
         """Return True if this ammo is suitable for a vehicle-vs-vehicle duel."""
@@ -8985,7 +9009,10 @@ class ItemSearchController(QObject):
         uso_text = " ".join(uso)
         damage_type = ItemSearchController._normalize_search_text(ammo.get("damage_type") or "")
 
-        if "anti-ship" in uso_text or "anti-large-ship" in uso_text:
+        def has_usage(tags: tuple[str, ...]) -> bool:
+            return any(ItemSearchController._normalize_search_text(tag) in uso_text for tag in tags)
+
+        if has_usage(("anti-ship", "anti-large-ship")):
             is_ship = any(t in combined_resistance for t in ("ship", "naval", "submarine"))
             return is_ship
 
@@ -8996,9 +9023,9 @@ class ItemSearchController(QObject):
             "base destruction", "heavy pve", "sea mine", "infantry demolition",
             "area bleed",
         )
-        if any(tag in uso_text for tag in EXCLUDE_TAGS):
+        if has_usage(EXCLUDE_TAGS):
             # Exception: if it also explicitly mentions anti-tank or anti-vehicle, keep it
-            if not any(t in uso_text for t in ("anti-tank", "anti-vehicle", "anti-armor", "anti-armour")):
+            if not has_usage(("anti-tank", "anti-vehicle", "anti-armor", "anti-armour", "vehicle weapon", "light vehicle", "light vehicles", "heavy vehicle")):
                 return False
 
         # Always include if tagged as vehicle / tank relevant
@@ -9007,7 +9034,7 @@ class ItemSearchController(QObject):
             "vehicle weapon", "heavy vehicle", "light vehicle",
             "armour piercing", "anti-structure medio",
         )
-        if any(tag in uso_text for tag in INCLUDE_TAGS):
+        if has_usage(INCLUDE_TAGS):
             return True
 
         # Include standard calibre ammos (no uso or pve/artillery)
