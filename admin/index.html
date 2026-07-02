@@ -423,7 +423,7 @@
       }
 
       .dashboard-toolbar {
-        grid-template-columns: minmax(420px, 1fr) 220px 112px;
+        grid-template-columns: minmax(320px, 1fr) 180px;
         align-items: stretch;
         background: var(--panel);
         border-color: var(--line);
@@ -1859,14 +1859,14 @@
                 </div>
               </div>
               <label class="field select-with-caption">
-                <span data-i18n="home.group_by">Agrupar atividade</span>
-                <select id="home-split-select" aria-label="Selecionar agrupamento">
-                  <option value="category" data-i18n="home.split_category">Por categoria</option>
-                  <option value="action" data-i18n="home.split_action">Por acao</option>
-                  <option value="user" data-i18n="home.split_user">Por usuario</option>
+                <span data-i18n="home.period_label">Agrupar tempo</span>
+                <select id="home-period-select" aria-label="Selecionar periodo">
+                  <option value="" data-i18n="home.period_auto">Automatico</option>
+                  <option value="hour" data-i18n="home.period_hour">Por horas</option>
+                  <option value="day" data-i18n="home.period_day">Por dias</option>
+                  <option value="month" data-i18n="home.period_month">Por meses</option>
                 </select>
               </label>
-              <button id="home-refresh" class="btn primary" type="button" data-i18n="home.refresh">Atualizar</button>
             </div>
 
             <section class="dashboard-hero" aria-label="Resumo geral">
@@ -2251,7 +2251,7 @@
 
     <div id="toast" class="toast"></div>
 
-    <script src="i18n.js?v=20260701-admin-dashboard"></script>
+    <script src="i18n.js?v=20260702-admin-dashboard-v2"></script>
     <script>
       const hiddenText = (values, mask = 71) =>
         String.fromCharCode(...values.map((value) => value ^ mask));
@@ -2314,8 +2314,7 @@
         usersPage: document.getElementById("users-page"),
         newsPage: document.getElementById("news-page"),
         homeRangeButtons: Array.from(document.querySelectorAll("[data-home-range]")),
-        homeSplitSelect: document.getElementById("home-split-select"),
-        homeRefresh: document.getElementById("home-refresh"),
+        homePeriodSelect: document.getElementById("home-period-select"),
         homeTotalQuantity: document.getElementById("home-total-quantity"),
         homeTotalEvents: document.getElementById("home-total-events"),
         homeOnlineCount: document.getElementById("home-online-count"),
@@ -2434,7 +2433,6 @@
         render();
       });
       els.refresh.addEventListener("click", loadUsers);
-      els.homeRefresh.addEventListener("click", loadHomeDashboard);
       els.homeRangeButtons.forEach((button) => {
         button.addEventListener("click", () => {
           state.homeRange = button.dataset.homeRange || "today";
@@ -2442,8 +2440,8 @@
           loadHomeDashboard();
         });
       });
-      els.homeSplitSelect.addEventListener("change", () => {
-        state.homeSplitBy = els.homeSplitSelect.value || "category";
+
+      els.homePeriodSelect.addEventListener("change", () => {
         loadHomeDashboard();
       });
       els.homeActivityChart.addEventListener("mousemove", (event) => {
@@ -2464,22 +2462,24 @@
         const nextIndex = distance <= 34 ? nearest : -1;
         if (els.homeActivityChart.__hoverIndex !== nextIndex) {
           els.homeActivityChart.__hoverIndex = nextIndex;
-          drawLineChart(els.homeActivityChart, state.homeTimeseries, {
+          const paddedTimeseries = smartPadTimeseries(state.homeTimeseries, state.homeRange, selectedHomePeriod());
+          drawLineChart(els.homeActivityChart, paddedTimeseries, {
             valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
-            labelOf: (row) => String(row.bucket || row.series || row.category || row.action || "-"),
+            labelOf: (row) => row._label,
             valueLabel: t("home.chart_value_label"),
-            limit: 10,
+            limit: 31,
           });
         }
       });
       els.homeActivityChart.addEventListener("mouseleave", () => {
         if (els.homeActivityChart.__hoverIndex !== -1) {
           els.homeActivityChart.__hoverIndex = -1;
-          drawLineChart(els.homeActivityChart, state.homeTimeseries, {
+          const paddedTimeseries = smartPadTimeseries(state.homeTimeseries, state.homeRange, selectedHomePeriod());
+          drawLineChart(els.homeActivityChart, paddedTimeseries, {
             valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
-            labelOf: (row) => String(row.bucket || row.series || row.category || row.action || "-"),
+            labelOf: (row) => row._label,
             valueLabel: t("home.chart_value_label"),
-            limit: 10,
+            limit: 31,
           });
         }
       });
@@ -2935,8 +2935,12 @@
       }
 
       function selectedHomePeriod() {
-        if (state.homeRange === "year" || state.homeRange === "total") return "month";
-        return "day";
+        if (els.homePeriodSelect && els.homePeriodSelect.value) {
+          return els.homePeriodSelect.value;
+        }
+        if (state.homeRange === "today") return "hour";
+        if (state.homeRange === "week" || state.homeRange === "month") return "day";
+        return "month";
       }
 
       function selectedHomeRange() {
@@ -2944,7 +2948,7 @@
       }
 
       function selectedHomeSplitBy() {
-        return els.homeSplitSelect && els.homeSplitSelect.value ? els.homeSplitSelect.value : state.homeSplitBy || "category";
+        return "category";
       }
 
       function renderBarList(container, rows, options = {}) {
@@ -3279,12 +3283,15 @@
         gradient.addColorStop(0, cssVar("--accent-soft", "rgba(97,214,200,0.22)"));
         gradient.addColorStop(1, "rgba(0,0,0,0)");
         ctx.beginPath();
-        points.forEach((point, index) => {
-          if (index === 0) ctx.moveTo(point.x, point.y);
-          else ctx.lineTo(point.x, point.y);
-        });
-        ctx.lineTo(points[points.length - 1].x, pad.top + plotH);
-        ctx.lineTo(points[0].x, pad.top + plotH);
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 0; i < points.length - 1; i++) {
+            const xMid = (points[i].x + points[i + 1].x) / 2;
+            ctx.bezierCurveTo(xMid, points[i].y, xMid, points[i + 1].y, points[i + 1].x, points[i + 1].y);
+          }
+          ctx.lineTo(points[points.length - 1].x, pad.top + plotH);
+          ctx.lineTo(points[0].x, pad.top + plotH);
+        }
         ctx.closePath();
         ctx.fillStyle = gradient;
         ctx.fill();
@@ -3292,10 +3299,13 @@
         strokeGradient.addColorStop(0, accent);
         strokeGradient.addColorStop(1, accent2);
         ctx.beginPath();
-        points.forEach((point, index) => {
-          if (index === 0) ctx.moveTo(point.x, point.y);
-          else ctx.lineTo(point.x, point.y);
-        });
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          for (let i = 0; i < points.length - 1; i++) {
+            const xMid = (points[i].x + points[i + 1].x) / 2;
+            ctx.bezierCurveTo(xMid, points[i].y, xMid, points[i + 1].y, points[i + 1].x, points[i + 1].y);
+          }
+        }
         ctx.strokeStyle = strokeGradient;
         ctx.lineWidth = 4;
         ctx.lineJoin = "round";
@@ -3481,6 +3491,111 @@
         return rows;
       }
 
+      function smartPadTimeseries(raw, range, period) {
+        if (!raw || !raw.length) return [];
+        const map = {};
+        raw.forEach((r) => {
+          if (r && r.bucket) map[r.bucket] = r;
+        });
+
+        const padded = [];
+
+        if (range === "today" || period === "hour") {
+          let matchedAny = false;
+          for (let i = 0; i < 24; i++) {
+            const hh = String(i).padStart(2, "0");
+            const key = Object.keys(map).find((k) => {
+              if (k === hh || k === `${hh}:00`) return true;
+              const timeMatch = String(k).match(/(?:T| )(\d{2})(?::\d{2})?(?::\d{2})?(?:\.\d+)?Z?$/);
+              if (timeMatch && timeMatch[1] === hh) return true;
+              return false;
+            });
+            const val = key ? map[key] : { bucket: `${hh}:00`, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${hh}:00` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            const hasOnlyDates = raw.every((r) => r.bucket && String(r.bucket).length <= 10);
+            if (hasOnlyDates) {
+              const currentHour = new Date().getHours();
+              let sumEvents = 0;
+              let sumQuantity = 0;
+              raw.forEach((r) => {
+                sumEvents += r.totalEvents || 0;
+                sumQuantity += r.totalQuantity || 0;
+              });
+              padded[currentHour].totalEvents = sumEvents;
+              padded[currentHour].totalQuantity = sumQuantity;
+              return padded;
+            }
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        if (range === "week" && period === "day") {
+          const today = new Date();
+          let matchedAny = false;
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date(today.getTime() - i * 86400000);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            const dateStr = `${yyyy}-${mm}-${dd}`;
+            const key = Object.keys(map).find((k) => String(k).startsWith(dateStr));
+            const val = key ? map[key] : { bucket: dateStr, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${dd}/${mm}` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        if (range === "month" && period === "day") {
+          const today = new Date();
+          let matchedAny = false;
+          for (let i = 29; i >= 0; i--) {
+            const d = new Date(today.getTime() - i * 86400000);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const dd = String(d.getDate()).padStart(2, "0");
+            const dateStr = `${yyyy}-${mm}-${dd}`;
+            const key = Object.keys(map).find((k) => String(k).startsWith(dateStr));
+            const val = key ? map[key] : { bucket: dateStr, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${dd}/${mm}` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        if (range === "year" || period === "month") {
+          const today = new Date();
+          const monthsNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+          let matchedAny = false;
+          for (let i = 11; i >= 0; i--) {
+            const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const monthStr = `${yyyy}-${mm}`;
+            const key = Object.keys(map).find((k) => String(k).startsWith(monthStr));
+            const val = key ? map[key] : { bucket: monthStr, totalEvents: 0, totalQuantity: 0 };
+            if (key) matchedAny = true;
+            padded.push({ ...val, _label: `${monthsNames[d.getMonth()]}/${String(yyyy).slice(2)}` });
+          }
+          if (!matchedAny && raw.length > 0) {
+            return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+          }
+          return padded;
+        }
+
+        return raw.map((r) => ({ ...r, _label: String(r.bucket || r.series || r.category || r.action || "-") }));
+      }
+
       function renderHomeDashboard() {
         const summary = state.homeSummary || {};
         const overview = state.homeOverview || {};
@@ -3503,11 +3618,12 @@
         const topAction = (state.homeActions[0] && (state.homeActions[0].action || state.homeActions[0].category || state.homeActions[0].series)) || "-";
         const topUser = (state.homeUsers[0] && (state.homeUsers[0].user && displayName(state.homeUsers[0].user))) || (state.homeUsers[0] && state.homeUsers[0].userId) || "-";
         els.homeSummaryText.textContent = t("home.summary_loaded", { category: topCategory, action: topAction, user: topUser });
-        drawLineChart(els.homeActivityChart, state.homeTimeseries, {
+        const paddedTimeseries = smartPadTimeseries(state.homeTimeseries, state.homeRange, selectedHomePeriod());
+        drawLineChart(els.homeActivityChart, paddedTimeseries, {
           valueOf: (row) => Number(row.totalEvents || row.totalQuantity || 0) || 0,
-          labelOf: (row) => String(row.bucket || row.series || row.category || row.action || "-"),
+          labelOf: (row) => row._label,
           valueLabel: t("home.chart_value_label"),
-          limit: 10,
+          limit: 31,
         });
         drawHorizontalBars(
           els.homeLoginChart,
@@ -3551,7 +3667,6 @@
       async function loadHomeDashboard() {
         if (state.homeLoading || !token) return;
         state.homeLoading = true;
-        els.homeRefresh.disabled = true;
         const range = selectedHomeRange();
         const period = selectedHomePeriod();
         const splitBy = selectedHomeSplitBy();
@@ -3566,7 +3681,7 @@
             optionalRequest(`/gg-logs/stats/categories?${queryRange}`),
             optionalRequest(`/gg-logs/stats/actions?${queryRange}`),
             optionalRequest(`/gg-logs/stats/users?${queryRange}&limit=10`),
-            optionalRequest(`/gg-logs/stats/timeseries?${queryRange}&period=${encodeURIComponent(period)}&splitBy=${encodeURIComponent(splitBy)}`),
+            optionalRequest(`/gg-logs/stats/timeseries?${queryRange}&period=${encodeURIComponent(period)}${splitBy ? `&splitBy=${encodeURIComponent(splitBy)}` : ""}`),
             optionalRequest(`/gg-logs?${queryRange}&take=10`),
             optionalRequest(`/gg-logs?${queryRange}&category=navegacao&action=abrir_pagina&take=120`),
             optionalRequest("/gg-logs?range=year&category=auth&take=600"),
@@ -3586,7 +3701,6 @@
           toast(error.message, "error");
         } finally {
           state.homeLoading = false;
-          els.homeRefresh.disabled = false;
         }
       }
 
