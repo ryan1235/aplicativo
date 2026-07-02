@@ -26,6 +26,14 @@ Item {
     anchors.fill: parent
     z: 9999
 
+    function tr(key) {
+        if (typeof i18nController !== "undefined") {
+            i18nController.revision
+            return i18nController.t(key)
+        }
+        return key
+    }
+
     // Consume mouse events
     MouseArea {
         anchors.fill: parent
@@ -37,7 +45,7 @@ Item {
     // Background Overlay
     Rectangle {
         anchors.fill: parent
-        color: Qt.rgba(uiTheme.background.r, uiTheme.background.g, uiTheme.background.b, 0.95)
+        color: Qt.rgba(settingsController.backgroundColor.r, settingsController.backgroundColor.g, settingsController.backgroundColor.b, 0.95)
     }
 
     // Main Container
@@ -46,8 +54,8 @@ Item {
         width: Math.min(parent.width - 40, 500)
         height: mainColumn.implicitHeight + 60
         anchors.centerIn: parent
-        color: uiTheme.surface
-        radius: uiTheme.cardRadius
+        color: settingsController.surfaceColor
+        radius: 18
         border.color: categoryBorderColor()
         border.width: 1
 
@@ -92,7 +100,7 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
                 text: getTitle()
-                color: uiTheme.text
+                color: settingsController.textColor
                 font.pixelSize: 24
                 font.bold: true
                 horizontalAlignment: Text.AlignHCenter
@@ -104,7 +112,7 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
                 text: getBody()
-                color: uiTheme.mutedText
+                color: settingsController.mutedTextColor
                 font.pixelSize: 15
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
@@ -114,10 +122,10 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: detailLayout.implicitHeight + 20
-                color: uiTheme.background
-                radius: uiTheme.cardRadius - 2
+                color: settingsController.backgroundColor
+                radius: 10
                 visible: hasDetails()
-                border.color: uiTheme.border
+                border.color: settingsController.borderColor
                 border.width: 1
 
                 GridLayout {
@@ -131,30 +139,30 @@ Item {
                     // Blocked details
                     Text {
                         visible: root.errorCategory === "BLOCKED"
-                        text: i18n.t("error.auth.blocked.reason_label") + ":"
-                        color: uiTheme.mutedText
+                        text: tr("error.auth.blocked.reason_label") + ":"
+                        color: settingsController.mutedTextColor
                         font.pixelSize: 13
                         font.bold: true
                     }
                     Text {
                         visible: root.errorCategory === "BLOCKED"
                         text: root.blockedReason
-                        color: uiTheme.text
+                        color: settingsController.textColor
                         font.pixelSize: 13
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
                     }
                     Text {
                         visible: root.errorCategory === "BLOCKED" && root.blockedAt !== ""
-                        text: i18n.t("error.auth.blocked.date_label") + ":"
-                        color: uiTheme.mutedText
+                        text: tr("error.auth.blocked.date_label") + ":"
+                        color: settingsController.mutedTextColor
                         font.pixelSize: 13
                         font.bold: true
                     }
                     Text {
                         visible: root.errorCategory === "BLOCKED" && root.blockedAt !== ""
                         text: root.blockedAt
-                        color: uiTheme.text
+                        color: settingsController.textColor
                         font.pixelSize: 13
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
@@ -163,15 +171,15 @@ Item {
                     // Access Denied Details
                     Text {
                         visible: root.errorCategory === "ACCESS_DENIED" || root.errorCategory === "PERMISSION"
-                        text: i18n.t("Nível de Acesso") + ":"
-                        color: uiTheme.mutedText
+                        text: tr("Nível de Acesso") + ":"
+                        color: settingsController.mutedTextColor
                         font.pixelSize: 13
                         font.bold: true
                     }
                     Text {
                         visible: root.errorCategory === "ACCESS_DENIED" || root.errorCategory === "PERMISSION"
                         text: root.currentLevel + " → Requerido: " + root.requiredLevel
-                        color: uiTheme.text
+                        color: settingsController.textColor
                         font.pixelSize: 13
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
@@ -181,14 +189,14 @@ Item {
                     Text {
                         visible: root.errorCategory === "UNKNOWN"
                         text: "Mensagem:"
-                        color: uiTheme.mutedText
+                        color: settingsController.mutedTextColor
                         font.pixelSize: 13
                         font.bold: true
                     }
                     Text {
                         visible: root.errorCategory === "UNKNOWN"
                         text: root.errorMessage
-                        color: uiTheme.text
+                        color: settingsController.textColor
                         font.pixelSize: 13
                         wrapMode: Text.Wrap
                         Layout.fillWidth: true
@@ -205,42 +213,62 @@ Item {
                 spacing: 15
 
                 // Secondary/Go Back Button
-                Button {
+                PrimaryButton {
                     Layout.fillWidth: true
-                    text: i18n.t("error.auth.btn.go_back")
+                    Layout.preferredHeight: 44
+                    text: tr("error.auth.btn.go_back")
                     visible: root.errorCategory === "PERMISSION"
+                    fill: settingsController.controlColor
+                    hoverFill: settingsController.controlHoverColor
+                    textFill: settingsController.textColor
                     onClicked: root.goBackClicked()
                 }
 
                 // Retry Button
-                Button {
+                PrimaryButton {
                     Layout.fillWidth: true
-                    text: i18n.t("error.auth.btn.retry")
+                    Layout.preferredHeight: 44
+                    text: tr("error.auth.btn.retry")
                     visible: root.errorCategory === "ACCESS_DENIED" || root.errorCategory === "UNKNOWN"
+                    fill: settingsController.accentColor
+                    hoverFill: settingsController.accentHoverColor
+                    textFill: settingsController.textColor
                     onClicked: root.retryClicked()
                 }
 
                 // Sign in with Discord Button
-                Button {
+                PrimaryButton {
                     Layout.fillWidth: true
-                    text: i18n.t("error.auth.btn.signin_discord")
+                    Layout.preferredHeight: 44
+                    text: tr("error.auth.btn.signin_discord")
                     visible: root.errorCategory === "REAUTH"
+                    fill: settingsController.infoColor
+                    hoverFill: settingsController.controlHoverColor
+                    textFill: settingsController.textColor
                     onClicked: root.signinClicked()
                 }
 
                 // Logout Button
-                Button {
+                PrimaryButton {
                     Layout.fillWidth: true
-                    text: i18n.t("error.auth.btn.logout")
+                    Layout.preferredHeight: 44
+                    text: tr("error.auth.btn.logout")
                     visible: root.errorCategory !== "PERMISSION"
+                    fill: settingsController.controlColor
+                    hoverFill: settingsController.controlHoverColor
+                    textFill: settingsController.textColor
                     onClicked: root.logoutClicked()
                 }
 
                 // Close App Button
-                Button {
+                PrimaryButton {
                     Layout.fillWidth: true
-                    text: i18n.t("error.auth.btn.close_app")
+                    Layout.preferredHeight: 44
+                    text: tr("error.auth.btn.close_app")
                     visible: root.errorCategory === "BLOCKED"
+                    fill: settingsController.dangerColor
+                    hoverFill: settingsController.dangerHoverColor
+                    textFill: settingsController.textColor
                     onClicked: root.closeAppClicked()
                 }
             }
@@ -249,9 +277,9 @@ Item {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.fillWidth: true
-                text: root.errorCategory === "BLOCKED" ? i18n.t("error.auth.blocked.contact_support") : ""
+                text: root.errorCategory === "BLOCKED" ? tr("error.auth.blocked.contact_support") : ""
                 visible: root.errorCategory === "BLOCKED"
-                color: uiTheme.mutedText
+                color: settingsController.mutedTextColor
                 font.pixelSize: 12
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
@@ -262,35 +290,23 @@ Item {
     // Helper functions
     function categoryColor() {
         switch(root.errorCategory) {
-            case "BLOCKED": return uiTheme.danger;
-            case "NOT_FOUND": return uiTheme.danger;
-            case "ACCESS_DENIED": return uiTheme.warning;
-            case "PERMISSION": return uiTheme.warning;
-            case "REAUTH": return uiTheme.info;
-            default: return uiTheme.mutedText;
+            case "BLOCKED": return settingsController.dangerColor;
+            case "NOT_FOUND": return settingsController.dangerColor;
+            case "ACCESS_DENIED": return settingsController.warningColor || settingsController.accentColor;
+            case "PERMISSION": return settingsController.warningColor || settingsController.accentColor;
+            case "REAUTH": return settingsController.infoColor;
+            default: return settingsController.mutedTextColor;
         }
     }
 
     function categoryBorderColor() {
-        switch(root.errorCategory) {
-            case "BLOCKED": return Qt.rgba(uiTheme.danger.r, uiTheme.danger.g, uiTheme.danger.b, 0.3);
-            case "NOT_FOUND": return Qt.rgba(uiTheme.danger.r, uiTheme.danger.g, uiTheme.danger.b, 0.3);
-            case "ACCESS_DENIED": return Qt.rgba(uiTheme.warning.r, uiTheme.warning.g, uiTheme.warning.b, 0.3);
-            case "PERMISSION": return Qt.rgba(uiTheme.warning.r, uiTheme.warning.g, uiTheme.warning.b, 0.3);
-            case "REAUTH": return Qt.rgba(uiTheme.info.r, uiTheme.info.g, uiTheme.info.b, 0.3);
-            default: return uiTheme.border;
-        }
+        var c = categoryColor();
+        return Qt.rgba(c.r, c.g, c.b, 0.3);
     }
 
     function categoryPanelColor() {
-        switch(root.errorCategory) {
-            case "BLOCKED": return uiTheme.dangerPanel;
-            case "NOT_FOUND": return uiTheme.dangerPanel;
-            case "ACCESS_DENIED": return uiTheme.accentPanel; // or a warning panel if available
-            case "PERMISSION": return uiTheme.accentPanel;
-            case "REAUTH": return Qt.rgba(uiTheme.info.r, uiTheme.info.g, uiTheme.info.b, 0.1);
-            default: return uiTheme.background;
-        }
+        var c = categoryColor();
+        return Qt.rgba(c.r, c.g, c.b, 0.1);
     }
 
     function categoryIcon() {
@@ -306,23 +322,23 @@ Item {
 
     function getTitle() {
         switch(root.errorCategory) {
-            case "BLOCKED": return i18n.t("error.auth.blocked.title");
-            case "ACCESS_DENIED": return i18n.t("error.auth.denied.title");
-            case "REAUTH": return i18n.t("error.auth.reauth.title");
-            case "PERMISSION": return i18n.t("error.auth.permission.title");
-            case "NOT_FOUND": return i18n.t("error.auth.not_found.title");
-            default: return i18n.t("error.auth.unknown.title");
+            case "BLOCKED": return tr("error.auth.blocked.title");
+            case "ACCESS_DENIED": return tr("error.auth.denied.title");
+            case "REAUTH": return tr("error.auth.reauth.title");
+            case "PERMISSION": return tr("error.auth.permission.title");
+            case "NOT_FOUND": return tr("error.auth.not_found.title");
+            default: return tr("error.auth.unknown.title");
         }
     }
 
     function getBody() {
         switch(root.errorCategory) {
-            case "BLOCKED": return i18n.t("error.auth.blocked.body");
-            case "ACCESS_DENIED": return i18n.t("error.auth.denied.body");
-            case "REAUTH": return i18n.t("error.auth.reauth.body");
-            case "PERMISSION": return i18n.t("error.auth.permission.body");
-            case "NOT_FOUND": return i18n.t("error.auth.not_found.body");
-            default: return i18n.t("error.auth.unknown.body");
+            case "BLOCKED": return tr("error.auth.blocked.body");
+            case "ACCESS_DENIED": return tr("error.auth.denied.body");
+            case "REAUTH": return tr("error.auth.reauth.body");
+            case "PERMISSION": return tr("error.auth.permission.body");
+            case "NOT_FOUND": return tr("error.auth.not_found.body");
+            default: return tr("error.auth.unknown.body");
         }
     }
 
