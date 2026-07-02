@@ -541,6 +541,31 @@ REGIMENT_CANONICAL = {
     "REQ": "REQ",
 }
 
+class ApiHttpError(RuntimeError):
+    def __init__(self, status: int, reason: object, body: str = "") -> None:
+        self.status = int(status)
+        self.reason = str(reason or "")
+        self.body = body or ""
+        try:
+            parsed = json.loads(self.body) if self.body else {}
+        except Exception:
+            parsed = {}
+        self.data = parsed if isinstance(parsed, dict) else {}
+        message = str(
+            self.data.get("message")
+            or self.data.get("error")
+            or self.data.get("detail")
+            or self.body
+            or "empty response"
+        )
+        super().__init__(f"HTTP {self.status} {self.reason}: {message}")
+
+
+class AuthUiError(RuntimeError):
+    def __init__(self, message: str, *, data: dict[str, Any] | None = None, status: int | None = None) -> None:
+        super().__init__(message)
+        self.data = data or {}
+        self.status = status
 
 def int_or_none(value: object) -> int | None:
     try:
@@ -1511,9 +1536,9 @@ class AppController(QObject):
             self._pending_admin_panel_token = ""
             self.showStartupDialog(
                 kind="error",
-                title="Acesso Negado",
-                subtitle="Sem autenticação",
-                body="Você precisa estar logado com o Discord para acessar o painel.",
+                title=self._t("error.auth.denied.title"),
+                subtitle=self._t("error.auth.reauth.title"),
+                body=self._t("error.auth.reauth.body"),
                 image_url="",
             )
             return
@@ -1547,11 +1572,11 @@ class AppController(QObject):
                 if bool(panel_access.get("canLoginPanel")) and access_level is not None and access_level >= PANEL_REQUIRED_ACCESS_LEVEL:
                     self.panelAccessResult.emit("ok", token)
                 else:
-                    reason = "Acesso ao painel negado."
+                    reason = self._t("error.auth.denied.title")
                     if access_level in (0, 1):
-                        reason = f"Seu nível de acesso ({access_level}) não permite entrar no painel."
+                        reason = self._t("error.auth.denied.level_info").replace("{current}", str(access_level)).replace("{required}", str(PANEL_REQUIRED_ACCESS_LEVEL))
                     elif panel_access:
-                        reason = f"Nível mínimo para o painel: {panel_access.get('requiredAccessLevel', PANEL_REQUIRED_ACCESS_LEVEL)}."
+                        reason = self._t("error.auth.denied.level_info").replace("{current}", str(access_level)).replace("{required}", str(panel_access.get("requiredAccessLevel", PANEL_REQUIRED_ACCESS_LEVEL)))
                     self.panelAccessResult.emit("error", reason)
             except Exception as exc:
                 self.panelAccessResult.emit("error", f"Erro ao verificar acesso: {exc}")
@@ -1573,9 +1598,9 @@ class AppController(QObject):
             return
         self.showStartupDialog(
             kind="error",
-            title="Acesso Negado",
-            subtitle="Sem autenticação",
-            body="Você precisa estar logado com o Discord para acessar o painel.",
+            title=self._t("error.auth.denied.title"),
+            subtitle=self._t("error.auth.reauth.title"),
+            body=self._t("error.auth.reauth.body"),
             image_url="",
         )
 
@@ -1637,8 +1662,8 @@ class AppController(QObject):
         elif status == "error":
             self.showStartupDialog(
                 kind="error",
-                title="Acesso Negado ao Painel",
-                subtitle="Permissão insuficiente",
+                title=self._t("error.auth.denied.title"),
+                subtitle=self._t("error.auth.permission.title"),
                 body=payload,
                 image_url="",
             )
@@ -4318,6 +4343,12 @@ class ChatController(QObject):
         self._activity_user_stats: dict[str, Any] = {}
         self._user_metrics: dict[str, Any] = {}
         self._activity_error = ""
+        self._auth_error_category = ""
+        self._auth_error_message = ""
+        self._auth_error_blocked_reason = ""
+        self._auth_error_blocked_at = ""
+        self._auth_error_current_level = 0
+        self._auth_error_required_level = 0
         self._auth_error_visible = False
         self._auth_denied = False
         self._discord_oauth_in_flight = False
@@ -4824,6 +4855,30 @@ class ChatController(QObject):
     @Property(bool, notify=changed)
     def authErrorVisible(self) -> bool:
         return self._auth_error_visible
+
+    @Property(str, notify=changed)
+    def authErrorCategory(self) -> str:
+        return self._auth_error_category
+
+    @Property(str, notify=changed)
+    def authErrorMessage(self) -> str:
+        return self._auth_error_message
+
+    @Property(str, notify=changed)
+    def authErrorBlockedReason(self) -> str:
+        return self._auth_error_blocked_reason
+
+    @Property(str, notify=changed)
+    def authErrorBlockedAt(self) -> str:
+        return self._auth_error_blocked_at
+
+    @Property(int, notify=changed)
+    def authErrorCurrentLevel(self) -> int:
+        return self._auth_error_current_level
+
+    @Property(int, notify=changed)
+    def authErrorRequiredLevel(self) -> int:
+        return self._auth_error_required_level
 
     @Property(bool, notify=changed)
     def authDenied(self) -> bool:
@@ -5608,6 +5663,87 @@ class ChatController(QObject):
         self.changed.emit()
 
     @Slot(str, object)
+    def _classify_auth_error(self, payload: object) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "category": "UNKNOWN",
+            "message": "Erro desconhecido",
+            "blockedReason": "",
+            "blockedAt": "",
+            "currentAccessLevel": 0,
+            "requiredAccessLevel": 0,
+        }
+        
+        if isinstance(payload, dict):
+            msg = str(payload.get("message") or payload.get("error") or payload.get("detail") or "Erro desconhecido")
+            result["message"] = msg
+            
+            status = int_or_none(payload.get("status"))
+            
+            if msg.lower().startswith("conta gg bloqueada"):
+                result["category"] = "BLOCKED"
+                result["blockedReason"] = str(payload.get("blockedReason") or "Violação dos Termos de Serviço")
+                result["blockedAt"] = str(payload.get("blockedAt") or "")
+                return result
+                
+            denied_markers = (
+                "acesso negado", "access denied", "application access denied",
+                "acceso denegado", "acceso a la aplicacion denegado",
+                "acces refuse", "acces a l'application refuse",
+                "permissao insuficiente", "permissões", "permission", "revogado", "revoked"
+            )
+            
+            if status == 403:
+                if any(m in msg.lower() for m in denied_markers):
+                    if "permiss" in msg.lower() or "permission" in msg.lower():
+                        result["category"] = "PERMISSION"
+                    else:
+                        result["category"] = "ACCESS_DENIED"
+                        result["currentAccessLevel"] = int_or_none(payload.get("accessLevel")) or 0
+                        result["requiredAccessLevel"] = int_or_none(payload.get("requiredAccessLevel")) or PANEL_REQUIRED_ACCESS_LEVEL
+                elif "desativada" in msg.lower() or "deactivated" in msg.lower():
+                    result["category"] = "NOT_FOUND"
+                else:
+                    result["category"] = "ACCESS_DENIED"
+                return result
+                
+            if status == 401:
+                result["category"] = "REAUTH"
+                return result
+                
+            if status == 404:
+                result["category"] = "NOT_FOUND"
+                return result
+                
+            lower_msg = msg.lower()
+            if "bloqueada" in lower_msg or "blocked" in lower_msg:
+                result["category"] = "BLOCKED"
+            elif any(m in lower_msg for m in denied_markers):
+                if "permiss" in lower_msg:
+                    result["category"] = "PERMISSION"
+                else:
+                    result["category"] = "ACCESS_DENIED"
+            elif "sessão" in lower_msg or "session" in lower_msg or "token" in lower_msg or "auto-login" in lower_msg or "invalida" in lower_msg or "invalid" in lower_msg:
+                result["category"] = "REAUTH"
+            elif "encontrado" in lower_msg or "not found" in lower_msg:
+                result["category"] = "NOT_FOUND"
+                
+        else:
+            msg = str(payload)
+            result["message"] = msg
+            lower_msg = msg.lower()
+            if "bloqueada" in lower_msg or "blocked" in lower_msg:
+                result["category"] = "BLOCKED"
+            elif any(m in lower_msg for m in ("acesso negado", "access denied")):
+                result["category"] = "ACCESS_DENIED"
+            elif "permiss" in lower_msg:
+                result["category"] = "PERMISSION"
+            elif "sessão" in lower_msg or "session" in lower_msg or "token" in lower_msg or "auto-login" in lower_msg or "invalida" in lower_msg or "invalid" in lower_msg:
+                result["category"] = "REAUTH"
+            elif "encontrado" in lower_msg or "not found" in lower_msg:
+                result["category"] = "NOT_FOUND"
+                
+        return result
+
     def _apply_result(self, kind: str, payload: object) -> None:
         if kind.startswith("activity-") and kind.endswith("-error"):
             self._activity_error = str(payload or "")
@@ -5729,20 +5865,19 @@ class ChatController(QObject):
             self._profile_ready = False
             self._discord_configuration_checked = True
             self._discord_login_required = True
+            error_data = self._classify_auth_error(payload)
             self._auth_error_visible = True
-            payload_text = str(payload).lower()
-            denied_markers = (
-                "acesso negado",
-                "access denied",
-                "application access denied",
-                "acceso denegado",
-                "acceso a la aplicacion denegado",
-                "acces refuse",
-                "acces a l'application refuse",
-            )
-            self._auth_denied = any(marker in payload_text for marker in denied_markers)
+            self._auth_error_category = error_data["category"]
+            self._auth_error_message = error_data["message"]
+            self._auth_error_blocked_reason = error_data.get("blockedReason", "")
+            self._auth_error_blocked_at = error_data.get("blockedAt", "")
+            self._auth_error_current_level = error_data.get("currentAccessLevel", 0)
+            self._auth_error_required_level = error_data.get("requiredAccessLevel", 0)
+            self._auth_denied = error_data["category"] == "ACCESS_DENIED"
             self._auth_retry_after = time.monotonic() + 30
-            self._status = str(payload)
+            self._status = error_data["message"]
+            if error_data["category"] in ("REAUTH", "NOT_FOUND"):
+                self._clear_secure_login_credentials()
         elif kind == "rooms" and isinstance(payload, dict):
             rooms = payload.get("chats") or payload.get("rooms") or []
             self.rooms.set_items([self._room_to_row(room) for room in rooms])
@@ -6205,6 +6340,15 @@ WIKI_KEY_LABELS_BY_LANGUAGE = {
         "health": "Vida",
         "resistance": "Resistencia",
         "armour": "Blindagem",
+        "armor": "Blindagem",
+        "speed": "Velocidade",
+        "velocity": "Velocidade",
+        "caliber": "Calibre",
+        "reload": "Recarga",
+        "cooldown": "Tempo de recarga",
+        "splash_radius": "Raio de explosao",
+        "damage_per_shot": "Dano por tiro",
+        "fuel_usage": "Consumo de combustivel",
         "disable_threshold": "Limite de desativacao",
         "repair_cost": "Custo de reparo",
         "crew": "Tripulacao",
@@ -6234,12 +6378,29 @@ WIKI_KEY_LABELS_BY_LANGUAGE = {
         "ammunition": "Municao",
         "fire_rate": "Cadencia de tiro",
         "firing_mode": "Modo de disparo",
+        "hitpoints": "Pontos de vida",
+        "hp": "HP",
+        "explosive_damage": "Dano explosivo",
+        "ap_damage": "Dano AP",
+        "penetration_modifier": "Modificador de penetracao",
+        "inner_radius": "Raio interno",
+        "outer_radius": "Raio externo",
+        "storage_capacity": "Capacidade de armazenamento",
     },
     "en": {
         "class": "Class",
         "health": "Health",
         "resistance": "Resistance",
         "armour": "Armour",
+        "armor": "Armour",
+        "speed": "Speed",
+        "velocity": "Velocity",
+        "caliber": "Caliber",
+        "reload": "Reload",
+        "cooldown": "Cooldown",
+        "splash_radius": "Splash radius",
+        "damage_per_shot": "Damage per shot",
+        "fuel_usage": "Fuel usage",
         "disable_threshold": "Disable threshold",
         "repair_cost": "Repair cost",
         "crew": "Crew",
@@ -6269,12 +6430,29 @@ WIKI_KEY_LABELS_BY_LANGUAGE = {
         "ammunition": "Ammunition",
         "fire_rate": "Fire rate",
         "firing_mode": "Firing mode",
+        "hitpoints": "Hit points",
+        "hp": "HP",
+        "explosive_damage": "Explosive damage",
+        "ap_damage": "AP damage",
+        "penetration_modifier": "Penetration modifier",
+        "inner_radius": "Inner radius",
+        "outer_radius": "Outer radius",
+        "storage_capacity": "Storage capacity",
     },
     "es": {
         "class": "Clase",
         "health": "Vida",
         "resistance": "Resistencia",
         "armour": "Blindaje",
+        "armor": "Blindaje",
+        "speed": "Velocidad",
+        "velocity": "Velocidad",
+        "caliber": "Calibre",
+        "reload": "Recarga",
+        "cooldown": "Tiempo de recarga",
+        "splash_radius": "Radio de explosion",
+        "damage_per_shot": "Dano por disparo",
+        "fuel_usage": "Consumo de combustible",
         "disable_threshold": "Umbral de desactivacion",
         "repair_cost": "Costo de reparacion",
         "crew": "Tripulacion",
@@ -6304,12 +6482,29 @@ WIKI_KEY_LABELS_BY_LANGUAGE = {
         "ammunition": "Municion",
         "fire_rate": "Cadencia de disparo",
         "firing_mode": "Modo de disparo",
+        "hitpoints": "Pontos de vida",
+        "hp": "HP",
+        "explosive_damage": "Dano explosivo",
+        "ap_damage": "Dano AP",
+        "penetration_modifier": "Modificador de penetracao",
+        "inner_radius": "Raio interno",
+        "outer_radius": "Raio externo",
+        "storage_capacity": "Capacidade de armazenamento",
     },
     "fr": {
         "class": "Classe",
         "health": "Sante",
         "resistance": "Resistance",
         "armour": "Blindage",
+        "armor": "Blindage",
+        "speed": "Vitesse",
+        "velocity": "Vitesse",
+        "caliber": "Calibre",
+        "reload": "Rechargement",
+        "cooldown": "Temps de recharge",
+        "splash_radius": "Rayon d explosion",
+        "damage_per_shot": "Degats par tir",
+        "fuel_usage": "Consommation de carburant",
         "disable_threshold": "Seuil de desactivation",
         "repair_cost": "Cout de reparation",
         "crew": "Equipage",
@@ -6339,6 +6534,14 @@ WIKI_KEY_LABELS_BY_LANGUAGE = {
         "ammunition": "Munitions",
         "fire_rate": "Cadence de tir",
         "firing_mode": "Mode de tir",
+        "hitpoints": "Points de vie",
+        "hp": "PV",
+        "explosive_damage": "Degats explosifs",
+        "ap_damage": "Degats AP",
+        "penetration_modifier": "Modificateur de penetration",
+        "inner_radius": "Rayon interieur",
+        "outer_radius": "Rayon exterieur",
+        "storage_capacity": "Capacite de stockage",
     },
 }
 
@@ -6695,6 +6898,15 @@ def normalize_wiki_key(label: str) -> str:
         "Ammunition": "ammunition",
         "Fire Rate": "fire_rate",
         "Firing Mode": "firing_mode",
+        "Hit Points": "hitpoints",
+        "Hitpoints": "hitpoints",
+        "HP": "hp",
+        "Explosive Damage": "explosive_damage",
+        "AP Damage": "ap_damage",
+        "Penetration Modifier": "penetration_modifier",
+        "Inner Radius": "inner_radius",
+        "Outer Radius": "outer_radius",
+        "Storage Capacity": "storage_capacity",
         "Production Site": "production_site",
         "Production Cost": "production_cost_raw",
         "Package Size": "package_size",
@@ -7048,6 +7260,7 @@ def fetch_wiki_item_info(page_title: str) -> dict[str, Any]:
 
     item = extract_wiki_infobox(page_html)
     item["name"] = clean_wiki_text(item.get("name") or page_payload.get("title") or resolved_title)
+    item["display_title"] = strip_wiki_html(page_payload.get("displaytitle") or "")
     item["description"] = extract_wiki_intro(page_html)
     item["production"] = extract_wiki_production(page_html)
     item["sections"] = extract_wiki_sections(page_html, page_payload.get("sections") if isinstance(page_payload.get("sections"), list) else [])
@@ -7086,9 +7299,10 @@ class ItemSearchController(QObject):
         self.wiki_production_rows = DictListModel(["site", "input", "output", "time"], self)
         self.wiki_sections = DictListModel(["title", "body"], self)
         self.wiki_categories = DictListModel(["label"], self)
+        self.wiki_tech_rows = DictListModel(["label", "value", "kind"], self)
         self.damage_ammo_suggestions = DictListModel(["name", "detail"], self)
-        self.damage_duel_left_suggestions = DictListModel(["name", "detail"], self)
-        self.damage_duel_right_suggestions = DictListModel(["name", "detail"], self)
+        self.damage_duel_left_suggestions = DictListModel(["name", "detail", "faction"], self)
+        self.damage_duel_right_suggestions = DictListModel(["name", "detail", "faction"], self)
         self.damage_result_rows = DictListModel(["label", "value", "kind"], self)
         self.damage_duel_rows = DictListModel(["label", "value", "kind"], self)
         self._damage_data = self._load_damage_data()
@@ -7102,6 +7316,7 @@ class ItemSearchController(QObject):
         self._damage_target_rows = self._merge_damage_target_rows(self._damage_target_rows, self._damage_targets_from_terms())
         self._wiki_title = ""
         self._wiki_name = ""
+        self._wiki_display_title = ""
         self._wiki_description = ""
         self._wiki_image = ""
         self._wiki_source_url = ""
@@ -7118,6 +7333,15 @@ class ItemSearchController(QObject):
         self._damage_duel_left_faction = ""
         self._damage_duel_right_faction = ""
         self._damage_target_image = ""
+        self._damage_ammo_image = ""
+        self._damage_duel_ammo_image = ""
+        self._damage_duel_ammo_name = ""
+        self._damage_duel_ammo_damage = ""
+        self._damage_duel_winner_name = ""
+        self._damage_duel_left_hp = ""
+        self._damage_duel_right_hp = ""
+        self._damage_duel_left_shots = ""
+        self._damage_duel_right_shots = ""
         self._damage_duel_left_prob = -1.0
         self._damage_duel_right_prob = -1.0
         self._wiki_request_token = 0
@@ -7209,6 +7433,10 @@ class ItemSearchController(QObject):
         return self.wiki_categories
 
     @Property(QObject, constant=True)
+    def wikiTechRows(self) -> QObject:
+        return self.wiki_tech_rows
+
+    @Property(QObject, constant=True)
     def damageAmmoSuggestions(self) -> QObject:
         return self.damage_ammo_suggestions
 
@@ -7227,6 +7455,36 @@ class ItemSearchController(QObject):
     @Property(QObject, constant=True)
     def damageDuelRows(self) -> QObject:
         return self.damage_duel_rows
+
+    @Slot(str, result="QVariantList")
+    def damageDuelPresets(self, faction: str = "") -> list[dict[str, Any]]:
+        return self._damage_preset_rows(faction)
+
+    @Slot(result="QVariantList")
+    def damageDuelAmmoOptions(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = [
+            {
+                "name": "Auto",
+                "detail": "Melhor munição estimada",
+                "value": "",
+                "image": "",
+            }
+        ]
+        for ammo in self._damage_ammo_rows:
+            if not self._ammo_relevant_for_vehicle(ammo, "tank armour armor vehicle"):
+                continue
+            name = str(ammo.get("name") or "")
+            if not name:
+                continue
+            rows.append(
+                {
+                    "name": name,
+                    "detail": str(ammo.get("detail") or ammo.get("damage_type") or ""),
+                    "value": name,
+                    "image": self._damage_ammo_image_for(ammo),
+                }
+            )
+        return rows[:24]
 
     @Property(str, notify=changed)
     def damageDuelLeftName(self) -> str:
@@ -7272,6 +7530,42 @@ class ItemSearchController(QObject):
     def damageTargetImage(self) -> str:
         return self._damage_target_image
 
+    @Property(str, notify=changed)
+    def damageAmmoImage(self) -> str:
+        return self._damage_ammo_image
+
+    @Property(str, notify=changed)
+    def damageDuelAmmoImage(self) -> str:
+        return self._damage_duel_ammo_image
+
+    @Property(str, notify=changed)
+    def damageDuelAmmoName(self) -> str:
+        return self._damage_duel_ammo_name
+
+    @Property(str, notify=changed)
+    def damageDuelAmmoDamage(self) -> str:
+        return self._damage_duel_ammo_damage
+
+    @Property(str, notify=changed)
+    def damageDuelWinnerName(self) -> str:
+        return self._damage_duel_winner_name
+
+    @Property(str, notify=changed)
+    def damageDuelLeftHp(self) -> str:
+        return self._damage_duel_left_hp
+
+    @Property(str, notify=changed)
+    def damageDuelRightHp(self) -> str:
+        return self._damage_duel_right_hp
+
+    @Property(str, notify=changed)
+    def damageDuelLeftShots(self) -> str:
+        return self._damage_duel_left_shots
+
+    @Property(str, notify=changed)
+    def damageDuelRightShots(self) -> str:
+        return self._damage_duel_right_shots
+
     @Property("QVariantList", notify=changed)
     def resultRowItems(self) -> list[dict[str, Any]]:
         return self.items.items()
@@ -7296,6 +7590,10 @@ class ItemSearchController(QObject):
     @Property(str, notify=changed)
     def wikiName(self) -> str:
         return self._wiki_name
+
+    @Property(str, notify=changed)
+    def wikiDisplayTitle(self) -> str:
+        return self._wiki_display_title
 
     @Property(str, notify=changed)
     def wikiDescription(self) -> str:
@@ -7393,6 +7691,15 @@ class ItemSearchController(QObject):
         target = self._current_damage_target()
         self.damage_result_rows.set_items(self._damage_target_preview_rows())
         self._damage_target_image = str(target.get("image") or "")
+        self._damage_ammo_image = ""
+        self._damage_duel_ammo_image = ""
+        self._damage_duel_ammo_name = ""
+        self._damage_duel_ammo_damage = ""
+        self._damage_duel_winner_name = ""
+        self._damage_duel_left_hp = ""
+        self._damage_duel_right_hp = ""
+        self._damage_duel_left_shots = ""
+        self._damage_duel_right_shots = ""
         self.damage_duel_rows.set_items([])
         self._update_damage_duel_suggestions("", "left")
         self._update_damage_duel_suggestions("", "right")
@@ -7404,9 +7711,9 @@ class ItemSearchController(QObject):
     def searchDamageAmmo(self, query: str) -> None:
         self._update_damage_ammo_suggestions(query)
 
-    @Slot(str, str)
-    def searchDamageDuelTarget(self, query: str, side: str) -> None:
-        self._update_damage_duel_suggestions(query, side)
+    @Slot(str, str, str)
+    def searchDamageDuelTarget(self, query: str, side: str, faction: str = "") -> None:
+        self._update_damage_duel_suggestions(query, side, faction)
 
     @Slot(str, str)
     def calculateDamageTarget(self, ammo_name: str, penetration_percent: str = "") -> None:
@@ -7415,6 +7722,7 @@ class ItemSearchController(QObject):
         rows = self._calculate_damage_rows(target, ammo, penetration_percent)
         self.damage_result_rows.set_items(rows)
         self._damage_target_image = str(target.get("image") or "")
+        self._damage_ammo_image = self._damage_ammo_image_for(ammo)
         self.changed.emit()
 
     @Slot(str, str, str, str)
@@ -7424,22 +7732,43 @@ class ItemSearchController(QObject):
         right = self._find_damage_target(right_name)
         self._damage_duel_left_name = clean_wiki_text(left.get("name") or left_name)
         self._damage_duel_right_name = clean_wiki_text(right.get("name") or right_name)
-        self._damage_duel_left_image = str(left.get("image") or "")
-        self._damage_duel_right_image = str(right.get("image") or "")
+        self._damage_duel_left_image = self._damage_tank_image_for(left)
+        self._damage_duel_right_image = self._damage_tank_image_for(right)
         self._damage_duel_left_detail = clean_wiki_text(left.get("detail") or left.get("resistance_type") or "")
         self._damage_duel_right_detail = clean_wiki_text(right.get("detail") or right.get("resistance_type") or "")
         self._damage_duel_left_faction = self._detect_faction(left)
         self._damage_duel_right_faction = self._detect_faction(right)
+        self._damage_duel_left_hp = self._format_damage_stat(self._damage_number(left.get("hp")), " HP")
+        self._damage_duel_right_hp = self._format_damage_stat(self._damage_number(right.get("hp")), " HP")
         rows = self._calculate_duel_rows(left, right, ammo, penetration_percent)
         # Extract win probabilities for bar display
         self._damage_duel_left_prob = -1.0
         self._damage_duel_right_prob = -1.0
         # Pick any valid ammo for the bar (specific if given, else best from all ammos)
         bar_ammo = ammo if ammo else self._best_ammo_for_duel(left, right, penetration_percent)
+        self._damage_duel_ammo_image = self._damage_ammo_image_for(bar_ammo if bar_ammo else ammo)
+        self._damage_duel_ammo_name = clean_wiki_text((bar_ammo or ammo).get("name") if (bar_ammo or ammo) else "")
+        self._damage_duel_ammo_damage = self._format_damage_stat(self._damage_number((bar_ammo or ammo).get("damage") if (bar_ammo or ammo) else None), " dano")
+        self._damage_duel_winner_name = ""
+        self._damage_duel_left_shots = ""
+        self._damage_duel_right_shots = ""
         if bar_ammo:
             left_attack = self._damage_estimate(right, bar_ammo, penetration_percent)
             right_attack = self._damage_estimate(left, bar_ammo, penetration_percent)
             if left_attack.get("ok") and right_attack.get("ok"):
+                left_score = left_attack.get("expected_destroy") or left_attack.get("hits_destroy")
+                right_score = right_attack.get("expected_destroy") or right_attack.get("hits_destroy")
+                left_hits = left_attack.get("hits_destroy")
+                right_hits = right_attack.get("hits_destroy")
+                self._damage_duel_left_shots = self._format_duel_shots(left_score, left_hits)
+                self._damage_duel_right_shots = self._format_duel_shots(right_score, right_hits)
+                if left_score and right_score:
+                    if left_score < right_score:
+                        self._damage_duel_winner_name = self._damage_duel_left_name
+                    elif right_score < left_score:
+                        self._damage_duel_winner_name = self._damage_duel_right_name
+                    else:
+                        self._damage_duel_winner_name = "Empate tecnico"
                 lp = left_attack.get("probability_destroy")
                 rp = right_attack.get("probability_destroy")
                 if lp is not None:
@@ -7458,18 +7787,35 @@ class ItemSearchController(QObject):
     def _best_ammo_for_duel(self, left: dict[str, Any], right: dict[str, Any], penetration_percent: str = "") -> dict[str, Any]:
         """Find the ammo where the combined kill efficiency is highest (smallest total shots)."""
         best: dict[str, Any] = {}
-        best_diff = 0
+        best_total: float | None = None
+        best_damage = 0.0
+        combined_resistance = self._normalize_search_text(
+            " ".join(
+                str(value)
+                for value in (
+                    left.get("resistance_type"),
+                    left.get("detail"),
+                    right.get("resistance_type"),
+                    right.get("detail"),
+                )
+                if value
+            )
+        )
         for ammo in self._damage_ammo_rows:
+            if not self._ammo_relevant_for_vehicle(ammo, combined_resistance):
+                continue
             la = self._damage_estimate(right, ammo, penetration_percent)
             ra = self._damage_estimate(left, ammo, penetration_percent)
             if not la.get("ok") or not ra.get("ok"):
                 continue
-            ls = la.get("expected_destroy") or la.get("hits_destroy") or 9999
-            rs = ra.get("expected_destroy") or ra.get("hits_destroy") or 9999
-            diff = abs(rs - ls)
-            if not best or diff > best_diff:
+            ls = self._damage_number(la.get("expected_destroy") or la.get("hits_destroy")) or 9999
+            rs = self._damage_number(ra.get("expected_destroy") or ra.get("hits_destroy")) or 9999
+            total = float(ls) + float(rs)
+            damage = self._damage_number(ammo.get("damage")) or 0
+            if best_total is None or total < best_total or (abs(total - best_total) < 0.001 and damage > best_damage):
                 best = ammo
-                best_diff = diff
+                best_total = total
+                best_damage = float(damage)
         return best
 
 
@@ -7495,6 +7841,7 @@ class ItemSearchController(QObject):
         self._pending_wiki_title = ""
         self._wiki_title = ""
         self._wiki_name = ""
+        self._wiki_display_title = ""
         self._wiki_description = ""
         self._wiki_image = ""
         self._wiki_source_url = ""
@@ -7506,6 +7853,7 @@ class ItemSearchController(QObject):
         self.wiki_production_rows.set_items([])
         self.wiki_sections.set_items([])
         self.wiki_categories.set_items([])
+        self.wiki_tech_rows.set_items([])
 
     def _schedule_wiki_lookup(self) -> None:
         if not self._query.strip():
@@ -7534,6 +7882,7 @@ class ItemSearchController(QObject):
         token = self._wiki_request_token
         self._wiki_title = title
         self._wiki_name = title
+        self._wiki_display_title = ""
         self._wiki_description = ""
         self._wiki_image = ""
         self._wiki_source_url = f"{FOXHOLE_WIKI_BASE_URL}/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
@@ -7541,6 +7890,7 @@ class ItemSearchController(QObject):
         self._wiki_status_message = ""
         self._wiki_loading = True
         self.wiki_fields.set_items([])
+        self.wiki_tech_rows.set_items([])
         self.wiki_production_rows.set_items([])
         self.wiki_sections.set_items([])
         self.wiki_categories.set_items([])
@@ -7567,6 +7917,7 @@ class ItemSearchController(QObject):
             self.wiki_production_rows.set_items([])
             self.wiki_sections.set_items([])
             self.wiki_categories.set_items([])
+            self.wiki_tech_rows.set_items([])
             self.changed.emit()
             return
 
@@ -7611,15 +7962,28 @@ class ItemSearchController(QObject):
             for value in raw_categories
             if translate_wiki_value(value, language)
         ]
-        has_data = bool(item.get("name") or item.get("description") or item.get("image") or fields or production or sections or categories)
+        tech_rows = self._build_wiki_tech_rows(item, raw_fields, language)
+        has_data = bool(
+            item.get("display_title")
+            or item.get("name")
+            or item.get("description")
+            or item.get("image")
+            or fields
+            or tech_rows
+            or production
+            or sections
+            or categories
+        )
 
         self._wiki_name = clean_wiki_text(item.get("name") or self._wiki_title)
+        self._wiki_display_title = clean_wiki_text(item.get("display_title") or "")
         self._wiki_description = translate_wiki_value(item.get("description") or "", language)
         self._wiki_image = str(item.get("image") or "")
         self._wiki_source_url = str(item.get("source_url") or self._wiki_source_url)
         self._wiki_status_key = "item_search.wiki_loaded" if has_data else "item_search.wiki_empty"
         self._wiki_status_message = ""
         self.wiki_fields.set_items(fields[:24])
+        self.wiki_tech_rows.set_items(tech_rows[:10])
         self.wiki_sections.set_items(sections[:8])
         self.wiki_categories.set_items(categories[:8])
         self.wiki_production_rows.set_items(
@@ -7634,6 +7998,141 @@ class ItemSearchController(QObject):
                 if isinstance(row, dict)
             ]
         )
+
+    def _build_wiki_tech_rows(self, item: dict[str, Any], raw_fields: list[dict[str, Any]], language: str | None = None) -> list[dict[str, str]]:
+        values: dict[str, Any] = {}
+        for row in raw_fields:
+            if not isinstance(row, dict):
+                continue
+            key = normalize_wiki_key(str(row.get("key") or row.get("label") or ""))
+            if key and key not in values:
+                values[key] = row.get("value")
+        for key, value in item.items():
+            if key not in values:
+                values[str(key)] = value
+
+        candidates = [
+            ("health", ("health", "hitpoints", "hp"), "success"),
+            ("armour", ("armour", "armor", "resistance", "resistance_type"), "warning"),
+            ("damage", ("damage", "explosive_damage", "ap_damage"), "success"),
+            ("damage_type", ("damage_type",), "info"),
+            ("penetration_modifier", ("penetration_modifier",), "warning"),
+            ("range", ("range",), "info"),
+            ("rate_of_fire", ("rate_of_fire", "fire_rate"), "info"),
+            ("reload_time", ("reload_time", "reload", "cooldown"), "warning"),
+            ("magazine_size", ("magazine_size",), "info"),
+            ("crew", ("crew",), "success"),
+            ("fuel_capacity", ("fuel_capacity",), "info"),
+            ("storage_capacity", ("storage_capacity",), "info"),
+            ("disable_threshold", ("disable_threshold",), "warning"),
+            ("inner_radius", ("inner_radius",), "info"),
+            ("outer_radius", ("outer_radius",), "info"),
+            ("faction", ("faction",), "info"),
+            ("class", ("class", "super_class", "category"), "info"),
+            ("production_site", ("production_site", "main_production_site"), "note"),
+        ]
+
+        rows: list[dict[str, str]] = []
+        used_keys: set[str] = set()
+        for label_key, keys, kind in candidates:
+            for key in keys:
+                if key in used_keys:
+                    continue
+                raw_value = values.get(key)
+                text = translate_wiki_value(raw_value, language)
+                if not text:
+                    continue
+                rows.append({"label": wiki_field_label(label_key, language), "value": text, "kind": kind})
+                used_keys.add(key)
+                break
+        return rows
+
+    def _damage_preset_candidate(self, row: dict[str, Any]) -> bool:
+        name = self._normalize_search_text(row.get("name"))
+        detail = self._normalize_search_text(row.get("detail"))
+        haystack = f"{name} {detail}"
+        if not haystack.strip():
+            return False
+        if row.get("category") == "ship":
+            return False
+        blocked = (
+            "anti-tank", "anti tank", "rifle", "pillbox", "grenade", "flask", "ammo", "munition",
+            "half-track", "half track", "armored car", "armoured car", "armouries", "armories",
+            "bunker", "base", "garrison", "facility", "structure", "ship", "submarine",
+        )
+        if any(token in haystack for token in blocked):
+            return False
+        tokens = (
+            "tank", "battle tank", "light tank", "medium tank", "heavy tank", "super heavy",
+            "spatha", "bardiche", "silverhand", "outlaw", "devitt", "falchion", "ballista",
+            "scorpion", "talos", "predator", "stygian", "ares", "chieftain", "kranesca", "mpt",
+            "doru", "trident", "hatchet", "pelekys", "bonelaw", "highwayman", "thornfall",
+        )
+        return any(token in haystack for token in tokens)
+
+    def _damage_preset_score(self, row: dict[str, Any], faction_norm: str) -> int:
+        name = self._normalize_search_text(row.get("name"))
+        detail = self._normalize_search_text(row.get("detail"))
+        score = 0
+        if faction_norm and self._damage_row_faction(row) == faction_norm:
+            score += 40
+        if any(token in name for token in ("battle tank", "light tank", "medium tank", "heavy tank", "super heavy")):
+            score += 35
+        if any(token in name for token in ("tank", "spatha", "bardiche", "silverhand", "outlaw", "devitt", "falchion", "ballista", "scorpion", "talos", "predator", "stygian", "ares", "chieftain", "kranesca", "mpt")):
+            score += 25
+        if self._damage_number(row.get("hp")):
+            score += 40
+        if row.get("source") == "damege.json":
+            score += 15
+        if row.get("source") == "wiki":
+            score += 5
+        if detail:
+            score += 1
+        return score
+
+    def _damage_preset_rows(self, faction: str = "") -> list[dict[str, str]]:
+        faction_norm = self._normalize_damage_faction(faction)
+        rows: list[tuple[int, dict[str, Any]]] = []
+        seen: set[str] = set()
+        for row in self._damage_target_rows:
+            if not self._damage_preset_candidate(row):
+                continue
+            row_faction = self._damage_row_faction(row)
+            if faction_norm and row_faction and row_faction != faction_norm:
+                continue
+            key = self._normalize_search_text(row.get("name"))
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            rows.append((self._damage_preset_score(row, faction_norm), row))
+        seed_queries = []
+        if faction_norm == "warden":
+            seed_queries = ["warden tank", "warden battle tank", "warden heavy tank", "warden light tank", "warden armored vehicle"]
+        elif faction_norm == "colonial":
+            seed_queries = ["colonial tank", "colonial battle tank", "colonial heavy tank", "colonial light tank", "colonial armored vehicle"]
+        else:
+            seed_queries = ["tank", "battle tank", "light tank", "heavy tank"]
+        for query in seed_queries:
+            try:
+                titles = search_wiki_page_titles(query, 8)
+            except Exception:
+                titles = []
+            for title in titles:
+                key = self._normalize_search_text(title)
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                rows.append((5 + (30 if faction_norm else 0), {"name": title, "detail": "Wiki | preset", "faction": faction_norm or self._damage_row_faction({"name": title, "detail": title})}))
+        rows.sort(key=lambda item: (-item[0], str(item[1].get("name") or "").lower()))
+        return [
+            {
+                "name": str(row.get("name") or ""),
+                "detail": str(row.get("detail") or ""),
+                "faction": str(row.get("faction") or self._damage_row_faction(row)),
+                "image": self._damage_tank_image_for(row),
+            }
+            for _score, row in rows[:12]
+        ]
 
     @staticmethod
     def _load_damage_data() -> dict[str, Any]:
@@ -7660,6 +8159,24 @@ class ItemSearchController(QObject):
             return None
 
     @staticmethod
+    def _format_damage_stat(value: float | None, suffix: str = "") -> str:
+        if value is None:
+            return ""
+        number = int(value) if float(value).is_integer() else round(float(value), 1)
+        return f"{number:g}{suffix}"
+
+    @classmethod
+    def _format_duel_shots(cls, shots: Any, penetrations: Any = None) -> str:
+        value = cls._damage_number(shots)
+        if value is None:
+            return ""
+        text = f"{int(value) if float(value).is_integer() else value:g}"
+        pen_value = cls._damage_number(penetrations)
+        if pen_value is not None and int(pen_value) != int(value):
+            text += f" ({int(pen_value)} pen.)"
+        return text
+
+    @staticmethod
     def _damage_percent(value: Any) -> float | None:
         number = ItemSearchController._damage_number(value)
         if number is None:
@@ -7669,6 +8186,100 @@ class ItemSearchController(QObject):
         if number <= 0:
             return None
         return min(1.0, number)
+
+    @staticmethod
+    def _local_damage_ammo_image_url(name: object, damage_type: object = "") -> str:
+        text = ItemSearchController._normalize_search_text(f"{name} {damage_type}")
+        if not text:
+            return ""
+        candidates: list[str] = []
+        icon_map: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+            (("12.7", "12 7", "machine gun", "heavy kinetic"), ("Content/Textures/UI/ItemIcons/FieldMGAmmoItemIcon.png", "Content/Textures/UI/ItemIcons/MachineGunAmmoIcon.png")),
+            (("14.5", "14 5", "anti tank kinetic", "atrifle"), ("Content/Textures/UI/ItemIcons/ATRifleAmmoItemIcon.png", "Content/Textures/UI/ItemIcons/ATAmmoIcon.png")),
+            (("20mm", "20 mm", "shrapnel"), ("Content/Textures/UI/VehicleIcons/LightAAAmmoIcon.png", "Content/Textures/UI/ItemIcons/ATAmmoIcon.png")),
+            (("30mm", "30 mm"), ("Content/Textures/UI/ItemIcons/MiniTankAmmoItemIcon.png", "Content/Textures/UI/ItemIcons/ATAmmoIcon.png")),
+            (("40mm", "40 mm"), ("Content/Textures/UI/ItemIcons/LightTankAmmoItemIcon.png", "Content/Textures/UI/ItemIcons/ATAmmoIcon.png")),
+            (("68mm", "68 mm"), ("Content/Textures/UI/ATLargeAmmoIcon.png", "Content/Textures/UI/ItemIcons/ATAmmoIcon.png")),
+            (("75mm", "75 mm", "94.5", "94 5"), ("Content/Textures/UI/ItemIcons/BattleTankAmmoItemIcon.png", "Content/Textures/UI/ATLargeAmmoIcon.png")),
+            (("120mm", "120 mm"), ("Content/Textures/UI/ItemIcons/LightArtilleryAmmoItemIcon.png", "Content/Textures/UI/ItemIcons/LRArtilleryAmmoItemIcon.png")),
+            (("150mm", "150 mm", "250mm", "250 mm"), ("Content/Textures/UI/ItemIcons/HeavyArtilleryAmmoItemIcon.png",)),
+            (("high explosive rocket", "herocket", "3c high"), ("Content/Textures/UI/ItemIcons/HERocketAmmoIcon.png",)),
+            (("demolition rocket", "shatter missile"), ("Content/Textures/UI/ItemIcons/DemolitionRocketAmmoIcon.png",)),
+            (("ap/rpg", "arc/rpg", "atrpg"), ("Content/Textures/UI/ItemIcons/ATRpgAmmoItemIcon.png",)),
+            (("rpg",), ("Content/Textures/UI/ItemIcons/RpgAmmoItemIcon.png",)),
+            (("ignifist", "white ash", "sticky", "anti tank explosive"), ("Content/Textures/UI/ItemIcons/ATGrenadeWIcon.png", "Content/Textures/UI/ItemIcons/ATAmmoIcon.png")),
+            (("mammon", "tremola", "grenade"), ("Content/Textures/UI/ItemIcons/HELaunchedGrenadeItemIcon.png", "Content/Textures/UI/ItemIcons/HEGrenadeItemIcon.png")),
+            (("torpedo",), ("Content/Textures/UI/ItemIcons/TorpedoIcon.png", "Content/Textures/UI/ItemIcons/MiniTorpedoAmmoIcon.png")),
+            (("minefield", "sea mine", "hullbreaker"), ("Content/Textures/UI/ItemIcons/SeaMineIcon.png",)),
+            (("mine",), ("Content/Textures/UI/ItemIcons/AntiTankMineItemIcon.png",)),
+            (("charge", "havoc", "alligator", "demolition"), ("Content/Textures/UI/ItemIcons/SatchelChargeTIcon.png", "Content/Textures/UI/StructureIcons/SatchelCharge.png")),
+        )
+        for tokens, paths in icon_map:
+            if any(token in text for token in tokens):
+                candidates.extend(paths)
+        candidates.extend(
+            (
+                "Content/Textures/UI/ItemIcons/ATAmmoIcon.png",
+                "Content/Textures/UI/ItemIcons/SubtypeAmmoIcon.png",
+            )
+        )
+        for relative in candidates:
+            path = BASE_DIR / relative
+            if path.exists():
+                return file_url(path)
+        return ""
+
+    def _damage_ammo_image_for(self, ammo: dict[str, Any]) -> str:
+        if not ammo:
+            return ""
+        image = str(ammo.get("image") or "")
+        if image:
+            return image
+        return self._local_damage_ammo_image_url(ammo.get("name"), ammo.get("damage_type"))
+
+    @staticmethod
+    def _local_damage_tank_image_url(name: object, detail: object = "") -> str:
+        text = ItemSearchController._normalize_search_text(f"{name} {detail}")
+        if not text:
+            return ""
+        icon_map: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
+            (("falchion", "spatha", "kranesca", "colonial medium", "medium tank c"), ("Content/Textures/UI/VehicleIcons/ColonialMediumTankIcon.png", "Content/Textures/UI/VehicleIcons/ColonialMediumTankOffensive.png")),
+            (("doru", "tankette"), ("Content/Textures/UI/VehicleIcons/TanketteCVehicleIcon.png", "Content/Textures/UI/VehicleIcons/TanketteOffensiveCVehicleIcon.png")),
+            (("trident", "pelekys", "light tank c", "hatchet"), ("Content/Textures/UI/VehicleIcons/LightTankColVehicleIcon.png", "Content/Textures/UI/VehicleIcons/LightTankOffensiveCVehicleIcon.png")),
+            (("bardiche", "talos", "medium tank large"), ("Content/Textures/UI/VehicleIcons/MediumTankLargeCIcon.png",)),
+            (("ares", "super tank c", "predator", "cullen"), ("Content/Textures/UI/VehicleIcons/SuperTankCtemIcon.png", "Content/Textures/UI/VehicleIcons/SuperTankWVehicleIcon.png")),
+            (("silverhand", "outlaw", "warden medium", "highwayman", "thornfall"), ("Content/Textures/UI/VehicleIcons/WardenMediumTankIcon.png", "Content/Textures/UI/VehicleIcons/MediumTank2WIcon.png")),
+            (("devitt", "light tank w", "light tank"), ("Content/Textures/UI/VehicleIcons/LightTankWarVehicleIcon.png", "Content/Textures/UI/VehicleIcons/LightTank3WVehicleIcon.png")),
+            (("bonelaw", "destroyer tank"), ("Content/Textures/UI/VehicleIcons/DestroyerTankWVehicleIcon.png",)),
+            (("chieftain", "ballista", "siege"), ("Content/Textures/UI/VehicleIcons/MediumTankSiegeWVehicleIcon.png", "Content/Textures/UI/VehicleIcons/MediumTank3CItemIcon.png")),
+            (("scorpion", "infantry support"), ("Content/Textures/UI/VehicleIcons/LightTank2InfantryCVehicleIcon.png",)),
+            (("battle tank",), ("Content/Textures/UI/VehicleIcons/BattleTank.png", "Content/Textures/UI/VehicleIcons/BattleTankWar.png")),
+            (("scout tank",), ("Content/Textures/UI/VehicleIcons/ScoutTankWIcon.png",)),
+            (("mortar tank",), ("Content/Textures/UI/VehicleIcons/MortarTankVehicleIcon.png",)),
+        )
+        candidates: list[str] = []
+        for tokens, paths in icon_map:
+            if any(token in text for token in tokens):
+                candidates.extend(paths)
+        candidates.extend(
+            (
+                "Content/Textures/UI/VehicleIcons/LightTankWarVehicleIcon.png",
+                "Content/Textures/UI/VehicleIcons/ColonialMediumTankIcon.png",
+            )
+        )
+        for relative in candidates:
+            path = BASE_DIR / relative
+            if path.exists():
+                return file_url(path)
+        return ""
+
+    def _damage_tank_image_for(self, target: dict[str, Any]) -> str:
+        if not target:
+            return ""
+        image = str(target.get("image") or "")
+        if image:
+            return image
+        return self._local_damage_tank_image_url(target.get("name"), target.get("detail") or target.get("resistance_type"))
 
     @staticmethod
     def _build_damage_ammo_rows(data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -7699,6 +8310,7 @@ class ItemSearchController(QObject):
                     "inner_radius_m": ItemSearchController._damage_number(payload.get("inner_radius_m")),
                     "outer_radius_m": ItemSearchController._damage_number(payload.get("outer_radius_m")),
                     "uso": uses,
+                    "image": ItemSearchController._local_damage_ammo_image_url(name, damage_type),
                 }
             )
         return sorted(rows, key=lambda row: row["name"].lower())
@@ -7902,6 +8514,7 @@ class ItemSearchController(QObject):
             "inner_radius_m": self._damage_number(values.get("inner_radius")),
             "outer_radius_m": self._damage_number(values.get("outer_radius")),
             "source": "wiki",
+            "image": str(item.get("image") or item.get("remote_image") or "") or self._local_damage_ammo_image_url(item_name, damage_type),
         }
 
     def _find_damage_target(self, name: str) -> dict[str, Any]:
@@ -8372,6 +8985,10 @@ class ItemSearchController(QObject):
         uso_text = " ".join(uso)
         damage_type = ItemSearchController._normalize_search_text(ammo.get("damage_type") or "")
 
+        if "anti-ship" in uso_text or "anti-large-ship" in uso_text:
+            is_ship = any(t in combined_resistance for t in ("ship", "naval", "submarine"))
+            return is_ship
+
         # Exclude pure infantry / AA / sea mine / structure demolition ammos
         EXCLUDE_TAGS = (
             "anti-infantry", "anti-air", "area denial", "anti-aircraft",
@@ -8400,17 +9017,31 @@ class ItemSearchController(QObject):
         if damage_type in CALIBRE_TYPES or not uso:
             return True
 
-        # Exclude torpedoes when not fighting ships
-        if "anti-ship" in uso_text or "anti-large-ship" in uso_text:
-            is_ship = any(t in combined_resistance for t in ("ship", "naval", "submarine"))
-            return is_ship
-
         return False
 
-    def _damage_suggestions(self, rows: list[dict[str, Any]], query: str, limit: int = 10) -> list[dict[str, str]]:
+    def _normalize_damage_faction(self, value: Any) -> str:
+        faction = self._normalize_search_text(value)
+        if "warden" in faction:
+            return "warden"
+        if "colonial" in faction:
+            return "colonial"
+        return ""
+
+    def _damage_row_faction(self, row: dict[str, Any]) -> str:
+        for value in (row.get("faction"), row.get("detail"), row.get("name"), row.get("resistance_type")):
+            faction = self._normalize_damage_faction(value)
+            if faction:
+                return faction
+        return ""
+
+    def _damage_suggestions(self, rows: list[dict[str, Any]], query: str, limit: int = 10, faction: str = "") -> list[dict[str, str]]:
         query_norm = self._normalize_search_text(query)
+        faction_norm = self._normalize_damage_faction(faction)
         scored: list[tuple[int, dict[str, Any]]] = []
         for row in rows:
+            row_faction = self._damage_row_faction(row)
+            if faction_norm and row_faction and row_faction != faction_norm:
+                continue
             name_norm = self._normalize_search_text(row.get("name"))
             detail_norm = self._normalize_search_text(row.get("detail"))
             aliases_norm = self._normalize_search_text(" ".join(str(alias) for alias in row.get("aliases", []) if alias)) if isinstance(row.get("aliases"), list) else ""
@@ -8427,18 +9058,22 @@ class ItemSearchController(QObject):
                 score = 62
             elif query_norm in detail_norm:
                 score = 45
+            if faction_norm and row_faction == faction_norm:
+                score += 8
             if score:
                 scored.append((score, row))
         scored.sort(key=lambda item: (-item[0], str(item[1].get("name") or "").lower()))
-        return [{"name": str(row.get("name") or ""), "detail": str(row.get("detail") or "")} for _score, row in scored[:limit]]
+        return [{"name": str(row.get("name") or ""), "detail": str(row.get("detail") or ""), "faction": self._damage_row_faction(row)} for _score, row in scored[:limit]]
 
     def _update_damage_ammo_suggestions(self, query: str) -> None:
         self.damage_ammo_suggestions.set_items(self._damage_suggestions(self._damage_ammo_rows, query))
 
-    def _update_damage_duel_suggestions(self, query: str, side: str) -> None:
-        rows = self._damage_suggestions(self._damage_target_rows, query)
+    def _update_damage_duel_suggestions(self, query: str, side: str, faction: str = "") -> None:
+        tank_rows = [row for row in self._damage_target_rows if self._damage_preset_candidate(row)]
+        rows = self._damage_suggestions(tank_rows, query, faction=faction)
         if len(rows) < 6 and len(clean_wiki_text(query)) >= 3:
             seen = {self._normalize_search_text(row.get("name")) for row in rows}
+            faction_norm = self._normalize_damage_faction(faction)
             try:
                 titles = search_wiki_page_titles(query, 8)
             except Exception:
@@ -8447,7 +9082,13 @@ class ItemSearchController(QObject):
                 key = self._normalize_search_text(title)
                 if not key or key in seen:
                     continue
-                rows.append({"name": title, "detail": "Wiki | HP e imagem resolvidos ao calcular"})
+                wiki_row = {"name": title, "detail": "Wiki | HP e imagem resolvidos ao calcular"}
+                if not self._damage_preset_candidate(wiki_row):
+                    continue
+                wiki_faction = self._damage_row_faction(wiki_row)
+                if faction_norm and wiki_faction and wiki_faction != faction_norm:
+                    continue
+                rows.append({"name": title, "detail": "Wiki | HP e imagem resolvidos ao calcular", "faction": wiki_faction})
                 seen.add(key)
                 if len(rows) >= 8:
                     break

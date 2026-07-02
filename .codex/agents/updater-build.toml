@@ -12,7 +12,7 @@ Do not run destructive cleanup or broad build commands without explicit need and
 context_files = [
   ".agents/project-context.md",
   ".agents/workflow.md",
-  ".agents/agents/updater-build-agent.md",
+  ".agents/agents/updater-2-agent.md",
 ]
 avoid_paths = [
   ".agents/skills/",

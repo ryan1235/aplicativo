@@ -676,6 +676,17 @@ Item {
                                 }
 
                                 Text {
+                                    visible: itemSearchController.wikiDisplayTitle !== "" && itemSearchController.wikiDisplayTitle !== itemSearchController.wikiName
+                                    text: itemSearchController.wikiDisplayTitle
+                                    color: settingsController.accentColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                }
+
+                                Text {
                                     text: root.wikiStatusText()
                                     color: itemSearchController.wikiStatusKey === "item_search.wiki_error" ? settingsController.warningColor : settingsController.mutedTextColor
                                     font.family: "Segoe UI"

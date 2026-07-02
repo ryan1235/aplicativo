@@ -2094,6 +2094,23 @@ ApplicationWindow {
                 }
             }
         }
+
+        AppComponents.AuthErrorOverlay {
+            id: authErrorOverlay
+            errorVisible: chatController.authErrorVisible
+            errorCategory: chatController.authErrorCategory
+            errorMessage: chatController.authErrorMessage
+            blockedReason: chatController.authErrorBlockedReason
+            blockedAt: chatController.authErrorBlockedAt
+            currentLevel: chatController.authErrorCurrentLevel
+            requiredLevel: chatController.authErrorRequiredLevel
+
+            onLogoutClicked: chatController.logout()
+            onRetryClicked: chatController.connectWithDiscord()
+            onSigninClicked: chatController.connectWithDiscord()
+            onGoBackClicked: chatController.authErrorVisible = false
+            onCloseAppClicked: Qt.quit()
+        }
     }
 
     Window {

@@ -60,11 +60,29 @@ Item {
         damageModeBar.currentIndex = 0
         damageAmmoField.text = ""
         duelAmmoField.text = ""
-        duelLeftField.text = ""
-        duelRightField.text = ""
         damagePenField.text = ""
         duelPenField.text = ""
         damageDialog.open()
+        Qt.callLater(function() {
+            if (duelLeftFactionCombo) duelLeftFactionCombo.currentIndex = 0
+            if (duelRightFactionCombo) duelRightFactionCombo.currentIndex = 0
+            if (duelLeftSelect && duelLeftSelect.count > 0) {
+                duelLeftSelect.currentIndex = 0
+                duelLeftField.text = duelLeftSelect.currentText
+            }
+            if (duelRightSelect && duelRightSelect.count > 1) {
+                duelRightSelect.currentIndex = 1
+                duelRightField.text = duelRightSelect.currentText
+            } else if (duelRightSelect && duelRightSelect.count > 0) {
+                duelRightSelect.currentIndex = 0
+                duelRightField.text = duelRightSelect.currentText
+            }
+            if (duelAmmoSelect && duelAmmoSelect.count > 0) {
+                duelAmmoSelect.currentIndex = 0
+                duelAmmoField.text = ""
+            }
+            root.scheduleDuelAuto()
+        })
     }
 
     function rowKindColor(kind) {
@@ -83,13 +101,52 @@ Item {
         return settingsController.accentColor
     }
 
+    function factionChoices() {
+        i18nController.revision
+        return [
+            { text: tr("wiki.faction_all"), value: "" },
+            { text: tr("wiki.faction_warden"), value: "warden" },
+            { text: tr("wiki.faction_colonial"), value: "colonial" }
+        ]
+    }
+
+    function selectedFactionValue(combo) {
+        if (!combo || combo.currentIndex < 0 || !combo.model)
+            return ""
+        var entry = combo.model[combo.currentIndex]
+        return entry && entry.value !== undefined ? String(entry.value) : ""
+    }
+
+    function updateDuelSuggestions(side) {
+        if (side === "right") {
+            itemSearchController.searchDamageDuelTarget(duelRightField.text, "right", selectedFactionValue(duelRightFactionCombo))
+            return
+        }
+        itemSearchController.searchDamageDuelTarget(duelLeftField.text, "left", selectedFactionValue(duelLeftFactionCombo))
+    }
+
     function tryAutoDuel() {
+        var leftName = duelLeftSelect && duelLeftSelect.currentIndex >= 0 ? duelLeftSelect.currentText : duelLeftField.text
+        var rightName = duelRightSelect && duelRightSelect.currentIndex >= 0 ? duelRightSelect.currentText : duelRightField.text
+        var ammoChoice = ""
+        if (duelAmmoSelect && duelAmmoSelect.currentIndex >= 0 && duelAmmoSelect.model) {
+            var ammoEntry = duelAmmoSelect.model[duelAmmoSelect.currentIndex]
+            ammoChoice = ammoEntry && ammoEntry.value !== undefined ? String(ammoEntry.value) : ""
+        }
+        duelLeftField.text = leftName || ""
+        duelRightField.text = rightName || ""
+        duelAmmoField.text = ammoChoice || ""
         if (duelLeftField.text.trim() !== "" && duelRightField.text.trim() !== "") {
             itemSearchController.calculateTankDuel(
                 duelLeftField.text, duelRightField.text,
                 duelAmmoField.text, duelPenField.text
             )
         }
+    }
+
+    function scheduleDuelAuto() {
+        if (duelAutoTimer)
+            duelAutoTimer.restart()
     }
 
     Flickable {
@@ -450,12 +507,206 @@ Item {
                         }
 
                         Text {
+                            visible: itemSearchController.wikiDisplayTitle !== "" && itemSearchController.wikiDisplayTitle !== itemSearchController.wikiName
+                            text: itemSearchController.wikiDisplayTitle
+                            color: settingsController.accentColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            font.bold: true
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Text {
                             text: root.wikiStatusText()
                             color: itemSearchController.wikiStatusKey === "item_search.wiki_error" ? settingsController.warningColor : settingsController.mutedTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 12
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
+                        }
+
+                        Text {
+                            visible: wikiTechRepeater.count > 0
+                            text: tr("wiki.tech_summary")
+                            color: settingsController.accentColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 10
+                            font.bold: true
+                            font.letterSpacing: 1.0
+                            Layout.fillWidth: true
+                            opacity: 0.9
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            visible: wikiTechRepeater.count > 0
+
+                            Repeater {
+                                id: wikiTechRepeater
+                                model: itemSearchController.wikiTechRows
+
+                                delegate: Rectangle {
+                                    implicitHeight: 26
+                                    implicitWidth: techLabel.implicitWidth + techValue.implicitWidth + 26
+                                    radius: Math.min(8, settingsController.cardRadius)
+                                    color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.08)
+                                    border.color: root.rowKindColor(model.kind || "")
+                                    border.width: 1
+
+                                    Row {
+                                        anchors.centerIn: parent
+                                        spacing: 6
+
+                                        Text {
+                                            id: techLabel
+                                            text: model.label || ""
+                                            color: settingsController.mutedTextColor
+                                            font.family: "Segoe UI"
+                                            font.pixelSize: 9
+                                            font.bold: true
+                                            opacity: 0.9
+                                        }
+
+                                        Text {
+                                            id: techValue
+                                            text: model.value || "-"
+                                            color: settingsController.textColor
+                                            font.family: "Segoe UI"
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            visible: itemSearchController.wikiStatusKey !== "item_search.wiki_empty"
+
+                            Rectangle {
+                                visible: wikiCategoriesRepeater.count > 0
+                                implicitWidth: metaCategoriesText.implicitWidth + 20
+                                implicitHeight: 24
+                                radius: Math.min(7, settingsController.cardRadius)
+                                color: settingsController.backgroundColor
+                                border.color: settingsController.borderColor
+
+                                Text {
+                                    id: metaCategoriesText
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    text: tr("wiki.categories") + ": " + String(wikiCategoriesRepeater.count)
+                                    color: settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                visible: wikiFieldsRepeater.count > 0
+                                implicitWidth: metaFieldsText.implicitWidth + 20
+                                implicitHeight: 24
+                                radius: Math.min(7, settingsController.cardRadius)
+                                color: settingsController.backgroundColor
+                                border.color: settingsController.borderColor
+
+                                Text {
+                                    id: metaFieldsText
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    text: tr("item_search.wiki_fields") + ": " + String(wikiFieldsRepeater.count)
+                                    color: settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                visible: wikiSectionsRepeater.count > 0
+                                implicitWidth: metaSectionsText.implicitWidth + 20
+                                implicitHeight: 24
+                                radius: Math.min(7, settingsController.cardRadius)
+                                color: settingsController.backgroundColor
+                                border.color: settingsController.borderColor
+
+                                Text {
+                                    id: metaSectionsText
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    text: tr("wiki.sections") + ": " + String(wikiSectionsRepeater.count)
+                                    color: settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                visible: wikiProductionRepeater.count > 0
+                                implicitWidth: metaProductionText.implicitWidth + 20
+                                implicitHeight: 24
+                                radius: Math.min(7, settingsController.cardRadius)
+                                color: settingsController.backgroundColor
+                                border.color: settingsController.borderColor
+
+                                Text {
+                                    id: metaProductionText
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    text: tr("item_search.wiki_production") + ": " + String(wikiProductionRepeater.count)
+                                    color: settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Rectangle {
+                                visible: itemSearchController.wikiSourceUrl !== ""
+                                implicitWidth: metaSourceText.implicitWidth + 20
+                                implicitHeight: 24
+                                radius: Math.min(7, settingsController.cardRadius)
+                                color: settingsController.backgroundColor
+                                border.color: settingsController.borderColor
+
+                                Text {
+                                    id: metaSourceText
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 10
+                                    text: tr("wiki.source") + ": foxhole.wiki.gg"
+                                    color: settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                            }
                         }
 
                         Flow {
@@ -804,11 +1055,20 @@ Item {
     Dialog {
         id: damageDialog
         modal: true
+        property bool wideLayout: width >= 860
+        property bool compactLayout: width < 620
         width: Math.min(920, root.width - 24)
         height: Math.min(720, root.height - 24)
         x: Math.round((root.width - width) / 2)
         y: Math.round((root.height - height) / 2)
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        Timer {
+            id: duelAutoTimer
+            interval: 250
+            repeat: false
+            onTriggered: root.tryAutoDuel()
+        }
 
         background: Rectangle {
             radius: 14
@@ -959,7 +1219,10 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: damageModeBar.currentIndex = 1
+                            onClicked: {
+                                damageModeBar.currentIndex = 1
+                                root.scheduleDuelAuto()
+                            }
                         }
 
                         Behavior on color { ColorAnimation { duration: 140 } }
@@ -1029,9 +1292,11 @@ Item {
                         spacing: 8
 
                         // Input row
-                        RowLayout {
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: 8
+                            columns: damageDialog.compactLayout ? 1 : 3
+                            columnSpacing: 8
+                            rowSpacing: 8
 
                             Rectangle {
                                 Layout.fillWidth: true
@@ -1071,7 +1336,8 @@ Item {
                             }
 
                             Rectangle {
-                                width: 120
+                                Layout.preferredWidth: 120
+                                Layout.fillWidth: damageDialog.compactLayout
                                 height: 42
                                 radius: 9
                                 color: settingsController.backgroundColor
@@ -1109,7 +1375,8 @@ Item {
                             }
 
                             Rectangle {
-                                width: 110
+                                Layout.preferredWidth: 110
+                                Layout.fillWidth: damageDialog.compactLayout
                                 height: 42
                                 radius: 9
                                 color: calcBtnMouse.containsMouse ? Qt.lighter(settingsController.accentColor, 1.1) : settingsController.accentColor
@@ -1133,66 +1400,6 @@ Item {
 
                                 Behavior on color { ColorAnimation { duration: 120 } }
                             }
-                        }
-
-                        // Target image + info banner
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: itemSearchController.damageTargetImage !== "" ? 72 : 0
-                            visible: itemSearchController.damageTargetImage !== ""
-                            radius: 9
-                            color: settingsController.backgroundColor
-                            border.color: settingsController.borderColor
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 10
-
-                                Rectangle {
-                                    width: 80
-                                    Layout.fillHeight: true
-                                    radius: 7
-                                    color: settingsController.surfaceColor
-                                    border.color: settingsController.borderColor
-
-                                    Image {
-                                        anchors.fill: parent
-                                        anchors.margins: 5
-                                        source: itemSearchController.damageTargetImage
-                                        fillMode: Image.PreserveAspectFit
-                                        asynchronous: true
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    Layout.alignment: Qt.AlignVCenter
-                                    spacing: 3
-
-                                    Text {
-                                        text: itemSearchController.wikiName !== "" ? itemSearchController.wikiName : "-"
-                                        color: settingsController.textColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 14
-                                        font.bold: true
-                                        Layout.fillWidth: true
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Text {
-                                        text: tr("wiki.damage_title")
-                                        color: settingsController.accentColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 10
-                                        font.bold: true
-                                        font.capitalization: Font.AllUppercase
-                                        opacity: 0.8
-                                    }
-                                }
-                            }
-
-                            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         }
 
                         // Ammo suggestion chips
@@ -1245,6 +1452,162 @@ Item {
                             }
 
                             ScrollBar.horizontal: ScrollBar { active: parent.moving }
+                        }
+
+                        // Ammo attacking target preview
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: (itemSearchController.damageAmmoImage !== "" || itemSearchController.damageTargetImage !== "") ? 86 : 0
+                            visible: itemSearchController.damageAmmoImage !== "" || itemSearchController.damageTargetImage !== ""
+                            radius: 9
+                            color: settingsController.backgroundColor
+                            border.color: settingsController.borderColor
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 8
+
+                                Rectangle {
+                                    Layout.preferredWidth: 148
+                                    Layout.fillHeight: true
+                                    radius: 8
+                                    color: settingsController.surfaceColor
+                                    border.color: itemSearchController.damageAmmoImage !== "" ? settingsController.accentColor : settingsController.borderColor
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        spacing: 7
+
+                                        Rectangle {
+                                            width: 56
+                                            Layout.fillHeight: true
+                                            radius: 7
+                                            color: settingsController.backgroundColor
+                                            border.color: settingsController.borderColor
+
+                                            Image {
+                                                anchors.fill: parent
+                                                anchors.margins: 5
+                                                source: itemSearchController.damageAmmoImage
+                                                visible: itemSearchController.damageAmmoImage !== ""
+                                                fillMode: Image.PreserveAspectFit
+                                                asynchronous: true
+                                            }
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                visible: itemSearchController.damageAmmoImage === ""
+                                                text: "DMG"
+                                                color: settingsController.mutedTextColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                                opacity: 0.55
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            Layout.alignment: Qt.AlignVCenter
+                                            spacing: 2
+
+                                            Text {
+                                                text: damageAmmoField.text.trim() !== "" ? damageAmmoField.text : tr("wiki.damage_ammo")
+                                                color: settingsController.textColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                text: tr("wiki.damage_ammo")
+                                                color: settingsController.accentColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 9
+                                                font.bold: true
+                                                font.capitalization: Font.AllUppercase
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                                opacity: 0.8
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    Layout.preferredWidth: 28
+                                    text: "->"
+                                    color: settingsController.accentColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 8
+                                    color: settingsController.surfaceColor
+                                    border.color: settingsController.borderColor
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        spacing: 8
+
+                                        Rectangle {
+                                            width: 64
+                                            Layout.fillHeight: true
+                                            radius: 7
+                                            color: settingsController.backgroundColor
+                                            border.color: settingsController.borderColor
+
+                                            Image {
+                                                anchors.fill: parent
+                                                anchors.margins: 5
+                                                source: itemSearchController.damageTargetImage
+                                                visible: itemSearchController.damageTargetImage !== ""
+                                                fillMode: Image.PreserveAspectFit
+                                                asynchronous: true
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            Layout.alignment: Qt.AlignVCenter
+                                            spacing: 3
+
+                                            Text {
+                                                text: itemSearchController.wikiName !== "" ? itemSearchController.wikiName : "-"
+                                                color: settingsController.textColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                text: tr("wiki.damage_title")
+                                                color: settingsController.mutedTextColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                font.capitalization: Font.AllUppercase
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         }
 
                         // Results grid
@@ -1344,65 +1707,167 @@ Item {
                         anchors.fill: parent
                         spacing: 8
 
-                        // Tank selection row
+                        TextField {
+                            id: duelLeftField
+                            visible: false
+                            Layout.preferredHeight: 0
+                            text: duelLeftSelect.currentText
+                        }
+
+                        TextField {
+                            id: duelRightField
+                            visible: false
+                            Layout.preferredHeight: 0
+                            text: duelRightSelect.currentText
+                        }
+
+                        TextField {
+                            id: duelAmmoField
+                            visible: false
+                            Layout.preferredHeight: 0
+                            text: ""
+                        }
+
+                        ComboBox {
+                            id: duelLeftFactionCombo
+                            visible: false
+                            Layout.preferredHeight: 0
+                            model: root.factionChoices()
+                            textRole: "text"
+                            valueRole: "value"
+                            currentIndex: 0
+                            onActivated: root.scheduleDuelAuto()
+                        }
+
+                        ComboBox {
+                            id: duelRightFactionCombo
+                            visible: false
+                            Layout.preferredHeight: 0
+                            model: root.factionChoices()
+                            textRole: "text"
+                            valueRole: "value"
+                            currentIndex: 0
+                            onActivated: root.scheduleDuelAuto()
+                        }
+
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.wide ? 3 : 1
-                            columnSpacing: 8
+                            columns: damageDialog.wideLayout ? 3 : 1
+                            columnSpacing: 10
                             rowSpacing: 8
 
-                            // Tank A input
                             Rectangle {
                                 Layout.fillWidth: true
-                                height: 42
-                                radius: 9
-                                color: settingsController.backgroundColor
-                                border.color: duelLeftField.activeFocus ? settingsController.accentColor : settingsController.borderColor
+                                height: 86
+                                radius: 10
+                                color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.08)
+                                border.color: settingsController.accentColor
 
-                                RowLayout {
+                                ComboBox {
+                                    id: duelLeftSelect
                                     anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 8
-                                    spacing: 8
+                                    anchors.margins: 1
+                                    model: itemSearchController.damageDuelPresets("")
+                                    textRole: "name"
+                                    valueRole: "name"
+                                    currentIndex: 0
+                                    onActivated: {
+                                        duelLeftField.text = currentText
+                                        root.scheduleDuelAuto()
+                                    }
+                                    contentItem: RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12
+                                        anchors.rightMargin: 12
+                                        spacing: 10
 
-                                    Rectangle {
-                                        width: 20
-                                        height: 20
-                                        radius: 5
-                                        color: settingsController.accentPanelColor
-                                        border.color: settingsController.accentColor
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "A"
-                                            color: settingsController.accentColor
-                                            font.pixelSize: 10
-                                            font.bold: true
+                                        Image {
+                                            Layout.preferredWidth: 62
+                                            Layout.preferredHeight: 62
+                                            source: duelLeftSelect.currentIndex >= 0 && duelLeftSelect.model[duelLeftSelect.currentIndex] ? (duelLeftSelect.model[duelLeftSelect.currentIndex].image || "") : ""
+                                            fillMode: Image.PreserveAspectFit
+                                            asynchronous: true
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            Layout.alignment: Qt.AlignVCenter
+                                            spacing: 3
+
+                                            Text {
+                                                text: tr("wiki.damage_tank_a")
+                                                color: settingsController.accentColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                font.capitalization: Font.AllUppercase
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                text: duelLeftSelect.currentText || tr("wiki.damage_preset")
+                                                color: settingsController.textColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                text: duelLeftSelect.currentIndex >= 0 && duelLeftSelect.model[duelLeftSelect.currentIndex] ? (duelLeftSelect.model[duelLeftSelect.currentIndex].detail || "") : ""
+                                                color: settingsController.mutedTextColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 10
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
                                         }
                                     }
-
-                                    TextField {
-                                        id: duelLeftField
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        placeholderText: tr("wiki.damage_tank_a")
-                                        color: settingsController.textColor
-                                        placeholderTextColor: settingsController.mutedTextColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 13
-                                        selectByMouse: true
-                                        onTextEdited: itemSearchController.searchDamageDuelTarget(text, "left")
-                                        background: Item {}
+                                    delegate: ItemDelegate {
+                                        width: duelLeftSelect.width
+                                        height: 54
+                                        contentItem: RowLayout {
+                                            spacing: 9
+                                            Image {
+                                                Layout.preferredWidth: 42
+                                                Layout.preferredHeight: 42
+                                                source: model.image || ""
+                                                fillMode: Image.PreserveAspectFit
+                                                asynchronous: true
+                                            }
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 1
+                                                Text {
+                                                    text: model.name || ""
+                                                    color: settingsController.textColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+                                                Text {
+                                                    text: model.detail || ""
+                                                    color: settingsController.mutedTextColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 9
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
                                     }
+                                    background: Item {}
                                 }
-
-                                Behavior on border.color { ColorAnimation { duration: 120 } }
                             }
 
-                            // VS center
                             Rectangle {
-                                Layout.preferredWidth: root.wide ? 50 : parent.width
-                                height: 42
-                                radius: 9
+                                Layout.preferredWidth: damageDialog.wideLayout ? 92 : parent.width
+                                height: 86
+                                radius: 10
                                 color: settingsController.accentPanelColor
                                 border.color: settingsController.accentColor
 
@@ -1411,171 +1876,173 @@ Item {
                                     text: "VS"
                                     color: settingsController.accentColor
                                     font.family: "Segoe UI"
-                                    font.pixelSize: 14
+                                    font.pixelSize: 24
                                     font.bold: true
-                                    font.letterSpacing: 1.5
+                                    font.letterSpacing: 2
                                 }
                             }
 
-                            // Tank B input
                             Rectangle {
                                 Layout.fillWidth: true
-                                height: 42
-                                radius: 9
-                                color: settingsController.backgroundColor
-                                border.color: duelRightField.activeFocus ? settingsController.accentColor : settingsController.borderColor
+                                height: 86
+                                radius: 10
+                                color: Qt.rgba(settingsController.warningColor.r, settingsController.warningColor.g, settingsController.warningColor.b, 0.08)
+                                border.color: settingsController.warningColor
 
-                                RowLayout {
+                                ComboBox {
+                                    id: duelRightSelect
                                     anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 8
-                                    spacing: 8
+                                    anchors.margins: 1
+                                    model: itemSearchController.damageDuelPresets("")
+                                    textRole: "name"
+                                    valueRole: "name"
+                                    currentIndex: count > 1 ? 1 : 0
+                                    onActivated: {
+                                        duelRightField.text = currentText
+                                        root.scheduleDuelAuto()
+                                    }
+                                    contentItem: RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12
+                                        anchors.rightMargin: 12
+                                        spacing: 10
 
-                                    Rectangle {
-                                        width: 20
-                                        height: 20
-                                        radius: 5
-                                        color: Qt.rgba(settingsController.warningColor.r, settingsController.warningColor.g, settingsController.warningColor.b, 0.2)
-                                        border.color: settingsController.warningColor
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "B"
-                                            color: settingsController.warningColor
-                                            font.pixelSize: 10
-                                            font.bold: true
+                                        Image {
+                                            Layout.preferredWidth: 62
+                                            Layout.preferredHeight: 62
+                                            source: duelRightSelect.currentIndex >= 0 && duelRightSelect.model[duelRightSelect.currentIndex] ? (duelRightSelect.model[duelRightSelect.currentIndex].image || "") : ""
+                                            fillMode: Image.PreserveAspectFit
+                                            asynchronous: true
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            Layout.alignment: Qt.AlignVCenter
+                                            spacing: 3
+
+                                            Text {
+                                                text: tr("wiki.damage_tank_b")
+                                                color: settingsController.warningColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                font.capitalization: Font.AllUppercase
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                text: duelRightSelect.currentText || tr("wiki.damage_preset")
+                                                color: settingsController.textColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 14
+                                                font.bold: true
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                text: duelRightSelect.currentIndex >= 0 && duelRightSelect.model[duelRightSelect.currentIndex] ? (duelRightSelect.model[duelRightSelect.currentIndex].detail || "") : ""
+                                                color: settingsController.mutedTextColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 10
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
                                         }
                                     }
-
-                                    TextField {
-                                        id: duelRightField
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        placeholderText: tr("wiki.damage_tank_b")
-                                        color: settingsController.textColor
-                                        placeholderTextColor: settingsController.mutedTextColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 13
-                                        selectByMouse: true
-                                        onTextEdited: itemSearchController.searchDamageDuelTarget(text, "right")
-                                        background: Item {}
+                                    delegate: ItemDelegate {
+                                        width: duelRightSelect.width
+                                        height: 54
+                                        contentItem: RowLayout {
+                                            spacing: 9
+                                            Image {
+                                                Layout.preferredWidth: 42
+                                                Layout.preferredHeight: 42
+                                                source: model.image || ""
+                                                fillMode: Image.PreserveAspectFit
+                                                asynchronous: true
+                                            }
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 1
+                                                Text {
+                                                    text: model.name || ""
+                                                    color: settingsController.textColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+                                                Text {
+                                                    text: model.detail || ""
+                                                    color: settingsController.mutedTextColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 9
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
                                     }
+                                    background: Item {}
                                 }
-
-                                Behavior on border.color { ColorAnimation { duration: 120 } }
                             }
                         }
 
-                        // Suggestions row
-                        GridLayout {
+                        Rectangle {
                             Layout.fillWidth: true
-                            columns: root.wide ? 2 : 1
-                            columnSpacing: 8
-                            rowSpacing: 4
+                            height: 38
+                            radius: 9
+                            color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.12)
+                            border.color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.45)
 
-                            ListView {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: count > 0 ? 34 : 0
-                                visible: count > 0
-                                orientation: ListView.Horizontal
-                                spacing: 6
-                                clip: true
-                                model: itemSearchController.damageDuelLeftSuggestions
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                spacing: 10
 
-                                delegate: Rectangle {
-                                    height: 28
-                                    width: Math.min(210, Math.max(80, leftTankChip.implicitWidth + 22))
-                                    radius: 7
-                                    color: leftChipMouse.containsMouse ? settingsController.accentPanelColor : settingsController.surfaceColor
-                                    border.color: leftChipMouse.containsMouse ? settingsController.accentColor : settingsController.borderColor
-
-                                    Text {
-                                        id: leftTankChip
-                                        anchors.centerIn: parent
-                                        text: model.name || ""
-                                        color: leftChipMouse.containsMouse ? settingsController.accentColor : settingsController.textColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                        elide: Text.ElideRight
-                                    }
-
-                                    MouseArea {
-                                        id: leftChipMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            duelLeftField.text = model.name || ""
-                                            itemSearchController.searchDamageDuelTarget(duelLeftField.text, "left")
-                                            Qt.callLater(root.tryAutoDuel)
-                                        }
-                                    }
-
-                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                Text {
+                                    text: tr("wiki.damage_arena")
+                                    color: settingsController.accentColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    font.capitalization: Font.AllUppercase
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
                                 }
 
-                                ScrollBar.horizontal: ScrollBar { active: parent.moving }
-                            }
-
-                            ListView {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: count > 0 ? 34 : 0
-                                visible: count > 0
-                                orientation: ListView.Horizontal
-                                spacing: 6
-                                clip: true
-                                model: itemSearchController.damageDuelRightSuggestions
-
-                                delegate: Rectangle {
-                                    height: 28
-                                    width: Math.min(210, Math.max(80, rightTankChip.implicitWidth + 22))
-                                    radius: 7
-                                    color: rightChipMouse.containsMouse ? Qt.rgba(settingsController.warningColor.r, settingsController.warningColor.g, settingsController.warningColor.b, 0.15) : settingsController.surfaceColor
-                                    border.color: rightChipMouse.containsMouse ? settingsController.warningColor : settingsController.borderColor
-
-                                    Text {
-                                        id: rightTankChip
-                                        anchors.centerIn: parent
-                                        text: model.name || ""
-                                        color: rightChipMouse.containsMouse ? settingsController.warningColor : settingsController.textColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 11
-                                        font.bold: true
-                                        elide: Text.ElideRight
-                                    }
-
-                                    MouseArea {
-                                        id: rightChipMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            duelRightField.text = model.name || ""
-                                            itemSearchController.searchDamageDuelTarget(duelRightField.text, "right")
-                                            Qt.callLater(root.tryAutoDuel)
-                                        }
-                                    }
-
-                                    Behavior on color { ColorAnimation { duration: 100 } }
+                                Text {
+                                    text: itemSearchController.damageDuelWinnerName !== ""
+                                        ? tr("wiki.damage_winner") + ": " + itemSearchController.damageDuelWinnerName
+                                        : tr("wiki.damage_waiting")
+                                    color: itemSearchController.damageDuelWinnerName !== "" ? settingsController.textColor : settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideRight
                                 }
-
-                                ScrollBar.horizontal: ScrollBar { active: parent.moving }
                             }
                         }
 
                         // Tank preview cards (A vs B) with faction-colored borders and VS win-bar
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: root.wide ? 3 : 1
+                            columns: damageDialog.wideLayout ? 3 : 1
                             columnSpacing: 8
                             rowSpacing: 6
 
                             // Tank A card
                             Rectangle {
                                 Layout.fillWidth: true
-                                height: 120
+                                height: 148
                                 radius: 10
-                                color: settingsController.backgroundColor
+                                color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.08)
                                 border.color: {
                                     var fc = itemSearchController.damageDuelLeftFaction
                                     if (fc === "warden")   return Qt.rgba(0.23, 0.52, 0.83, 0.7)
@@ -1590,7 +2057,7 @@ Item {
                                     spacing: 10
 
                                     Rectangle {
-                                        width: 90
+                                        width: 96
                                         Layout.fillHeight: true
                                         radius: 8
                                         color: settingsController.surfaceColor
@@ -1634,6 +2101,29 @@ Item {
                                             }
                                         }
 
+                                        Rectangle {
+                                            width: 74
+                                            height: 18
+                                            radius: 6
+                                            visible: itemSearchController.damageDuelLeftFaction !== ""
+                                            color: Qt.rgba(
+                                                factionColor(itemSearchController.damageDuelLeftFaction).r,
+                                                factionColor(itemSearchController.damageDuelLeftFaction).g,
+                                                factionColor(itemSearchController.damageDuelLeftFaction).b,
+                                                0.15
+                                            )
+                                            border.color: factionColor(itemSearchController.damageDuelLeftFaction)
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: itemSearchController.damageDuelLeftFaction === "warden" ? tr("wiki.faction_warden") : tr("wiki.faction_colonial")
+                                                color: factionColor(itemSearchController.damageDuelLeftFaction)
+                                                font.pixelSize: 8
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
                                         Text {
                                             text: itemSearchController.damageDuelLeftName !== "" ? itemSearchController.damageDuelLeftName : tr("wiki.damage_tank_a")
                                             color: settingsController.textColor
@@ -1658,15 +2148,15 @@ Item {
 
                             // VS center — faction win-chance bar
                             Item {
-                                Layout.preferredWidth: root.wide ? 54 : parent.width
-                                height: root.wide ? 120 : 54
+                                Layout.preferredWidth: damageDialog.wideLayout ? 110 : parent.width
+                                height: damageDialog.wideLayout ? 148 : 72
 
                                 // Background
                                 Rectangle {
                                     anchors.fill: parent
                                     radius: 10
-                                    color: settingsController.surfaceColor
-                                    border.color: settingsController.borderColor
+                                    color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.1)
+                                    border.color: settingsController.accentColor
                                 }
 
                                 // Win bar — left side
@@ -1675,7 +2165,7 @@ Item {
                                 property bool hasProb: leftP >= 0 && rightP >= 0
 
                                 Rectangle {
-                                    visible: parent.hasProb && root.wide
+                                    visible: parent.hasProb && damageDialog.wideLayout
                                     anchors.top: parent.top
                                     anchors.bottom: parent.bottom
                                     anchors.left: parent.left
@@ -1689,7 +2179,7 @@ Item {
 
                                 // Win bar — right side
                                 Rectangle {
-                                    visible: parent.hasProb && root.wide
+                                    visible: parent.hasProb && damageDialog.wideLayout
                                     anchors.top: parent.top
                                     anchors.bottom: parent.bottom
                                     anchors.right: parent.right
@@ -1701,26 +2191,47 @@ Item {
                                     Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutCubic } }
                                 }
 
-                                // VS label
-                                Text {
+                                Column {
                                     anchors.centerIn: parent
-                                    text: "VS"
-                                    color: settingsController.textColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                    font.letterSpacing: 2
-                                    style: Text.Outline
-                                    styleColor: settingsController.backgroundColor
+                                    spacing: 5
+
+                                    Rectangle {
+                                        width: 48
+                                        height: 48
+                                        radius: 8
+                                        visible: itemSearchController.damageDuelAmmoImage !== "" && damageDialog.wideLayout
+                                        color: settingsController.backgroundColor
+                                        border.color: settingsController.borderColor
+
+                                        Image {
+                                            anchors.fill: parent
+                                            anchors.margins: 4
+                                            source: itemSearchController.damageDuelAmmoImage
+                                            fillMode: Image.PreserveAspectFit
+                                            asynchronous: true
+                                        }
+                                    }
+
+                                    Text {
+                                        text: "VS"
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        font.letterSpacing: 2
+                                        style: Text.Outline
+                                        styleColor: settingsController.backgroundColor
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
                                 }
                             }
 
                             // Tank B card
                             Rectangle {
                                 Layout.fillWidth: true
-                                height: 120
+                                height: 148
                                 radius: 10
-                                color: settingsController.backgroundColor
+                                color: Qt.rgba(settingsController.warningColor.r, settingsController.warningColor.g, settingsController.warningColor.b, 0.07)
                                 border.color: {
                                     var fc = itemSearchController.damageDuelRightFaction
                                     if (fc === "warden")   return Qt.rgba(0.23, 0.52, 0.83, 0.7)
@@ -1735,7 +2246,7 @@ Item {
                                     spacing: 10
 
                                     Rectangle {
-                                        width: 90
+                                        width: 96
                                         Layout.fillHeight: true
                                         radius: 8
                                         color: settingsController.surfaceColor
@@ -1779,6 +2290,29 @@ Item {
                                             }
                                         }
 
+                                        Rectangle {
+                                            width: 74
+                                            height: 18
+                                            radius: 6
+                                            visible: itemSearchController.damageDuelRightFaction !== ""
+                                            color: Qt.rgba(
+                                                factionColor(itemSearchController.damageDuelRightFaction).r,
+                                                factionColor(itemSearchController.damageDuelRightFaction).g,
+                                                factionColor(itemSearchController.damageDuelRightFaction).b,
+                                                0.15
+                                            )
+                                            border.color: factionColor(itemSearchController.damageDuelRightFaction)
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: itemSearchController.damageDuelRightFaction === "warden" ? tr("wiki.faction_warden") : tr("wiki.faction_colonial")
+                                                color: factionColor(itemSearchController.damageDuelRightFaction)
+                                                font.pixelSize: 8
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
                                         Text {
                                             text: itemSearchController.damageDuelRightName !== "" ? itemSearchController.damageDuelRightName : tr("wiki.damage_tank_b")
                                             color: settingsController.textColor
@@ -1802,48 +2336,277 @@ Item {
                             }
                         }
 
-                        // Ammo + calc row
-                        RowLayout {
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: 8
+                            columns: damageDialog.wideLayout ? 3 : 1
+                            columnSpacing: 8
+                            rowSpacing: 6
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 50
+                                radius: 9
+                                color: settingsController.backgroundColor
+                                border.color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.45)
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 2
+
+                                    Text {
+                                        text: itemSearchController.damageDuelLeftName !== "" ? itemSearchController.damageDuelLeftName : tr("wiki.damage_tank_a")
+                                        color: settingsController.accentColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        text: "HP " + (itemSearchController.damageDuelLeftHp !== "" ? itemSearchController.damageDuelLeftHp : "--") + "  |  " + tr("wiki.damage_avg_shots") + " " + (itemSearchController.damageDuelLeftShots !== "" ? itemSearchController.damageDuelLeftShots : "--")
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 50
+                                radius: 9
+                                color: Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.08)
+                                border.color: settingsController.borderColor
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 8
+
+                                    Image {
+                                        Layout.preferredWidth: 34
+                                        Layout.preferredHeight: 34
+                                        source: itemSearchController.damageDuelAmmoImage
+                                        visible: itemSearchController.damageDuelAmmoImage !== ""
+                                        fillMode: Image.PreserveAspectFit
+                                        asynchronous: true
+                                    }
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 2
+
+                                        Text {
+                                            text: itemSearchController.damageDuelAmmoName !== "" ? itemSearchController.damageDuelAmmoName : tr("wiki.damage_selected_ammo")
+                                            color: settingsController.textColor
+                                            font.family: "Segoe UI"
+                                            font.pixelSize: 11
+                                            font.bold: true
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            text: itemSearchController.damageDuelAmmoDamage !== "" ? itemSearchController.damageDuelAmmoDamage : tr("wiki.damage_waiting")
+                                            color: settingsController.mutedTextColor
+                                            font.family: "Segoe UI"
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 50
+                                radius: 9
+                                color: settingsController.backgroundColor
+                                border.color: Qt.rgba(settingsController.warningColor.r, settingsController.warningColor.g, settingsController.warningColor.b, 0.45)
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 2
+
+                                    Text {
+                                        text: itemSearchController.damageDuelRightName !== "" ? itemSearchController.damageDuelRightName : tr("wiki.damage_tank_b")
+                                        color: settingsController.warningColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 10
+                                        font.bold: true
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        text: "HP " + (itemSearchController.damageDuelRightHp !== "" ? itemSearchController.damageDuelRightHp : "--") + "  |  " + tr("wiki.damage_avg_shots") + " " + (itemSearchController.damageDuelRightShots !== "" ? itemSearchController.damageDuelRightShots : "--")
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 11
+                                        font.bold: true
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+                        }
+
+                        // Ammo + penetration controls auto-update the duel.
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: damageDialog.compactLayout ? 1 : 2
+                            columnSpacing: 8
+                            rowSpacing: 8
 
                             Rectangle {
                                 Layout.fillWidth: true
                                 height: 42
                                 radius: 9
                                 color: settingsController.backgroundColor
-                                border.color: duelAmmoField.activeFocus ? settingsController.accentColor : settingsController.borderColor
+                                border.color: duelAmmoSelect.activeFocus ? settingsController.accentColor : settingsController.borderColor
 
-                                RowLayout {
+                                ComboBox {
+                                    id: duelAmmoSelect
                                     anchors.fill: parent
-                                    anchors.leftMargin: 12
-                                    anchors.rightMargin: 8
-                                    spacing: 8
-
-                                    Text {
-                                        text: "💥"
-                                        font.pixelSize: 13
+                                    anchors.margins: 1
+                                    model: itemSearchController.damageDuelAmmoOptions()
+                                    textRole: "name"
+                                    valueRole: "value"
+                                    currentIndex: 0
+                                    onActivated: {
+                                        var entry = model && currentIndex >= 0 ? model[currentIndex] : null
+                                        duelAmmoField.text = entry && entry.value !== undefined ? String(entry.value) : ""
+                                        root.scheduleDuelAuto()
                                     }
+                                    contentItem: RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 12
+                                        anchors.rightMargin: 12
+                                        spacing: 8
 
-                                    TextField {
-                                        id: duelAmmoField
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        placeholderText: tr("wiki.damage_ammo") + " (vazio = todas)"
-                                        color: settingsController.textColor
-                                        placeholderTextColor: settingsController.mutedTextColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 13
-                                        selectByMouse: true
-                                        background: Item {}
+                                        Rectangle {
+                                            Layout.preferredWidth: 28
+                                            Layout.preferredHeight: 28
+                                            radius: 7
+                                            color: settingsController.surfaceColor
+                                            border.color: settingsController.borderColor
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                visible: !(duelAmmoSelect.currentIndex >= 0 && duelAmmoSelect.model[duelAmmoSelect.currentIndex] && duelAmmoSelect.model[duelAmmoSelect.currentIndex].image)
+                                                text: "AUTO"
+                                                color: settingsController.accentColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 7
+                                                font.bold: true
+                                            }
+
+                                            Image {
+                                                anchors.fill: parent
+                                                anchors.margins: 4
+                                                source: duelAmmoSelect.currentIndex >= 0 && duelAmmoSelect.model[duelAmmoSelect.currentIndex] ? (duelAmmoSelect.model[duelAmmoSelect.currentIndex].image || "") : ""
+                                                fillMode: Image.PreserveAspectFit
+                                                asynchronous: true
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            Layout.alignment: Qt.AlignVCenter
+                                            spacing: 0
+
+                                            Text {
+                                                text: duelAmmoSelect.currentText || tr("wiki.damage_selected_ammo")
+                                                color: settingsController.textColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            Text {
+                                                text: duelAmmoSelect.currentIndex >= 0 && duelAmmoSelect.model[duelAmmoSelect.currentIndex] ? (duelAmmoSelect.model[duelAmmoSelect.currentIndex].detail || tr("wiki.damage_selected_ammo")) : tr("wiki.damage_selected_ammo")
+                                                color: settingsController.mutedTextColor
+                                                font.family: "Segoe UI"
+                                                font.pixelSize: 9
+                                                Layout.fillWidth: true
+                                                elide: Text.ElideRight
+                                            }
+                                        }
                                     }
+                                    delegate: ItemDelegate {
+                                        width: duelAmmoSelect.width
+                                        height: 48
+                                        contentItem: RowLayout {
+                                            spacing: 8
+
+                                            Rectangle {
+                                                Layout.preferredWidth: 32
+                                                Layout.preferredHeight: 32
+                                                radius: 7
+                                                color: settingsController.surfaceColor
+                                                border.color: highlighted ? settingsController.accentColor : settingsController.borderColor
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    visible: !(model.image || "")
+                                                    text: "AUTO"
+                                                    color: settingsController.accentColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 7
+                                                    font.bold: true
+                                                }
+
+                                                Image {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 4
+                                                    source: model.image || ""
+                                                    fillMode: Image.PreserveAspectFit
+                                                    asynchronous: true
+                                                }
+                                            }
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 1
+                                                Text {
+                                                    text: model.name || ""
+                                                    color: settingsController.textColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 12
+                                                    font.bold: true
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+                                                Text {
+                                                    text: model.detail || ""
+                                                    color: settingsController.mutedTextColor
+                                                    font.family: "Segoe UI"
+                                                    font.pixelSize: 9
+                                                    Layout.fillWidth: true
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                    }
+                                    background: Item {}
                                 }
 
                                 Behavior on border.color { ColorAnimation { duration: 120 } }
                             }
 
                             Rectangle {
-                                width: 110
+                                Layout.preferredWidth: 150
+                                Layout.fillWidth: damageDialog.compactLayout
                                 height: 42
                                 radius: 9
                                 color: settingsController.backgroundColor
@@ -1873,37 +2636,13 @@ Item {
                                         font.pixelSize: 13
                                         selectByMouse: true
                                         inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                        onTextEdited: root.scheduleDuelAuto()
+                                        onAccepted: root.tryAutoDuel()
                                         background: Item {}
                                     }
                                 }
 
                                 Behavior on border.color { ColorAnimation { duration: 120 } }
-                            }
-
-                            Rectangle {
-                                width: 110
-                                height: 42
-                                radius: 9
-                                color: duelCalcMouse.containsMouse ? Qt.lighter(settingsController.accentColor, 1.1) : settingsController.accentColor
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: tr("wiki.damage_calculate")
-                                    color: settingsController.textInverseColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                }
-
-                                MouseArea {
-                                    id: duelCalcMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: itemSearchController.calculateTankDuel(duelLeftField.text, duelRightField.text, duelAmmoField.text, duelPenField.text)
-                                }
-
-                                Behavior on color { ColorAnimation { duration: 120 } }
                             }
                         }
 
@@ -1917,16 +2656,19 @@ Item {
 
                             ScrollBar.vertical: ScrollBar { active: parent.moving || parent.flicking }
 
-                            ColumnLayout {
+                            GridLayout {
                                 id: duelResultGrid
                                 width: parent.width
-                                spacing: 6
+                                columns: width > 620 ? 2 : 1
+                                columnSpacing: 6
+                                rowSpacing: 6
 
                                 Repeater {
                                     model: itemSearchController.damageDuelRows
 
                                     delegate: Item {
                                         Layout.fillWidth: true
+                                        Layout.columnSpan: isWinner || isLoser ? duelResultGrid.columns : 1
                                         // Winner card: full width, tall, prominent
                                         implicitHeight: isWinner ? 100 : isLoser ? 72 : Math.max(58, duelVal.implicitHeight + duelLbl.implicitHeight + 28)
 
