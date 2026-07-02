@@ -1550,6 +1550,7 @@ ApplicationWindow {
                                             "bell": "notificação.png",
                                             "settings": "config.png",
                                             "palette": "config.png",
+                                            "wiki": "wiki.png",
                                             "personalizacao.png": "personalizacao.png"
                                         }
                                         if (icon.indexOf(".png") !== -1) return appController.assetUrl("img/iconmenu/" + icon)
@@ -2095,7 +2096,7 @@ ApplicationWindow {
             }
         }
 
-        AppComponents.AuthErrorOverlay {
+        AuthErrorOverlay {
             id: authErrorOverlay
             errorVisible: chatController.authErrorVisible
             errorCategory: chatController.authErrorCategory
@@ -3232,7 +3233,7 @@ ApplicationWindow {
                         }
 
                         Text {
-                            text: timeTaskController.captureSummary
+                            text: timeTaskController.captureSummary || ""
                             color: settingsController.secondaryTextColor
                             font.family: "Segoe UI"
                             font.pixelSize: 10

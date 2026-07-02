@@ -1752,7 +1752,7 @@ Item {
 
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: damageDialog.wideLayout ? 3 : 1
+                            columns: damageDialog.wideLayout ? 2 : 1
                             columnSpacing: 10
                             rowSpacing: 8
 
@@ -1859,26 +1859,77 @@ Item {
                                                 }
                                             }
                                         }
+                                        background: Rectangle {
+                                            radius: 7
+                                            color: highlighted ? Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.18) : "transparent"
+                                        }
+                                    }
+                                    popup: Popup {
+                                        y: duelLeftSelect.height + 4
+                                        width: duelLeftSelect.width
+                                        height: Math.min(duelLeftPopupList.contentHeight + 8, 280)
+                                        padding: 4
+                                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                                        background: Rectangle {
+                                            radius: 9
+                                            color: settingsController.surfaceColor
+                                            border.color: settingsController.accentColor
+                                        }
+                                        contentItem: ListView {
+                                            id: duelLeftPopupList
+                                            clip: true
+                                            model: duelLeftSelect.model
+                                            currentIndex: duelLeftSelect.highlightedIndex
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            ScrollBar.vertical: ScrollBar { policy: duelLeftPopupList.contentHeight > duelLeftPopupList.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+                                            delegate: ItemDelegate {
+                                                width: duelLeftPopupList.width
+                                                height: 54
+                                                onClicked: {
+                                                    duelLeftSelect.currentIndex = index
+                                                    duelLeftField.text = duelLeftSelect.currentText
+                                                    duelLeftSelect.popup.close()
+                                                    root.scheduleDuelAuto()
+                                                }
+                                                contentItem: RowLayout {
+                                                    spacing: 9
+                                                    Image {
+                                                        Layout.preferredWidth: 42
+                                                        Layout.preferredHeight: 42
+                                                        source: model.image || ""
+                                                        fillMode: Image.PreserveAspectFit
+                                                        asynchronous: true
+                                                    }
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 1
+                                                        Text {
+                                                            text: model.name || ""
+                                                            color: settingsController.textColor
+                                                            font.family: "Segoe UI"
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                            Layout.fillWidth: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                        Text {
+                                                            text: model.detail || ""
+                                                            color: settingsController.mutedTextColor
+                                                            font.family: "Segoe UI"
+                                                            font.pixelSize: 9
+                                                            Layout.fillWidth: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                }
+                                                background: Rectangle {
+                                                    radius: 7
+                                                    color: hovered || duelLeftSelect.currentIndex === index ? Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.18) : "transparent"
+                                                }
+                                            }
+                                        }
                                     }
                                     background: Item {}
-                                }
-                            }
-
-                            Rectangle {
-                                Layout.preferredWidth: damageDialog.wideLayout ? 92 : parent.width
-                                height: 86
-                                radius: 10
-                                color: settingsController.accentPanelColor
-                                border.color: settingsController.accentColor
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "VS"
-                                    color: settingsController.accentColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 24
-                                    font.bold: true
-                                    font.letterSpacing: 2
                                 }
                             }
 
@@ -1982,6 +2033,75 @@ Item {
                                                     font.pixelSize: 9
                                                     Layout.fillWidth: true
                                                     elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                        background: Rectangle {
+                                            radius: 7
+                                            color: highlighted ? Qt.rgba(settingsController.warningColor.r, settingsController.warningColor.g, settingsController.warningColor.b, 0.18) : "transparent"
+                                        }
+                                    }
+                                    popup: Popup {
+                                        y: duelRightSelect.height + 4
+                                        width: duelRightSelect.width
+                                        height: Math.min(duelRightPopupList.contentHeight + 8, 280)
+                                        padding: 4
+                                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                                        background: Rectangle {
+                                            radius: 9
+                                            color: settingsController.surfaceColor
+                                            border.color: settingsController.warningColor
+                                        }
+                                        contentItem: ListView {
+                                            id: duelRightPopupList
+                                            clip: true
+                                            model: duelRightSelect.model
+                                            currentIndex: duelRightSelect.highlightedIndex
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            ScrollBar.vertical: ScrollBar { policy: duelRightPopupList.contentHeight > duelRightPopupList.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+                                            delegate: ItemDelegate {
+                                                width: duelRightPopupList.width
+                                                height: 54
+                                                onClicked: {
+                                                    duelRightSelect.currentIndex = index
+                                                    duelRightField.text = duelRightSelect.currentText
+                                                    duelRightSelect.popup.close()
+                                                    root.scheduleDuelAuto()
+                                                }
+                                                contentItem: RowLayout {
+                                                    spacing: 9
+                                                    Image {
+                                                        Layout.preferredWidth: 42
+                                                        Layout.preferredHeight: 42
+                                                        source: model.image || ""
+                                                        fillMode: Image.PreserveAspectFit
+                                                        asynchronous: true
+                                                    }
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 1
+                                                        Text {
+                                                            text: model.name || ""
+                                                            color: settingsController.textColor
+                                                            font.family: "Segoe UI"
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                            Layout.fillWidth: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                        Text {
+                                                            text: model.detail || ""
+                                                            color: settingsController.mutedTextColor
+                                                            font.family: "Segoe UI"
+                                                            font.pixelSize: 9
+                                                            Layout.fillWidth: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                }
+                                                background: Rectangle {
+                                                    radius: 7
+                                                    color: hovered || duelRightSelect.currentIndex === index ? Qt.rgba(settingsController.warningColor.r, settingsController.warningColor.g, settingsController.warningColor.b, 0.18) : "transparent"
                                                 }
                                             }
                                         }
@@ -2594,6 +2714,96 @@ Item {
                                                     font.pixelSize: 9
                                                     Layout.fillWidth: true
                                                     elide: Text.ElideRight
+                                                }
+                                            }
+                                        }
+                                        background: Rectangle {
+                                            radius: 7
+                                            color: highlighted ? Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.18) : "transparent"
+                                        }
+                                    }
+                                    popup: Popup {
+                                        y: duelAmmoSelect.height + 4
+                                        width: duelAmmoSelect.width
+                                        height: Math.min(duelAmmoPopupList.contentHeight + 8, 260)
+                                        padding: 4
+                                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+                                        background: Rectangle {
+                                            radius: 9
+                                            color: settingsController.surfaceColor
+                                            border.color: settingsController.accentColor
+                                        }
+                                        contentItem: ListView {
+                                            id: duelAmmoPopupList
+                                            clip: true
+                                            model: duelAmmoSelect.model
+                                            currentIndex: duelAmmoSelect.highlightedIndex
+                                            boundsBehavior: Flickable.StopAtBounds
+                                            ScrollBar.vertical: ScrollBar { policy: duelAmmoPopupList.contentHeight > duelAmmoPopupList.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+                                            delegate: ItemDelegate {
+                                                width: duelAmmoPopupList.width
+                                                height: 48
+                                                onClicked: {
+                                                    duelAmmoSelect.currentIndex = index
+                                                    var entry = duelAmmoSelect.model && index >= 0 ? duelAmmoSelect.model[index] : null
+                                                    duelAmmoField.text = entry && entry.value !== undefined ? String(entry.value) : ""
+                                                    duelAmmoSelect.popup.close()
+                                                    root.scheduleDuelAuto()
+                                                }
+                                                contentItem: RowLayout {
+                                                    spacing: 8
+
+                                                    Rectangle {
+                                                        Layout.preferredWidth: 32
+                                                        Layout.preferredHeight: 32
+                                                        radius: 7
+                                                        color: settingsController.surfaceColor
+                                                        border.color: hovered || duelAmmoSelect.currentIndex === index ? settingsController.accentColor : settingsController.borderColor
+
+                                                        Text {
+                                                            anchors.centerIn: parent
+                                                            visible: !(model.image || "")
+                                                            text: "AUTO"
+                                                            color: settingsController.accentColor
+                                                            font.family: "Segoe UI"
+                                                            font.pixelSize: 7
+                                                            font.bold: true
+                                                        }
+
+                                                        Image {
+                                                            anchors.fill: parent
+                                                            anchors.margins: 4
+                                                            source: model.image || ""
+                                                            fillMode: Image.PreserveAspectFit
+                                                            asynchronous: true
+                                                        }
+                                                    }
+
+                                                    ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 1
+                                                        Text {
+                                                            text: model.name || ""
+                                                            color: settingsController.textColor
+                                                            font.family: "Segoe UI"
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                            Layout.fillWidth: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                        Text {
+                                                            text: model.detail || ""
+                                                            color: settingsController.mutedTextColor
+                                                            font.family: "Segoe UI"
+                                                            font.pixelSize: 9
+                                                            Layout.fillWidth: true
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+                                                }
+                                                background: Rectangle {
+                                                    radius: 7
+                                                    color: hovered || duelAmmoSelect.currentIndex === index ? Qt.rgba(settingsController.accentColor.r, settingsController.accentColor.g, settingsController.accentColor.b, 0.18) : "transparent"
                                                 }
                                             }
                                         }
