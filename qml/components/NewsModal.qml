@@ -77,10 +77,60 @@ Popup {
     function blocksModel() {
         if (newsItem && newsItem.contentBlocks && newsItem.contentBlocks.length)
             return newsItem.contentBlocks
-        if (newsItem && newsItem.bodyHtml)
-            return [{ "type": "rich", "html": newsItem.bodyHtml }]
-        if (newsItem && newsItem.body)
-            return [{ "type": "paragraph", "html": newsItem.body }]
+            
+        var rawHtml = "";
+        if (newsItem && newsItem.bodyHtml) {
+            rawHtml = newsItem.bodyHtml;
+        } else if (newsItem && newsItem.body) {
+            rawHtml = newsItem.body;
+        }
+        
+        if (rawHtml) {
+            var blocks = [];
+            var imgRegex = /<img\b([^>]*)>/gi;
+            var lastIndex = 0;
+            var match;
+            
+            while ((match = imgRegex.exec(rawHtml)) !== null) {
+                if (match.index > lastIndex) {
+                    blocks.push({ "type": "rich", "html": rawHtml.substring(lastIndex, match.index) });
+                }
+                
+                var inner = match[1];
+                var srcMatch = inner.match(/\bsrc\s*=\s*(['"])(.*?)\1/i);
+                var altMatch = inner.match(/\balt\s*=\s*(['"])(.*?)\1/i);
+                var widthMatch = inner.match(/\bwidth\s*=\s*(['"]?)(\d+)\1/i);
+                var w = widthMatch ? parseInt(widthMatch[2]) : 0;
+                
+                if (w > 0 && w <= 150) {
+                    // Small images / icons remain inline
+                    blocks.push({ "type": "rich", "html": match[0] });
+                } else {
+                    blocks.push({ 
+                        "type": "image", 
+                        "src": srcMatch ? srcMatch[2] : "", 
+                        "alt": altMatch ? altMatch[2] : "" 
+                    });
+                }
+                
+                lastIndex = imgRegex.lastIndex;
+            }
+            
+            if (lastIndex < rawHtml.length) {
+                blocks.push({ "type": "rich", "html": rawHtml.substring(lastIndex) });
+            }
+            
+            var merged = [];
+            for (var i = 0; i < blocks.length; i++) {
+                if (blocks[i].type === "rich" && merged.length > 0 && merged[merged.length - 1].type === "rich") {
+                    merged[merged.length - 1].html += blocks[i].html;
+                } else {
+                    merged.push(blocks[i]);
+                }
+            }
+            return merged.length ? merged : [{ "type": "rich", "html": rawHtml }];
+        }
+        
         return []
     }
     
@@ -292,16 +342,19 @@ Popup {
             Rectangle {
                 id: imageFrame
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: Math.min(parent.width, 540)
-                implicitHeight: width * 0.5625
+                width: Math.min(parent.width, 860)
+                implicitHeight: newsImg.status === Image.Ready && newsImg.implicitWidth > 0 
+                                ? (width * (newsImg.implicitHeight / newsImg.implicitWidth)) 
+                                : (width * 0.5625)
                 radius: 8
                 color: settingsController.backgroundColor
                 border.color: settingsController.borderColor
                 clip: true
 
                 Image {
+                    id: newsImg
                     anchors.fill: parent
-                    anchors.margins: 8
+                    anchors.margins: 0
                     source: block.src || ""
                     fillMode: Image.PreserveAspectFit
                     asynchronous: true
