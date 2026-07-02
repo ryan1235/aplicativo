@@ -11891,12 +11891,6 @@ class UpdateController(QObject):
         if self._installing or not self._update:
             return
         debug_log("update", "install requested", {"version": self._update.version, "asset": self._update.asset_name})
-        if self.sourceMode:
-            self._error_text = self._t("update.source_mode_unavailable")
-            self._error_visible = True
-            self._status = self._error_text
-            self.changed.emit()
-            return
 
         update = self._update
         self._offer_visible = False
