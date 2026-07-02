@@ -182,544 +182,448 @@ Rectangle {
         contentWidth: availableWidth
 
         ColumnLayout {
-            width: parent.width - 40
+            width: parent.width - 60
             anchors.horizontalCenter: parent.horizontalCenter
-            anchors.margins: 20
-            spacing: 16
+            anchors.margins: 30
+            spacing: 32
 
-            Rectangle {
+            // --- PREMIUM HEADER ---
+            Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: root.width > 980 ? 286 : (root.width > 680 ? 430 : 680)
-                radius: settingsController.cardRadius
-                color: settingsController.surfaceColor
-                border.color: settingsController.borderColor
-                border.width: 1
-                clip: true
+                Layout.preferredHeight: 180
 
                 Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    height: 142
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: "#b10f6d" }
-                        GradientStop { position: 0.48; color: settingsController.accentPanelColor }
-                        GradientStop { position: 1.0; color: settingsController.accentColor }
-                    }
-                }
+                    id: headerBg
+                    anchors.fill: parent
+                    radius: 24
+                    color: settingsController.surfaceColor
+                    border.color: Qt.rgba(1, 1, 1, 0.04)
+                    border.width: 1
+                    clip: true
 
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    height: 142
-                    gradient: Gradient {
-                        GradientStop { position: 0.0; color: "transparent" }
-                        GradientStop { position: 1.0; color: settingsController.surfaceColor }
-                    }
-                }
+                    // --- ANIMATED AURORA BACKGROUND ---
+                    Rectangle {
+                        width: 300
+                        height: 300
+                        radius: 150
+                        color: settingsController.accentColor
+                        opacity: 0.15
+                        x: parent.width * 0.1
+                        y: -50
 
-                RowLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.margins: 22
-                    spacing: 18
+                        SequentialAnimation on x {
+                            loops: Animation.Infinite
+                            running: true
+                            NumberAnimation { to: headerBg.width * 0.5; duration: 20000; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: headerBg.width * 0.1; duration: 20000; easing.type: Easing.InOutSine }
+                        }
+                        SequentialAnimation on y {
+                            loops: Animation.Infinite
+                            running: true
+                            NumberAnimation { to: 50; duration: 15000; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: -50; duration: 15000; easing.type: Easing.InOutSine }
+                        }
+                    }
 
                     Rectangle {
-                        width: 108
-                        height: 108
-                        radius: 54
-                        color: settingsController.controlColor
-                        border.color: account.online ? settingsController.successColor : settingsController.borderColor
-                        border.width: 3
-                        Layout.alignment: Qt.AlignTop
+                        width: 400
+                        height: 400
+                        radius: 200
+                        color: settingsController.infoColor
+                        opacity: 0.1
+                        x: parent.width * 0.6
+                        y: -100
 
-                        Rectangle {
-                            id: avatarMask
-                            anchors.fill: parent
-                            anchors.margins: 5
-                            radius: 50
-                            visible: false
+                        SequentialAnimation on x {
+                            loops: Animation.Infinite
+                            running: true
+                            NumberAnimation { to: headerBg.width * 0.3; duration: 25000; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: headerBg.width * 0.6; duration: 25000; easing.type: Easing.InOutSine }
                         }
-                        Image {
-                            id: avatarImage
-                            anchors.fill: avatarMask
-                            source: avatarSource()
-                            fillMode: Image.PreserveAspectCrop
-                            visible: false
-                        }
-                        OpacityMask {
-                            anchors.fill: avatarMask
-                            source: avatarImage
-                            maskSource: avatarMask
-                            visible: avatarImage.source !== ""
-                        }
-                        Text {
-                            anchors.centerIn: parent
-                            visible: avatarImage.source === ""
-                            text: profileName().charAt(0).toUpperCase()
-                            color: settingsController.textColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 32
-                            font.bold: true
+                        SequentialAnimation on y {
+                            loops: Animation.Infinite
+                            running: true
+                            NumberAnimation { to: 20; duration: 18000; easing.type: Easing.InOutSine }
+                            NumberAnimation { to: -100; duration: 18000; easing.type: Easing.InOutSine }
                         }
                     }
 
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-                        spacing: 8
+                    // Glass frost overlay to soften the orbs
+                    Rectangle {
+                        anchors.fill: parent
+                        color: settingsController.surfaceColor
+                        opacity: 0.45
+                    }
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 10
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 30
+                        spacing: 24
 
-                            Text {
-                                text: profileName()
-                                color: settingsController.textColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 28
-                                font.bold: true
-                                wrapMode: Text.WordWrap
-                                Layout.fillWidth: true
-                                maximumLineCount: 2
+                        // Avatar
+                        Item {
+                            width: 110
+                            height: 110
+
+                            // Animated Pulse Ring
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: parent.width
+                                height: parent.height
+                                radius: width / 2
+                                color: "transparent"
+                                border.color: account.online ? settingsController.successColor : settingsController.accentColor
+                                border.width: 2
+                                opacity: 0.6
+
+                                SequentialAnimation on scale {
+                                    loops: Animation.Infinite
+                                    running: true
+                                    NumberAnimation { to: 1.15; duration: 2500; easing.type: Easing.InOutSine }
+                                    NumberAnimation { to: 1.0; duration: 2500; easing.type: Easing.InOutSine }
+                                }
+                                SequentialAnimation on opacity {
+                                    loops: Animation.Infinite
+                                    running: true
+                                    NumberAnimation { to: 0.0; duration: 2500; easing.type: Easing.InOutSine }
+                                    NumberAnimation { to: 0.6; duration: 2500; easing.type: Easing.InOutSine }
+                                }
                             }
 
+                            // Main Avatar Border
                             Rectangle {
-                                visible: String(account.role || "") !== ""
-                                height: 24
-                                width: roleText.implicitWidth + 18
-                                radius: 6
-                                color: settingsController.accentPanelColor
-                                border.color: settingsController.accentColor
+                                anchors.fill: parent
+                                radius: width / 2
+                                color: settingsController.controlColor
+                                border.color: account.online ? settingsController.successColor : Qt.rgba(1, 1, 1, 0.1)
+                                border.width: 3
 
+                                Rectangle {
+                                    id: avatarMask
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    radius: (width / 2)
+                                    visible: false
+                                }
+                                Image {
+                                    id: avatarImage
+                                    anchors.fill: avatarMask
+                                    source: avatarSource()
+                                    fillMode: Image.PreserveAspectCrop
+                                    visible: false
+                                }
+                                OpacityMask {
+                                    anchors.fill: avatarMask
+                                    source: avatarImage
+                                    maskSource: avatarMask
+                                    visible: avatarImage.source !== ""
+                                }
                                 Text {
-                                    id: roleText
                                     anchors.centerIn: parent
-                                    text: String(account.role || "")
-                                    color: settingsController.accentColor
+                                    visible: avatarImage.source === ""
+                                    text: profileName().charAt(0).toUpperCase()
+                                    color: settingsController.textColor
                                     font.family: "Segoe UI"
-                                    font.pixelSize: 12
+                                    font.pixelSize: 42
                                     font.bold: true
                                 }
                             }
                         }
 
-                        Text {
-                            text: profileHandle()
-                            color: settingsController.mutedTextColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 14
-                            elide: Text.ElideRight
+                        // Info Column
+                        ColumnLayout {
                             Layout.fillWidth: true
-                        }
+                            Layout.alignment: Qt.AlignVCenter
+                            spacing: 4
 
-                        Text {
-                            text: tr("profile.summary_title")
-                            color: settingsController.mutedTextColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 13
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
-                            Layout.maximumWidth: 760
-                        }
-
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 8
-
-                            Repeater {
-                                model: [
-                                    account.online ? tr("profile.online_now") : tr("profile.offline_now"),
-                                    account.regiment || tr("profile.no_regiment"),
-                                    account.panelAccessLevel !== undefined ? tr("profile.access_level") + ": " + account.panelAccessLevel : tr("profile.access_level_unknown"),
-                                    account.appVersion ? tr("profile.app_version").replace("{version}", account.appVersion) : ""
-                                ].filter(function(item) { return String(item || "") !== "" })
-
-                                delegate: Rectangle {
-                                    height: 30
-                                    width: chipText.implicitWidth + 20
-                                    radius: 8
-                                    color: index === 0 && account.online ? settingsController.accentPanelColor : settingsController.controlColor
-                                    border.color: index === 0 && account.online ? settingsController.successColor : settingsController.borderColor
-
+                            RowLayout {
+                                spacing: 12
+                                Text {
+                                    text: profileName()
+                                    color: settingsController.textColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 32
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                    Layout.maximumWidth: 400
+                                }
+                                Rectangle {
+                                    visible: String(account.role || "") !== ""
+                                    height: 24
+                                    width: roleText.implicitWidth + 20
+                                    radius: 12
+                                    color: settingsController.accentPanelColor
+                                    border.color: settingsController.accentColor
                                     Text {
-                                        id: chipText
+                                        id: roleText
                                         anchors.centerIn: parent
-                                        text: String(modelData)
-                                        color: index === 0 && account.online ? settingsController.successColor : settingsController.textColor
+                                        text: String(account.role || "")
+                                        color: settingsController.accentColor
                                         font.family: "Segoe UI"
-                                        font.pixelSize: 12
+                                        font.pixelSize: 11
                                         font.bold: true
+                                        font.letterSpacing: 1.2
+                                    }
+                                }
+                            }
+
+                            Text {
+                                text: profileHandle()
+                                color: settingsController.mutedTextColor
+                                font.family: "Segoe UI"
+                                font.pixelSize: 16
+                            }
+
+                            RowLayout {
+                                Layout.topMargin: 8
+                                spacing: 8
+                                Repeater {
+                                    model: [
+                                        account.online ? tr("profile.online_now") : tr("profile.offline_now"),
+                                        account.regiment || tr("profile.no_regiment"),
+                                        account.panelAccessLevel !== undefined ? tr("profile.access_level") + ": " + account.panelAccessLevel : tr("profile.access_level_unknown")
+                                    ].filter(function(item) { return String(item || "") !== "" })
+
+                                    delegate: Rectangle {
+                                        height: 26
+                                        width: chipText.implicitWidth + 20
+                                        radius: 13
+                                        color: index === 0 && account.online ? settingsController.accentPanelColor : Qt.rgba(1, 1, 1, 0.05)
+                                        border.color: index === 0 && account.online ? settingsController.successColor : Qt.rgba(1, 1, 1, 0.05)
+                                        border.width: 1
+                                        Text {
+                                            id: chipText
+                                            anchors.centerIn: parent
+                                            text: String(modelData)
+                                            color: index === 0 && account.online ? settingsController.successColor : settingsController.textColor
+                                            font.family: "Segoe UI"
+                                            font.pixelSize: 12
+                                            font.bold: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        // Actions
+                        Column {
+                            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                            width: 220
+                            spacing: 12
+
+                            Rectangle {
+                                visible: canOpenAdminPanel()
+                                width: parent.width
+                                height: 42
+                                radius: 21
+                                color: adminHover.containsMouse ? settingsController.accentHoverColor : settingsController.accentColor
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: tr("profile.open_admin")
+                                    color: settingsController.textInverseColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                }
+                                MouseArea {
+                                    id: adminHover
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: appController.openAdminPanel(chatController.apiToken)
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                height: 42
+                                radius: 21
+                                color: logoutHover.containsMouse ? Qt.rgba(1, 0, 0, 0.1) : "transparent"
+                                border.color: logoutHover.containsMouse ? settingsController.dangerColor : Qt.rgba(1, 1, 1, 0.15)
+                                border.width: 1
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: tr("profile.logout")
+                                    color: logoutHover.containsMouse ? settingsController.dangerColor : settingsController.textColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 13
+                                    font.bold: true
+                                }
+                                MouseArea {
+                                    id: logoutHover
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        chatController.logout()
+                                        appController.setCurrentPage("chat")
                                     }
                                 }
                             }
                         }
                     }
-
-                    ColumnLayout {
-                        Layout.alignment: Qt.AlignTop
-                        Layout.preferredWidth: 210
-                        spacing: 8
-
-                        Rectangle {
-                            visible: canOpenAdminPanel()
-                            Layout.fillWidth: true
-                            height: 36
-                            radius: 8
-                            color: adminHover.containsMouse ? settingsController.accentHoverColor : settingsController.accentColor
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: tr("profile.open_admin")
-                                color: settingsController.textInverseColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-
-                            MouseArea {
-                                id: adminHover
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: appController.openAdminPanel(chatController.apiToken)
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 36
-                            radius: 8
-                            color: logoutHover.containsMouse ? settingsController.dangerColor : settingsController.controlColor
-                            border.color: logoutHover.containsMouse ? settingsController.dangerColor : settingsController.borderColor
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: tr("profile.logout")
-                                color: settingsController.textColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 13
-                                font.bold: true
-                            }
-
-                            MouseArea {
-                                id: logoutHover
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    chatController.logout()
-                                    appController.setCurrentPage("chat")
-                                }
-                            }
-                        }
-                    }
-                }
-
-                GridLayout {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    anchors.margins: 18
-                    columns: root.width > 980 ? 4 : 2
-                    columnSpacing: 10
-                    rowSpacing: 10
-
-                    MetricCard {
-                        Layout.fillWidth: true
-                        title: tr("profile.total_online")
-                        value: formatTime(account.totalOnlineSeconds)
-                        detail: tr("profile.last_presence").replace("{time}", formatRelative(account.lastPresenceAt || account.updatedAt))
-                        accent: settingsController.accentColor
-                        valuePixelSize: 20
-                    }
-                    MetricCard {
-                        Layout.fillWidth: true
-                        title: tr("profile.account_age")
-                        value: compactNumber(account.accountAgeDays || 0) + "d"
-                        detail: tr("profile.created_at_short").replace("{date}", formatDate(account.createdAt))
-                        accent: settingsController.infoColor
-                        valuePixelSize: 20
-                    }
-                    MetricCard {
-                        Layout.fillWidth: true
-                        title: tr("profile.login_metric")
-                        value: compactNumber(loginEvents(selectedRange))
-                        detail: tr("profile.last_login_short").replace("{date}", formatRelative(account.lastLoginAt))
-                        accent: settingsController.successColor
-                        valuePixelSize: 20
-                    }
-                    MetricCard {
-                        Layout.fillWidth: true
-                        title: tr("profile.latest_title")
-                        value: lastLogText()
-                        detail: tr("profile.period_label_" + selectedRange)
-                        accent: settingsController.warningColor
-                        valuePixelSize: 18
-                    }
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: 54
-                radius: settingsController.cardRadius
-                color: settingsController.surfaceColor
-                border.color: settingsController.borderColor
-                border.width: 1
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 8
-
-                    Text {
-                        text: tr("profile.period")
-                        color: settingsController.mutedTextColor
-                        font.family: "Segoe UI"
-                        font.pixelSize: 12
-                        font.bold: true
-                    }
-
-                    Repeater {
-                        model: [
-                            {key: "today", label: tr("profile.period_today")},
-                            {key: "week", label: tr("profile.period_week")},
-                            {key: "month", label: tr("profile.period_month")},
-                            {key: "total", label: tr("profile.period_total")}
-                        ]
-
-                        delegate: Rectangle {
-                            height: 34
-                            width: periodText.implicitWidth + 24
-                            radius: 8
-                            color: selectedRange === modelData.key ? settingsController.accentPanelColor : settingsController.controlColor
-                            border.color: selectedRange === modelData.key ? settingsController.accentColor : settingsController.borderColor
-
-                            Text {
-                                id: periodText
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                color: selectedRange === modelData.key ? settingsController.accentColor : settingsController.textColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 12
-                                font.bold: true
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: setRange(modelData.key)
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    Text {
-                        text: metrics.generatedAt ? tr("profile.updated_at").replace("{time}", formatRelative(metrics.generatedAt)) : ""
-                        color: settingsController.mutedTextColor
-                        font.family: "Segoe UI"
-                        font.pixelSize: 11
-                    }
-                }
-            }
-
+            // --- COMPACT STATS ROW ---
             GridLayout {
                 Layout.fillWidth: true
-                columns: root.width > 1040 ? 4 : root.width > 720 ? 2 : 1
-                columnSpacing: 12
-                rowSpacing: 12
+                columns: root.width > 1000 ? 4 : 2
+                columnSpacing: 24
+                rowSpacing: 24
 
+                MetricCard {
+                    Layout.fillWidth: true
+                    title: tr("profile.total_online")
+                    value: formatTime(account.totalOnlineSeconds)
+                    detail: tr("profile.last_presence").replace("{time}", formatRelative(account.lastPresenceAt || account.updatedAt))
+                    accent: settingsController.accentColor
+                }
+                MetricCard {
+                    Layout.fillWidth: true
+                    title: tr("profile.account_age")
+                    value: compactNumber(account.accountAgeDays || 0) + "d"
+                    detail: tr("profile.created_at_short").replace("{date}", formatDate(account.createdAt))
+                    accent: settingsController.infoColor
+                }
                 MetricCard {
                     Layout.fillWidth: true
                     title: tr("profile.metric_events")
                     value: compactNumber(actions.totalEvents || 0)
-                    detail: tr("profile.metric_events_detail")
+                    detail: tr("profile.period_label_" + selectedRange)
                     accent: settingsController.successColor
-                }
-                MetricCard {
-                    Layout.fillWidth: true
-                    title: tr("profile.metric_quantity")
-                    value: compactNumber(actions.totalQuantity || 0)
-                    detail: tr("profile.metric_quantity_detail")
-                    accent: settingsController.accentColor
                 }
                 MetricCard {
                     Layout.fillWidth: true
                     title: tr("profile.messages")
                     value: compactNumber(counters.messages || 0)
                     detail: tr("profile.messages_detail").replace("{count}", compactNumber(counters.whisperMessages || 0))
-                    accent: settingsController.infoColor
-                }
-                MetricCard {
-                    Layout.fillWidth: true
-                    title: tr("profile.interactions")
-                    value: compactNumber(numberValue(counters.messageReactions) + mentionTotal())
-                    detail: tr("profile.interactions_detail").replace("{count}", compactNumber(counters.newsViews || 0))
                     accent: settingsController.warningColor
                 }
             }
 
-            GridLayout {
+            // --- PERIOD SELECTOR ---
+            RowLayout {
                 Layout.fillWidth: true
-                columns: root.width > 900 ? 2 : 1
-                columnSpacing: 14
-                rowSpacing: 14
-
+                Layout.topMargin: 10
+                Layout.bottomMargin: 10
+                
+                Item { Layout.fillWidth: true } // spacer left
+                
                 Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 300
-                    radius: settingsController.cardRadius
-                    color: settingsController.surfaceColor
-                    border.color: settingsController.borderColor
+                    height: 44
+                    implicitWidth: periodRow.implicitWidth + 8
+                    radius: 22
+                    color: Qt.rgba(0, 0, 0, 0.25)
+                    border.color: Qt.rgba(1, 1, 1, 0.05)
                     border.width: 1
 
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text {
-                                text: tr("profile.graph_categories")
-                                color: settingsController.textColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 18
-                                font.bold: true
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                text: tr("profile.graph_categories_hint")
-                                color: settingsController.mutedTextColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 11
-                            }
-                        }
-
-                        Text {
-                            visible: categories.length === 0
-                            text: tr("profile.no_data")
-                            color: settingsController.mutedTextColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 13
-                        }
+                    Row {
+                        id: periodRow
+                        anchors.centerIn: parent
+                        spacing: 2
 
                         Repeater {
-                            model: categories
+                            model: [
+                                {key: "today", label: tr("profile.period_today")},
+                                {key: "week", label: tr("profile.period_week")},
+                                {key: "month", label: tr("profile.period_month")},
+                                {key: "total", label: tr("profile.period_total")}
+                            ]
 
-                            delegate: ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 6
-                                visible: index < 5
-
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Text {
-                                        text: labelText(modelData)
-                                        color: settingsController.textColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 12
-                                        elide: Text.ElideRight
-                                        Layout.fillWidth: true
-                                    }
-                                    Text {
-                                        text: compactNumber(modelData.totalEvents || modelData.totalQuantity || 0)
-                                        color: settingsController.accentColor
-                                        font.family: "Segoe UI"
-                                        font.pixelSize: 12
-                                        font.bold: true
-                                    }
+                            delegate: Rectangle {
+                                height: 36
+                                width: 110
+                                radius: 18
+                                color: selectedRange === modelData.key ? settingsController.accentColor : "transparent"
+                                
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: selectedRange === modelData.key ? settingsController.textInverseColor : settingsController.mutedTextColor
+                                    font.family: "Segoe UI"
+                                    font.pixelSize: 14
+                                    font.bold: selectedRange === modelData.key
                                 }
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    height: 9
-                                    radius: 5
-                                    color: settingsController.controlColor
-
-                                    Rectangle {
-                                        width: parent.width * barRatio(modelData.totalEvents || modelData.totalQuantity || 0, barMax(categories, "totalEvents"))
-                                        height: parent.height
-                                        radius: 5
-                                        color: settingsController.accentColor
-                                    }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: setRange(modelData.key)
                                 }
                             }
                         }
                     }
                 }
+                
+                Item { Layout.fillWidth: true } // spacer right
+            }
 
-                Rectangle {
+            // --- DATA CHARTS ROW ---
+            GridLayout {
+                Layout.fillWidth: true
+                columns: root.width > 900 ? 2 : 1
+                columnSpacing: 32
+                rowSpacing: 32
+
+                // Top Actions
+                ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 300
-                    radius: settingsController.cardRadius
-                    color: settingsController.surfaceColor
-                    border.color: settingsController.borderColor
-                    border.width: 1
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 20
+
+                    Text {
+                        text: tr("profile.top_actions")
+                        color: settingsController.textColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 20
+                        font.bold: true
+                        Layout.fillWidth: true
+                    }
+
+                    Text {
+                        visible: topActions.length === 0
+                        text: tr("profile.no_data")
+                        color: settingsController.mutedTextColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 14
+                    }
 
                     ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 12
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text {
-                                text: tr("profile.top_actions")
-                                color: settingsController.textColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 18
-                                font.bold: true
-                                Layout.fillWidth: true
-                            }
-                            Text {
-                                text: tr("profile.top_actions_hint")
-                                color: settingsController.mutedTextColor
-                                font.family: "Segoe UI"
-                                font.pixelSize: 11
-                            }
-                        }
-
-                        Text {
-                            visible: topActions.length === 0
-                            text: tr("profile.no_data")
-                            color: settingsController.mutedTextColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 13
-                        }
-
+                        Layout.fillWidth: true
+                        spacing: 8
+                        
                         Repeater {
                             model: topActions
 
                             delegate: Rectangle {
                                 Layout.fillWidth: true
-                                height: 38
+                                height: 54
                                 visible: index < 5
-                                radius: 8
-                                color: index % 2 === 0 ? settingsController.backgroundColor : settingsController.controlColor
-                                border.color: settingsController.borderColor
+                                radius: 12
+                                color: Qt.rgba(1, 1, 1, 0.04)
+                                border.color: Qt.rgba(1, 1, 1, 0.03)
+                                border.width: 1
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 10
-                                    spacing: 10
+                                    anchors.margins: 16
+                                    spacing: 12
 
                                     Text {
                                         text: actionLabel(modelData)
                                         color: settingsController.textColor
                                         font.family: "Segoe UI"
-                                        font.pixelSize: 12
+                                        font.pixelSize: 14
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
                                     }
-
                                     Text {
-                                        text: compactNumber(modelData.totalEvents || 0) + " / " + compactNumber(modelData.totalQuantity || 0)
+                                        text: compactNumber(modelData.totalEvents || 0)
                                         color: settingsController.successColor
                                         font.family: "Segoe UI"
-                                        font.pixelSize: 12
+                                        font.pixelSize: 15
                                         font.bold: true
                                     }
                                 }
@@ -727,38 +631,20 @@ Rectangle {
                         }
                     }
                 }
-            }
 
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: 340
-                radius: settingsController.cardRadius
-                color: settingsController.surfaceColor
-                border.color: settingsController.borderColor
-                border.width: 1
-                clip: true
-
+                // Recent Logs
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 16
-                    spacing: 12
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 20
 
-                    RowLayout {
+                    Text {
+                        text: tr("profile.recent_logs")
+                        color: settingsController.textColor
+                        font.family: "Segoe UI"
+                        font.pixelSize: 20
+                        font.bold: true
                         Layout.fillWidth: true
-                        Text {
-                            text: tr("profile.recent_logs")
-                            color: settingsController.textColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 18
-                            font.bold: true
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: tr("profile.recent_logs_hint")
-                            color: settingsController.mutedTextColor
-                            font.family: "Segoe UI"
-                            font.pixelSize: 11
-                        }
                     }
 
                     Text {
@@ -766,59 +652,65 @@ Rectangle {
                         text: tr("profile.no_data")
                         color: settingsController.mutedTextColor
                         font.family: "Segoe UI"
-                        font.pixelSize: 13
+                        font.pixelSize: 14
                     }
 
-                    Repeater {
-                        model: Math.min(recentLogs.length, 5)
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
 
-                        delegate: Rectangle {
-                            property var rowData: recentLogs[index] || {}
-                            Layout.fillWidth: true
-                            height: 36
-                            radius: 8
-                            color: index % 2 === 0 ? settingsController.backgroundColor : settingsController.controlColor
-                            border.color: settingsController.borderColor
+                        Repeater {
+                            model: Math.min(recentLogs.length, 5)
 
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 10
+                            delegate: Rectangle {
+                                property var rowData: recentLogs[index] || {}
+                                Layout.fillWidth: true
+                                height: 54
+                                radius: 12
+                                color: Qt.rgba(1, 1, 1, 0.04)
+                                border.color: Qt.rgba(1, 1, 1, 0.03)
+                                border.width: 1
 
-                                Text {
-                                    text: String(rowData.category || "-")
-                                    color: settingsController.accentColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                    Layout.preferredWidth: 120
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    text: String(rowData.action || "-")
-                                    color: settingsController.textColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 12
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    text: "x" + compactNumber(rowData.quantity || 1)
-                                    color: settingsController.successColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 12
-                                    font.bold: true
-                                    Layout.preferredWidth: 54
-                                    horizontalAlignment: Text.AlignRight
-                                }
-                                Text {
-                                    text: formatRelative(rowData.occurredAt || rowData.createdAt)
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 11
-                                    Layout.preferredWidth: 120
-                                    horizontalAlignment: Text.AlignRight
-                                    elide: Text.ElideRight
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 16
+                                    spacing: 12
+
+                                    Text {
+                                        text: String(rowData.category || "-")
+                                        color: settingsController.accentColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        Layout.preferredWidth: 100
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        text: String(rowData.action || "-")
+                                        color: settingsController.textColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 13
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        text: "x" + compactNumber(rowData.quantity || 1)
+                                        color: settingsController.successColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 13
+                                        font.bold: true
+                                        Layout.preferredWidth: 40
+                                        horizontalAlignment: Text.AlignRight
+                                    }
+                                    Text {
+                                        text: formatRelative(rowData.occurredAt || rowData.createdAt)
+                                        color: settingsController.mutedTextColor
+                                        font.family: "Segoe UI"
+                                        font.pixelSize: 12
+                                        Layout.preferredWidth: 70
+                                        horizontalAlignment: Text.AlignRight
+                                        elide: Text.ElideRight
+                                    }
                                 }
                             }
                         }
@@ -827,4 +719,5 @@ Rectangle {
             }
         }
     }
+
 }

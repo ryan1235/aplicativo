@@ -9,64 +9,39 @@ Rectangle {
     property string emoji: ""
     property int textRightMargin: 0
     property color accent: settingsController.accentColor
-    property int contentMargins: 18
-    property int contentSpacing: 6
-    property int titlePixelSize: 11
-    property int valuePixelSize: 22
+    property int contentMargins: 20
+    property int contentSpacing: 8
+    property int titlePixelSize: 12
+    property int valuePixelSize: 24
     property int detailPixelSize: 12
     property int valueMaximumLineCount: 1
     property int detailMaximumLineCount: 1
 
-    radius: settingsController.cardRadius
-    color: hoverArea.containsMouse ? settingsController.accentPanelColor : settingsController.surfaceColor
-    border.color: hoverArea.containsMouse ? root.accent : settingsController.borderColor
+    radius: 20
+    color: settingsController.surfaceColor
+    border.color: hoverArea.containsMouse ? root.accent : Qt.rgba(1, 1, 1, 0.05)
     border.width: 1
-    implicitHeight: 110
+    implicitHeight: 120
     clip: true
 
-    Behavior on color {
-        ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
-    }
-
     Behavior on border.color {
-        ColorAnimation { duration: 200; easing.type: Easing.OutCubic }
-    }
-
-    Rectangle {
-        id: accentBar
-        width: 4
-        height: parent.height
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        color: root.accent
-        opacity: hoverArea.containsMouse ? 1.0 : 0.6
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
-        }
+        ColorAnimation { duration: 250; easing.type: Easing.OutCubic }
     }
 
     Rectangle {
         anchors.fill: parent
-        anchors.leftMargin: accentBar.width
         radius: root.radius
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: root.accent }
-            GradientStop { position: 0.6; color: "transparent" }
-        }
+        color: root.accent
         opacity: hoverArea.containsMouse ? 0.12 : 0.03
         
         Behavior on opacity {
-            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
         }
     }
 
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: root.contentMargins
-        anchors.leftMargin: root.contentMargins + accentBar.width
         spacing: root.contentSpacing
 
         RowLayout {
@@ -105,7 +80,7 @@ Rectangle {
         Text {
             text: root.detail
             color: settingsController.textColor
-            opacity: 0.8
+            opacity: 0.7
             font.family: "Segoe UI"
             font.pixelSize: root.detailPixelSize
             elide: Text.ElideRight
@@ -120,6 +95,7 @@ Rectangle {
         id: hoverArea
         anchors.fill: parent
         hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
         acceptedButtons: Qt.NoButton
     }
 }
