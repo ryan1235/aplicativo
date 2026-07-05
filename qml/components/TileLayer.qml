@@ -6,6 +6,7 @@ Item {
     
     property string baseUrl: ""
     property string fallbackUrl: ""
+    property string tileUrlMode: "icons" // "icons" | "labels"
     property int tileSize: 256
     property int layerZoom: 2
     
@@ -65,16 +66,22 @@ Item {
             
             sourceComponent: Image {
                 source: {
-                    if (typeof mapController !== "undefined" && mapController.getTileUrl) {
-                        return mapController.getTileUrl(tileLayerRoot.layerZoom, tileLoader.tileX, tileLoader.tileY);
+                    if (typeof mapController !== "undefined" && mapController) {
+                        if (tileLayerRoot.tileUrlMode === "labels" && mapController.getLabelsTileUrl) {
+                            return mapController.getLabelsTileUrl(tileLayerRoot.layerZoom, tileLoader.tileX, tileLoader.tileY);
+                        }
+                        if (mapController.getTileUrl) {
+                            return mapController.getTileUrl(tileLayerRoot.layerZoom, tileLoader.tileX, tileLoader.tileY);
+                        }
                     }
                     return tileLayerRoot.baseUrl.replace("{z}", tileLayerRoot.layerZoom).replace("{x}", tileLoader.tileX).replace("{y}", tileLoader.tileY);
                 }
                 
-                asynchronous: source.toString().startsWith("http")
+                asynchronous: true // Always async for smoother UI
                 cache: true
                 fillMode: Image.PreserveAspectFit
                 sourceSize: Qt.size(tileLayerRoot.tileSize, tileLayerRoot.tileSize)
+                visible: status === Image.Ready && source.toString().length > 0
                 
                 property bool isLoading: status === Image.Loading
                 onIsLoadingChanged: {

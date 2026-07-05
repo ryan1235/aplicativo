@@ -28,6 +28,7 @@ from debug_logging import debug_log, debug_logger
 from PySide6.QtNetwork import QNetworkAccessManager
 from PySide6.QtCore import (
     QAbstractListModel,
+    QMetaObject,
     QModelIndex,
     QObject,
     Property,
@@ -13248,6 +13249,9 @@ class MapController(QObject):
     mapItemsChanged = Signal()
     mapTextItemsChanged = Signal()
     calibrationChanged = Signal()
+    visibleItemsChanged = Signal()
+    visibleTextItemsChanged = Signal()
+    visibleTestItemsChanged = Signal()
     _internalFetchCompleted = Signal(list)
     _internalTestFetchCompleted = Signal(list)
     _internalTextItemsCompleted = Signal(list)
@@ -13255,6 +13259,13 @@ class MapController(QObject):
     
     mapDownloadProgress = Signal(int, int, arguments=["current", "total"])
     mapDownloadFinished = Signal()
+    mapBakeProgress = Signal(str, int, int, arguments=["stage", "current", "total"])
+    mapBakeFinished = Signal()
+    mapViewportReady = Signal()
+    mapTilesReadyChanged = Signal()
+    _internalBakeProgress = Signal(str, int, int)
+    _internalBakeFinished = Signal()
+    _internalUnlockAfterLayer = Signal(int)
 
     def __init__(self, settings_data: dict[str, Any], parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -13263,16 +13274,35 @@ class MapController(QObject):
         from PySide6.QtCore import QStandardPaths
         
         app_data_dir = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
-        self._cache_dir = os.path.join(app_data_dir, "map-tiles", "patch-64")
-        os.makedirs(self._cache_dir, exist_ok=True)
+        self._map_tiles_root = os.path.join(app_data_dir, "map-tiles")
+        self._icons_cache_dir = os.path.join(self._map_tiles_root, "patch-64-icons")
+        self._labels_cache_dir = os.path.join(self._map_tiles_root, "patch-64-labels")
+        self._cache_dir = self._icons_cache_dir
+        os.makedirs(self._icons_cache_dir, exist_ok=True)
+        os.makedirs(self._labels_cache_dir, exist_ok=True)
         
-        local_path = self._cache_dir.replace("\\", "/")
-        self._base_url = f"file:///{local_path}/{{z}}/{{x}}/{{y}}.webp"
+        self._icons_tiles_ready = False
+        self._labels_tiles_ready = False
+        self._blocking_bake_running = False
+        self._background_bake_running = False
+        self._map_bake_stage = ""
+        self._viewport_gate: threading.Event | None = None
+        self._settings = settings_data
+        
+        self._refresh_tile_urls()
         self._fallback_url = "https://foxlogi.com/map-tiles/patch-64/{z}/{x}/{y}.webp"
         
         self._map_items = []
         self._test_items = []
         self._map_text_items = []
+        self._visible_map_items = []
+        self._visible_text_items = []
+        self._visible_test_items = []
+        self._viewport_center_x = 0.0
+        self._viewport_center_y = 0.0
+        self._viewport_width = 1920.0
+        self._viewport_height = 1080.0
+        self._viewport_zoom = 2
         self._map_scale = 1.0
         self._map_offset_x = 0.0
         self._map_offset_y = 0.0
@@ -13280,11 +13310,15 @@ class MapController(QObject):
         self._internalTestFetchCompleted.connect(self._updateTestItems)
         self._internalTextItemsCompleted.connect(self._updateTextItems)
         self._internalStockDataCompleted.connect(self._on_stock_data_completed)
+        self._internalBakeProgress.connect(self._on_bake_progress)
+        self._internalBakeFinished.connect(self._on_bake_finished)
+        self._internalUnlockAfterLayer.connect(self._on_unlock_after_layer)
         
         # Start fetching immediately
         QTimer.singleShot(100, self.fetchMapItems)
         QTimer.singleShot(200, self.fetchOfficialMapLabels)
         QTimer.singleShot(200, self.fetchStockData)
+        QTimer.singleShot(300, self.checkAndGenerateBakedTiles)
 
     def _read_api_cache(self, filename: str, max_age_hours: float):
         import os, json, time
@@ -13325,6 +13359,219 @@ class MapController(QObject):
     def fallbackUrl(self) -> str:
         return self._fallback_url
 
+    @Property(str, notify=mapTilesReadyChanged)
+    def labelsBaseUrl(self) -> str:
+        local_path = self._labels_cache_dir.replace("\\", "/")
+        return f"file:///{local_path}/{{z}}/{{x}}/{{y}}.webp"
+
+    @Property(bool, notify=mapTilesReadyChanged)
+    def iconsTilesReady(self) -> bool:
+        return self._icons_tiles_ready
+
+    @Property(bool, notify=mapTilesReadyChanged)
+    def labelsTilesReady(self) -> bool:
+        return self._labels_tiles_ready
+
+    @Property(bool, notify=mapBakeProgress)
+    def isBlockingBake(self) -> bool:
+        return self._blocking_bake_running
+
+    @Property(bool, notify=mapBakeProgress)
+    def isBackgroundBake(self) -> bool:
+        return self._background_bake_running
+
+    @Property(bool, notify=mapBakeProgress)
+    def isMapBaking(self) -> bool:
+        return self._blocking_bake_running
+
+    @Property(str, notify=mapBakeProgress)
+    def mapBakeStage(self) -> str:
+        return self._map_bake_stage
+
+    def _refresh_tile_urls(self) -> None:
+        from map_tile_baker import MapTileBaker
+
+        baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
+        self._icons_tiles_ready = baker.icons_ready()
+        self._labels_tiles_ready = baker.labels_ready()
+        local_path = self._cache_dir.replace("\\", "/")
+        self._base_url = f"file:///{local_path}/{{z}}/{{x}}/{{y}}.webp"
+        self.baseUrlChanged.emit()
+        self.mapTilesReadyChanged.emit()
+
+    @Slot(str, int, int)
+    def _on_bake_progress(self, stage: str, current: int, total: int) -> None:
+        self._map_bake_stage = stage
+        if stage.endswith("_background"):
+            self._background_bake_running = True
+        self.mapBakeProgress.emit(stage, current, total)
+
+    @Slot()
+    def _on_bake_finished(self) -> None:
+        self._blocking_bake_running = False
+        self._background_bake_running = False
+        self._map_bake_stage = ""
+        self._refresh_tile_urls()
+        self.mapBakeFinished.emit()
+
+    @Slot(int)
+    def _on_unlock_after_layer(self, layer: int) -> None:
+        """Libera o mapa após cada camada prioritária (viewport)."""
+        self._blocking_bake_running = False
+        self._refresh_tile_urls_quiet()
+        if layer == 1:
+            self.mapViewportReady.emit()
+        if self._viewport_gate is not None:
+            self._viewport_gate.set()
+
+    def _wait_for_viewport_unlock(self) -> None:
+        if self._viewport_gate is None:
+            return
+        self._viewport_gate.clear()
+        self._internalUnlockAfterLayer.emit(self._pending_unlock_layer)
+        self._viewport_gate.wait(timeout=120)
+
+    @Slot()
+    def checkAndGenerateBakedTiles(self) -> None:
+        from map_tile_baker import (
+            ICON_BAKE_ZOOMS,
+            LABEL_BAKE_ZOOMS,
+            MapTileBaker,
+            collect_viewport_keys,
+        )
+
+        if getattr(self, "_bake_thread_running", False):
+            return
+
+        baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
+        needs_icons = not baker.icons_ready()
+        needs_labels = not baker.labels_ready()
+
+        if not needs_icons:
+            self._refresh_tile_urls()
+            threading.Thread(target=self._run_incremental_icon_update, daemon=True).start()
+            if needs_labels:
+                threading.Thread(target=self._run_staged_labels_only, daemon=True).start()
+            return
+
+        self._bake_thread_running = True
+        self._blocking_bake_running = True
+        self._map_bake_stage = "prepare"
+        self._viewport_gate = threading.Event()
+        self.mapBakeProgress.emit("prepare", 0, 1)
+
+        def _generate() -> None:
+            try:
+                def _progress(stage: str, current: int, total: int) -> None:
+                    self._internalBakeProgress.emit(stage, current, total)
+
+                icon_index, bakeable = baker.prepare_icon_bake(full=True)
+                viewport = collect_viewport_keys(ICON_BAKE_ZOOMS)
+
+                # —— Camada 1: ícones na região visível (bloqueia o loading) ——
+                keys_layer1 = [k for k in icon_index if k in viewport]
+                baker.bake_icon_keys(
+                    keys_layer1, icon_index, progress=_progress, stage="icons_viewport", workers=6
+                )
+                self._pending_unlock_layer = 1
+                self._wait_for_viewport_unlock()
+
+                # —— Segundo plano: ícones restantes + nomes (camada 2 opcional) ——
+                self._background_bake_running = True
+                keys_icon_bg = [k for k in icon_index if k not in viewport]
+                baker.bake_icon_keys(
+                    keys_icon_bg, icon_index, progress=_progress, stage="icons_background", workers=6
+                )
+                baker.finalize_icons(bakeable)
+
+                if needs_labels:
+                    try:
+                        label_index, labels = baker.prepare_label_bake()
+                        label_viewport = collect_viewport_keys(LABEL_BAKE_ZOOMS)
+                        keys_label_vp = [k for k in label_index if k in label_viewport]
+                        keys_label_bg = [k for k in label_index if k not in label_viewport]
+                        baker.bake_label_keys(
+                            keys_label_vp, label_index, progress=_progress, stage="labels_viewport", workers=4
+                        )
+                        QMetaObject.invokeMethod(
+                            self, "_refresh_tile_urls_quiet", Qt.ConnectionType.QueuedConnection
+                        )
+                        baker.bake_label_keys(
+                            keys_label_bg, label_index, progress=_progress, stage="labels_background", workers=4
+                        )
+                        baker.finalize_labels(labels)
+                    except Exception as label_err:
+                        print(f"[MapController] Nomes em segundo plano falharam: {label_err}")
+
+            except Exception as e:
+                print(f"[MapController] Erro ao gerar tiles baked: {e}")
+            finally:
+                self._bake_thread_running = False
+                self._viewport_gate = None
+                self._internalBakeFinished.emit()
+
+        threading.Thread(target=_generate, daemon=True).start()
+
+    def _run_staged_labels_only(self) -> None:
+        """Gera só a camada de nomes quando ícones já existem."""
+        try:
+            from map_tile_baker import LABEL_BAKE_ZOOMS, MapTileBaker, collect_viewport_keys
+
+            baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
+            if baker.labels_ready():
+                return
+
+            def _progress(stage: str, current: int, total: int) -> None:
+                self._internalBakeProgress.emit(stage, current, total)
+
+            self._background_bake_running = True
+            label_index, labels = baker.prepare_label_bake()
+            viewport = collect_viewport_keys(LABEL_BAKE_ZOOMS)
+            keys_bg = [k for k in label_index if k not in viewport]
+            keys_vp = [k for k in label_index if k in viewport]
+
+            baker.bake_label_keys(keys_vp, label_index, progress=_progress, stage="labels_viewport", workers=4)
+            QMetaObject.invokeMethod(self, "_refresh_tile_urls_quiet", Qt.ConnectionType.QueuedConnection)
+            baker.bake_label_keys(keys_bg, label_index, progress=_progress, stage="labels_background", workers=4)
+            baker.finalize_labels(labels)
+        except Exception as e:
+            print(f"[MapController] Erro ao gerar nomes: {e}")
+        finally:
+            QMetaObject.invokeMethod(self, "_on_bake_finished", Qt.ConnectionType.QueuedConnection)
+
+    def _run_background_labels_bake(self) -> None:
+        self._run_staged_labels_only()
+
+    def _run_incremental_icon_update(self) -> None:
+        try:
+            from map_tile_baker import MapTileBaker
+
+            baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
+            baker.generate_icons(workers=4, full=False)
+            QMetaObject.invokeMethod(self, "_refresh_tile_urls_quiet", Qt.ConnectionType.QueuedConnection)
+        except Exception as e:
+            print(f"[MapController] Erro na atualização incremental de ícones: {e}")
+
+    @Slot()
+    def _refresh_tile_urls_quiet(self) -> None:
+        from map_tile_baker import MapTileBaker
+
+        baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
+        self._icons_tiles_ready = baker.icons_ready()
+        self._labels_tiles_ready = baker.labels_ready()
+        self.mapTilesReadyChanged.emit()
+
+    @Slot(int, int, int, result=str)
+    def getLabelsTileUrl(self, z: int, x: int, y: int) -> str:
+        import os
+        if not self._labels_tiles_ready:
+            return ""
+        tile_dir = os.path.join(self._labels_cache_dir, str(z), str(x))
+        file_path = os.path.join(tile_dir, f"{y}.webp")
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            return f"file:///{file_path.replace(chr(92), '/')}"
+        return ""
+
     @Property(list, notify=mapItemsChanged)
     def mapItemsModel(self) -> list:
         return self._map_items
@@ -13336,6 +13583,90 @@ class MapController(QObject):
     @Property(list, notify=mapItemsChanged)
     def testItemsModel(self) -> list:
         return self._test_items
+
+    # --- Viewport-filtered models (only items visible on screen) ---
+    @Property(list, notify=visibleItemsChanged)
+    def visibleMapItemsModel(self) -> list:
+        return self._visible_map_items
+
+    @Property(list, notify=visibleTextItemsChanged)
+    def visibleMapTextItemsModel(self) -> list:
+        return self._visible_text_items
+
+    @Property(list, notify=visibleTestItemsChanged)
+    def visibleTestItemsModel(self) -> list:
+        return self._visible_test_items
+
+    @Slot(float, float, float, float, int)
+    def updateViewport(self, centerX: float, centerY: float, viewW: float, viewH: float, zoom: int) -> None:
+        """Called from QML when the viewport changes. Recalculates visible models."""
+        self._viewport_center_x = centerX
+        self._viewport_center_y = centerY
+        self._viewport_width = viewW
+        self._viewport_height = viewH
+        self._viewport_zoom = zoom
+        self._recalculate_visible_items()
+
+    def _recalculate_visible_items(self) -> None:
+        """Filter all item lists to only include items within the current viewport + margin."""
+        zoom_factor = 1 << self._viewport_zoom
+        cx = self._viewport_center_x
+        cy = self._viewport_center_y
+        half_w = self._viewport_width / 2.0
+        half_h = self._viewport_height / 2.0
+        # Extra margin in map pixels to avoid pop-in (300px on each side)
+        margin = 300.0
+
+        vp_left = cx - half_w - margin
+        vp_right = cx + half_w + margin
+        vp_top = cy - half_h - margin
+        vp_bottom = cy + half_h + margin
+
+        scale = self._map_scale
+        off_x = self._map_offset_x
+        off_y = self._map_offset_y
+
+        # Filter map items (icons)
+        new_visible = []
+        for item in self._map_items:
+            ix = item.get('x', 0.0)
+            iy = item.get('y', 0.0)
+            wpx = (ix * scale + off_x) * zoom_factor
+            wpy = (-iy * scale + off_y) * zoom_factor
+            if vp_left <= wpx <= vp_right and vp_top <= wpy <= vp_bottom:
+                new_visible.append(item)
+            elif item.get('stock') is not None:
+                # Always include items with stock data (small count)
+                new_visible.append(item)
+        if new_visible != self._visible_map_items:
+            self._visible_map_items = new_visible
+            self.visibleItemsChanged.emit()
+
+        # Filter text items (labels)
+        new_text = []
+        for item in self._map_text_items:
+            ix = item.get('x', 0.0)
+            iy = item.get('y', 0.0)
+            wpx = (ix * scale + off_x) * zoom_factor
+            wpy = (-iy * scale + off_y) * zoom_factor
+            if vp_left <= wpx <= vp_right and vp_top <= wpy <= vp_bottom:
+                new_text.append(item)
+        if new_text != self._visible_text_items:
+            self._visible_text_items = new_text
+            self.visibleTextItemsChanged.emit()
+
+        # Filter test items
+        new_test = []
+        for item in self._test_items:
+            ix = item.get('x', 0.0)
+            iy = item.get('y', 0.0)
+            wpx = (ix * scale + off_x) * zoom_factor
+            wpy = (-iy * scale + off_y) * zoom_factor
+            if vp_left <= wpx <= vp_right and vp_top <= wpy <= vp_bottom:
+                new_test.append(item)
+        if new_test != self._visible_test_items:
+            self._visible_test_items = new_test
+            self.visibleTestItemsChanged.emit()
         
     @Slot()
     def fetchStockData(self) -> None:
@@ -13675,6 +14006,7 @@ class MapController(QObject):
         self._map_items = data
         self._merge_stock_data()
         self.mapItemsChanged.emit()
+        self._recalculate_visible_items()
 
     @Slot(list)
     def _updateTestItems(self, data: list) -> None:
@@ -13682,6 +14014,7 @@ class MapController(QObject):
         self.mapItemsChanged.emit()
         self._test_items = data
         self.mapItemsChanged.emit()
+        self._recalculate_visible_items()
 
     @Slot(dict)
     def _on_stock_data_completed(self, stock_dict: dict) -> None:
@@ -13770,6 +14103,7 @@ class MapController(QObject):
         print(f"[MapController] _merge_stock_data finished: matched {matched_count} depots")
         self._map_items = updated_items
         self.mapItemsChanged.emit()
+        self._recalculate_visible_items()
 
     @Slot(list)
     def _updateTextItems(self, data: list) -> None:
@@ -13778,18 +14112,24 @@ class MapController(QObject):
         self._map_text_items = data
         self._merge_stock_data()
         self.mapTextItemsChanged.emit()
+        self._recalculate_visible_items()
 
     @Slot(int, int, int, result=str)
     def getTileUrl(self, z: int, x: int, y: int) -> str:
         import os
-        tile_dir = os.path.join(self._cache_dir, str(z), str(x))
-        file_path = os.path.join(tile_dir, f"{y}.webp")
-        if os.path.exists(file_path):
-            if os.path.getsize(file_path) > 0:
+        from map_tile_baker import ICON_BAKE_ZOOMS
+
+        if self._icons_tiles_ready and z in ICON_BAKE_ZOOMS:
+            tile_dir = os.path.join(self._icons_cache_dir, str(z), str(x))
+            file_path = os.path.join(tile_dir, f"{y}.webp")
+            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
                 return f"file:///{file_path.replace(chr(92), '/')}"
-            return ""
-        
-        self.cacheTile(z, x, y)
+
+        legacy_dir = os.path.join(self._map_tiles_root, "patch-64", str(z), str(x))
+        legacy_path = os.path.join(legacy_dir, f"{y}.webp")
+        if os.path.exists(legacy_path) and os.path.getsize(legacy_path) > 0:
+            return f"file:///{legacy_path.replace(chr(92), '/')}"
+
         return self._fallback_url.format(z=z, x=x, y=y)
 
     @Slot(int, int, int)
@@ -13799,12 +14139,11 @@ class MapController(QObject):
         import threading
         
         def _download_and_save():
-            tile_dir = os.path.join(self._cache_dir, str(z), str(x))
+            tile_dir = os.path.join(self._icons_cache_dir, str(z), str(x))
             os.makedirs(tile_dir, exist_ok=True)
             file_path = os.path.join(tile_dir, f"{y}.webp")
             
-            # Skip if already exists and valid
-            if os.path.exists(file_path):
+            if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
                 return
                 
             try:

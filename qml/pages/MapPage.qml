@@ -7,28 +7,10 @@ import "../components"
 Item {
     id: root
 
-    // Background Image
+    // Opaque background to save resources and avoid loading large wallpapers
     Rectangle {
         anchors.fill: parent
-        color: "#0a0f18" // Slightly lighter than pure black
-        z: -2
-    }
-    
-    Image {
-        id: bgImage
-        anchors.fill: parent
-        source: typeof appController !== "undefined" ? appController.assetUrl("img/mapwarpepe.png") : ""
-        fillMode: Image.PreserveAspectCrop
-        visible: false // Hidden because MultiEffect handles it
-    }
-    
-    MultiEffect {
-        anchors.fill: bgImage
-        source: bgImage
-        blurEnabled: true
-        blurMax: 32
-        blur: 0.4 // Subtle blur
-        opacity: 0.45 // Increased opacity to make it lighter/brighter
+        color: "#0a0f18"
         z: -1
     }
 
@@ -38,14 +20,16 @@ Item {
         // No margins for true fullscreen
     }
 
-    // Loading Screen Overlay
+    // Loading Screen Overlay (dados da API)
     Rectangle {
         id: loadingScreen
         anchors.fill: parent
         color: "#1c2025"
         z: 99
         
-        property bool isReady: typeof mapController !== "undefined" && mapController && mapController.mapTextItemsModel && mapController.mapTextItemsModel.length > 0
+        property bool apiReady: typeof mapController !== "undefined" && mapController && mapController.mapTextItemsModel && mapController.mapTextItemsModel.length > 0
+        property bool isReady: apiReady
+            && (typeof mapController === "undefined" || !mapController || !mapController.isBlockingBake)
         opacity: isReady ? 0.0 : 1.0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: 800; easing.type: Easing.InOutQuad } }
@@ -58,7 +42,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: 64
                 height: 64
-                running: parent.visible
+                running: parent.parent.visible
                 
                 contentItem: Item {
                     implicitWidth: 64
@@ -109,20 +93,84 @@ Item {
             }
             
             Text {
-                text: "Conectando aos Satélites..."
+                id: loadingStatusText
+                text: {
+                    if (!loadingScreen.apiReady) return "Conectando aos Satélites...";
+                    return "Preparando região central do mapa...";
+                }
                 color: "#e0e0e0"
                 font.pixelSize: 18
                 font.family: "Segoe UI"
                 font.bold: true
                 anchors.horizontalCenter: parent.horizontalCenter
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            ProgressBar {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: typeof mapController !== "undefined" && mapController && mapController.isBlockingBake && root.bakeProgressTotal > 0
+                from: 0
+                to: root.bakeProgressTotal
+                value: root.bakeProgressCurrent
+                width: 320
+            }
+
+            Text {
+                visible: typeof mapController !== "undefined" && mapController && mapController.isBlockingBake && root.bakeProgressTotal > 0
+                text: root.bakeProgressCurrent + " / " + root.bakeProgressTotal
+                color: "#9ca3af"
+                font.pixelSize: 12
+                anchors.horizontalCenter: parent.horizontalCenter
             }
         }
     }
     
-    // Download Overlay
+    // Download Overlay (tiles crus legados)
     property bool isMapDownloading: false
     property int downloadCurrent: 0
     property int downloadTotal: 100
+
+    property bool isMapBaking: false
+    property bool isBackgroundBaking: false
+    property string bakeStage: ""
+    property int bakeProgressCurrent: 0
+    property int bakeProgressTotal: 0
+    property string bakeStatusMessage: ""
+    
+    // Indicador discreto enquanto o restante das camadas gera em segundo plano
+    Rectangle {
+        id: backgroundBakePill
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        width: bgBakeColumn.implicitWidth + 20
+        height: bgBakeColumn.implicitHeight + 12
+        radius: 8
+        color: Qt.rgba(0, 0, 0, 0.75)
+        border.color: "#374151"
+        visible: isBackgroundBaking
+        z: 50
+
+        Column {
+            id: bgBakeColumn
+            anchors.centerIn: parent
+            spacing: 4
+
+            Text {
+                text: bakeStatusMessage || "Otimizando mapa..."
+                color: "#e5e7eb"
+                font.pixelSize: 11
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            ProgressBar {
+                width: 180
+                from: 0
+                to: bakeProgressTotal > 0 ? bakeProgressTotal : 1
+                value: bakeProgressCurrent
+            }
+        }
+    }
     
     Rectangle {
         id: downloadOverlay
@@ -182,6 +230,38 @@ Item {
         function onMapDownloadFinished() {
             isMapDownloading = false;
         }
+
+        function onMapBakeProgress(stage, current, total) {
+            bakeStage = stage;
+            bakeProgressCurrent = current;
+            bakeProgressTotal = total;
+            isMapBaking = typeof mapController !== "undefined" && mapController && mapController.isBlockingBake;
+            isBackgroundBaking = typeof mapController !== "undefined" && mapController && mapController.isBackgroundBake;
+
+            if (stage === "icons_viewport") {
+                bakeStatusMessage = "Camada 1: ícones da região visível...";
+            } else if (stage === "icons_background") {
+                bakeStatusMessage = "Segundo plano: ícones restantes...";
+            } else if (stage === "labels_viewport") {
+                bakeStatusMessage = "Camada 2: nomes da região visível...";
+            } else if (stage === "labels_background") {
+                bakeStatusMessage = "Segundo plano: nomes restantes...";
+            } else if (stage === "icons_fetch" || stage === "labels_fetch") {
+                bakeStatusMessage = "Consultando dados do mapa...";
+            }
+        }
+
+        function onMapBakeFinished() {
+            isMapBaking = false;
+            isBackgroundBaking = false;
+            bakeProgressCurrent = 0;
+            bakeProgressTotal = 0;
+            bakeStatusMessage = "";
+        }
+
+        function onMapViewportReady() {
+            isMapBaking = false;
+        }
     }
     
     Timer {
@@ -190,7 +270,7 @@ Item {
         repeat: false
         onTriggered: {
             if (typeof mapController !== "undefined" && mapController) {
-                mapController.checkAndDownloadInitialMap();
+                mapController.checkAndGenerateBakedTiles();
                 mapController.fetchOfficialMapLabels();
                 mapController.fetchMapItems();
                 mapController.fetchStockData();

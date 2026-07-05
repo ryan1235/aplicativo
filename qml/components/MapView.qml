@@ -47,6 +47,20 @@ Item {
     property var drawings: [] // stores objects like {type: "brush", color: "red", thickness: 3, points: [{x,y}...]}
     property var currentDrawing: null // currently active drawing while mouse is pressed
     property bool polygonNameDialogVisible: false
+    property bool routeNameDialogVisible: false
+    property int dashOffset: 0
+    
+    // Timer to animate flowing dashed lines along logistics routes and drawings
+    Timer {
+        id: lineAnimationTimer
+        interval: 35
+        running: true
+        repeat: true
+        onTriggered: {
+            root.dashOffset = (root.dashOffset + 1) % 48;
+            drawingCanvas.requestPaint();
+        }
+    }
     
     // --- LOGISTICS PROPERTIES ---
     property bool logisticsModalVisible: false
@@ -119,6 +133,36 @@ Item {
         var wX = (apiX * mapController.mapScale) + mapController.mapOffsetX;
         var wY = (-apiY * mapController.mapScale) + mapController.mapOffsetY;
         return {x: wX, y: wY};
+    }
+
+    function getRouteMidpointX(d) {
+        if (!d || !d.start || !d.end) return 0;
+        var aStart = apiToWorld(d.start.x, d.start.y);
+        var aEnd = apiToWorld(d.end.x, d.end.y);
+        var cx = (aStart.x + aEnd.x) / 2;
+        var cy = (aStart.y + aEnd.y) / 2;
+        var dx = aEnd.x - aStart.x;
+        var dy = aEnd.y - aStart.y;
+        var ctrlX = cx - dy * 0.3;
+        var ctrlY = cy + dx * 0.3;
+        var midX = 0.25 * aStart.x + 0.5 * ctrlX + 0.25 * aEnd.x;
+        var p = worldToCanvas(midX, 0);
+        return p.x;
+    }
+
+    function getRouteMidpointY(d) {
+        if (!d || !d.start || !d.end) return 0;
+        var aStart = apiToWorld(d.start.x, d.start.y);
+        var aEnd = apiToWorld(d.end.x, d.end.y);
+        var cx = (aStart.x + aEnd.x) / 2;
+        var cy = (aStart.y + aEnd.y) / 2;
+        var dx = aEnd.x - aStart.x;
+        var dy = aEnd.y - aStart.y;
+        var ctrlX = cx - dy * 0.3;
+        var ctrlY = cy + dx * 0.3;
+        var midY = 0.25 * aStart.y + 0.5 * ctrlY + 0.25 * aEnd.y;
+        var p = worldToCanvas(0, midY);
+        return p.y;
     }
 
     function drawArrow(ctx, fromx, fromy, tox, toy, headlen) {
@@ -561,7 +605,9 @@ Item {
                                 globalToolTip.text = modelData.name + " (Type: " + modelData.type + ")";
                                 globalToolTip.visible = true;
                             }
-                            parent.scale = 1.2;
+                            if (!hasStock || !stockHoverCard.isPinned) {
+                                parent.scale = 1.2;
+                            }
                         } else {
                             globalToolTip.visible = false;
                             parent.scale = 1.0;
@@ -616,8 +662,8 @@ Item {
                     x: baseIcon.width
                     y: -height / 2 + baseIcon.height / 2
                     
-                    // Default sizes
-                    width: 600
+                    // Default sizes (smaller when pinned to look cleaner on map)
+                    width: isPinned ? 420 : 600
                     height: stockHoverContent.implicitHeight + 20
                     radius: 8
                     color: settingsController.surfaceColor 
@@ -633,6 +679,9 @@ Item {
                     TapHandler {
                         onTapped: {
                             stockHoverCard.isPinned = !stockHoverCard.isPinned;
+                            if (stockHoverCard.isPinned) {
+                                stockHoverCard.parent.scale = 1.0;
+                            }
                         }
                     }
 
@@ -926,15 +975,110 @@ Item {
                             ctx.fillText(d.name, cx, cy);
                             ctx.lineWidth = d.thickness || 3;
                         }
-                    }
-                    if (d.type === "parabola" && d.start && d.end) {
+                    } else if (d.type === "route" && d.points && d.points.length > 0) {
+                        ctx.beginPath();
+                        var rStart = worldToCanvas(d.points[0].x, d.points[0].y);
+                        ctx.moveTo(rStart.x, rStart.y);
+                        for (var rj = 1; rj < d.points.length; rj++) {
+                            var rp = worldToCanvas(d.points[rj].x, d.points[rj].y);
+                            ctx.lineTo(rp.x, rp.y);
+                        }
+                        
+                        ctx.save();
+                        ctx.strokeStyle = d.color || "#3b82f6";
+                        ctx.lineWidth = d.thickness || 4;
+                        ctx.setLineDash([8, 6]); // Beautiful dotted/dashed line
+                        ctx.lineDashOffset = -root.dashOffset;
+                        ctx.stroke();
+                        ctx.restore();
+
+                        // Start indicator A (Início) with pulse effect
+                        var startPulse = 10 + Math.sin(root.dashOffset * 0.15) * 1.5;
+                        ctx.beginPath();
+                        ctx.arc(rStart.x, rStart.y, startPulse + 3, 0, 2 * Math.PI);
+                        ctx.fillStyle = (d.color || "#3b82f6") === "#ffffff" ? "rgba(255, 255, 255, 0.2)" : "rgba(59, 130, 246, 0.25)";
+                        ctx.fill();
+
+                        ctx.beginPath();
+                        ctx.arc(rStart.x, rStart.y, 10, 0, 2 * Math.PI);
+                        ctx.fillStyle = d.color || "#3b82f6";
+                        ctx.fill();
+                        ctx.strokeStyle = "#ffffff";
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        ctx.font = "bold 11px Segoe UI";
+                        ctx.fillStyle = (d.color === "#ffffff" || d.color === "#ffffff" || d.color === "#eab308") ? "#111827" : "#ffffff";
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.fillText("A", rStart.x, rStart.y);
+
+                        // End indicator B (Fim)
+                        if (d.points.length > 1) {
+                            var rEnd = worldToCanvas(d.points[d.points.length - 1].x, d.points[d.points.length - 1].y);
+                            var endPulse = 10 + Math.cos(root.dashOffset * 0.15) * 1.5;
+                            ctx.beginPath();
+                            ctx.arc(rEnd.x, rEnd.y, endPulse + 3, 0, 2 * Math.PI);
+                            ctx.fillStyle = (d.color || "#3b82f6") === "#ffffff" ? "rgba(255, 255, 255, 0.2)" : "rgba(59, 130, 246, 0.25)";
+                            ctx.fill();
+
+                            ctx.beginPath();
+                            ctx.arc(rEnd.x, rEnd.y, 10, 0, 2 * Math.PI);
+                            ctx.fillStyle = d.color || "#3b82f6";
+                            ctx.fill();
+                            ctx.strokeStyle = "#ffffff";
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+
+                            ctx.font = "bold 11px Segoe UI";
+                            ctx.fillStyle = (d.color === "#ffffff" || d.color === "#ffffff" || d.color === "#eab308") ? "#111827" : "#ffffff";
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+                            ctx.fillText("B", rEnd.x, rEnd.y);
+                        }
+
+                        // Draw intermediate nodes for route
+                        for (var ri = 1; ri < d.points.length - 1; ri++) {
+                            var rNode = worldToCanvas(d.points[ri].x, d.points[ri].y);
+                            ctx.beginPath();
+                            ctx.arc(rNode.x, rNode.y, 4, 0, 2 * Math.PI);
+                            ctx.fillStyle = "#ffffff";
+                            ctx.fill();
+                            ctx.strokeStyle = d.color || "#3b82f6";
+                            ctx.lineWidth = 1.5;
+                            ctx.stroke();
+                        }
+
+                        // Draw Route Name at center
+                        if (d.name) {
+                            var rcx = 0, rcy = 0;
+                            for (var rm = 0; rm < d.points.length; rm++) {
+                                var rptm = worldToCanvas(d.points[rm].x, d.points[rm].y);
+                                rcx += rptm.x;
+                                rcy += rptm.y;
+                            }
+                            rcx /= d.points.length;
+                            rcy /= d.points.length;
+                            
+                            ctx.font = "bold 12px Segoe UI";
+                            var txtWidth = ctx.measureText(d.name).width;
+                            ctx.fillStyle = "rgba(10, 15, 24, 0.85)";
+                            ctx.fillRect(rcx - txtWidth / 2 - 8, rcy - 10, txtWidth + 16, 20);
+                            ctx.strokeStyle = d.color || "#3b82f6";
+                            ctx.lineWidth = 1;
+                            ctx.strokeRect(rcx - txtWidth / 2 - 8, rcy - 10, txtWidth + 16, 20);
+
+                            ctx.fillStyle = "#ffffff";
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+                            ctx.fillText(d.name, rcx, rcy);
+                        }
+                    } else if (d.type === "parabola" && d.start && d.end) {
                         var aStart = apiToWorld(d.start.x, d.start.y);
                         var aEnd = apiToWorld(d.end.x, d.end.y);
                         var sP = worldToCanvas(aStart.x, aStart.y);
                         var eP = worldToCanvas(aEnd.x, aEnd.y);
                         
-                        ctx.beginPath();
-                        ctx.moveTo(sP.x, sP.y);
                         var cx = (sP.x + eP.x) / 2;
                         var cy = (sP.y + eP.y) / 2;
                         var dx = eP.x - sP.x;
@@ -944,8 +1088,6 @@ Item {
                         var ctrlX = cx - dy * 0.3;
                         var ctrlY = cy + dx * 0.3;
                         
-                        ctx.quadraticCurveTo(ctrlX, ctrlY, eP.x, eP.y);
-                        
                         var isHovered = false;
                         if (root.logisticsHoveredRoute && root.logisticsHoveredRoute.start && root.logisticsHoveredRoute.end) {
                             if (Math.abs(root.logisticsHoveredRoute.start.x - d.start.x) < 0.1 && 
@@ -953,17 +1095,43 @@ Item {
                                 isHovered = true;
                             }
                         }
-                        
-                        ctx.lineWidth = isHovered ? 6 : (d.thickness || 4);
+
+                        // 1. Draw glowing background path
+                        ctx.beginPath();
+                        ctx.moveTo(sP.x, sP.y);
+                        ctx.quadraticCurveTo(ctrlX, ctrlY, eP.x, eP.y);
+                        ctx.lineWidth = isHovered ? 10 : 6;
+                        ctx.strokeStyle = isHovered ? "rgba(234, 179, 8, 0.35)" : "rgba(59, 130, 246, 0.3)";
+                        ctx.stroke();
+
+                        // 2. Draw modern dotted foreground path with animated flow
+                        ctx.beginPath();
+                        ctx.moveTo(sP.x, sP.y);
+                        ctx.quadraticCurveTo(ctrlX, ctrlY, eP.x, eP.y);
+                        ctx.lineWidth = isHovered ? 4.5 : 2.5;
                         ctx.strokeStyle = isHovered ? "#eab308" : String(d.color || "#3b82f6");
-                        
-                        // Make it a beautiful dashed line, but reset immediately after
-                        ctx.setLineDash([12, 10]);
+                        ctx.setLineDash([8, 6]);
+                        ctx.lineDashOffset = -root.dashOffset;
                         ctx.stroke();
                         ctx.setLineDash([]);
+                        ctx.lineDashOffset = 0;
                         
-                        // Draw arrowhead
-                        var headlen = 16 + (d.thickness || 4);
+                        // 3. Draw origin waypoint (circle with an inner dot, matching route color)
+                        ctx.beginPath();
+                        ctx.arc(sP.x, sP.y, 7, 0, 2 * Math.PI);
+                        ctx.fillStyle = isHovered ? "#eab308" : String(d.color || "#3b82f6");
+                        ctx.fill();
+                        ctx.strokeStyle = "#ffffff";
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
+                        
+                        ctx.beginPath();
+                        ctx.arc(sP.x, sP.y, 2.5, 0, 2 * Math.PI);
+                        ctx.fillStyle = "#ffffff";
+                        ctx.fill();
+                        
+                        // 4. Draw sleek modern arrowhead at eP
+                        var headlen = 14 + (d.thickness || 4);
                         var angle = Math.atan2(eP.y - ctrlY, eP.x - ctrlX);
                         ctx.fillStyle = isHovered ? "#eab308" : String(d.color || "#3b82f6");
                         ctx.beginPath();
@@ -972,8 +1140,96 @@ Item {
                         ctx.lineTo(eP.x - headlen * Math.cos(angle + Math.PI / 6), eP.y - headlen * Math.sin(angle + Math.PI / 6));
                         ctx.closePath();
                         ctx.fill();
+                        
+                        ctx.strokeStyle = "#ffffff";
+                        ctx.lineWidth = 1.5;
+                        ctx.stroke();
                     }
                 } // End of allDrawings loop
+            }
+        }
+
+        // High-fidelity QML overlays for cargo items on logistics routes
+        Repeater {
+            model: root.drawings
+            delegate: Item {
+                id: cargoCardWrapper
+                visible: modelData.type === "parabola" && modelData.cargo && modelData.cargo.length > 0
+                
+                // Position centered at the curve's peak
+                anchors.horizontalCenter: parent.left
+                anchors.horizontalCenterOffset: root.getRouteMidpointX(modelData)
+                anchors.verticalCenter: parent.top
+                anchors.verticalCenterOffset: root.getRouteMidpointY(modelData)
+                
+                Rectangle {
+                    anchors.centerIn: parent
+                    implicitWidth: cargoRow.implicitWidth + 24
+                    implicitHeight: 28
+                    radius: 14
+                    color: "#f00f172a" // Sleek slate 900 (rgba(15, 23, 42, 0.94))
+                    border.width: 1.5
+                    border.color: (root.logisticsHoveredRoute && root.logisticsHoveredRoute.start && root.logisticsHoveredRoute.end && 
+                                   Math.abs(root.logisticsHoveredRoute.start.x - modelData.start.x) < 0.1 && 
+                                   Math.abs(root.logisticsHoveredRoute.end.x - modelData.end.x) < 0.1) ? "#eab308" : String(modelData.color || "#3b82f6")
+                    
+                    MultiEffect {
+                        source: parent
+                        anchors.fill: parent
+                        shadowEnabled: true
+                        shadowOpacity: 0.4
+                        shadowBlur: 0.8
+                        shadowVerticalOffset: 2
+                        shadowColor: "black"
+                    }
+                    
+                    Row {
+                        id: cargoRow
+                        anchors.centerIn: parent
+                        spacing: 8
+                        
+                        Repeater {
+                            model: modelData.cargo
+                            delegate: Row {
+                                spacing: 4
+                                anchors.verticalCenter: parent.verticalCenter
+                                
+                                Text {
+                                    text: "•"
+                                    color: "#66ffffff"
+                                    font.pixelSize: 12
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: index > 0
+                                }
+                                
+                                Image {
+                                    source: modelData.icon || ""
+                                    width: 16
+                                    height: 16
+                                    fillMode: Image.PreserveAspectFit
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: source !== ""
+                                    
+                                    // Fallback if image fails to load or empty
+                                    onStatusChanged: {
+                                        if (status === Image.Error) {
+                                            visible = false;
+                                        }
+                                    }
+                                }
+                                
+                                Text {
+                                    text: modelData.qty + "x " + modelData.name
+                                    color: "white"
+                                    font.bold: true
+                                    font.pixelSize: 11
+                                    font.family: "Segoe UI"
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1138,7 +1394,7 @@ Item {
                 var hit = false;
                 if (d.type === "polygon") {
                     hit = isPointInPolygon(wp.x, wp.y, d.points);
-                } else if (d.type === "brush") {
+                } else if (d.type === "brush" || d.type === "route") {
                     for (var j = 0; j < d.points.length - 1; j++) {
                         var dist = distanceToSegment(wp.x, wp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
                         if (dist <= threshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
@@ -1187,7 +1443,7 @@ Item {
                 var wp2 = screenToWorld(mouse.x, mouse.y);
                 root.currentDrawing = { type: "arrow", color: root.activeColor, thickness: root.activeThickness, start: wp2, end: wp2 };
                 drawingCanvas.requestPaint();
-            } else if (root.activeTool === "polygon") {
+            } else if (root.activeTool === "polygon" || root.activeTool === "route") {
                 cursorShape = Qt.ClosedHandCursor; // Will reset to cross on release if no pan
             } else if (root.activeTool === "eraser") {
                 eraseAt(mouse.x, mouse.y);
@@ -1212,6 +1468,20 @@ Item {
                     }
                     drawingCanvas.requestPaint();
                 }
+            } else if (root.activeTool === "route") {
+                cursorShape = Qt.CrossCursor;
+                if (!didPan && !root.routeNameDialogVisible) {
+                    var wpRoute = screenToWorld(mouse.x, mouse.y);
+                    if (!root.currentDrawing || root.currentDrawing.type !== "route") {
+                        root.currentDrawing = { type: "route", color: root.activeColor, thickness: root.activeThickness, points: [wpRoute] };
+                    } else {
+                        var route = Object.assign({}, root.currentDrawing);
+                        route.points = route.points.slice();
+                        route.points.push(wpRoute);
+                        root.currentDrawing = route;
+                    }
+                    drawingCanvas.requestPaint();
+                }
             } else {
                 if (root.currentDrawing) {
                     var newDrawings = root.drawings.slice();
@@ -1233,7 +1503,7 @@ Item {
         onExited: {
             cursorShape = Qt.ArrowCursor;
             isDragging = false;
-            if (root.currentDrawing && root.activeTool !== "polygon") {
+            if (root.currentDrawing && root.activeTool !== "polygon" && root.activeTool !== "route") {
                 var newDrawings = root.drawings.slice();
                 newDrawings.push(root.currentDrawing);
                 root.drawings = newDrawings;
@@ -1243,7 +1513,7 @@ Item {
         
         onPositionChanged: function(mouse) {
             if (isDragging) {
-                if (root.activeTool === "pan" || root.activeTool === "polygon") {
+                if (root.activeTool === "pan" || root.activeTool === "polygon" || root.activeTool === "route") {
                     var dx = mouse.x - lastX;
                     var dy = mouse.y - lastY;
                     
@@ -1464,6 +1734,36 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                 }
             }
+
+            // Route Tool
+            Rectangle {
+                width: 36
+                height: 36
+                radius: 18
+                color: root.activeTool === "route" ? settingsController.accentColor : "transparent"
+                border.color: root.activeTool === "route" ? settingsController.accentColor : settingsController.borderColor
+                Text {
+                    anchors.centerIn: parent
+                    text: "🛣️"
+                    font.pixelSize: 18
+                    color: root.activeTool === "route" ? "white" : settingsController.textColor
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (root.activeTool === "route") {
+                            root.showToolSettings = !root.showToolSettings;
+                        } else {
+                            if (root.currentDrawing && root.currentDrawing.type === "route") {
+                                root.currentDrawing = null; // discard if changing tool
+                            }
+                            root.activeTool = "route";
+                            root.showToolSettings = true;
+                        }
+                    }
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
             
             Rectangle {
                 width: 1
@@ -1532,7 +1832,7 @@ Item {
     // --- TOOL SETTINGS MODAL ---
     Rectangle {
         id: toolSettingsModal
-        visible: root.showToolSettings && (root.activeTool === "brush" || root.activeTool === "arrow" || root.activeTool === "polygon" || root.activeTool === "eraser")
+        visible: root.showToolSettings && (root.activeTool === "brush" || root.activeTool === "arrow" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "eraser")
         anchors.bottom: drawingToolbar.top
         anchors.bottomMargin: 12
         anchors.horizontalCenter: parent.horizontalCenter
@@ -1561,7 +1861,7 @@ Item {
             visible: root.activeTool !== "eraser"
             
             Text {
-                text: root.activeTool === "brush" ? "Espessura e Cor do Pincel" : (root.activeTool === "arrow" ? "Espessura e Cor da Seta" : "Espessura e Cor da Área")
+                text: root.activeTool === "brush" ? "Espessura e Cor do Pincel" : (root.activeTool === "arrow" ? "Espessura e Cor da Seta" : (root.activeTool === "route" ? "Espessura e Cor da Rota" : "Espessura e Cor da Área"))
                 color: settingsController.textColor
                 font.bold: true
                 font.pixelSize: 12
@@ -1771,6 +2071,35 @@ Item {
             }
         }
     }
+
+    Rectangle {
+        visible: root.activeTool === "route" && root.currentDrawing && root.currentDrawing.type === "route" && root.currentDrawing.points.length >= 2 && !root.routeNameDialogVisible
+        anchors.bottom: toolSettingsModal.visible ? toolSettingsModal.top : drawingToolbar.top
+        anchors.bottomMargin: 12
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: 140
+        height: 36
+        radius: 18
+        color: settingsController.accentColor
+        z: 100
+        
+        Text {
+            anchors.centerIn: parent
+            text: "✅ Finalizar Rota"
+            color: "white"
+            font.bold: true
+            font.pixelSize: 13
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                root.routeNameDialogVisible = true;
+                routeNameInput.forceActiveFocus();
+            }
+        }
+    }
     
     // --- POLYGON NAME MODAL ---
     Rectangle {
@@ -1860,6 +2189,165 @@ Item {
                             root.currentDrawing = null;
                             polygonNameInput.text = "";
                             root.polygonNameDialogVisible = false;
+                            drawingCanvas.requestPaint();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- ROUTE NAME MODAL ---
+    Rectangle {
+        id: routeNameModal
+        visible: root.routeNameDialogVisible
+        anchors.centerIn: parent
+        width: 320
+        height: 250
+        radius: 8
+        color: settingsController.surfaceColor
+        border.color: settingsController.borderColor
+        border.width: 1
+        z: 200
+        
+        MultiEffect {
+            source: routeNameModal
+            anchors.fill: routeNameModal
+            shadowEnabled: true
+            shadowOpacity: 0.5
+            shadowBlur: 1.0
+            shadowVerticalOffset: 4
+            shadowColor: "black"
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            
+            Text {
+                text: "Configurar Rota"
+                color: settingsController.textColor
+                font.bold: true
+                font.pixelSize: 16
+                Layout.fillWidth: true
+            }
+            
+            TextField {
+                id: routeNameInput
+                Layout.fillWidth: true
+                placeholderText: "Ex: Rota de Abastecimento Norte"
+                color: settingsController.textColor
+                background: Rectangle {
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
+                    border.width: 1
+                    radius: 4
+                }
+                onAccepted: finishRouteBtn.clicked()
+            }
+            
+            Text {
+                text: "Selecione a Cor"
+                color: settingsController.mutedTextColor
+                font.pixelSize: 11
+                font.bold: true
+            }
+            
+            Row {
+                spacing: 8
+                Layout.alignment: Qt.AlignHCenter
+                Repeater {
+                    model: ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#a855f7", "#ff7849"]
+                    delegate: Rectangle {
+                        width: 24
+                        height: 24
+                        radius: 12
+                        color: modelData
+                        border.color: root.activeColor === modelData ? settingsController.accentColor : "#888888"
+                        border.width: root.activeColor === modelData ? 3 : 1
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                root.activeColor = modelData;
+                                if (root.currentDrawing) {
+                                    root.currentDrawing.color = modelData;
+                                    drawingCanvas.requestPaint();
+                                }
+                            }
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                    }
+                }
+            }
+            
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                
+                Text {
+                    text: "Espessura"
+                    color: settingsController.mutedTextColor
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+                
+                Slider {
+                    Layout.fillWidth: true
+                    from: 2
+                    to: 12
+                    value: root.activeThickness
+                    stepSize: 1
+                    onValueChanged: {
+                        root.activeThickness = value;
+                        if (root.currentDrawing) {
+                            root.currentDrawing.thickness = value;
+                            drawingCanvas.requestPaint();
+                        }
+                    }
+                }
+            }
+            
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                
+                Button {
+                    Layout.fillWidth: true
+                    text: "Cancelar"
+                    onClicked: {
+                        root.routeNameDialogVisible = false;
+                        root.currentDrawing = null;
+                        drawingCanvas.requestPaint();
+                    }
+                }
+                
+                Button {
+                    id: finishRouteBtn
+                    Layout.fillWidth: true
+                    text: "Salvar"
+                    background: Rectangle {
+                        color: settingsController.accentColor
+                        radius: 4
+                    }
+                    contentItem: Text {
+                        text: "Salvar"
+                        color: "white"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        font.bold: true
+                    }
+                    onClicked: {
+                        if (root.currentDrawing && root.currentDrawing.type === "route") {
+                            root.currentDrawing.name = routeNameInput.text;
+                            root.currentDrawing.color = root.activeColor;
+                            root.currentDrawing.thickness = root.activeThickness;
+                            var newDrawings = root.drawings.slice();
+                            newDrawings.push(root.currentDrawing);
+                            root.drawings = newDrawings;
+                            root.currentDrawing = null;
+                            routeNameInput.text = "";
+                            root.routeNameDialogVisible = false;
                             drawingCanvas.requestPaint();
                         }
                     }
