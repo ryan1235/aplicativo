@@ -229,10 +229,12 @@ ApplicationWindow {
         if (page === "wiki") return "pages/WikiPage.qml"
         if (page === "identifyItem") return "pages/IdentifyItemPage.qml"
         if (page === "production") return "pages/ProductionPage.qml"
+        if (page === "msuppCalculator") return "pages/MSuppCalculatorPage.qml"
         if (page === "timeTask") return "pages/TimeTaskPage.qml"
         if (page === "notifications") return "pages/NotificationsPage.qml"
         if (page === "settings") return "pages/SettingsPage.qml"
         if (page === "personalization") return "pages/PersonalizationPage.qml"
+        if (page === "map") return "pages/MapPage.qml"
         return "pages/HomePage.qml"
     }
 
