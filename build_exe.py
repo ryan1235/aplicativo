@@ -116,11 +116,10 @@ DATA_DIRS = [
     ("Content", "Content"),
     ("qml", "qml"),
     ("admin", "admin"),
+    ("data", "data"),
 ]
 
 DATA_FILES = [
-    ("data/locations.csv", "data/locations.csv"),
-    ("data/slang_terms.json", "data/slang_terms.json"),
     ("update64.db", "update64.db"),
     ("requirements-python.txt", "requirements-python.txt"),
     ("README.md", "README.md"),
