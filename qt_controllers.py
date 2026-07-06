@@ -914,7 +914,7 @@ def _location_index() -> dict[tuple[str, str], dict[str, str]]:
         return _LOCATION_INDEX
 
     index: dict[tuple[str, str], dict[str, str]] = {}
-    for csv_path in (resource_dir() / "locations.csv", BASE_DIR / "locations.csv"):
+    for csv_path in (resource_dir() / "data" / "locations.csv", BASE_DIR / "data" / "locations.csv"):
         if not csv_path.exists():
             continue
         try:
@@ -8187,7 +8187,7 @@ class ItemSearchController(QObject):
 
     @staticmethod
     def _load_damage_data() -> dict[str, Any]:
-        path = BASE_DIR / "damege.json"
+        path = BASE_DIR / "data" / "damege.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -9246,7 +9246,7 @@ class ItemSearchController(QObject):
             )
 
         terms: list[dict[str, Any]] = []
-        path = BASE_DIR / "slang_terms.json"
+        path = BASE_DIR / "data" / "slang_terms.json"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -9265,7 +9265,7 @@ class ItemSearchController(QObject):
                 "slang",
             )
 
-        structure_path = BASE_DIR / "siglestrutrure.json"
+        structure_path = BASE_DIR / "data" / "siglestrutrure.json"
         try:
             structure_data = json.loads(structure_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -13815,7 +13815,7 @@ class MapController(QObject):
                 
             try:
                 # 1. Load exact Hex Origins mapping
-                origins_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'origins.json')
+                origins_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'origins.json')
                 with open(origins_file, 'r', encoding='utf-8') as f:
                     HEX_ORIGINS = json.load(f)
                     
@@ -14098,6 +14098,21 @@ class MapController(QObject):
         self.mapItemsChanged.emit()
         self._recalculate_visible_items()
 
+    @Slot(float, float, float, float, result="QVariant")
+    def calculateArtillery(self, startX: float, startY: float, endX: float, endY: float) -> dict:
+        try:
+            from foxmap.geo.artillery import ArtilleryCalculator
+            calc = ArtilleryCalculator()
+            solution = calc.calculate((startX, startY), (endX, endY))
+            return {
+                "distance_meters": solution.distance_meters,
+                "distance_hexes": solution.distance_hexes,
+                "bearing": solution.bearing
+            }
+        except Exception as e:
+            print(f"[MapController] Error in calculateArtillery: {e}")
+            return {}
+
     @Slot(list)
     def _updateTextItems(self, data: list) -> None:
         self._map_text_items = []
@@ -14243,18 +14258,45 @@ class MapSessionController(QObject):
     myRoomsFetched = Signal(str)
     roomJoined = Signal(str, str)
     mapUpdated = Signal(str)
+    userKicked = Signal()
     resultFromWorker = Signal(str, str)
+    currentRoomChanged = Signal()
+    currentRoomCreatorChanged = Signal()
 
     def __init__(self, chatController, parent=None):
         super().__init__(parent)
+        from PySide6.QtWebSockets import QWebSocket, QWebSocketProtocol
         self._chatController = chatController
-        from PySide6.QtWebSockets import QWebSocket
         self._ws = QWebSocket()
+        self._ws.setParent(self)
+        self._ws.errorOccurred.connect(self._on_ws_error)
+        self._ws.sslErrors.connect(self._on_ws_ssl_errors)
         self._ws.connected.connect(self._on_ws_connected)
         self._ws.disconnected.connect(self._on_ws_disconnected)
         self._ws.textMessageReceived.connect(self._on_ws_text_received)
         self._current_room = ""
+        self._current_room_creator = ""
         self.resultFromWorker.connect(self._apply_result)
+        
+    @Property(str, notify=currentRoomChanged)
+    def currentRoom(self):
+        return self._current_room
+        
+    @currentRoom.setter
+    def currentRoom(self, value):
+        if self._current_room != value:
+            self._current_room = value
+            self.currentRoomChanged.emit()
+
+    @Property(str, notify=currentRoomCreatorChanged)
+    def currentRoomCreator(self):
+        return self._current_room_creator
+        
+    @currentRoomCreator.setter
+    def currentRoomCreator(self, value):
+        if self._current_room_creator != value:
+            self._current_room_creator = value
+            self.currentRoomCreatorChanged.emit()
 
     def _get_token(self):
         return self._chatController._token if self._chatController else ""
@@ -14273,7 +14315,14 @@ class MapSessionController(QObject):
             try:
                 res = json.loads(data)
                 if "id" in res:
-                    self.joinRoom(res["id"], "")
+                    pwd = getattr(self, "_last_created_password", "")
+                    creator = ""
+                    if "creator" in res and isinstance(res["creator"], dict):
+                        creator = res["creator"].get("personaname", "")
+                    if not creator and self._chatController:
+                        val = self._chatController.property("currentUserName")
+                        creator = str(val) if val else ""
+                    self.joinRoom(res["id"], pwd, creator)
             except Exception:
                 pass
         elif kind == "room-joined-auth":
@@ -14312,6 +14361,7 @@ class MapSessionController(QObject):
     def createRoom(self, name: str, isPrivate: bool, password: str):
         token = self._get_token()
         if not token: return
+        self._last_created_password = password
         payload = {"name": name, "isPrivate": isPrivate}
         if isPrivate and password:
             payload["password"] = password
@@ -14323,17 +14373,21 @@ class MapSessionController(QObject):
                 print("Error creating map room:", e)
         threading.Thread(target=run, daemon=True).start()
 
-    @Slot(str, str)
-    def joinRoom(self, roomId: str, password: str):
+    @Slot(str, str, str)
+    def joinRoom(self, roomId: str, password: str, creator: str = ""):
         token = self._get_token()
         if not token: return
+        self.currentRoomCreator = creator
         payload = {"password": password} if password else {}
         def run():
             try:
                 res = http_json("POST", f"/map-rooms/{roomId}/join", token=token, payload=payload)
+                # Inject roomId into the response so _apply_result can use it
+                if isinstance(res, dict):
+                    res["roomId"] = roomId
                 self.resultFromWorker.emit("room-joined-auth", json.dumps(res))
             except Exception as e:
-                print("Error joining map room:", e)
+                print(f"Error joining map room: {e}")
         threading.Thread(target=run, daemon=True).start()
 
     @Slot(str)
@@ -14348,19 +14402,57 @@ class MapSessionController(QObject):
                 print("Error deleting map room:", e)
         threading.Thread(target=run, daemon=True).start()
 
+    @Slot(str, str, str)
+    def editRoom(self, roomId: str, newName: str, newPassword: str):
+        token = self._get_token()
+        if not token: return
+        payload = {"name": newName, "password": newPassword}
+        def run():
+            try:
+                res = http_json("PUT", f"/map-rooms/{roomId}", token=token, payload=payload)
+                self.resultFromWorker.emit("room-edited", json.dumps(res))
+            except Exception as e:
+                print("Error editing room:", e)
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str, str)
+    def kickUser(self, roomId: str, userIdToKick: str):
+        token = self._get_token()
+        if not token: return
+        payload = {"userIdToKick": userIdToKick}
+        def run():
+            try:
+                res = http_json("POST", f"/map-rooms/{roomId}/kick", token=token, payload=payload)
+                print(f"User {userIdToKick} kicked successfully")
+            except Exception as e:
+                print("Error kicking user:", e)
+        threading.Thread(target=run, daemon=True).start()
+
     @Slot(str)
     def connectWs(self, roomId: str):
-        self._current_room = roomId
+        self.currentRoom = roomId
         token = self._get_token()
         if not token: return
         self._ws.close()
-        ws_url = CHAT_API_BASE.replace("http", "ws") + f"/ws/map?token={token}"
-        self._ws.open(QUrl(ws_url))
+        from PySide6.QtNetwork import QNetworkRequest
+        ws_url = f"{CHAT_WS_BASE}/ws/map?token={token}"
+        req = QNetworkRequest(QUrl(ws_url))
+        req.setRawHeader(b"User-Agent", b"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        self._ws.open(req)
+
+    @Slot(list)
+    def _on_ws_ssl_errors(self, errors):
+        self._ws.ignoreSslErrors()
+
+    @Slot()
+    def _on_ws_error(self, error):
+        pass
 
     @Slot()
     def _on_ws_connected(self):
         payload = {"event": "join_room", "room_id": self._current_room}
-        self._ws.sendTextMessage(json.dumps(payload))
+        msg = json.dumps(payload)
+        self.send_ws_message(msg)
 
     @Slot()
     def _on_ws_disconnected(self):
@@ -14375,8 +14467,15 @@ class MapSessionController(QObject):
                 self.roomJoined.emit(data.get("room_id", ""), json.dumps(data.get("mapData", {})))
             elif event == "map_update":
                 self.mapUpdated.emit(json.dumps(data.get("data", {})))
+            elif event == "kicked":
+                self._ws.close()
+                self.userKicked.emit()
         except Exception:
             pass
+
+    def send_ws_message(self, msg: str):
+        if self._ws.isValid():
+            self._ws.sendTextMessage(msg)
 
     @Slot(str)
     def sendMapUpdate(self, dataJson: str):
@@ -14388,9 +14487,10 @@ class MapSessionController(QObject):
                     "room_id": self._current_room,
                     "data": data
                 }
-                self._ws.sendTextMessage(json.dumps(payload))
-            except Exception:
-                pass
+                msg = json.dumps(payload)
+                self.send_ws_message(msg)
+            except Exception as e:
+                print(f"Error sending map update: {e}")
 
     @Slot()
     def leaveWsRoom(self):
@@ -14401,13 +14501,14 @@ class MapSessionController(QObject):
                     "room_id": self._current_room
                 }
                 self._ws.sendTextMessage(json.dumps(payload))
-                self._current_room = ""
+                self.currentRoom = ""
             except Exception:
                 pass
 
 
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
+        from foxmap.geo.artillery_controller import ArtilleryController
         super().__init__()
         self._shutdown_done = False
         self._background_mode = False
@@ -14434,6 +14535,7 @@ class ControllerRegistry(QObject):
         self.msuppController = MSuppController(self)
         self.mapController = MapController(self.settings_data, self)
         self.mapSessionController = MapSessionController(self.chatController, self)
+        self.artilleryController = ArtilleryController(self)
         for controller in (
             self.appController,
             self.settingsController,
@@ -14507,6 +14609,7 @@ class ControllerRegistry(QObject):
             "msuppController",
             "mapController",
             "mapSessionController",
+            "artilleryController",
         ):
             context.setContextProperty(name, getattr(self, name))
         context.setContextProperty("navItems", self.appController.navItems)

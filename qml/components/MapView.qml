@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import QtQuick.Layouts
 import "SlangTerms.js" as SlangTerms
+import "Vehicles.js" as VehiclesData
 
 Item {
     id: root
@@ -53,8 +54,25 @@ Item {
         updateCullingSignal();
     }
     // --- DRAWING SYSTEM PROPERTIES ---
-    property string activeTool: "pan" // "pan", "brush", "arrow", "polygon", "eraser"
+    property string activeTool: "pan" // "pan", "brush", "arrow", "polygon", "eraser", "vehicle", "artillery"
+    
+    // Artillery state
+    property var artilleryCannon: null
+    property var artilleryTarget: null
+    property int artilleryStep: 0
+    onActiveToolChanged: root.selectedVehicleIndex = -1
+    
     property string activeColor: "#ef4444" // default red
+    property string activeVehicleImage: "Blacksteele.png"
+    property real activeVehicleRotation: 0
+    property real activeVehicleScale: 1.0
+    property string activeVehicleName: ""
+    
+    property int selectedVehicleIndex: -1
+    property real liveVehicleRotation: 0
+    property real liveVehicleScale: 1.0
+    property string liveVehicleName: ""
+    property bool wasEditingOnPress: false
 
     // --- MULTIPLAYER SESSION ---
     property var remoteCursorsDict: ({})
@@ -73,6 +91,11 @@ Item {
         }
         function onMapUpdated(dataStr) {
             try {
+                var date = new Date();
+                var h = date.getHours();
+                var m = date.getMinutes();
+                root.lastSyncTime = (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
+                
                 var data = JSON.parse(dataStr);
                 var currentUserId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
                 
@@ -118,6 +141,9 @@ Item {
                 }
             } catch (e) {}
         }
+        function onUserKicked() {
+            kickedPopup.open();
+        }
     }
     property int activeThickness: 3
     property bool showToolSettings: false
@@ -126,6 +152,31 @@ Item {
     property bool polygonNameDialogVisible: false
     property bool routeNameDialogVisible: false
     property int dashOffset: 0
+    
+    property var activeUsers: []
+    property var historicUsers: []
+    property string lastSyncTime: ""
+    
+    onDrawingsChanged: {
+        var hUsers = [];
+        for (var i = 0; i < root.drawings.length; i++) {
+            var d = root.drawings[i];
+            if (d && d.user && hUsers.indexOf(d.user) === -1) {
+                hUsers.push(d.user);
+            }
+        }
+        root.historicUsers = hUsers;
+    }
+    
+    onRemoteCursorsDictChanged: {
+        var aUsers = [];
+        var keys = Object.keys(root.remoteCursorsDict);
+        for (var i = 0; i < keys.length; i++) {
+            var obj = root.remoteCursorsDict[keys[i]];
+            aUsers.push({ id: obj.id, name: keys[i], avatar: obj.avatar });
+        }
+        root.activeUsers = aUsers;
+    }
     
     property bool hasAnimatedDrawings: {
         for (var i = 0; i < root.drawings.length; i++) {
@@ -219,6 +270,13 @@ Item {
         var wX = (apiX * mapController.mapScale) + mapController.mapOffsetX;
         var wY = (-apiY * mapController.mapScale) + mapController.mapOffsetY;
         return {x: wX, y: wY};
+    }
+    
+    function worldToApi(wX, wY) {
+        if (typeof mapController === "undefined" || !mapController) return {x: wX, y: wY};
+        var apiX = (wX - mapController.mapOffsetX) / mapController.mapScale;
+        var apiY = -(wY - mapController.mapOffsetY) / mapController.mapScale;
+        return {x: apiX, y: apiY};
     }
 
     function getRouteMidpointX(d) {
@@ -831,7 +889,7 @@ Item {
                             ComboBox {
                                 id: warehouseCombo
                                 Layout.preferredWidth: 150
-                                visible: modelData.stock && modelData.stock.length > 1
+                                visible: modelData.stock !== undefined && modelData.stock !== null && modelData.stock.length > 1
                                 model: {
                                     var arr = [];
                                     if (modelData.stock) {
@@ -955,10 +1013,42 @@ Item {
     }
 
     // --- DRAWING CANVAS ---
+    AuthErrorOverlay {
+        id: authErrorOverlay
+        anchors.fill: parent
+        z: 9999
+    }
+    
+    ArtilleryModal {
+        id: artilleryModal
+        x: root.width - width - 20
+        y: 80
+        visible: false
+        z: 100
+    }
+
     Item {
         id: drawingContainer
         anchors.fill: parent
         z: 3 // Above map, below UI filters
+        
+        ArtilleryOverlay {
+            id: artilleryOverlay
+            isActive: (root.activeTool === "artillery" || root.artilleryCannon !== null)
+            mapController: typeof mapController !== "undefined" ? mapController : null
+            currentZoom: root.currentZoom
+            mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1
+            mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0
+            mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0
+            
+            centerX: drawingCanvas.lastPaintCenterX
+            centerY: drawingCanvas.lastPaintCenterY
+            
+            cannonX: root.artilleryCannon ? root.worldToApi(root.artilleryCannon.x, root.artilleryCannon.y).x : 0
+            cannonY: root.artilleryCannon ? root.worldToApi(root.artilleryCannon.x, root.artilleryCannon.y).y : 0
+            targetX: root.artilleryTarget ? root.worldToApi(root.artilleryTarget.x, root.artilleryTarget.y).x : 0
+            targetY: root.artilleryTarget ? root.worldToApi(root.artilleryTarget.x, root.artilleryTarget.y).y : 0
+        }
         
         // This ensures the canvas moves instantly with the map without waiting for repaint
         transform: Translate {
@@ -1150,6 +1240,41 @@ Item {
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
                             ctx.fillText(d.name, rcx, rcy);
+                        }
+                    } else if (d.type === "artillery" && d.start && d.end) {
+                        var aStart = root.apiToWorld(d.start.x, d.start.y);
+                        var aEnd = root.apiToWorld(d.end.x, d.end.y);
+                        var aP1 = worldToCanvas(aStart.x, aStart.y);
+                        var aP2 = worldToCanvas(aEnd.x, aEnd.y);
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(aP1.x, aP1.y);
+                        ctx.lineTo(aP2.x, aP2.y);
+                        ctx.strokeStyle = d.color || "#ef4444";
+                        ctx.lineWidth = d.thickness || 2;
+                        ctx.setLineDash([5, 5]);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                        
+                        ctx.beginPath();
+                        ctx.arc(aP2.x, aP2.y, 8, 0, 2 * Math.PI);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(aP2.x - 12, aP2.y); ctx.lineTo(aP2.x + 12, aP2.y);
+                        ctx.moveTo(aP2.x, aP2.y - 12); ctx.lineTo(aP2.x, aP2.y + 12);
+                        ctx.stroke();
+                        
+                        if (d.info) {
+                            var aCx = (aP1.x + aP2.x) / 2;
+                            var aCy = (aP1.y + aP2.y) / 2;
+                            ctx.font = "bold 13px sans-serif";
+                            var aTxtW = ctx.measureText(d.info).width;
+                            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                            ctx.fillRect(aCx - aTxtW / 2 - 4, aCy - 10, aTxtW + 8, 20);
+                            ctx.fillStyle = "#ffffff";
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+                            ctx.fillText(d.info, aCx, aCy);
                         }
                     } else if (d.type === "parabola" && d.start && d.end) {
                         var aStart = apiToWorld(d.start.x, d.start.y);
@@ -1371,6 +1496,121 @@ Item {
                 }
             }
         }
+
+        // Vehicles layer
+        Repeater {
+            model: root.drawings
+            delegate: Item {
+                id: vehItem
+                visible: modelData.type === "vehicle"
+                
+                property real wx: modelData.x ? modelData.x : 0
+                property real wy: modelData.y ? modelData.y : 0
+                
+                x: (wx * Math.pow(2, root.currentZoom)) - root.centerX + (root.width / 2) - width/2
+                y: (wy * Math.pow(2, root.currentZoom)) - root.centerY + (root.height / 2) - height/2
+                z: root.selectedVehicleIndex === index ? 155 : 150
+                
+                width: vehColumn.implicitWidth
+                height: vehColumn.implicitHeight
+                
+                rotation: root.selectedVehicleIndex === index ? root.liveVehicleRotation : (modelData.rotation || 0)
+                
+                Column {
+                    id: vehColumn
+                    anchors.centerIn: parent
+                    spacing: 4
+                    Image {
+                        source: typeof appController !== "undefined" ? appController.assetUrl("img/map-layer/" + (modelData.image || "Blacksteele.png")) : "file:///c:/Users/ryanl/OneDrive/Desktop/aplicativo/img/map-layer/" + (modelData.image || "Blacksteele.png")
+                        
+                        property real computedScale: root.selectedVehicleIndex === index ? root.liveVehicleScale : (modelData.scale || 1.0)
+                        property real zoomFactor: Math.pow(2, root.currentZoom - 2)
+                        
+                        width: implicitWidth * 0.2 * computedScale * zoomFactor
+                        height: implicitHeight * 0.2 * computedScale * zoomFactor
+                        
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        fillMode: Image.PreserveAspectFit
+                    }
+                    Text {
+                        text: root.selectedVehicleIndex === index ? root.liveVehicleName : (modelData.name || "")
+                        color: "white"
+                        font.bold: true
+                        font.pixelSize: 14
+                        style: Text.Outline
+                        styleColor: "black"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible: text !== ""
+                    }
+                }
+                
+                MouseArea {
+                    anchors.fill: parent
+                    drag.target: null
+                    property real startMouseWorldX
+                    property real startMouseWorldY
+                    property real startWx
+                    property real startWy
+                    onPressed: function(mouse) {
+                        root.selectedVehicleIndex = index;
+                        root.liveVehicleRotation = modelData.rotation || 0;
+                        root.liveVehicleScale = modelData.scale || 1.0;
+                        root.liveVehicleName = modelData.name || "";
+                        
+                        var globalMouse = root.mapFromItem(vehItem, mouse.x, mouse.y);
+                        startMouseWorldX = globalMouse.x;
+                        startMouseWorldY = globalMouse.y;
+                        startWx = vehItem.wx;
+                        startWy = vehItem.wy;
+                    }
+                    onPositionChanged: function(mouse) {
+                        if (pressed) {
+                            var globalMouse = root.mapFromItem(vehItem, mouse.x, mouse.y);
+                            var dx = globalMouse.x - startMouseWorldX;
+                            var dy = globalMouse.y - startMouseWorldY;
+                            vehItem.wx = startWx + (dx / Math.pow(2, root.currentZoom));
+                            vehItem.wy = startWy + (dy / Math.pow(2, root.currentZoom));
+                        }
+                    }
+                    onReleased: function(mouse) {
+                        if (startWx !== vehItem.wx || startWy !== vehItem.wy) {
+                            var newDrawings = root.drawings.slice();
+                            newDrawings[index].x = vehItem.wx;
+                            newDrawings[index].y = vehItem.wy;
+                            root.drawings = newDrawings;
+                        }
+                    }
+                    cursorShape: Qt.PointingHandCursor
+                }
+                
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    color: "transparent"
+                    border.color: "#eab308"
+                    border.width: 2
+                    radius: 4
+                    visible: root.selectedVehicleIndex === index
+                    
+                    Rectangle {
+                        anchors.top: parent.top; anchors.right: parent.right; anchors.margins: -10
+                        width: 20; height: 20; radius: 10; color: "#ef4444"
+                        Text { anchors.centerIn: parent; text: "×"; color: "white"; font.bold: true; font.pixelSize: 14 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                var newDrawings = root.drawings.slice();
+                                newDrawings.splice(index, 1);
+                                root.drawings = newDrawings;
+                                root.selectedVehicleIndex = -1;
+                                drawingCanvas.requestPaint();
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // --- MAP FILTERS UI ---
@@ -1549,9 +1789,21 @@ Item {
                             hit = true; break;
                         }
                     }
-                } else if (d.type === "arrow") {
+                } else if (d.type === "arrow" || d.type === "artillery") {
                     var dist2 = distanceToSegment(wp.x, wp.y, d.start.x, d.start.y, d.end.x, d.end.y);
                     if (dist2 <= threshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                        hit = true;
+                    }
+                } else if (d.type === "parabola") {
+                    var sWp = apiToWorld(d.start.x, d.start.y);
+                    var eWp = apiToWorld(d.end.x, d.end.y);
+                    var pDist = distanceToParabola(wp.x, wp.y, sWp.x, sWp.y, eWp.x, eWp.y);
+                    if (pDist <= threshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                        hit = true;
+                    }
+                } else if (d.type === "vehicle") {
+                    var distVeh = Math.sqrt(Math.pow(wp.x - d.x, 2) + Math.pow(wp.y - d.y, 2));
+                    if (distVeh <= (30 * (d.scale || 1.0)) / Math.pow(2, root.currentZoom)) {
                         hit = true;
                     }
                 }
@@ -1570,6 +1822,8 @@ Item {
         }
         
         onPressed: function(mouse) {
+            root.wasEditingOnPress = (root.selectedVehicleIndex !== -1);
+            root.selectedVehicleIndex = -1;
             lastX = mouse.x;
             lastY = mouse.y;
             pressX = mouse.x;
@@ -1585,20 +1839,22 @@ Item {
                 cursorShape = Qt.ClosedHandCursor;
             } else if (root.activeTool === "brush") {
                 var wp = screenToWorld(mouse.x, mouse.y);
-                root.currentDrawing = { type: "brush", color: root.activeColor, thickness: root.activeThickness, points: [wp] };
+                var cUserBrush = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                root.currentDrawing = { type: "brush", color: root.activeColor, thickness: root.activeThickness, points: [wp], user: cUserBrush };
                 drawingCanvas.requestPaint();
             } else if (root.activeTool === "arrow") {
                 var wp2 = screenToWorld(mouse.x, mouse.y);
-                root.currentDrawing = { type: "arrow", color: root.activeColor, thickness: root.activeThickness, start: wp2, end: wp2 };
+                var cUserArrow = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                root.currentDrawing = { type: "arrow", color: root.activeColor, thickness: root.activeThickness, start: wp2, end: wp2, user: cUserArrow };
                 drawingCanvas.requestPaint();
-            } else if (root.activeTool === "polygon" || root.activeTool === "route") {
+            } else if (root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "vehicle") {
                 cursorShape = Qt.ClosedHandCursor; // Will reset to cross on release if no pan
             } else if (root.activeTool === "eraser") {
                 eraseAt(mouse.x, mouse.y);
             }
         }
         
-        onReleased: {
+        onReleased: function(mouse) {
             isDragging = false;
             if (root.activeTool === "pan") {
                 cursorShape = Qt.OpenHandCursor;
@@ -1607,7 +1863,8 @@ Item {
                 if (!didPan && !root.polygonNameDialogVisible) {
                     var wp = screenToWorld(mouse.x, mouse.y);
                     if (!root.currentDrawing || root.currentDrawing.type !== "polygon") {
-                        root.currentDrawing = { type: "polygon", color: root.activeColor, thickness: root.activeThickness, points: [wp] };
+                        var cUserPoly = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                        root.currentDrawing = { type: "polygon", color: root.activeColor, thickness: root.activeThickness, points: [wp], user: cUserPoly };
                     } else {
                         var poly = Object.assign({}, root.currentDrawing);
                         poly.points = poly.points.slice();
@@ -1621,7 +1878,8 @@ Item {
                 if (!didPan && !root.routeNameDialogVisible) {
                     var wpRoute = screenToWorld(mouse.x, mouse.y);
                     if (!root.currentDrawing || root.currentDrawing.type !== "route") {
-                        root.currentDrawing = { type: "route", color: root.activeColor, thickness: root.activeThickness, points: [wpRoute] };
+                        var cUserRoute = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                        root.currentDrawing = { type: "route", color: root.activeColor, thickness: root.activeThickness, points: [wpRoute], user: cUserRoute };
                     } else {
                         var route = Object.assign({}, root.currentDrawing);
                         route.points = route.points.slice();
@@ -1629,6 +1887,69 @@ Item {
                         root.currentDrawing = route;
                     }
                     drawingCanvas.requestPaint();
+                }
+            } else if (root.activeTool === "vehicle") {
+                cursorShape = Qt.CrossCursor;
+                if (!didPan && !root.wasEditingOnPress) {
+                    var wpVeh = screenToWorld(mouse.x, mouse.y);
+                    var cUserVeh = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                    var newDrawings = root.drawings.slice();
+                    newDrawings.push({
+                        type: "vehicle",
+                        user: cUserVeh,
+                        x: wpVeh.x,
+                        y: wpVeh.y,
+                        image: root.activeVehicleImage,
+                        rotation: root.activeVehicleRotation,
+                        scale: root.activeVehicleScale * (1.0 / Math.pow(2, root.currentZoom - 2)),
+                        name: root.activeVehicleName
+                    });
+                    root.drawings = newDrawings;
+                    drawingCanvas.requestPaint();
+                }
+            } else if (root.activeTool === "artillery") {
+                cursorShape = Qt.CrossCursor;
+                console.log("MapView: artillery clicked! didPan:", didPan, "mouse:", mouse.x, mouse.y);
+                if (!didPan) {
+                    var wpArt = screenToWorld(mouse.x, mouse.y);
+                    console.log("MapView: wpArt calculated:", wpArt.x, wpArt.y);
+                    if (root.artilleryStep !== 1) {
+                        root.artilleryCannon = wpArt;
+                        root.artilleryTarget = wpArt;
+                        root.artilleryStep = 1;
+                        console.log("MapView: step 1, cannon set!");
+                    } else {
+                        root.artilleryTarget = wpArt;
+                        
+                        // Sync to drawing log
+                        var wCannonAPI = root.worldToApi(root.artilleryCannon.x, root.artilleryCannon.y);
+                        var wTargetAPI = root.worldToApi(wpArt.x, wpArt.y);
+                        
+                        // calculateArtillery expects API coordinates (which python engine calls World coordinates)
+                        var mathRes = typeof mapController !== "undefined" && mapController ? mapController.calculateArtillery(wCannonAPI.x, wCannonAPI.y, wTargetAPI.x, wTargetAPI.y) : null;
+                        var azm = mathRes ? (mathRes.bearing || 0) : 0;
+                        var dist = mathRes ? (mathRes.distance_meters || 0) : 0;
+                        var infoText = "AZM: " + Math.round(azm) + "° | DIST: " + Math.round(dist) + "m";
+                        
+                        var cUserArt = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                        var newArt = { 
+                            type: "artillery", 
+                            color: root.activeColor, 
+                            thickness: root.activeThickness, 
+                            start: wCannonAPI, 
+                            end: wTargetAPI, 
+                            user: cUserArt,
+                            info: infoText
+                        };
+                        var nds = root.drawings.slice();
+                        nds.push(newArt);
+                        root.drawings = nds;
+                        drawingCanvas.requestPaint();
+                        
+                        // Keep step 2 so overlay stays visible
+                        root.artilleryStep = 2;
+                        console.log("MapView: step 2, target set and synced to log!");
+                    }
                 }
             } else {
                 if (root.currentDrawing) {
@@ -1661,7 +1982,7 @@ Item {
         
         onPositionChanged: function(mouse) {
             if (isDragging) {
-                if (root.activeTool === "pan" || root.activeTool === "polygon" || root.activeTool === "route") {
+                if (root.activeTool === "pan" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "vehicle") {
                     var dx = mouse.x - lastX;
                     var dy = mouse.y - lastY;
                     
@@ -1690,6 +2011,10 @@ Item {
                     eraseAt(mouse.x, mouse.y);
                 }
             } else {
+                if (root.activeTool === "artillery" && root.artilleryStep === 1) {
+                    root.artilleryTarget = screenToWorld(mouse.x, mouse.y);
+                }
+
                 if (root.logisticsRoutes.length > 0) {
                     var hwp = screenToWorld(mouse.x, mouse.y);
                     var foundHover = null;
@@ -1704,6 +2029,52 @@ Item {
                     if (root.logisticsHoveredRoute !== foundHover) {
                         root.logisticsHoveredRoute = foundHover;
                         drawingCanvas.requestPaint();
+                    }
+                }
+                
+                // Hover for drawings
+                if (!isDragging && root.drawings) {
+                    var hoverWp = screenToWorld(mouse.x, mouse.y);
+                    var hoverThreshold = 15 / Math.pow(2, root.currentZoom);
+                    var foundHoverDrawing = null;
+                    
+                    for (var i = root.drawings.length - 1; i >= 0; i--) {
+                        var d = root.drawings[i];
+                        var hit = false;
+                        if (d.type === "polygon") {
+                            hit = isPointInPolygon(hoverWp.x, hoverWp.y, d.points);
+                        } else if (d.type === "brush" || d.type === "route") {
+                            for (var j = 0; j < d.points.length - 1; j++) {
+                                var segmentDist = distanceToSegment(hoverWp.x, hoverWp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
+                                if (segmentDist <= hoverThreshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                                    hit = true; break;
+                                }
+                            }
+                        } else if (d.type === "arrow" || d.type === "artillery") {
+                            var arrowDist = distanceToSegment(hoverWp.x, hoverWp.y, d.start.x, d.start.y, d.end.x, d.end.y);
+                            if (arrowDist <= hoverThreshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                                hit = true;
+                            }
+                        } else if (d.type === "vehicle") {
+                            var vDist = Math.sqrt(Math.pow(hoverWp.x - d.x, 2) + Math.pow(hoverWp.y - d.y, 2));
+                            if (vDist <= (30 * (d.scale || 1.0)) / Math.pow(2, root.currentZoom)) {
+                                hit = true;
+                            }
+                        }
+                        
+                        if (hit) {
+                            foundHoverDrawing = d;
+                            break;
+                        }
+                    }
+                    
+                    if (foundHoverDrawing && foundHoverDrawing.user) {
+                        drawingHoverTooltip.tooltipText = foundHoverDrawing.user;
+                        drawingHoverTooltip.x = mouse.x + 15;
+                        drawingHoverTooltip.y = mouse.y + 15;
+                        drawingHoverTooltip.visible = true;
+                    } else {
+                        drawingHoverTooltip.visible = false;
                     }
                 }
             }
@@ -1913,6 +2284,64 @@ Item {
                 }
             }
             
+            // Artillery Tool
+            Rectangle {
+                width: 36
+                height: 36
+                radius: 18
+                color: root.activeTool === "artillery" ? settingsController.accentColor : "transparent"
+                border.color: root.activeTool === "artillery" ? settingsController.accentColor : settingsController.borderColor
+                Text {
+                    anchors.centerIn: parent
+                    text: "🎯"
+                    font.pixelSize: 18
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (root.currentDrawing) root.currentDrawing = null;
+                        
+                        if (root.activeTool === "artillery") {
+                            root.activeTool = "pan";
+                            artilleryModal.visible = false;
+                        } else {
+                            root.activeTool = "artillery";
+                            artilleryModal.visible = true;
+                            root.showToolSettings = false;
+                        }
+                    }
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+
+            // Vehicle Tool
+            Rectangle {
+                width: 36
+                height: 36
+                radius: 18
+                color: root.activeTool === "vehicle" ? settingsController.accentColor : "transparent"
+                border.color: root.activeTool === "vehicle" ? settingsController.accentColor : settingsController.borderColor
+                Text {
+                    anchors.centerIn: parent
+                    text: "🚢"
+                    font.pixelSize: 18
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (root.activeTool === "vehicle") {
+                            root.showToolSettings = !root.showToolSettings;
+                        } else {
+                            if (root.currentDrawing) root.currentDrawing = null;
+                            root.activeTool = "vehicle";
+                            root.showToolSettings = true;
+                        }
+                    }
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+            
+            
             Rectangle {
                 width: 1
                 height: 24
@@ -1980,17 +2409,20 @@ Item {
     // --- TOOL SETTINGS MODAL ---
     Rectangle {
         id: toolSettingsModal
-        visible: root.showToolSettings && (root.activeTool === "brush" || root.activeTool === "arrow" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "eraser")
+        visible: (root.showToolSettings && (root.activeTool === "brush" || root.activeTool === "arrow" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "eraser" || root.activeTool === "vehicle")) || root.selectedVehicleIndex !== -1
         anchors.bottom: drawingToolbar.top
         anchors.bottomMargin: 12
         anchors.horizontalCenter: parent.horizontalCenter
-        width: 240
-        height: root.activeTool === "eraser" ? 80 : 120
+        width: (root.selectedVehicleIndex !== -1 || root.activeTool === "vehicle") ? 320 : 240
+        height: root.selectedVehicleIndex !== -1 ? 260 : (root.activeTool === "eraser" ? 80 : (root.activeTool === "vehicle" ? 380 : 120))
         radius: 12
         color: settingsController.surfaceColor
         border.color: settingsController.borderColor
         border.width: 1
         z: 100
+        
+        // Block clicks from propagating to map
+        MouseArea { anchors.fill: parent }
 
         MultiEffect {
             source: toolSettingsModal
@@ -2006,7 +2438,7 @@ Item {
             anchors.fill: parent
             anchors.margins: 12
             spacing: 12
-            visible: root.activeTool !== "eraser"
+            visible: root.activeTool !== "eraser" && root.activeTool !== "vehicle"
             
             Text {
                 text: root.activeTool === "brush" ? "Espessura e Cor do Pincel" : (root.activeTool === "arrow" ? "Espessura e Cor da Seta" : (root.activeTool === "route" ? "Espessura e Cor da Rota" : "Espessura e Cor da Área"))
@@ -2104,7 +2536,226 @@ Item {
             }
         }
         
-        // Removed old logistics configuration block
+        Column {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 16
+            visible: root.selectedVehicleIndex !== -1
+            
+            RowLayout {
+                width: parent.width
+                Text {
+                    text: "Editar Embarcação"
+                    color: settingsController.textColor
+                    font.bold: true
+                    font.pixelSize: 14
+                    Layout.fillWidth: true
+                }
+            }
+            
+            Column {
+                width: parent.width
+                spacing: 4
+                Text { text: "Rotação"; color: settingsController.mutedTextColor; font.pixelSize: 11; font.bold: true }
+                Slider {
+                    width: parent.width
+                    from: 0; to: 360; stepSize: 1
+                    value: root.liveVehicleRotation
+                    onValueChanged: {
+                        if (root.selectedVehicleIndex !== -1) {
+                            root.liveVehicleRotation = value;
+                        }
+                    }
+                    onPressedChanged: {
+                        if (!pressed && root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
+                            if (root.drawings[root.selectedVehicleIndex].rotation !== root.liveVehicleRotation) {
+                                var newDrawings = root.drawings.slice();
+                                newDrawings[root.selectedVehicleIndex].rotation = root.liveVehicleRotation;
+                                root.drawings = newDrawings;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Column {
+                width: parent.width
+                spacing: 4
+                Text { text: "Tamanho"; color: settingsController.mutedTextColor; font.pixelSize: 11; font.bold: true }
+                Slider {
+                    width: parent.width
+                    from: 0.05; to: 3.0; stepSize: 0.05
+                    value: root.liveVehicleScale
+                    onValueChanged: {
+                        if (root.selectedVehicleIndex !== -1) {
+                            root.liveVehicleScale = value;
+                        }
+                    }
+                    onPressedChanged: {
+                        if (!pressed && root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
+                            if (root.drawings[root.selectedVehicleIndex].scale !== root.liveVehicleScale) {
+                                var newDrawings = root.drawings.slice();
+                                newDrawings[root.selectedVehicleIndex].scale = root.liveVehicleScale;
+                                root.drawings = newDrawings;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Column {
+                width: parent.width
+                spacing: 4
+                Text { text: "Nome da Embarcação"; color: settingsController.mutedTextColor; font.pixelSize: 11; font.bold: true }
+                TextField {
+                    width: parent.width
+                    text: root.liveVehicleName
+                    font.pixelSize: 12
+                    onTextEdited: {
+                        root.liveVehicleName = text;
+                    }
+                    onEditingFinished: {
+                        if (root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
+                            if (root.drawings[root.selectedVehicleIndex].name !== root.liveVehicleName) {
+                                var newDrawings = root.drawings.slice();
+                                newDrawings[root.selectedVehicleIndex].name = root.liveVehicleName;
+                                root.drawings = newDrawings;
+                            }
+                        }
+                    }
+                    color: settingsController.textColor
+                    background: Rectangle { color: settingsController.backgroundColor; border.color: settingsController.borderColor; border.width: 1; radius: 6 }
+                }
+            }
+        }
+        
+        Column {
+            id: vehicleSearchCol
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 16
+            visible: root.activeTool === "vehicle" && root.selectedVehicleIndex === -1
+            
+            property string searchText: ""
+            
+            Text {
+                text: "Catálogo de Embarcações"
+                color: settingsController.textColor
+                font.bold: true
+                font.pixelSize: 14
+            }
+            
+            TextField {
+                width: parent.width
+                placeholderText: "Buscar embarcação..."
+                color: settingsController.textColor
+                font.pixelSize: 12
+                background: Rectangle { color: settingsController.backgroundColor; border.color: settingsController.borderColor; border.width: 1; radius: 6 }
+                onTextEdited: vehicleSearchCol.searchText = text.toLowerCase()
+            }
+            
+            ScrollView {
+                width: parent.width
+                height: 290
+                clip: true
+                
+                Grid {
+                    columns: 3
+                    spacing: 12
+                    
+                    property var allItems: {
+                        if (typeof VehiclesData === "undefined" || !VehiclesData.data.categories || VehiclesData.data.categories.length === 0) return [];
+                        var items = VehiclesData.data.categories[0].items;
+                        var res = [];
+                        for (var i = 0; i < items.length; i++) {
+                            if (vehicleSearchCol.searchText === "" || items[i].name.toLowerCase().indexOf(vehicleSearchCol.searchText) !== -1) {
+                                res.push(items[i]);
+                            }
+                        }
+                        return res;
+                    }
+                    
+                    Repeater {
+                        model: parent.allItems
+                        delegate: Rectangle {
+                            width: 80
+                            height: 88
+                            radius: 8
+                            color: settingsController.backgroundColor
+                            border.color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.borderColor
+                            border.width: root.activeVehicleImage === modelData.image ? 2 : 1
+                            
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 8
+                                color: "white"
+                                opacity: mouseArea.containsMouse ? 0.05 : 0.0
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                            }
+                            
+                            Column {
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                spacing: 4
+                                
+                                Item {
+                                    width: parent.width
+                                    height: 50
+                                    Image {
+                                        anchors.centerIn: parent
+                                        source: typeof appController !== "undefined" ? appController.assetUrl("img/map-layer/" + modelData.image) : "file:///c:/Users/ryanl/OneDrive/Desktop/aplicativo/img/map-layer/" + modelData.image
+                                        width: parent.width
+                                        height: parent.height
+                                        fillMode: Image.PreserveAspectFit
+                                        smooth: true
+                                        mipmap: true
+                                    }
+                                }
+                                
+                                Text {
+                                    text: modelData.name
+                                    color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.textColor
+                                    font.pixelSize: 10
+                                    font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            
+                            Rectangle {
+                                anchors.top: parent.top
+                                anchors.left: parent.left
+                                anchors.margins: 6
+                                width: 14
+                                height: 14
+                                radius: 3
+                                color: modelData.faction === "w" ? "#2a5b8c" : (modelData.faction === "c" ? "#5a7a50" : "#888888")
+                                visible: modelData.faction !== undefined
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.faction ? modelData.faction.toUpperCase() : ""
+                                    color: "white"
+                                    font.pixelSize: 9
+                                    font.bold: true
+                                }
+                            }
+                            
+                            MouseArea {
+                                id: mouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.activeVehicleImage = modelData.image;
+                                    root.activeVehicleName = modelData.name;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // --- LOGISTICS ROUTE HOVER TOOLTIP ---
@@ -2504,14 +3155,14 @@ Item {
         }
     }
 
-    // --- DEBUG DATA MODAL (TEMPORARY) ---
+    // --- JSON DEBUG WINDOW ---
     Rectangle {
-        id: debugDataModal
+        id: jsonDebugWindow
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.margins: 20
-        width: 320
-        height: Math.min(parent.height - 40, debugColumn.implicitHeight + 40)
+        width: 300
+        height: 250
         radius: 8
         color: Qt.rgba(settingsController.surfaceColor.r, settingsController.surfaceColor.g, settingsController.surfaceColor.b, 0.9)
         border.color: settingsController.borderColor
@@ -2521,6 +3172,65 @@ Item {
         
         property string jsonOutput: ""
         
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 5
+            
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    text: "Log JSON dos Desenhos"
+                    color: settingsController.textColor
+                    font.bold: true
+                    font.pixelSize: 12
+                    Layout.fillWidth: true
+                }
+                Rectangle {
+                    width: 50
+                    height: 24
+                    color: settingsController.accentColor
+                    radius: 4
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Copiar"
+                        color: "white"
+                        font.pixelSize: 10
+                        font.bold: true
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            jsonTextEdit.selectAll();
+                            jsonTextEdit.copy();
+                            jsonTextEdit.deselect();
+                        }
+                    }
+                }
+            }
+            
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                
+                TextEdit {
+                    id: jsonTextEdit
+                    text: jsonDebugWindow.jsonOutput
+                    color: settingsController.textColor
+                    font.family: "Consolas"
+                    font.pixelSize: 10
+                    wrapMode: TextEdit.WrapAnywhere
+                    readOnly: true
+                    selectByMouse: true
+                }
+            }
+        }
+    }
+
+    // --- AUTO SAVE TIMER ---
+    Item {
         Timer {
             interval: 500
             running: true
@@ -2549,76 +3259,20 @@ Item {
                 };
                 
                 var jsonStr = JSON.stringify(data, function(key, val) {
-                    if (val && typeof val.x === 'number') {
-                        val.x = Math.round(val.x * 100) / 100;
-                    }
-                    if (val && typeof val.y === 'number') {
-                        val.y = Math.round(val.y * 100) / 100;
-                    }
+                    if (val && typeof val.x === 'number') val.x = Math.round(val.x * 100) / 100;
+                    if (val && typeof val.y === 'number') val.y = Math.round(val.y * 100) / 100;
                     return val;
                 }, 2);
-                
-                // Otimiza visualmente as coordenadas para ocupar apenas 1 linha em vez de 4
                 jsonStr = jsonStr.replace(/\{\n\s+"x": ([\d.-]+),\n\s+"y": ([\d.-]+)\n\s+\}/g, '{ "x": $1, "y": $2 }');
                 
-                debugDataModal.jsonOutput = jsonStr;
+                jsonDebugWindow.jsonOutput = jsonStr;
                 
                 if (typeof mapSessionController !== "undefined") {
                     mapSessionController.sendMapUpdate(jsonStr);
-                }
-            }
-        }
-        
-        Flickable {
-            anchors.fill: parent
-            anchors.margins: 10
-            contentHeight: debugColumn.implicitHeight
-            clip: true
-            
-            Column {
-                id: debugColumn
-                width: parent.width
-                spacing: 10
-                
-                RowLayout {
-                    width: parent.width
-                    Image {
-                        source: typeof chatController !== "undefined" && chatController.currentUserAvatar ? chatController.currentUserAvatar : ""
-                        Layout.preferredWidth: 32
-                        Layout.preferredHeight: 32
-                        visible: source !== ""
-                        fillMode: Image.PreserveAspectCrop
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 16
-                            color: "transparent"
-                            border.color: settingsController.borderColor
-                            border.width: 1
-                        }
-                    }
-                    Text {
-                        text: "Usuário: " + (typeof chatController !== "undefined" ? chatController.currentUserName : "-")
-                        color: settingsController.textColor
-                        font.bold: true
-                        Layout.fillWidth: true
-                    }
-                }
-                
-                Text {
-                    text: "JSON dos Desenhos:"
-                    color: settingsController.accentColor
-                    font.bold: true
-                }
-                
-                TextEdit {
-                    width: parent.width
-                    text: debugDataModal.jsonOutput
-                    color: settingsController.textColor
-                    font.family: "Consolas"
-                    font.pixelSize: 10
-                    wrapMode: TextEdit.WrapAnywhere
-                    readOnly: true
-                    selectByMouse: true
+                    var date = new Date();
+                    var h = date.getHours();
+                    var m = date.getMinutes();
+                    root.lastSyncTime = (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
                 }
             }
         }
@@ -2641,7 +3295,8 @@ Item {
                     end: { x: r.end.x, y: r.end.y },
                     cargo: r.cargo,
                     color: "#3b82f6",
-                    thickness: 4
+                    thickness: 4,
+                    user: typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido"
                 });
             }
             var currentDrawings = root.drawings.slice();
@@ -2661,36 +3316,69 @@ Item {
     // --- MAP SESSIONS UI ---
     MapSessionsModal {
         id: mapSessionsModal
+        activeUsers: root.activeUsers
+        historicUsers: root.historicUsers
     }
 
     Rectangle {
-        id: sessionsFloatingBtn
+        id: sessionPill
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.margins: 24
-        width: 48
         height: 48
+        width: sessionPillContent.width + 30
         radius: 24
-        color: settingsController.accentColor
+        color: Qt.rgba(settingsController.surfaceColor.r, settingsController.surfaceColor.g, settingsController.surfaceColor.b, 0.8)
         border.color: settingsController.borderColor
         border.width: 1
         z: 990
         
         MultiEffect {
-            source: sessionsFloatingBtn
-            anchors.fill: sessionsFloatingBtn
+            source: sessionPill
+            anchors.fill: sessionPill
             shadowEnabled: true
-            shadowOpacity: 0.5
-            shadowBlur: 1.0
-            shadowVerticalOffset: 3
+            shadowOpacity: 0.3
+            shadowBlur: 2.0
+            shadowVerticalOffset: 2
             shadowColor: "black"
         }
 
-        Text {
-            anchors.centerIn: parent
-            text: "🌐" // Group / Session icon
-            font.pixelSize: 24
-            color: "white"
+        RowLayout {
+            id: sessionPillContent
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 15
+            spacing: 12
+            
+            Rectangle {
+                width: 32
+                height: 32
+                radius: 16
+                color: settingsController.accentColor
+                Text {
+                    anchors.centerIn: parent
+                    text: "🌐"
+                    font.pixelSize: 16
+                    color: "white"
+                }
+            }
+            
+            ColumnLayout {
+                spacing: 0
+                visible: typeof mapSessionController !== "undefined" && mapSessionController.currentRoom !== ""
+                
+                Text {
+                    text: "Online: " + (root.activeUsers.length + 1)
+                    color: settingsController.textColor
+                    font.pixelSize: 12
+                    font.bold: true
+                }
+                Text {
+                    text: root.lastSyncTime === "" ? "Aguardando sincronização..." : "Sincronizado às " + root.lastSyncTime
+                    color: settingsController.secondaryTextColor
+                    font.pixelSize: 10
+                }
+            }
         }
 
         MouseArea {
@@ -2698,31 +3386,86 @@ Item {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             hoverEnabled: true
-            onClicked: {
-                mapSessionsModal.open();
-            }
+            onClicked: mapSessionsModal.open()
         }
         
-        // Tooltip hint on hover
-        Rectangle {
-            id: sessionTooltip
-            anchors.left: parent.right
-            anchors.leftMargin: 12
-            anchors.verticalCenter: parent.verticalCenter
-            width: sessionTooltipText.width + 16
-            height: 30
-            radius: 4
-            color: settingsController.surfaceColor
-            border.color: settingsController.borderColor
-            visible: sessionBtnHover.containsMouse
+        ToolTip {
+            visible: sessionBtnHover.containsMouse && (typeof mapSessionController === "undefined" || mapSessionController.currentRoom === "")
+            text: "Sessões de Mapa"
+            y: parent.height + 10
+        }
+    }
+    
+    Popup {
+        id: kickedPopup
+        width: 300
+        height: 150
+        anchors.centerIn: parent
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        
+        background: Rectangle {
+            color: "#1e1e1e"
+            radius: 8
+            border.color: "#ef4444"
+            border.width: 2
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 20
+            spacing: 15
             
             Text {
-                id: sessionTooltipText
-                anchors.centerIn: parent
-                text: "Sessões de Mapa"
-                color: settingsController.textColor
-                font.pixelSize: 12
+                text: "⚠️ Expulso"
+                color: "#ef4444"
+                font.bold: true
+                font.pixelSize: 18
+                Layout.alignment: Qt.AlignHCenter
             }
+            
+            Text {
+                text: "Você foi expulso desta sessão pelo criador da sala."
+                color: "#ffffff"
+                font.pixelSize: 14
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+                Layout.fillWidth: true
+            }
+            
+            PrimaryButton {
+                text: "Voltar ao Lobby"
+                Layout.alignment: Qt.AlignHCenter
+                onClicked: {
+                    kickedPopup.close();
+                    root.drawings = [];
+                    root.remoteCursorsDict = ({});
+                    if (typeof mapSessionController !== "undefined") {
+                        mapSessionController._current_room = "";
+                    }
+                }
+            }
+        }
+    }
+    
+    Rectangle {
+        id: drawingHoverTooltip
+        property string tooltipText: ""
+        visible: false
+        width: tooltipLabel.width + 12
+        height: tooltipLabel.height + 8
+        color: "#1e1e1e"
+        border.color: "#333333"
+        border.width: 1
+        radius: 4
+        z: 9999
+        
+        Text {
+            id: tooltipLabel
+            anchors.centerIn: parent
+            color: "#e2e8f0"
+            font.pixelSize: 12
+            text: drawingHoverTooltip.tooltipText
         }
     }
 }

@@ -6,7 +6,7 @@ foxlogi_req = urllib.request.urlopen('https://foxlogi.com/api/map-items/', timeo
 foxlogi_data = json.loads(foxlogi_req.read().decode())
 foxlogi_dict = {item['name']: (item['x'], item['y']) for item in foxlogi_data if 'name' in item}
 
-reader = csv.DictReader(open('locations.csv', encoding='utf-8'))
+reader = csv.DictReader(open('../../data/locations.csv', encoding='utf-8'))
 points = []
 for row in reader:
     name = row['Loc']

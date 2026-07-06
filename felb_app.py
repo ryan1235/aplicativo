@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 import PySide6
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import QUrl, Qt, qInstallMessageHandler, QtMsgType
 from PySide6.QtGui import QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -143,6 +143,11 @@ def trim_runtime_memory(engine: QQmlApplicationEngine | None = None) -> None:
     except Exception:
         pass
 
+def custom_message_handler(mode, context, message):
+    if mode == QtMsgType.QtWarningMsg and "server replied with status code 404" in message:
+        return
+    print(message)
+
 def cleanup_old_files() -> None:
     for file in BASE_DIR.rglob("*.old"):
         try:
@@ -152,6 +157,7 @@ def cleanup_old_files() -> None:
 
 
 def main() -> int:
+    qInstallMessageHandler(custom_message_handler)
     cleanup_old_files()
     load_env_file(BASE_DIR / ".env")
     configure_qt()

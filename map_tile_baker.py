@@ -567,7 +567,7 @@ class MapTileBaker:
         self.icons_marker = self.icons_dir / ".bake_complete"
         self.labels_marker = self.labels_dir / ".bake_complete"
         self.icon_assets = self.resource_root / "img" / "iconmap"
-        self.origins_path = self.resource_root / "origins.json"
+        self.origins_path = self.resource_root / "data" / "origins.json"
 
     def icons_ready(self) -> bool:
         if not self.icons_marker.exists() or not self._has_sample_tile(self.icons_dir):

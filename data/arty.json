@@ -1,0 +1,205 @@
+{
+    "version": 1,
+    "game": "Foxhole",
+    "faction": "Warden",
+    "generatedFrom": "Official Foxhole Wiki",
+    "units": {
+        "distance": "meters",
+        "dispersion": "meters",
+        "fireRate": "rounds_per_minute",
+        "damage": "hp"
+    },
+    "weapons": [
+        {
+            "id": "callahan_120_emplacement",
+            "name": "Callahan",
+            "category": "120mm",
+            "type": "Emplaced Artillery",
+            "ammo": "120mm",
+            "mobile": false,
+            "crossHex": false,
+            "windAffected": true,
+            "minimumCrew": 2,
+            "recommendedCrew": 4,
+            "range": {
+                "minimum": 100,
+                "maximum": 200
+            },
+            "dispersion": {
+                "minimum": 2.5,
+                "maximum": 8.5,
+                "fixed": false
+            },
+            "damage": {
+                "direct": 400,
+                "effectiveRadius": 4.0,
+                "maximumRadius": 11.25
+            },
+            "fireRate": 27.3
+        },
+        {
+            "id": "huber_lariat_120",
+            "name": "Huber Lariat 120mm",
+            "category": "120mm",
+            "type": "Field Artillery",
+            "ammo": "120mm",
+            "mobile": true,
+            "crossHex": false,
+            "windAffected": true,
+            "minimumCrew": 2,
+            "recommendedCrew": 4,
+            "range": {
+                "minimum": 100,
+                "maximum": 300
+            },
+            "dispersion": {
+                "minimum": 25,
+                "maximum": 35,
+                "fixed": false
+            },
+            "damage": {
+                "direct": 400,
+                "effectiveRadius": 4,
+                "maximumRadius": 11.25
+            },
+            "fireRate": 8
+        },
+        {
+            "id": "titan_150_emplacement",
+            "name": "Titan",
+            "category": "150mm",
+            "type": "Emplaced Heavy Artillery",
+            "ammo": "150mm",
+            "mobile": false,
+            "crossHex": false,
+            "windAffected": true,
+            "minimumCrew": 2,
+            "recommendedCrew": 4,
+            "range": {
+                "minimum": 100,
+                "maximum": 225
+            },
+            "dispersion": {
+                "minimum": 2.5,
+                "maximum": 8.5,
+                "fixed": false
+            },
+            "damage": {
+                "direct": 900,
+                "effectiveRadius": 7,
+                "maximumRadius": 11.25
+            },
+            "fireRate": 27.3
+        },
+        {
+            "id": "huber_exalt_150",
+            "name": "Huber Exalt 150mm",
+            "category": "150mm",
+            "type": "Heavy Field Artillery",
+            "ammo": "150mm",
+            "mobile": true,
+            "crossHex": false,
+            "windAffected": true,
+            "minimumCrew": 2,
+            "recommendedCrew": 4,
+            "range": {
+                "minimum": 100,
+                "maximum": 300
+            },
+            "dispersion": {
+                "minimum": 25,
+                "maximum": 35,
+                "fixed": false
+            },
+            "damage": {
+                "direct": 900,
+                "effectiveRadius": 7,
+                "maximumRadius": 11.25
+            },
+            "fireRate": 8
+        },
+        {
+            "id": "skycaller",
+            "name": "Niska-Rycker Mk. IX Skycaller",
+            "category": "Rocket Artillery",
+            "type": "Fire Rocket Launcher",
+            "ammo": "4C Fire Rocket",
+            "mobile": true,
+            "crossHex": false,
+            "windAffected": true,
+            "minimumCrew": 2,
+            "recommendedCrew": 3,
+            "range": {
+                "minimum": 275,
+                "maximum": 350
+            },
+            "dispersion": {
+                "minimum": 37.5,
+                "maximum": 60,
+                "fixed": false
+            },
+            "damage": {
+                "direct": 145,
+                "effectiveRadius": 2.25,
+                "maximumRadius": 5.5,
+                "fire": true
+            },
+            "fireRate": 15
+        },
+        {
+            "id": "wasp_nest",
+            "name": "Rycker 4/3-F Wasp Nest",
+            "category": "Rocket Artillery",
+            "type": "Fire Rocket Emplacement",
+            "ammo": "4C Fire Rocket",
+            "mobile": true,
+            "crossHex": false,
+            "windAffected": true,
+            "minimumCrew": 2,
+            "recommendedCrew": 3,
+            "range": {
+                "minimum": 375,
+                "maximum": 450
+            },
+            "dispersion": {
+                "minimum": 37.5,
+                "maximum": 60,
+                "fixed": false
+            },
+            "damage": {
+                "direct": 145,
+                "effectiveRadius": 2.25,
+                "maximumRadius": 5.5,
+                "fire": true
+            },
+            "fireRate": 15
+        },
+        {
+            "id": "storm_cannon",
+            "name": "Storm Cannon",
+            "category": "300mm",
+            "type": "Super Heavy Artillery",
+            "ammo": "300mm",
+            "mobile": false,
+            "crossHex": true,
+            "windAffected": true,
+            "minimumCrew": 3,
+            "recommendedCrew": 6,
+            "range": {
+                "minimum": 400,
+                "maximum": 1000
+            },
+            "dispersion": {
+                "minimum": 50,
+                "maximum": 50,
+                "fixed": true
+            },
+            "damage": {
+                "direct": 3000,
+                "effectiveRadius": 4.5,
+                "maximumRadius": 15
+            },
+            "fireRate": 10
+        }
+    ]
+}

@@ -1,0 +1,3 @@
+"""
+foxmap namespace package
+"""

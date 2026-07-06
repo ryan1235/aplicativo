@@ -47,5 +47,5 @@ for m in maps:
 print(f"Calculated origins for {len(origins)} hexes.")
 print("DeadLandsHex:", origins.get("DeadLandsHex"))
 # Dump dict to file for python script to read
-with open('origins.json', 'w') as f:
+with open('../../data/origins.json', 'w') as f:
     json.dump(origins, f)
