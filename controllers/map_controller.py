@@ -127,11 +127,9 @@ class MapController(QObject):
         
         app_data_dir = QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
         self._map_tiles_root = os.path.join(app_data_dir, "map-tiles")
-        self._icons_cache_dir = os.path.join(self._map_tiles_root, "patch-64-icons")
-        self._labels_cache_dir = os.path.join(self._map_tiles_root, "patch-64-labels")
-        self._cache_dir = self._icons_cache_dir
-        os.makedirs(self._icons_cache_dir, exist_ok=True)
-        os.makedirs(self._labels_cache_dir, exist_ok=True)
+        self._base_cache_dir = os.path.join(self._map_tiles_root, "patch-64")
+        self._cache_dir = self._base_cache_dir
+        os.makedirs(self._cache_dir, exist_ok=True)
         
         self._icons_tiles_ready = False
         self._labels_tiles_ready = False
@@ -213,7 +211,7 @@ class MapController(QObject):
 
     @Property(str, notify=mapTilesReadyChanged)
     def labelsBaseUrl(self) -> str:
-        local_path = self._labels_cache_dir.replace("\\", "/")
+        local_path = self._cache_dir.replace("\\", "/")
         return f"file:///{local_path}/{{z}}/{{x}}/{{y}}.webp"
 
     @Property(bool, notify=mapTilesReadyChanged)
@@ -285,124 +283,22 @@ class MapController(QObject):
 
     @Slot()
     def checkAndGenerateBakedTiles(self) -> None:
-        from map_tile_baker import (
-            ICON_BAKE_ZOOMS,
-            LABEL_BAKE_ZOOMS,
-            MapTileBaker,
-            collect_viewport_keys,
-        )
-
-        if getattr(self, "_bake_thread_running", False):
-            return
-
-        baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
-        needs_icons = not baker.icons_ready()
-        needs_labels = not baker.labels_ready()
-
-        if not needs_icons:
-            self._refresh_tile_urls()
-            threading.Thread(target=self._run_incremental_icon_update, daemon=True).start()
-            if needs_labels:
-                threading.Thread(target=self._run_staged_labels_only, daemon=True).start()
-            return
-
-        self._bake_thread_running = True
-        self._blocking_bake_running = True
-        self._map_bake_stage = "prepare"
-        self._viewport_gate = threading.Event()
-        self.mapBakeProgress.emit("prepare", 0, 1)
-
-        def _generate() -> None:
-            try:
-                def _progress(stage: str, current: int, total: int) -> None:
-                    self._internalBakeProgress.emit(stage, current, total)
-
-                icon_index, bakeable = baker.prepare_icon_bake(full=True)
-                viewport = collect_viewport_keys(ICON_BAKE_ZOOMS)
-
-                # —— Camada 1: ícones na região visível (bloqueia o loading) ——
-                keys_layer1 = [k for k in icon_index if k in viewport]
-                baker.bake_icon_keys(
-                    keys_layer1, icon_index, progress=_progress, stage="icons_viewport", workers=6
-                )
-                self._pending_unlock_layer = 1
-                self._wait_for_viewport_unlock()
-
-                # —— Segundo plano: ícones restantes + nomes (camada 2 opcional) ——
-                self._background_bake_running = True
-                keys_icon_bg = [k for k in icon_index if k not in viewport]
-                baker.bake_icon_keys(
-                    keys_icon_bg, icon_index, progress=_progress, stage="icons_background", workers=6
-                )
-                baker.finalize_icons(bakeable)
-
-                if needs_labels:
-                    try:
-                        label_index, labels = baker.prepare_label_bake()
-                        label_viewport = collect_viewport_keys(LABEL_BAKE_ZOOMS)
-                        keys_label_vp = [k for k in label_index if k in label_viewport]
-                        keys_label_bg = [k for k in label_index if k not in label_viewport]
-                        baker.bake_label_keys(
-                            keys_label_vp, label_index, progress=_progress, stage="labels_viewport", workers=4
-                        )
-                        QMetaObject.invokeMethod(
-                            self, "_refresh_tile_urls_quiet", Qt.ConnectionType.QueuedConnection
-                        )
-                        baker.bake_label_keys(
-                            keys_label_bg, label_index, progress=_progress, stage="labels_background", workers=4
-                        )
-                        baker.finalize_labels(labels)
-                    except Exception as label_err:
-                        print(f"[MapController] Nomes em segundo plano falharam: {label_err}")
-
-            except Exception as e:
-                print(f"[MapController] Erro ao gerar tiles baked: {e}")
-            finally:
-                self._bake_thread_running = False
-                self._viewport_gate = None
-                self._internalBakeFinished.emit()
-
-        threading.Thread(target=_generate, daemon=True).start()
+        # We no longer bake tiles as both Icons and Text are rendered dynamically via C++ engine (MapIconsRenderer & MapTextRenderer).
+        self.mapBakeProgress.emit("prepare", 1, 1)
+        self._map_bake_stage = ""
+        self._refresh_tile_urls()
+        self.mapViewportReady.emit()
+        self._internalBakeFinished.emit()
 
     def _run_staged_labels_only(self) -> None:
         """Gera só a camada de nomes quando ícones já existem."""
-        try:
-            from map_tile_baker import LABEL_BAKE_ZOOMS, MapTileBaker, collect_viewport_keys
-
-            baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
-            if baker.labels_ready():
-                return
-
-            def _progress(stage: str, current: int, total: int) -> None:
-                self._internalBakeProgress.emit(stage, current, total)
-
-            self._background_bake_running = True
-            label_index, labels = baker.prepare_label_bake()
-            viewport = collect_viewport_keys(LABEL_BAKE_ZOOMS)
-            keys_bg = [k for k in label_index if k not in viewport]
-            keys_vp = [k for k in label_index if k in viewport]
-
-            baker.bake_label_keys(keys_vp, label_index, progress=_progress, stage="labels_viewport", workers=4)
-            QMetaObject.invokeMethod(self, "_refresh_tile_urls_quiet", Qt.ConnectionType.QueuedConnection)
-            baker.bake_label_keys(keys_bg, label_index, progress=_progress, stage="labels_background", workers=4)
-            baker.finalize_labels(labels)
-        except Exception as e:
-            print(f"[MapController] Erro ao gerar nomes: {e}")
-        finally:
-            QMetaObject.invokeMethod(self, "_on_bake_finished", Qt.ConnectionType.QueuedConnection)
+        QMetaObject.invokeMethod(self, "_on_bake_finished", Qt.ConnectionType.QueuedConnection)
 
     def _run_background_labels_bake(self) -> None:
         self._run_staged_labels_only()
 
     def _run_incremental_icon_update(self) -> None:
-        try:
-            from map_tile_baker import MapTileBaker
-
-            baker = MapTileBaker(self._map_tiles_root, BASE_DIR)
-            baker.generate_icons(workers=4, full=False)
-            QMetaObject.invokeMethod(self, "_refresh_tile_urls_quiet", Qt.ConnectionType.QueuedConnection)
-        except Exception as e:
-            print(f"[MapController] Erro na atualização incremental de ícones: {e}")
+        QMetaObject.invokeMethod(self, "_refresh_tile_urls_quiet", Qt.ConnectionType.QueuedConnection)
 
     @Slot()
     def _refresh_tile_urls_quiet(self) -> None:
@@ -418,7 +314,7 @@ class MapController(QObject):
         import os
         if not self._labels_tiles_ready:
             return ""
-        tile_dir = os.path.join(self._labels_cache_dir, str(z), str(x))
+        tile_dir = os.path.join(self._cache_dir, str(z), str(x))
         file_path = os.path.join(tile_dir, f"{y}.webp")
         if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
             return f"file:///{file_path.replace(chr(92), '/')}"
@@ -971,7 +867,7 @@ class MapController(QObject):
         from map_tile_baker import ICON_BAKE_ZOOMS
 
         if self._icons_tiles_ready and z in ICON_BAKE_ZOOMS:
-            tile_dir = os.path.join(self._icons_cache_dir, str(z), str(x))
+            tile_dir = os.path.join(self._cache_dir, str(z), str(x))
             file_path = os.path.join(tile_dir, f"{y}.webp")
             if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
                 return f"file:///{file_path.replace(chr(92), '/')}"
@@ -990,7 +886,7 @@ class MapController(QObject):
         import threading
         
         def _download_and_save():
-            tile_dir = os.path.join(self._icons_cache_dir, str(z), str(x))
+            tile_dir = os.path.join(self._cache_dir, str(z), str(x))
             os.makedirs(tile_dir, exist_ok=True)
             file_path = os.path.join(tile_dir, f"{y}.webp")
             

@@ -26,6 +26,9 @@ ALLOW_MULTIPLE_ENV = "FELB_ALLOW_MULTIPLE"
 TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
+import sys
+print("TEST PRINT SYS STDOUT", flush=True)
+
 def load_env_file(path: Path) -> None:
     if not path.exists():
         return
@@ -183,6 +186,12 @@ def main() -> int:
     app.setOrganizationName("GG Coalition")
     if ICON_ICO_PATH.exists():
         app.setWindowIcon(QIcon(str(ICON_ICO_PATH)))
+
+    from PySide6.QtQml import qmlRegisterType
+    from controllers.map_icons_renderer import MapIconsRenderer
+    from controllers.map_text_renderer import MapTextRenderer
+    qmlRegisterType(MapIconsRenderer, "GG.Map", 1, 0, "MapIconsRenderer")
+    qmlRegisterType(MapTextRenderer, "GG.Map", 1, 0, "MapTextRenderer")
 
     registry = ControllerRegistry(app)
     engine = QQmlApplicationEngine()

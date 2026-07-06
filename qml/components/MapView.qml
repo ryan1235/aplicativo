@@ -4,6 +4,7 @@ import QtQuick.Effects
 import QtQuick.Layouts
 import "SlangTerms.js" as SlangTerms
 import "Vehicles.js" as VehiclesData
+import GG.Map 1.0
 
 Item {
     id: root
@@ -339,6 +340,11 @@ Item {
     onCenterYChanged: cullingTimer.restart()
     
     // Global tooltip to avoid instantiating 3000+ ToolTip objects which causes massive lag
+
+    StockpileModal {
+        id: stockpileModal
+        z: 100
+    }
     Rectangle {
         id: globalToolTip
         z: 1000
@@ -454,6 +460,66 @@ Item {
         height: Math.pow(2, root.currentZoom) * root.tileSize
         z: 2 // Always on top of map layers
         
+        MapIconsRenderer {
+            anchors.fill: parent
+            itemsData: typeof mapController !== "undefined" && mapController ? mapController.mapItemsModel : []
+            mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1
+            mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0
+            mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0
+            currentZoom: root.currentZoom
+            centerX: root.centerX
+            centerY: root.centerY
+            showResources: root.showResources
+            showIcons: root.showIcons
+            showStockFilter: root.showStockFilter
+            showMainStructures: root.showMainStructures
+            
+            onItemHovered: function(itemData, hx, hy) {
+                if (itemData && itemData.name) {
+                    var hasStock = itemData.stock !== undefined && root.showStockFilter;
+                    if (!hasStock) {
+                        var p = mapToItem(root, hx, hy);
+                        globalToolTip.x = p.x + 15;
+                        globalToolTip.y = p.y + 15;
+                        globalToolTip.text = itemData.name + " (Type: " + (itemData.type !== undefined ? itemData.type : "") + ")";
+                        globalToolTip.visible = true;
+                        
+                        // Hide stock modal hover
+                        if (typeof stockpileModal !== "undefined") {
+                            stockpileModal.isHoveredMapItem = false;
+                        }
+                    } else {
+                        globalToolTip.visible = false;
+                        if (typeof stockpileModal !== "undefined") {
+                            stockpileModal.modelData = itemData;
+                            var pStock = mapToItem(root, hx, hy);
+                            stockpileModal.x = pStock.x + 10;
+                            stockpileModal.y = pStock.y - stockpileModal.height / 2;
+                            stockpileModal.isHoveredMapItem = true;
+                        }
+                    }
+                } else {
+                    globalToolTip.visible = false;
+                    if (typeof stockpileModal !== "undefined") {
+                        stockpileModal.isHoveredMapItem = false;
+                    }
+                }
+            }
+            
+            onItemClicked: function(itemData) {
+                if (itemData && itemData.name) {
+                    var name = itemData.name;
+                    var type = itemData.type !== undefined ? itemData.type : 0;
+                    console.log("Map icon clicked:", name);
+                    
+                    var hasStock = itemData.stock !== undefined && root.showStockFilter;
+                    if (hasStock && typeof stockpileModal !== "undefined") {
+                        stockpileModal.isPinned = !stockpileModal.isPinned;
+                    }
+                }
+            }
+        }
+
         Repeater {
             model: typeof mapController !== "undefined" && mapController ? mapController.testItemsModel : []
             
@@ -515,501 +581,22 @@ Item {
             }
         }
 
-        Repeater {
-            model: typeof mapController !== "undefined" && mapController ? mapController.mapTextItemsModel : []
-            
-            delegate: Item {
-                property real zoomFactor: Math.pow(2, root.currentZoom)
-                
-                property real worldPxX: ((modelData.x * mapController.mapScale) + mapController.mapOffsetX) * zoomFactor
-                property real worldPxY: ((-modelData.y * mapController.mapScale) + mapController.mapOffsetY) * zoomFactor
-                
-                x: worldPxX - width / 2
-                y: worldPxY - height / 2
-                
-                width: itemLoader.item ? itemLoader.item.implicitWidth : 0
-                height: itemLoader.item ? itemLoader.item.implicitHeight : 0
-                
-                property bool inBounds: {
-                    var screenX = worldPxX + (root.width / 2) - root.cullCenterX;
-                    var screenY = worldPxY + (root.height / 2) - root.cullCenterY;
-                    return (screenX >= -200 && screenX <= root.width + 200 &&
-                            screenY >= -200 && screenY <= root.height + 200);
-                }
-                
-                property bool shouldShow: {
-                    if (!inBounds) return false;
-                    
-                    if (modelData.mapMarkerType === "Hex") return root.showHexNames && root.currentZoom >= 0;
-                    if (modelData.mapMarkerType === "Major") return root.showMajorCities && root.currentZoom >= 4;
-                    if (modelData.mapMarkerType === "Minor") return root.showMinorCities && root.currentZoom >= 5;
-                    return true;
-                }
-                
-                visible: shouldShow
-                
-                property bool isMajor: modelData.mapMarkerType === "Major"
-                property bool isHex: modelData.mapMarkerType === "Hex"
-                
-                Loader {
-                    id: itemLoader
-                    active: shouldShow
-                    sourceComponent: Text {
-                        text: modelData.text || ""
-                        
-                        // Hex is white with black outline. Major is white. Minor is light grey.
-                        color: isHex ? "#ffffff" : (isMajor ? "#ffffff" : "#dddddd")
-                        
-                        font.pixelSize: {
-                            if (isHex) return root.currentZoom <= 2 ? 11 : (root.currentZoom >= 5 ? 36 : 18);
-                            if (isMajor) return root.currentZoom >= 6 ? 22 : 14;
-                            return root.currentZoom >= 6 ? 15 : 10;
-                        }
-                        font.bold: isHex || isMajor
-                        font.family: "Segoe UI"
-                        font.capitalization: Font.AllUppercase
-                        font.letterSpacing: 0
-                        
-                        opacity: isHex ? 0.75 : (isMajor ? 1.0 : (root.currentZoom >= 5 ? 0.9 : 0.6))
-                        
-                        style: Text.Outline
-                        styleColor: isHex ? "#cc000000" : "#e6000000"
-                    }
-                }
-            }
-        }
-        Repeater {
-            model: typeof mapController !== "undefined" && mapController ? mapController.mapItemsModel : []
-            
-            delegate: Item {
-                property real zoomFactor: Math.pow(2, root.currentZoom)
-                
-                property real worldPxX: ((modelData.x * mapController.mapScale) + mapController.mapOffsetX) * zoomFactor
-                property real worldPxY: ((-modelData.y * mapController.mapScale) + mapController.mapOffsetY) * zoomFactor
-                
-                x: worldPxX - width / 2
-                y: worldPxY - height / 2
-                
-                property bool inBounds: {
-                    var screenX = worldPxX + (root.width / 2) - root.cullCenterX;
-                    var screenY = worldPxY + (root.height / 2) - root.cullCenterY;
-                    return (screenX >= -100 && screenX <= root.width + 100 &&
-                            screenY >= -100 && screenY <= root.height + 100);
-                }
-                
-                property bool isResource: {
-                    var t = Number(modelData.type);
-                    // Fields: 20(Salvage), 21(Component), 22(Fuel), 23(Sulfur), 61(Coal), 62(Oil)
-                    // Mines: 32(Sulfur), 38(Component), 40(Salvage)
-                    return t === 20 || t === 21 || t === 22 || t === 23 || 
-                           t === 32 || t === 38 || t === 40 || 
-                           t === 61 || t === 62;
-                }
-                
-                property bool isMainStructure: {
-                    var t = Number(modelData.type);
-                    // Relic Bases, Town Bases, Seaports, Storage Depots, Safehouses, Keeps, Border Bases, Aircraft Deposits
-                    return t === 5 || t === 6 || t === 7 || t === 8 || t === 9 || t === 10 ||
-                           t === 56 || t === 57 || t === 58 ||
-                           t === 29 || t === 45 || t === 46 || t === 47 ||
-                           t === 52 || t === 33 || t === 35 || t === 27 || t === 50 || t === 55 || t === 88;
-                }
-                
-                property bool hasStock: root.showStockFilter && modelData.stock !== undefined
-                
-                property bool shouldShow: {
-                    if (!inBounds) return false;
-                    if (hasStock) return true;
-                    if (root.currentZoom < 5) return false;
-                    if (isMainStructure) return root.showMainStructures;
-                    if (isResource) return root.showResources;
-                    return root.showIcons;
-                }
-                
-                visible: shouldShow
-                
-                // Set appropriate icon size
-                width: hasStock ? 30 : 24
-                height: hasStock ? 30 : 24
-                
-                // (Removed pulsing logistics target indicator)
-                
-                Loader {
-                    anchors.fill: parent
-                    active: shouldShow
-                    sourceComponent: Item {
-                        anchors.fill: parent
-                        
-                Image {
-                    id: baseIcon
-                    anchors.fill: parent
-                    source: {
-                        var type = modelData.type;
-                        var iconMap = {
-                            5: "MapIconTownBaseTier1.webp",
-                            6: "MapIconTownBaseTier2.webp",
-                            7: "MapIconTownBaseTier3.webp",
-                            8: "MapIconTownBaseTier1.webp",
-                            9: "MapIconTownBaseTier2.webp",
-                            10: "MapIconTownBaseTier3.webp",
-                            11: "MapIconHospital.webp",
-                            12: "MapIconVehicle.webp",
-                            16: "MapIconManufacturing.webp",
-                            17: "MapIconManufacturing.webp", // Refinery
-                            18: "Shipyard.webp",
-                            19: "MapIconTechCenter.webp",
-                            20: "MapIconSalvageColor.webp", // Salvage Field
-                            21: "MapIconComponentsColor.webp", // Component Field
-                            22: "MapIconFuel.webp", // Fuel Field
-                            23: "MapIconSulfurColor.webp", // Sulfur Field
-                            27: "MapIconsKeep.webp",
-                            28: "MapIconObservationTower.webp",
-                            29: "MapIconRelicBase.webp", // Fort
-                            31: "MapIconSulfurMineColor.webp",
-                            32: "MapIconSulfurMineColor.webp",
-                            33: "MapIconStorageFacility.webp",
-                            34: "MapIconFactory.webp",
-                            35: "MapIconSafehouse.webp", // Garrison Station
-                            36: "MapIconFactory.webp", // Ammo Factory
-                            37: "MapIconRocketSite.webp",
-                            38: "MapIconSalvageMineColor.webp",
-                            39: "MapIconConstructionYard.webp",
-                            40: "MapIconComponentMineColor.webp",
-                            41: "MapIconFacilityMineOilRig.webp", // Oil Well
-                            42: "MapIconRocketTarget.webp",
-                            43: "MapIconMortarHouse.webp",
-                            45: "MapIconRelicBase.webp",
-                            46: "MapIconRelicBase.webp",
-                            47: "MapIconRelicBase.webp",
-                            48: "MapIconStormcannon.webp",
-                            49: "MapIconIntelcenter.webp",
-                            50: "MapIconBorderBase.webp",
-                            51: "MapIconMassProductionFactory.webp",
-                            52: "MapIconSeaport.webp",
-                            53: "MapIconCoastalGun.webp",
-                            54: "MapIconFactory.webp", // Soul Factory
-                            55: "MapIconBorderBase.webp",
-                            56: "MapIconTownBaseTier1.webp",
-                            57: "MapIconTownBaseTier2.webp",
-                            58: "MapIconTownBaseTier3.webp",
-                            59: "MapIconStormcannon.webp",
-                            60: "MapIconIntelcenter.webp",
-                            61: "MapIconCoalFieldColor.webp",
-                            62: "MapIconOilFieldColor.webp",
-                            70: "MapIconRocketTarget.webp",
-                            71: "MapIconRocketGroundZero.webp",
-                            84: "MapIconMaintenanceTunnel.webp",
-                            85: "MapIconTrainBridge.webp",
-                            86: "Shipyard.webp", // Dry Dock
-                            87: "MapIconFacilityMineOilRig.webp", // Offshore Platform
-                            88: "MapIconAircraftDeposit.webp"
-                        };
-                        var filename = iconMap[type] || "unknown.webp";
-                        return typeof appController !== "undefined" ? appController.assetUrl("img/iconmap/" + filename) : "file:///" + filename;
-                    }
-                    fillMode: Image.PreserveAspectFit
-                    sourceSize.width: 32
-                    sourceSize.height: 32
-                    smooth: false // Reduced CPU
-                    mipmap: false // Reduced RAM and CPU
-                    asynchronous: true // Prevent UI stuttering
-                    // Hide base image only if we are applying a color effect
-                    visible: !(modelData.team === 1 || modelData.team === 2)
-                }
-                
-                Component {
-                    id: teamColorEffect
-                    MultiEffect {
-                        anchors.fill: parent
-                        source: baseIcon
-                        colorization: 1.0
-                        colorizationColor: modelData.team === 1 ? "#3b82f6" : "#22c55e"
-                    }
-                }
-                
-                Loader {
-                    anchors.fill: baseIcon
-                    active: modelData.team === 1 || modelData.team === 2
-                    sourceComponent: teamColorEffect
-                }
-                
-                HoverHandler {
-                    id: mapHoverHandler
-                    onHoveredChanged: {
-                        if (hovered) {
-                            if (!hasStock) {
-                                var p = mapToItem(root, mapHoverHandler.point.position.x, mapHoverHandler.point.position.y);
-                                globalToolTip.x = p.x + 15;
-                                globalToolTip.y = p.y + 15;
-                                globalToolTip.text = modelData.name + " (Type: " + modelData.type + ")";
-                                globalToolTip.visible = true;
-                            }
-                            if (!hasStock || !stockHoverCard.isPinned) {
-                                parent.scale = 1.2;
-                            }
-                        } else {
-                            globalToolTip.visible = false;
-                            parent.scale = 1.0;
-                        }
-                    }
-                }
-                
-                TapHandler {
-                    onTapped: {
-                        console.log("Clicked:", modelData.name);
-                    }
-                }
-                
-                Rectangle {
-                    anchors.centerIn: baseIcon
-                    width: baseIcon.width * 1.8
-                    height: baseIcon.height * 1.8
-                    radius: width / 2
-                    color: "#f59e0b" // Logistics amber
-                    visible: hasStock
-                    z: -1
-                    
-                    SequentialAnimation on opacity {
-                        loops: Animation.Infinite
-                        running: hasStock
-                        NumberAnimation { from: 0.1; to: 0.45; duration: 1200; easing.type: Easing.InOutSine }
-                        NumberAnimation { from: 0.45; to: 0.1; duration: 1200; easing.type: Easing.InOutSine }
-                    }
-                }
-                
-                Rectangle {
-                    anchors.centerIn: baseIcon
-                    width: baseIcon.width + 8
-                    height: baseIcon.height + 8
-                    radius: 8
-                    color: "transparent"
-                    border.color: "#f59e0b"
-                    border.width: 1.5
-                    visible: hasStock
-                    opacity: 0.8
-                }
-                
-                Rectangle {
-                    id: stockHoverCard
-                    z: 50
-                    // Keep visible if either the map icon is hovered or the panel itself is hovered/pinned
-                    property bool isPinned: false
-                    visible: hasStock && (mapHoverHandler.hovered || panelHoverHandler.hovered || isPinned)
-                    opacity: visible ? 1 : 0
-                    
-                    // Position directly next to the icon without a gap, so hover is continuous
-                    x: baseIcon.width
-                    y: -height / 2 + baseIcon.height / 2
-                    
-                    // Default sizes (smaller when pinned to look cleaner on map)
-                    width: isPinned ? 420 : 600
-                    height: stockHoverContent.implicitHeight + 20
-                    radius: 8
-                    color: settingsController.surfaceColor 
-                    border.color: settingsController.borderColor
-                    border.width: 1
-                    
-                    Behavior on opacity { NumberAnimation { duration: 150 } }
-                    
-                    HoverHandler {
-                        id: panelHoverHandler
-                    }
-                    
-                    TapHandler {
-                        onTapped: {
-                            stockHoverCard.isPinned = !stockHoverCard.isPinned;
-                            if (stockHoverCard.isPinned) {
-                                stockHoverCard.parent.scale = 1.0;
-                            }
-                        }
-                    }
+        // Text rendering moved to MapTextRenderer (outside overlayManager)
+    }
 
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: parent.radius
-                        color: settingsController.backgroundColor
-                        opacity: 0.2
-                    }
-
-                    // Keep track of which warehouse is selected
-                    property int selectedWarehouseIndex: 0
-                    property var currentWarehouse: (modelData.stock && modelData.stock.length > selectedWarehouseIndex) ? modelData.stock[selectedWarehouseIndex] : null
-
-                    // Helper to group items by category
-                    function getItemsByCategory(catKey) {
-                        if (!currentWarehouse || !currentWarehouse.items) return [];
-                        var res = [];
-                        for (var i = 0; i < currentWarehouse.items.length; i++) {
-                            var item = currentWarehouse.items[i];
-                            // Match categories (or map multiple API categories to the UI category)
-                            if (catKey === "Priority" && item.category === "Priority") {
-                                res.push(item);
-                            } else if (catKey === "Supplies" && (item.category === "Supplies" || item.category === "Medical" || item.category === "Utility")) {
-                                res.push(item);
-                            } else if (catKey === "CommonLogi" && (item.category === "Small Arms" || item.category === "Heavy Arms" || item.category === "Heavy Ammo")) {
-                                res.push(item);
-                            } else if (catKey === "Vehicles" && item.category === "Vehicles") {
-                                res.push(item);
-                            } else if (catKey === "Others" && item.category !== "Priority" && item.category !== "Supplies" && item.category !== "Medical" && item.category !== "Utility" && item.category !== "Small Arms" && item.category !== "Heavy Arms" && item.category !== "Heavy Ammo" && item.category !== "Vehicles") {
-                                res.push(item);
-                            }
-                        }
-                        return res;
-                    }
-
-                    ColumnLayout {
-                        id: stockHoverContent
-                        anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 12
-
-                        // Header row
-                        RowLayout {
-                            Layout.fillWidth: true
-                            
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 2
-                                Text {
-                                    text: root.tr("map.stock.title", "Visual do estoque")
-                                    color: settingsController.textColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 16
-                                    font.bold: true
-                                }
-                                Text {
-                                    text: root.tr("map.stock.updated", "Atualizado") + ": " + modelData.name + " - " + (stockHoverCard.currentWarehouse ? stockHoverCard.currentWarehouse.last_update : "")
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 11
-                                }
-                            }
-                            
-                            // Warehouse Selector
-                            ComboBox {
-                                id: warehouseCombo
-                                Layout.preferredWidth: 150
-                                visible: modelData.stock !== undefined && modelData.stock !== null && modelData.stock.length > 1
-                                model: {
-                                    var arr = [];
-                                    if (modelData.stock) {
-                                        for (var i = 0; i < modelData.stock.length; i++) {
-                                            arr.push(modelData.stock[i].warehouse_name);
-                                        }
-                                    }
-                                    return arr;
-                                }
-                                currentIndex: stockHoverCard.selectedWarehouseIndex
-                                onCurrentIndexChanged: {
-                                    if (currentIndex >= 0) {
-                                        stockHoverCard.selectedWarehouseIndex = currentIndex;
-                                    }
-                                }
-                                
-                                background: Rectangle {
-                                    color: settingsController.backgroundColor
-                                    border.color: settingsController.borderColor
-                                    radius: 4
-                                }
-                                contentItem: Text {
-                                    text: warehouseCombo.currentText
-                                    color: "white"
-                                    verticalAlignment: Text.AlignVCenter
-                                    font.pixelSize: 12
-                                    leftPadding: 10
-                                }
-                            }
-                            
-                            // Optional pin indicator
-                            Text {
-                                text: stockHoverCard.isPinned ? "📌" : ""
-                                color: "#FFD700"
-                                font.pixelSize: 14
-                                visible: stockHoverCard.isPinned
-                            }
-                        }
-                        
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 1
-                            color: settingsController.borderColor
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 1
-                            color: settingsController.borderColor
-                        }
-                        
-                        // Dynamic categories
-                        Repeater {
-                            model: [
-                                { key: "Priority", label: root.tr("map.stock.priority", "PRIORIDADE") },
-                                { key: "Supplies", label: root.tr("map.stock.supplies", "SUPRIMENTOS") },
-                                { key: "CommonLogi", label: root.tr("map.stock.common_logi", "LOGI COMUM") },
-                                { key: "Vehicles", label: root.tr("map.stock.vehicles", "VEÍCULOS") },
-                                { key: "Others", label: root.tr("map.stock.others", "OUTROS") }
-                            ]
-                            delegate: ColumnLayout {
-                                property var catItems: stockHoverCard.getItemsByCategory(modelData.key)
-                                visible: catItems.length > 0
-                                spacing: 4
-                                Layout.fillWidth: true
-
-                                Text {
-                                    text: modelData.label
-                                    color: settingsController.mutedTextColor
-                                    font.family: "Segoe UI"
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                }
-                                
-                                Flow {
-                                    Layout.fillWidth: true
-                                    spacing: 4
-                                    Repeater {
-                                        model: catItems
-                                        delegate: Rectangle {
-                                            width: 60
-                                            height: 28
-                                            color: settingsController.backgroundColor
-                                            border.color: settingsController.borderColor
-                                            border.width: 1
-                                            radius: 3
-                                            
-                                            RowLayout {
-                                                anchors.fill: parent
-                                                anchors.margins: 4
-                                                spacing: 4
-                                                Image {
-                                                    source: modelData.icon || ""
-                                                    sourceSize.width: 20
-                                                    sourceSize.height: 20
-                                                    Layout.preferredWidth: 20
-                                                    Layout.preferredHeight: 20
-                                                    fillMode: Image.PreserveAspectFit
-                                                }
-                                                Text {
-                                                    text: modelData.quantity || "0"
-                                                    color: settingsController.textColor
-                                                    font.family: "Segoe UI"
-                                                    font.pixelSize: 12
-                                                    font.bold: true
-                                                    Layout.fillWidth: true
-                                                    horizontalAlignment: Text.AlignRight
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                    }
-                }
-            }
-        }
+    MapTextRenderer {
+        anchors.fill: parent
+        z: 4 // Above map layers and icons
+        itemsData: typeof mapController !== "undefined" && mapController ? mapController.mapTextItemsModel : []
+        mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1
+        mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0
+        mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0
+        currentZoom: root.currentZoom
+        centerX: root.centerX
+        centerY: root.centerY
+        showHexNames: root.showHexNames
+        showMajorCities: root.showMajorCities
+        showMinorCities: root.showMinorCities
     }
 
     // --- DRAWING CANVAS ---
