@@ -4543,6 +4543,15 @@ class ChatController(QObject):
         if subcategory and not details.get("subcategory"):
             details["subcategory"] = str(subcategory)
         details.setdefault("appVersion", APP_VERSION)
+        
+        try:
+            from PySide6.QtGui import QCursor
+            pos = QCursor.pos()
+            details.setdefault("mouseX", pos.x())
+            details.setdefault("mouseY", pos.y())
+        except Exception:
+            pass
+            
         payload = {
             "category": category,
             "action": action,
@@ -14030,76 +14039,60 @@ class MapController(QObject):
             print(f"[MapController] _merge_stock_data skipped: _map_items={len(getattr(self, '_map_items', []))}, text={len(getattr(self, '_map_text_items', []))}")
             return
             
+        updated_items = list(self._map_items)
+        for item in updated_items:
+            item.pop('stock', None)
             
-        updated_items = []
         matched_count = 0
         
-        # DEBUG: Print some mapMarkerTypes
-        if self._map_text_items:
-            types = set(t.get('mapMarkerType') for t in self._map_text_items)
-            print(f"[MapController] available mapMarkerTypes: {types}")
+        for api_key, stock_data in self._last_stock_dict.items():
+            api_town = api_key.split('|')[-1].strip().lower()
             
-        if self._map_items:
-            # DEBUG: Print the keys of the first item to see what we actually have
-            first = self._map_items[0]
-            print(f"[MapController] First map_item keys: {first.keys()}")
-            print(f"[MapController] First map_item: {first}")
-            
-            # Since iconType is not available, maybe they use 'type', 'id', 'name', 'mapMarkerType'?
-            types = set(i.get('type') or i.get('mapMarkerType') for i in self._map_items)
-            print(f"[MapController] available map item types: {types}")
-            
-        matched_towns = set()
-        matched_count = 0
-        
-        for item in self._map_items:
-            iconType = str(item.get('type', ''))
-            if iconType in ('33', '52', '53', '54', '56', '57', '58'): 
-                best_dist = float('inf')
-                best_town = None
+            town_tx, town_ty = None, None
+            for text_item in self._map_text_items:
+                if text_item.get('mapMarkerType') in ('Major', 'Minor'):
+                    if text_item.get('text', '').strip().lower() == api_town:
+                        town_tx = text_item.get('x', 0.0)
+                        town_ty = text_item.get('y', 0.0)
+                        break
+                        
+            if town_tx is None or town_ty is None:
+                continue
                 
+            best_p1 = None
+            best_p1_dist = float('inf')
+            
+            best_p2 = None
+            best_p2_dist = float('inf')
+            
+            for item in updated_items:
                 ix = item.get('x', 0.0)
                 iy = item.get('y', 0.0)
+                dx = ix - town_tx
+                dy = iy - town_ty
+                dist = dx*dx + dy*dy
                 
-                for text_item in self._map_text_items:
-                    m_type = text_item.get('mapMarkerType')
-                    if m_type in ('Major', 'Minor'):
-                        tx = text_item.get('x', 0.0)
-                        ty = text_item.get('y', 0.0)
+                # Limit radius so we don't match cross-map structures
+                if dist > 350000:
+                    continue
+                    
+                iconType = str(item.get('type', ''))
+                if iconType in ('33', '52', '88'):
+                    if dist < best_p1_dist:
+                        best_p1_dist = dist
+                        best_p1 = item
+                elif iconType in ('53', '54', '56', '57', '58', '29', '45', '46', '47', '27', '35', '50', '55'):
+                    if dist < best_p2_dist:
+                        best_p2_dist = dist
+                        best_p2 = item
                         
-                        dx = ix - tx
-                        dy = iy - ty
-                        dist = dx*dx + dy*dy
-                        
-                        if dist < best_dist:
-                            best_dist = dist
-                            best_town = text_item
-                            
-                if best_town:
-                    town_name = best_town.get('text', '').strip().lower()
-                    # Check if we already matched a depot to this town
-                    if town_name in matched_towns:
-                        item.pop('stock', None)
-                    else:
-                        matched_stock = None
-                        for k, stock_data in self._last_stock_dict.items():
-                            api_town = k.split('|')[-1].strip().lower()
-                            if api_town == town_name:
-                                matched_stock = stock_data
-                                break
-                                
-                        if matched_stock:
-                            item['stock'] = matched_stock
-                            matched_towns.add(town_name)
-                            matched_count += 1
-                        else:
-                            # print(f"[MapController] No API stock matched for nearest town: '{town_name}'")
-                            item.pop('stock', None)
-                else:
-                    item.pop('stock', None)
-            
-            updated_items.append(item)
-            
+            if best_p1 is not None:
+                best_p1['stock'] = stock_data
+                matched_count += 1
+            elif best_p2 is not None:
+                best_p2['stock'] = stock_data
+                matched_count += 1
+
         print(f"[MapController] _merge_stock_data finished: matched {matched_count} depots")
         self._map_items = updated_items
         self.mapItemsChanged.emit()
@@ -14245,6 +14238,174 @@ class MapController(QObject):
         threading.Thread(target=_check_and_download, daemon=True).start()
 
 
+class MapSessionController(QObject):
+    roomsFetched = Signal(str)
+    myRoomsFetched = Signal(str)
+    roomJoined = Signal(str, str)
+    mapUpdated = Signal(str)
+    resultFromWorker = Signal(str, str)
+
+    def __init__(self, chatController, parent=None):
+        super().__init__(parent)
+        self._chatController = chatController
+        from PySide6.QtWebSockets import QWebSocket
+        self._ws = QWebSocket()
+        self._ws.connected.connect(self._on_ws_connected)
+        self._ws.disconnected.connect(self._on_ws_disconnected)
+        self._ws.textMessageReceived.connect(self._on_ws_text_received)
+        self._current_room = ""
+        self.resultFromWorker.connect(self._apply_result)
+
+    def _get_token(self):
+        return self._chatController._token if self._chatController else ""
+
+    @Slot(str, str)
+    def _apply_result(self, kind: str, data: str):
+        if kind == "rooms-fetched":
+            self.roomsFetched.emit(data)
+        elif kind == "my-rooms-fetched":
+            self.myRoomsFetched.emit(data)
+        elif kind == "room-deleted":
+            self.fetchRooms()
+            self.fetchMyRooms()
+        elif kind == "room-created":
+            self.fetchRooms()
+            try:
+                res = json.loads(data)
+                if "id" in res:
+                    self.joinRoom(res["id"], "")
+            except Exception:
+                pass
+        elif kind == "room-joined-auth":
+            try:
+                res = json.loads(data)
+                if res.get("success"):
+                    self.connectWs(res.get("roomId", ""))
+            except Exception:
+                pass
+
+    @Slot()
+    def fetchRooms(self):
+        token = self._get_token()
+        if not token: return
+        def run():
+            try:
+                res = http_json("GET", "/map-rooms", token=token)
+                self.resultFromWorker.emit("rooms-fetched", json.dumps(res))
+            except Exception as e:
+                print("Error fetching map rooms:", e)
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot()
+    def fetchMyRooms(self):
+        token = self._get_token()
+        if not token: return
+        def run():
+            try:
+                res = http_json("GET", "/map-rooms/my-rooms", token=token)
+                self.resultFromWorker.emit("my-rooms-fetched", json.dumps(res))
+            except Exception as e:
+                print("Error fetching my map rooms:", e)
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str, bool, str)
+    def createRoom(self, name: str, isPrivate: bool, password: str):
+        token = self._get_token()
+        if not token: return
+        payload = {"name": name, "isPrivate": isPrivate}
+        if isPrivate and password:
+            payload["password"] = password
+        def run():
+            try:
+                res = http_json("POST", "/map-rooms", token=token, payload=payload)
+                self.resultFromWorker.emit("room-created", json.dumps(res))
+            except Exception as e:
+                print("Error creating map room:", e)
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str, str)
+    def joinRoom(self, roomId: str, password: str):
+        token = self._get_token()
+        if not token: return
+        payload = {"password": password} if password else {}
+        def run():
+            try:
+                res = http_json("POST", f"/map-rooms/{roomId}/join", token=token, payload=payload)
+                self.resultFromWorker.emit("room-joined-auth", json.dumps(res))
+            except Exception as e:
+                print("Error joining map room:", e)
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str)
+    def deleteRoom(self, roomId: str):
+        token = self._get_token()
+        if not token: return
+        def run():
+            try:
+                res = http_json("DELETE", f"/map-rooms/{roomId}", token=token)
+                self.resultFromWorker.emit("room-deleted", json.dumps(res))
+            except Exception as e:
+                print("Error deleting map room:", e)
+        threading.Thread(target=run, daemon=True).start()
+
+    @Slot(str)
+    def connectWs(self, roomId: str):
+        self._current_room = roomId
+        token = self._get_token()
+        if not token: return
+        self._ws.close()
+        ws_url = CHAT_API_BASE.replace("http", "ws") + f"/ws/map?token={token}"
+        self._ws.open(QUrl(ws_url))
+
+    @Slot()
+    def _on_ws_connected(self):
+        payload = {"event": "join_room", "room_id": self._current_room}
+        self._ws.sendTextMessage(json.dumps(payload))
+
+    @Slot()
+    def _on_ws_disconnected(self):
+        pass
+
+    @Slot(str)
+    def _on_ws_text_received(self, message: str):
+        try:
+            data = json.loads(message)
+            event = data.get("event")
+            if event == "joined_room":
+                self.roomJoined.emit(data.get("room_id", ""), json.dumps(data.get("mapData", {})))
+            elif event == "map_update":
+                self.mapUpdated.emit(json.dumps(data.get("data", {})))
+        except Exception:
+            pass
+
+    @Slot(str)
+    def sendMapUpdate(self, dataJson: str):
+        if self._ws.isValid() and self._current_room:
+            try:
+                data = json.loads(dataJson)
+                payload = {
+                    "event": "map_update",
+                    "room_id": self._current_room,
+                    "data": data
+                }
+                self._ws.sendTextMessage(json.dumps(payload))
+            except Exception:
+                pass
+
+    @Slot()
+    def leaveWsRoom(self):
+        if self._ws.isValid() and self._current_room:
+            try:
+                payload = {
+                    "event": "leave_room",
+                    "room_id": self._current_room
+                }
+                self._ws.sendTextMessage(json.dumps(payload))
+                self._current_room = ""
+            except Exception:
+                pass
+
+
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
         super().__init__()
@@ -14272,6 +14433,7 @@ class ControllerRegistry(QObject):
         self.customNotificationsController = CustomNotificationsController(self.settings_data, self)
         self.msuppController = MSuppController(self)
         self.mapController = MapController(self.settings_data, self)
+        self.mapSessionController = MapSessionController(self.chatController, self)
         for controller in (
             self.appController,
             self.settingsController,
@@ -14344,6 +14506,7 @@ class ControllerRegistry(QObject):
             "updateController",
             "msuppController",
             "mapController",
+            "mapSessionController",
         ):
             context.setContextProperty(name, getattr(self, name))
         context.setContextProperty("navItems", self.appController.navItems)

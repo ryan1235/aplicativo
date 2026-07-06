@@ -78,9 +78,10 @@ Item {
                 }
                 
                 asynchronous: true // Always async for smoother UI
-                cache: true
+                cache: false
+                sourceSize.width: tileLayerRoot.tileSize
+                sourceSize.height: tileLayerRoot.tileSize
                 fillMode: Image.PreserveAspectFit
-                sourceSize: Qt.size(tileLayerRoot.tileSize, tileLayerRoot.tileSize)
                 visible: status === Image.Ready && source.toString().length > 0
                 
                 property bool isLoading: status === Image.Loading

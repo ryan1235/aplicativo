@@ -35,13 +35,90 @@ Item {
     property bool showResources: false
     property bool showIcons: false
     property bool showStockFilter: true
+    property bool showMainStructures: true
     
-    // Culling system to prevent rendering items outside the screen
-    signal updateCulling()
-    
+    // Component Lifecycle
+    Component.onDestruction: {
+        if (typeof mapSessionController !== "undefined") {
+            mapSessionController.leaveWsRoom();
+        }
+    }
+
+    property real cullCenterX: centerX
+    property real cullCenterY: centerY
+    signal updateCullingSignal()
+    function updateCulling() {
+        cullCenterX = centerX;
+        cullCenterY = centerY;
+        updateCullingSignal();
+    }
     // --- DRAWING SYSTEM PROPERTIES ---
     property string activeTool: "pan" // "pan", "brush", "arrow", "polygon", "eraser"
     property string activeColor: "#ef4444" // default red
+
+    // --- MULTIPLAYER SESSION ---
+    property var remoteCursorsDict: ({})
+    ListModel { id: remoteCursorsModel }
+
+    Connections {
+        target: typeof mapSessionController !== "undefined" ? mapSessionController : null
+        function onRoomJoined(roomId, mapDataStr) {
+            try {
+                var mapData = JSON.parse(mapDataStr);
+                if (mapData && mapData.drawings) {
+                    root.drawings = mapData.drawings;
+                    if (typeof drawingCanvas !== "undefined") drawingCanvas.requestPaint();
+                }
+            } catch (e) {}
+        }
+        function onMapUpdated(dataStr) {
+            try {
+                var data = JSON.parse(dataStr);
+                var currentUserId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
+                
+                if (data.user && data.user.id && data.user.id !== currentUserId) {
+                    var cursors = root.remoteCursorsDict;
+                    if (data.user.status === null) {
+                        delete cursors[data.user.id];
+                        for (var i = 0; i < remoteCursorsModel.count; i++) {
+                            if (remoteCursorsModel.get(i).userId === data.user.id) {
+                                remoteCursorsModel.remove(i);
+                                break;
+                            }
+                        }
+                    } else {
+                        cursors[data.user.id] = data.user;
+                        var found = false;
+                        for (var j = 0; j < remoteCursorsModel.count; j++) {
+                            if (remoteCursorsModel.get(j).userId === data.user.id) {
+                                remoteCursorsModel.setProperty(j, "wx", data.user.status.x);
+                                remoteCursorsModel.setProperty(j, "wy", data.user.status.y);
+                                remoteCursorsModel.setProperty(j, "nick", data.user.nick || "");
+                                remoteCursorsModel.setProperty(j, "avatar", data.user.avatar || "");
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            remoteCursorsModel.append({
+                                userId: data.user.id,
+                                wx: data.user.status.x,
+                                wy: data.user.status.y,
+                                nick: data.user.nick || "",
+                                avatar: data.user.avatar || ""
+                            });
+                        }
+                    }
+                    root.remoteCursorsDict = cursors;
+                }
+                
+                if (!root.currentDrawing && data.drawings) {
+                    root.drawings = data.drawings;
+                    if (typeof drawingCanvas !== "undefined") drawingCanvas.requestPaint();
+                }
+            } catch (e) {}
+        }
+    }
     property int activeThickness: 3
     property bool showToolSettings: false
     property var drawings: [] // stores objects like {type: "brush", color: "red", thickness: 3, points: [{x,y}...]}
@@ -50,11 +127,20 @@ Item {
     property bool routeNameDialogVisible: false
     property int dashOffset: 0
     
+    property bool hasAnimatedDrawings: {
+        for (var i = 0; i < root.drawings.length; i++) {
+            var d = root.drawings[i];
+            if (d && (d.type === "route" || d.type === "parabola")) return true;
+        }
+        if (root.currentDrawing && (root.currentDrawing.type === "route" || root.currentDrawing.type === "parabola")) return true;
+        return false;
+    }
+
     // Timer to animate flowing dashed lines along logistics routes and drawings
     Timer {
         id: lineAnimationTimer
         interval: 35
-        running: true
+        running: root.hasAnimatedDrawings
         repeat: true
         onTriggered: {
             root.dashOffset = (root.dashOffset + 1) % 48;
@@ -386,21 +472,12 @@ Item {
                 width: itemLoader.item ? itemLoader.item.implicitWidth : 0
                 height: itemLoader.item ? itemLoader.item.implicitHeight : 0
                 
-                property bool inBounds: true
-                
-                function checkBounds() {
-                    var screenX = worldPxX + (root.width / 2) - root.centerX;
-                    var screenY = worldPxY + (root.height / 2) - root.centerY;
-                    inBounds = (screenX >= -200 && screenX <= root.width + 200 &&
-                                screenY >= -200 && screenY <= root.height + 200);
+                property bool inBounds: {
+                    var screenX = worldPxX + (root.width / 2) - root.cullCenterX;
+                    var screenY = worldPxY + (root.height / 2) - root.cullCenterY;
+                    return (screenX >= -200 && screenX <= root.width + 200 &&
+                            screenY >= -200 && screenY <= root.height + 200);
                 }
-                
-                Connections {
-                    target: root
-                    function onUpdateCulling() { checkBounds(); }
-                }
-                
-                Component.onCompleted: checkBounds()
                 
                 property bool shouldShow: {
                     if (!inBounds) return false;
@@ -455,29 +532,29 @@ Item {
                 x: worldPxX - width / 2
                 y: worldPxY - height / 2
                 
-                property bool inBounds: true
-                
-                function checkBounds() {
-                    var screenX = worldPxX + (root.width / 2) - root.centerX;
-                    var screenY = worldPxY + (root.height / 2) - root.centerY;
-                    inBounds = (screenX >= -100 && screenX <= root.width + 100 &&
-                                screenY >= -100 && screenY <= root.height + 100);
+                property bool inBounds: {
+                    var screenX = worldPxX + (root.width / 2) - root.cullCenterX;
+                    var screenY = worldPxY + (root.height / 2) - root.cullCenterY;
+                    return (screenX >= -100 && screenX <= root.width + 100 &&
+                            screenY >= -100 && screenY <= root.height + 100);
                 }
-                
-                Connections {
-                    target: root
-                    function onUpdateCulling() { checkBounds(); }
-                }
-                
-                Component.onCompleted: checkBounds()
                 
                 property bool isResource: {
-                    var t = Number(modelData.iconType);
+                    var t = Number(modelData.type);
                     // Fields: 20(Salvage), 21(Component), 22(Fuel), 23(Sulfur), 61(Coal), 62(Oil)
                     // Mines: 32(Sulfur), 38(Component), 40(Salvage)
                     return t === 20 || t === 21 || t === 22 || t === 23 || 
                            t === 32 || t === 38 || t === 40 || 
                            t === 61 || t === 62;
+                }
+                
+                property bool isMainStructure: {
+                    var t = Number(modelData.type);
+                    // Relic Bases, Town Bases, Seaports, Storage Depots, Safehouses, Keeps, Border Bases, Aircraft Deposits
+                    return t === 5 || t === 6 || t === 7 || t === 8 || t === 9 || t === 10 ||
+                           t === 56 || t === 57 || t === 58 ||
+                           t === 29 || t === 45 || t === 46 || t === 47 ||
+                           t === 52 || t === 33 || t === 35 || t === 27 || t === 50 || t === 55 || t === 88;
                 }
                 
                 property bool hasStock: root.showStockFilter && modelData.stock !== undefined
@@ -486,6 +563,7 @@ Item {
                     if (!inBounds) return false;
                     if (hasStock) return true;
                     if (root.currentZoom < 5) return false;
+                    if (isMainStructure) return root.showMainStructures;
                     if (isResource) return root.showResources;
                     return root.showIcons;
                 }
@@ -572,8 +650,11 @@ Item {
                         return typeof appController !== "undefined" ? appController.assetUrl("img/iconmap/" + filename) : "file:///" + filename;
                     }
                     fillMode: Image.PreserveAspectFit
-                    smooth: true
-                    mipmap: true
+                    sourceSize.width: 32
+                    sourceSize.height: 32
+                    smooth: false // Reduced CPU
+                    mipmap: false // Reduced RAM and CPU
+                    asynchronous: true // Prevent UI stuttering
                     // Hide base image only if we are applying a color effect
                     visible: !(modelData.team === 1 || modelData.team === 2)
                 }
@@ -906,11 +987,8 @@ Item {
                     allDrawings = allDrawings.concat([root.currentDrawing]);
                 }
                 
-                console.log("[Canvas] onPaint started. allDrawings length:", allDrawings.length);
-                
                 for (var i = 0; i < allDrawings.length; i++) {
                     var d = allDrawings[i];
-                    console.log("[Canvas] Processing drawing index:", i, "type:", d ? d.type : "null");
                     if (!d) continue;
                     
                     ctx.strokeStyle = d.color;
@@ -966,7 +1044,7 @@ Item {
                             cy /= d.points.length;
                             
                             ctx.fillStyle = "#ffffff";
-                            ctx.font = "bold 14px Segoe UI";
+                            ctx.font = "bold 14px sans-serif";
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
                             ctx.strokeStyle = "#000000";
@@ -1007,7 +1085,7 @@ Item {
                         ctx.lineWidth = 2;
                         ctx.stroke();
 
-                        ctx.font = "bold 11px Segoe UI";
+                        ctx.font = "bold 11px sans-serif";
                         ctx.fillStyle = (d.color === "#ffffff" || d.color === "#ffffff" || d.color === "#eab308") ? "#111827" : "#ffffff";
                         ctx.textAlign = "center";
                         ctx.textBaseline = "middle";
@@ -1030,7 +1108,7 @@ Item {
                             ctx.lineWidth = 2;
                             ctx.stroke();
 
-                            ctx.font = "bold 11px Segoe UI";
+                            ctx.font = "bold 11px sans-serif";
                             ctx.fillStyle = (d.color === "#ffffff" || d.color === "#ffffff" || d.color === "#eab308") ? "#111827" : "#ffffff";
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
@@ -1060,7 +1138,7 @@ Item {
                             rcx /= d.points.length;
                             rcy /= d.points.length;
                             
-                            ctx.font = "bold 12px Segoe UI";
+                            ctx.font = "bold 12px sans-serif";
                             var txtWidth = ctx.measureText(d.name).width;
                             ctx.fillStyle = "rgba(10, 15, 24, 0.85)";
                             ctx.fillRect(rcx - txtWidth / 2 - 8, rcy - 10, txtWidth + 16, 20);
@@ -1146,6 +1224,67 @@ Item {
                         ctx.stroke();
                     }
                 } // End of allDrawings loop
+            }
+        }
+
+        // High-fidelity QML overlays for Remote Cursors
+        Repeater {
+            model: remoteCursorsModel
+            delegate: Item {
+                x: (model.wx * Math.pow(2, root.currentZoom)) - root.centerX + (root.width / 2)
+                y: (model.wy * Math.pow(2, root.currentZoom)) - root.centerY + (root.height / 2)
+                z: 200 // On top of canvas
+
+                // Avatar container
+                Rectangle {
+                    width: 40
+                    height: 40
+                    radius: 20
+                    color: "#111827"
+                    border.color: "#3b82f6"
+                    border.width: 2
+                    anchors.centerIn: parent
+                    clip: true
+                    
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: 2 // space for border
+                        source: model.avatar || ""
+                        fillMode: Image.PreserveAspectCrop
+                        visible: model.avatar !== ""
+                    }
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: model.nick ? model.nick.substring(0,1).toUpperCase() : "?"
+                        color: "#ffffff"
+                        font.bold: true
+                        font.pixelSize: 18
+                        visible: model.avatar === ""
+                    }
+                }
+                
+                // Name Tag
+                Rectangle {
+                    anchors.top: parent.verticalCenter
+                    anchors.topMargin: 24
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    color: "#d9111827"
+                    radius: 4
+                    border.color: "#3b82f6"
+                    border.width: 1
+                    width: nameText.implicitWidth + 12
+                    height: nameText.implicitHeight + 6
+                    
+                    Text {
+                        id: nameText
+                        anchors.centerIn: parent
+                        text: model.nick
+                        color: "#ffffff"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
             }
         }
 
@@ -1359,7 +1498,12 @@ Item {
                 onCheckedChanged: root.showResources = checked
             }
             StyledCheckBox { 
-                text: root.tr("map.filter.icons", "Estruturas Gerais")
+                text: root.tr("map.filter.main_structures", "Estruturas Principais")
+                checked: root.showMainStructures
+                onCheckedChanged: root.showMainStructures = checked
+            }
+            StyledCheckBox { 
+                text: root.tr("map.filter.icons", "Estruturas Secundárias")
                 checked: root.showIcons
                 onCheckedChanged: root.showIcons = checked
             }
@@ -1369,6 +1513,10 @@ Item {
                 onCheckedChanged: root.showStockFilter = checked
             }
         }
+    }
+
+    HoverHandler {
+        id: globalHoverTracker
     }
 
     MouseArea {
@@ -2359,7 +2507,7 @@ Item {
     // --- DEBUG DATA MODAL (TEMPORARY) ---
     Rectangle {
         id: debugDataModal
-        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.margins: 20
         width: 320
@@ -2388,11 +2536,14 @@ Item {
                     allDrawings.push(root.currentDrawing);
                 }
                 
+                var wp = screenToWorld(mapMouseArea.mouseX, mapMouseArea.mouseY);
+                var isMouseActive = globalHoverTracker.hovered && Qt.application.active;
                 var data = {
                     user: {
                         nick: typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido",
                         avatar: typeof chatController !== "undefined" ? chatController.currentUserAvatar : "",
-                        id: currentUserId
+                        id: currentUserId,
+                        status: isMouseActive ? { x: wp.x, y: wp.y } : null
                     },
                     drawings: allDrawings
                 };
@@ -2411,6 +2562,10 @@ Item {
                 jsonStr = jsonStr.replace(/\{\n\s+"x": ([\d.-]+),\n\s+"y": ([\d.-]+)\n\s+\}/g, '{ "x": $1, "y": $2 }');
                 
                 debugDataModal.jsonOutput = jsonStr;
+                
+                if (typeof mapSessionController !== "undefined") {
+                    mapSessionController.sendMapUpdate(jsonStr);
+                }
             }
         }
         
@@ -2455,13 +2610,15 @@ Item {
                     font.bold: true
                 }
                 
-                Text {
+                TextEdit {
                     width: parent.width
                     text: debugDataModal.jsonOutput
                     color: settingsController.textColor
                     font.family: "Consolas"
                     font.pixelSize: 10
-                    wrapMode: Text.WrapAnywhere
+                    wrapMode: TextEdit.WrapAnywhere
+                    readOnly: true
+                    selectByMouse: true
                 }
             }
         }
@@ -2498,6 +2655,74 @@ Item {
         }
         onVisibleChanged: {
             root.logisticsModalVisible = visible;
+        }
+    }
+
+    // --- MAP SESSIONS UI ---
+    MapSessionsModal {
+        id: mapSessionsModal
+    }
+
+    Rectangle {
+        id: sessionsFloatingBtn
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.margins: 24
+        width: 48
+        height: 48
+        radius: 24
+        color: settingsController.accentColor
+        border.color: settingsController.borderColor
+        border.width: 1
+        z: 990
+        
+        MultiEffect {
+            source: sessionsFloatingBtn
+            anchors.fill: sessionsFloatingBtn
+            shadowEnabled: true
+            shadowOpacity: 0.5
+            shadowBlur: 1.0
+            shadowVerticalOffset: 3
+            shadowColor: "black"
+        }
+
+        Text {
+            anchors.centerIn: parent
+            text: "🌐" // Group / Session icon
+            font.pixelSize: 24
+            color: "white"
+        }
+
+        MouseArea {
+            id: sessionBtnHover
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+            onClicked: {
+                mapSessionsModal.open();
+            }
+        }
+        
+        // Tooltip hint on hover
+        Rectangle {
+            id: sessionTooltip
+            anchors.left: parent.right
+            anchors.leftMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            width: sessionTooltipText.width + 16
+            height: 30
+            radius: 4
+            color: settingsController.surfaceColor
+            border.color: settingsController.borderColor
+            visible: sessionBtnHover.containsMouse
+            
+            Text {
+                id: sessionTooltipText
+                anchors.centerIn: parent
+                text: "Sessões de Mapa"
+                color: settingsController.textColor
+                font.pixelSize: 12
+            }
         }
     }
 }
