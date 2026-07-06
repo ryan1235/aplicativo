@@ -11,6 +11,7 @@ from PySide6.QtCore import QUrl, Qt, qInstallMessageHandler, QtMsgType
 from PySide6.QtGui import QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtGui import QIcon, QPixmapCache
 
 from qt_controllers import APP_TITLE, ControllerRegistry
 
@@ -114,6 +115,8 @@ def configure_responsive_scaling() -> None:
 
 def configure_qt() -> None:
     os.chdir(BASE_DIR)
+    os.environ["QML_DISABLE_DISK_CACHE"] = "1"
+    QPixmapCache.setCacheLimit(10240)
     configure_responsive_scaling()
     pyside_dir = Path(PySide6.__file__).resolve().parent
     try:
