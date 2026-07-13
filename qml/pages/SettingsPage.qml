@@ -365,6 +365,37 @@ Flickable {
                         onClicked: settingsController.setStartWithWindows(checked)
                     }
                 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
+                    spacing: 12
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text {
+                            text: "Desativar Aceleração de Hardware"
+                            color: settingsController.textColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 13
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: "Desativa o uso da placa de vídeo (GPU) para renderizar a interface. Ative apenas se o aplicativo estiver apresentando falhas visuais ou travando (requer reinício)."
+                            color: settingsController.mutedTextColor
+                            font.family: "Segoe UI"
+                            font.pixelSize: 11
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                    ToggleSwitch {
+                        checked: settingsController.getSetting("app.disable_hardware_acceleration", false)
+                        onClicked: {
+                            settingsController.setSetting("app.disable_hardware_acceleration", checked)
+                        }
+                    }
+                }
             }
         }
 

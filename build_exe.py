@@ -41,6 +41,7 @@ PACKAGE_PATHS = [
 NUITKA_BLOAT_ARGS = [
     "--python-flag=no_docstrings",
     "--python-flag=no_asserts",
+    "--python-flag=isolated",
     "--nofollow-import-to=*.tests",
     "--nofollow-import-to=*.testing",
     "--nofollow-import-to=numpy.testing",
@@ -98,6 +99,10 @@ QT_PLUGIN_FAMILIES = [
     "platforms",
     "styles",
     "tls",
+    "qmltooling",
+    "renderers",
+    "renderplugins",
+    "sceneparsers",
 ]
 
 

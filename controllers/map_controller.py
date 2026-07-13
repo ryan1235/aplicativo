@@ -95,6 +95,76 @@ from stockpiler import (
 
 from .common import *
 from .common import _compact_location_key, _location_index, _warehouse_nested, _stockpile_town_code, _first_mapping_text, _location_from_stockpile_code, _location_code_index, _town_code_candidates, _warehouse_text, _strip_hex_suffix
+from .map_coordinates import api_to_map_pixels, map_pixels_to_api, zoom_scale_x, zoom_scale_y
+
+
+def build_local_tile_url_cache(local_tiles_dir: str) -> dict[tuple[int, int, int], str]:
+    """Build a local tile URL cache from the available tile index files in img/tiles."""
+    cache: dict[tuple[int, int, int], str] = {}
+    if not local_tiles_dir or not os.path.isdir(local_tiles_dir):
+        return cache
+
+    def add_tile(z: int, x: int, y: int, relative_path: str | None = None) -> None:
+        if z < 0 or x < 0 or y < 0:
+            return
+        if relative_path:
+            relative_path = relative_path.replace("\\", "/")
+            if relative_path.startswith("./"):
+                relative_path = relative_path[2:]
+            path = os.path.join(local_tiles_dir, *relative_path.split("/"))
+        else:
+            path = os.path.join(local_tiles_dir, str(z), f"{x}_{y}.webp")
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            cache[(z, x, y)] = f"file:///{path.replace(chr(92), '/')}"
+
+    tiles_json_path = os.path.join(local_tiles_dir, "tiles.json")
+    if os.path.exists(tiles_json_path):
+        with open(tiles_json_path, "r", encoding="utf-8") as handle:
+            tiles_index = json.load(handle)
+        if isinstance(tiles_index, dict):
+            for z_str, tiles in tiles_index.items():
+                try:
+                    z = int(z_str)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(tiles, list):
+                    for tile in tiles:
+                        if not isinstance(tile, dict):
+                            continue
+                        x = int(tile.get("x", -1))
+                        y = int(tile.get("y", -1))
+                        add_tile(z, x, y, tile.get("file") or tile.get("path"))
+
+    tile_index_path = os.path.join(local_tiles_dir, "tile_index.json")
+    if os.path.exists(tile_index_path):
+        with open(tile_index_path, "r", encoding="utf-8") as handle:
+            tile_index = json.load(handle)
+        if isinstance(tile_index, dict):
+            for z_str, tiles in tile_index.items():
+                try:
+                    z = int(z_str)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(tiles, dict):
+                    for tile_key, tile_info in tiles.items():
+                        if not isinstance(tile_info, dict):
+                            continue
+                        x = int(tile_info.get("x", -1))
+                        y = int(tile_info.get("y", -1))
+                        if x < 0 or y < 0:
+                            if isinstance(tile_key, str):
+                                parts = tile_key.split("_")
+                                if len(parts) == 2:
+                                    try:
+                                        x = int(parts[0])
+                                        y = int(parts[1])
+                                    except ValueError:
+                                        x = -1
+                                        y = -1
+                        add_tile(z, x, y, tile_info.get("path") or tile_info.get("file"))
+
+    return cache
+
 
 class MapController(QObject):
     baseUrlChanged = Signal()
@@ -115,6 +185,8 @@ class MapController(QObject):
     mapBakeFinished = Signal()
     mapViewportReady = Signal()
     mapTilesReadyChanged = Signal()
+    localTilesAvailableChanged = Signal()
+    localTileManifestChanged = Signal()
     _internalBakeProgress = Signal(str, int, int)
     _internalBakeFinished = Signal()
     _internalUnlockAfterLayer = Signal(int)
@@ -138,10 +210,13 @@ class MapController(QObject):
         self._map_bake_stage = ""
         self._viewport_gate: threading.Event | None = None
         self._settings = settings_data
+
+        self._local_tiles_dir = os.path.join(str(BASE_DIR), "img", "tiles")
+        self._local_tile_manifest: dict[str, Any] | None = None
+        self._local_tile_tiles: dict[str, set[tuple[int, int]]] = {}
+        self._local_tile_url_cache: dict[tuple[int, int, int], str] = {}
         
-        self._refresh_tile_urls()
-        self._fallback_url = "https://foxlogi.com/map-tiles/patch-64/{z}/{x}/{y}.webp"
-        
+        # Initialize map items BEFORE loading local tile manifest (which calls _auto_calibrate_local_map)
         self._map_items = []
         self._test_items = []
         self._map_text_items = []
@@ -156,6 +231,12 @@ class MapController(QObject):
         self._map_scale = 1.0
         self._map_offset_x = 0.0
         self._map_offset_y = 0.0
+        
+        self._load_local_tile_manifest()
+        
+        self._refresh_tile_urls()
+        self._fallback_url = "https://foxlogi.com/map-tiles/patch-64/{z}/{x}/{y}.webp"
+
         self._internalFetchCompleted.connect(self._updateMapItems)
         self._internalTestFetchCompleted.connect(self._updateTestItems)
         self._internalTextItemsCompleted.connect(self._updateTextItems)
@@ -164,11 +245,9 @@ class MapController(QObject):
         self._internalBakeFinished.connect(self._on_bake_finished)
         self._internalUnlockAfterLayer.connect(self._on_unlock_after_layer)
         
-        # Start fetching immediately
+        # Start fetching with optimized sequencing to reduce memory spike
+        # Prioritize map items first, then labels, then stock data
         QTimer.singleShot(100, self.fetchMapItems)
-        QTimer.singleShot(200, self.fetchOfficialMapLabels)
-        QTimer.singleShot(200, self.fetchStockData)
-        QTimer.singleShot(300, self.checkAndGenerateBakedTiles)
 
     def _read_api_cache(self, filename: str, max_age_hours: float):
         import os, json, time
@@ -209,6 +288,25 @@ class MapController(QObject):
     def fallbackUrl(self) -> str:
         return self._fallback_url
 
+    @Property(bool, notify=localTilesAvailableChanged)
+    def localTilesAvailable(self) -> bool:
+        return self._local_tile_manifest is not None
+
+    @Property(int, notify=localTileManifestChanged)
+    def localTileSize(self) -> int:
+        if self._local_tile_manifest is None:
+            return 256
+        return int(self._local_tile_manifest.get("tileSize", 256))
+
+    @Property(int, notify=localTileManifestChanged)
+    def localMaxZoom(self) -> int:
+        if self._local_tile_manifest is None:
+            return 6
+        levels = self._local_tile_manifest.get("levels", {})
+        if not levels:
+            return 6
+        return max(int(z) for z in levels.keys())
+
     @Property(str, notify=mapTilesReadyChanged)
     def labelsBaseUrl(self) -> str:
         local_path = self._cache_dir.replace("\\", "/")
@@ -238,6 +336,88 @@ class MapController(QObject):
     def mapBakeStage(self) -> str:
         return self._map_bake_stage
 
+    def _load_local_tile_manifest(self) -> None:
+        import json
+        import os
+        try:
+            self._local_tile_tiles = {}
+            self._local_tile_url_cache = {}
+            manifest_path = os.path.join(self._local_tiles_dir, "manifest.json")
+            if os.path.exists(manifest_path):
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    self._local_tile_manifest = json.load(f)
+            else:
+                self._local_tile_manifest = None
+
+            if self._local_tile_manifest is not None:
+                self._local_tile_url_cache = build_local_tile_url_cache(self._local_tiles_dir)
+                self._local_tile_tiles = {}
+                for (z, x, y) in self._local_tile_url_cache.keys():
+                    z_str = str(z)
+                    self._local_tile_tiles.setdefault(z_str, set()).add((x, y))
+        except Exception as e:
+            print(f"[MapController] Failed to load local tile manifest: {e}")
+            self._local_tile_manifest = None
+            self._local_tile_tiles = {}
+            self._local_tile_url_cache = {}
+        self.localTilesAvailableChanged.emit()
+        self.localTileManifestChanged.emit()
+        self._apply_local_map_calibration()
+
+    def _get_zoom_scale_x(self, z: int) -> float:
+        return zoom_scale_x(z, self._local_tile_manifest, self.getLocalTileLevelWidth)
+
+    def _get_zoom_scale_y(self, z: int) -> float:
+        return zoom_scale_y(z, self._local_tile_manifest, self.getLocalTileLevelHeight)
+
+    @Slot(int, result=float)
+    def getMapZoomScaleX(self, z: int) -> float:
+        return self._get_zoom_scale_x(z)
+
+    @Slot(int, result=float)
+    def getMapZoomScaleY(self, z: int) -> float:
+        return self._get_zoom_scale_y(z)
+
+    @Slot(float, float, int, result=float)
+    def apiToMapPixelX(self, api_x: float, api_y: float, zoom: int) -> float:
+        sx = self._get_zoom_scale_x(zoom)
+        sy = self._get_zoom_scale_y(zoom)
+        px, _ = api_to_map_pixels(
+            api_x, api_y, zoom, self._map_scale, self._map_offset_x, self._map_offset_y, sx, sy
+        )
+        return px
+
+    @Slot(float, float, int, result=float)
+    def apiToMapPixelY(self, api_x: float, api_y: float, zoom: int) -> float:
+        sx = self._get_zoom_scale_x(zoom)
+        sy = self._get_zoom_scale_y(zoom)
+        _, py = api_to_map_pixels(
+            api_x, api_y, zoom, self._map_scale, self._map_offset_x, self._map_offset_y, sx, sy
+        )
+        return py
+
+    @Slot(float, float, int, result=float)
+    def mapPixelToApiX(self, px: float, py: float, zoom: int) -> float:
+        sx = self._get_zoom_scale_x(zoom)
+        sy = self._get_zoom_scale_y(zoom)
+        api_x, _ = map_pixels_to_api(
+            px, py, zoom, self._map_scale, self._map_offset_x, self._map_offset_y, sx, sy
+        )
+        return api_x
+
+    @Slot(float, float, int, result=float)
+    def mapPixelToApiY(self, px: float, py: float, zoom: int) -> float:
+        sx = self._get_zoom_scale_x(zoom)
+        sy = self._get_zoom_scale_y(zoom)
+        _, api_y = map_pixels_to_api(
+            px, py, zoom, self._map_scale, self._map_offset_x, self._map_offset_y, sx, sy
+        )
+        return api_y
+
+    def _apply_local_map_calibration(self) -> None:
+        """Calibração manual via painel de debug — sem auto-ajuste."""
+        pass
+
     def _refresh_tile_urls(self) -> None:
         from map_tile_baker import MapTileBaker
 
@@ -248,6 +428,9 @@ class MapController(QObject):
         self._base_url = f"file:///{local_path}/{{z}}/{{x}}/{{y}}.webp"
         self.baseUrlChanged.emit()
         self.mapTilesReadyChanged.emit()
+
+    def _auto_calibrate_local_map(self) -> None:
+        self._apply_local_map_calibration()
 
     @Slot(str, int, int)
     def _on_bake_progress(self, stage: str, current: int, total: int) -> None:
@@ -320,6 +503,46 @@ class MapController(QObject):
             return f"file:///{file_path.replace(chr(92), '/')}"
         return ""
 
+    @Slot(int, result=int)
+    def getLocalTileCols(self, z: int) -> int:
+        if self._local_tile_manifest is None:
+            return 0
+        level = self._local_tile_manifest.get("levels", {}).get(str(z))
+        if not level:
+            return 0
+        return int(level.get("cols", 0))
+
+    @Slot(int, result=int)
+    def getLocalTileRows(self, z: int) -> int:
+        if self._local_tile_manifest is None:
+            return 0
+        level = self._local_tile_manifest.get("levels", {}).get(str(z))
+        if not level:
+            return 0
+        return int(level.get("rows", 0))
+
+    @Slot(int, result=int)
+    def getLocalTileLevelWidth(self, z: int) -> int:
+        if self._local_tile_manifest is None:
+            return 0
+        level = self._local_tile_manifest.get("levels", {}).get(str(z))
+        if not level:
+            return 0
+        return int(level.get("width", 0))
+
+    @Slot(int, result=int)
+    def getLocalTileLevelHeight(self, z: int) -> int:
+        if self._local_tile_manifest is None:
+            return 0
+        level = self._local_tile_manifest.get("levels", {}).get(str(z))
+        if not level:
+            return 0
+        return int(level.get("height", 0))
+
+    @Slot(int, int, int, result=str)
+    def getLocalTileUrl(self, z: int, x: int, y: int) -> str:
+        return self._local_tile_url_cache.get((z, x, y), "")
+
     @Property(list, notify=mapItemsChanged)
     def mapItemsModel(self) -> list:
         return self._map_items
@@ -357,12 +580,13 @@ class MapController(QObject):
 
     def _recalculate_visible_items(self) -> None:
         """Filter all item lists to only include items within the current viewport + margin."""
-        zoom_factor = 1 << self._viewport_zoom
+        zoom = self._viewport_zoom
+        sx = self._get_zoom_scale_x(zoom)
+        sy = self._get_zoom_scale_y(zoom)
         cx = self._viewport_center_x
         cy = self._viewport_center_y
         half_w = self._viewport_width / 2.0
         half_h = self._viewport_height / 2.0
-        # Extra margin in map pixels to avoid pop-in (300px on each side)
         margin = 300.0
 
         vp_left = cx - half_w - margin
@@ -374,17 +598,14 @@ class MapController(QObject):
         off_x = self._map_offset_x
         off_y = self._map_offset_y
 
-        # Filter map items (icons)
         new_visible = []
         for item in self._map_items:
             ix = item.get('x', 0.0)
             iy = item.get('y', 0.0)
-            wpx = (ix * scale + off_x) * zoom_factor
-            wpy = (-iy * scale + off_y) * zoom_factor
+            wpx, wpy = api_to_map_pixels(ix, iy, zoom, scale, off_x, off_y, sx, sy)
             if vp_left <= wpx <= vp_right and vp_top <= wpy <= vp_bottom:
                 new_visible.append(item)
             elif item.get('stock') is not None:
-                # Always include items with stock data (small count)
                 new_visible.append(item)
         if new_visible != self._visible_map_items:
             self._visible_map_items = new_visible
@@ -395,21 +616,18 @@ class MapController(QObject):
         for item in self._map_text_items:
             ix = item.get('x', 0.0)
             iy = item.get('y', 0.0)
-            wpx = (ix * scale + off_x) * zoom_factor
-            wpy = (-iy * scale + off_y) * zoom_factor
+            wpx, wpy = api_to_map_pixels(ix, iy, zoom, scale, off_x, off_y, sx, sy)
             if vp_left <= wpx <= vp_right and vp_top <= wpy <= vp_bottom:
                 new_text.append(item)
         if new_text != self._visible_text_items:
             self._visible_text_items = new_text
             self.visibleTextItemsChanged.emit()
 
-        # Filter test items
         new_test = []
         for item in self._test_items:
             ix = item.get('x', 0.0)
             iy = item.get('y', 0.0)
-            wpx = (ix * scale + off_x) * zoom_factor
-            wpy = (-iy * scale + off_y) * zoom_factor
+            wpx, wpy = api_to_map_pixels(ix, iy, zoom, scale, off_x, off_y, sx, sy)
             if vp_left <= wpx <= vp_right and vp_top <= wpy <= vp_bottom:
                 new_test.append(item)
         if new_test != self._visible_test_items:
@@ -504,6 +722,13 @@ class MapController(QObject):
 
         threading.Thread(target=_fetch, daemon=True).start()
 
+    @Slot(str)
+    def copyTextToClipboard(self, text: str) -> None:
+        from PySide6.QtGui import QGuiApplication
+        cb = QGuiApplication.clipboard()
+        if cb:
+            cb.setText(text)
+
     @Property(float, notify=calibrationChanged)
     def mapScale(self) -> float:
         return self._map_scale
@@ -554,7 +779,7 @@ class MapController(QObject):
                 
             try:
                 # 1. Load exact Hex Origins mapping
-                origins_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'origins.json')
+                origins_file = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data', 'origins.json'))
                 with open(origins_file, 'r', encoding='utf-8') as f:
                     HEX_ORIGINS = json.load(f)
                     
@@ -749,12 +974,18 @@ class MapController(QObject):
 
     @Slot(list)
     def _updateMapItems(self, data: list) -> None:
-        self._map_items = []
-        self.mapItemsChanged.emit()
+        if getattr(self, '_raw_map_items', None) == data:
+            return  # No changes in API, skip expensive rebuild
+        self._raw_map_items = list(data)
+        
         self._map_items = data
+        self._auto_calibrate_local_map()
         self._merge_stock_data()
         self.mapItemsChanged.emit()
         self._recalculate_visible_items()
+        # Chain next fetches after map items loaded to reduce memory spike
+        QTimer.singleShot(500, self.fetchOfficialMapLabels)
+        QTimer.singleShot(700, self.fetchStockData)
 
     @Slot(list)
     def _updateTestItems(self, data: list) -> None:
@@ -837,16 +1068,24 @@ class MapController(QObject):
         self.mapItemsChanged.emit()
         self._recalculate_visible_items()
 
-    @Slot(float, float, float, float, result="QVariant")
-    def calculateArtillery(self, startX: float, startY: float, endX: float, endY: float) -> dict:
+    @Slot('QVariant', 'QVariant', 'QVariant', 'QVariant', 'QVariant', 'QVariant', result="QVariant")
+    def calculateArtillery(self, startX, startY, endX, endY, windDir=0.0, windTier=0.0) -> dict:
         try:
             from foxmap.geo.artillery import ArtilleryCalculator
             calc = ArtilleryCalculator()
-            solution = calc.calculate((startX, startY), (endX, endY))
+            sx = float(startX) if startX is not None else 0.0
+            sy = float(startY) if startY is not None else 0.0
+            ex = float(endX) if endX is not None else 0.0
+            ey = float(endY) if endY is not None else 0.0
+            wd = float(windDir) if windDir is not None else 0.0
+            wt = int(float(windTier)) if windTier is not None else 0
+            solution = calc.calculate((sx, sy), (ex, ey), wd, wt)
             return {
                 "distance_meters": solution.distance_meters,
                 "distance_hexes": solution.distance_hexes,
-                "bearing": solution.bearing
+                "bearing": solution.bearing,
+                "aim_x": solution.aim_x,
+                "aim_y": solution.aim_y
             }
         except Exception as e:
             print(f"[MapController] Error in calculateArtillery: {e}")
@@ -863,6 +1102,10 @@ class MapController(QObject):
 
     @Slot(int, int, int, result=str)
     def getTileUrl(self, z: int, x: int, y: int) -> str:
+        local_url = self.getLocalTileUrl(z, x, y)
+        if local_url:
+            return local_url
+
         import os
         from map_tile_baker import ICON_BAKE_ZOOMS
 

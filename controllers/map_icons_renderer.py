@@ -1,8 +1,10 @@
-from PySide6.QtCore import Qt, Property, Signal, Slot, QRectF, QPointF
+from PySide6.QtCore import Qt, Property, Signal, Slot, QRectF, QPointF, QTimer
 from PySide6.QtQuick import QQuickItem, QSGNode, QSGGeometryNode, QSGGeometry, QSGTextureMaterial, QSGSimpleTextureNode, QSGTexture
-from PySide6.QtGui import QImage, QColor
+from PySide6.QtGui import QImage, QColor, QPainter
 import os
 from pathlib import Path
+
+from .map_spatial_grid import MapSpatialGrid
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -84,17 +86,30 @@ class MapIconsRenderer(QQuickItem):
         self._currentZoom = 2
         self._centerX = 0.0
         self._centerY = 0.0
+        self._mapZoomScaleX = 4.0
+        self._mapZoomScaleY = 4.0
 
         self._showResources = False
         self._showIcons = False
         self._showStockFilter = True
         self._showMainStructures = True
 
+        self._spatial_grid = MapSpatialGrid(cell_size=1024)
+        self._spatial_grid_dirty = True
         self._textures = {}
+        self._texture_usage = {}  # track frame when each texture was last used
+        self._max_cached_textures = 64  # limit cache to reduce memory
+        self._frame_count = 0
+        # Debounce updates to avoid frequent repaints during map interactions
+        self._update_timer = QTimer(self)
+        self._update_timer.setSingleShot(True)
+        self._update_timer.setInterval(16)  # ~60 FPS coalescing
+        self._update_timer.timeout.connect(self.update)
 
     def get_texture(self, type_id, team_id):
         key = f"{type_id}_{team_id}"
         if key in self._textures:
+            self._texture_usage[key] = self._frame_count  # mark as used
             return self._textures[key]
 
         filename = ICON_MAP.get(int(type_id), "unknown.webp")
@@ -110,19 +125,29 @@ class MapIconsRenderer(QQuickItem):
 
         texture = self.window().createTextureFromImage(img)
         self._textures[key] = texture
+        self._texture_usage[key] = self._frame_count  # mark as used
+        
+        # Evict least-recently-used texture if cache exceeds max
+        if len(self._textures) > self._max_cached_textures:
+            lru_key = min(self._texture_usage.keys(), key=lambda k: self._texture_usage[k])
+            del self._textures[lru_key]
+            del self._texture_usage[lru_key]
+        
         return texture
 
     def apply_colorization(self, img, color):
         res = img.copy()
-        res.convertTo(QImage.Format_ARGB32)
-        for y in range(res.height()):
-            for x in range(res.width()):
-                p = res.pixelColor(x, y)
-                if p.alpha() > 0:
-                    r = int((p.red() * 0.2 + color.red() * 0.8))
-                    g = int((p.green() * 0.2 + color.green() * 0.8))
-                    b = int((p.blue() * 0.2 + color.blue() * 0.8))
-                    res.setPixelColor(x, y, QColor(r, g, b, p.alpha()))
+        res = res.convertToFormat(QImage.Format_ARGB32_Premultiplied)
+        painter = QPainter(res)
+        
+        # Multiply colors
+        painter.setCompositionMode(QPainter.CompositionMode_Multiply)
+        painter.fillRect(res.rect(), color)
+        
+        # Restore alpha mask from original image
+        painter.setCompositionMode(QPainter.CompositionMode_DestinationIn)
+        painter.drawImage(0, 0, img)
+        painter.end()
         return res
 
     @Property('QVariant', notify=itemsChanged)
@@ -133,40 +158,96 @@ class MapIconsRenderer(QQuickItem):
     def itemsData(self, val):
         if hasattr(val, 'toVariant'):
             val = val.toVariant()
-        self._items = val if isinstance(val, list) else list(val) if val else []
+        new_items = val if isinstance(val, list) else list(val) if val else []
+        
+        # Fast diff to avoid massive rebuilds when API returns same data
+        if getattr(self, '_last_items_hash', None) is not None:
+            import hashlib
+            import json
+            # Create a quick hash of the new items by their IDs and flags to detect changes
+            try:
+                # Assuming items are dicts with 'id', 'team', 'type', 'flags', 'stock'
+                # Just stringifying the list of dicts is fast enough for 5000 items (takes ~2ms in Python)
+                current_hash = hashlib.md5(json.dumps(new_items, sort_keys=True).encode('utf-8')).hexdigest()
+                if current_hash == self._last_items_hash:
+                    # No changes detected!
+                    return
+                self._last_items_hash = current_hash
+            except Exception:
+                pass
+        else:
+            try:
+                import hashlib
+                import json
+                self._last_items_hash = hashlib.md5(json.dumps(new_items, sort_keys=True).encode('utf-8')).hexdigest()
+            except Exception:
+                pass
+
+        self._items = new_items
+        
+        # Pre-compute spatial and rendering values for extreme performance during panning/zooming
+        for item in self._items:
+            # Pre-compute coordinates
+            wx, wy = self._map_pixel(item)
+            item['_wx'] = wx
+            item['_wy'] = wy
+            
+            # Pre-compute fast filter flags
+            t = int(item.get("type", 0))
+            item['_is_resource'] = self._is_resource(t)
+            item['_is_main_structure'] = self._is_main_structure(t)
+            item['_has_stock'] = item.get("stock") is not None
+            item['_icon_size'] = 30 if item['_has_stock'] else 24
+            
+        self._spatial_grid_dirty = True
         print(f"MapIconsRenderer itemsData set! length={len(self._items)}")
-        self.update()
+        self.schedule_update()
 
     # --- Map Viewport Properties ---
     @Property(float, notify=mapStateChanged)
     def mapScale(self): return self._mapScale
     @mapScale.setter
-    def mapScale(self, val): self._mapScale = val; self.update()
+    def mapScale(self, val): self._mapScale = val; self._spatial_grid_dirty = True; self.schedule_update()
 
     @Property(float, notify=mapStateChanged)
     def mapOffsetX(self): return self._mapOffsetX
     @mapOffsetX.setter
-    def mapOffsetX(self, val): self._mapOffsetX = val; self.update()
+    def mapOffsetX(self, val): self._mapOffsetX = val; self._spatial_grid_dirty = True; self.schedule_update()
 
     @Property(float, notify=mapStateChanged)
     def mapOffsetY(self): return self._mapOffsetY
     @mapOffsetY.setter
-    def mapOffsetY(self, val): self._mapOffsetY = val; self.update()
+    def mapOffsetY(self, val): self._mapOffsetY = val; self._spatial_grid_dirty = True; self.schedule_update()
 
     @Property(int, notify=mapStateChanged)
     def currentZoom(self): return self._currentZoom
     @currentZoom.setter
-    def currentZoom(self, val): self._currentZoom = val; self.update()
+    def currentZoom(self, val): self._currentZoom = val; self._spatial_grid_dirty = True; self.schedule_update()
 
     @Property(float, notify=mapStateChanged)
     def centerX(self): return self._centerX
     @centerX.setter
-    def centerX(self, val): self._centerX = val; self.update()
+    def centerX(self, val): 
+        self._centerX = val
+        # Do not schedule_update() because MapIconsRenderer is inside overlayManager
+        # and moves automatically via QML!
 
     @Property(float, notify=mapStateChanged)
     def centerY(self): return self._centerY
     @centerY.setter
-    def centerY(self, val): self._centerY = val; self.update()
+    def centerY(self, val): 
+        self._centerY = val
+        # Do not schedule_update() because MapIconsRenderer is inside overlayManager
+
+    @Property(float, notify=mapStateChanged)
+    def mapZoomScaleX(self): return self._mapZoomScaleX
+    @mapZoomScaleX.setter
+    def mapZoomScaleX(self, val): self._mapZoomScaleX = val; self._spatial_grid_dirty = True; self.schedule_update()
+
+    @Property(float, notify=mapStateChanged)
+    def mapZoomScaleY(self): return self._mapZoomScaleY
+    @mapZoomScaleY.setter
+    def mapZoomScaleY(self, val): self._mapZoomScaleY = val; self._spatial_grid_dirty = True; self.schedule_update()
 
     # --- Filters ---
     @Property(bool, notify=mapStateChanged)
@@ -187,7 +268,10 @@ class MapIconsRenderer(QQuickItem):
     @Property(bool, notify=mapStateChanged)
     def showMainStructures(self): return self._showMainStructures
     @showMainStructures.setter
-    def showMainStructures(self, val): self._showMainStructures = val; self.update()
+    def showMainStructures(self, val): self._showMainStructures = val; self.schedule_update()
+
+    def schedule_update(self):
+        self.update()
 
     itemHovered = Signal('QVariant', float, float)
     itemClicked = Signal('QVariant')
@@ -243,6 +327,16 @@ class MapIconsRenderer(QQuickItem):
     def _should_show(self, item, inBounds):
         if not inBounds:
             return False
+        
+        # Extremely fast path using pre-computed flags
+        if '_has_stock' in item:
+            if item['_has_stock'] and self._showStockFilter: return True
+            if self._currentZoom < 5: return False
+            if item['_is_main_structure']: return self._showMainStructures
+            if item['_is_resource']: return self._showResources
+            return self._showIcons
+
+        # Fallback for dynamic items
         hasStock = self._showStockFilter and item.get("stock") is not None
         if hasStock:
             return True
@@ -256,19 +350,77 @@ class MapIconsRenderer(QQuickItem):
             return self._showResources
         return self._showIcons
 
+    def _map_pixel(self, item):
+        # 0. Extremely fast path using pre-computed values
+        if "_wx" in item:
+            return item["_wx"], item["_wy"]
+
+        # 1. Explicit world coordinates
+        if "worldX" in item and "worldY" in item:
+            return float(item["worldX"]), float(item["worldY"])
+        if "world_x" in item and "world_y" in item:
+            return float(item["world_x"]), float(item["world_y"])
+            
+        x_api = float(item.get("x", 0))
+        y_api = float(item.get("y", 0))
+
+        # 2. Region-based coordinates
+        if "regionOffsetX" in item and "regionWidth" in item:
+            wx = float(item["regionOffsetX"]) + (x_api * float(item["regionWidth"]))
+            if "regionOffsetY" in item and "regionHeight" in item:
+                wy = float(item["regionOffsetY"]) + (y_api * float(item["regionHeight"]))
+            else:
+                wy = (-y_api * self._mapScale) + self._mapOffsetY
+            return wx, wy
+            
+        # 3. Normalized API coordinates with map dimensions
+        if "mapWidth" in item and "mapHeight" in item:
+            wx = x_api * float(item["mapWidth"])
+            wy = abs(y_api) * float(item["mapHeight"])
+            return wx, wy
+
+        # 4. Fallback generic conversion
+        wx = x_api * 80.0
+        wy = -y_api * 80.0 - 4024.0
+        return wx, wy
+
+    def _rebuild_spatial_grid(self):
+        if not self._spatial_grid_dirty:
+            return
+        self._spatial_grid.build(
+            self._items,
+            map_scale=self._mapScale,
+            map_offset_x=self._mapOffsetX,
+            map_offset_y=self._mapOffsetY,
+        )
+        self._spatial_grid_dirty = False
+
     def _find_item_at(self, sx, sy):
-        zoomFactor = 2 ** self._currentZoom
-        
-        for item in self._items:
-            x_api = item.get("x", 0)
-            y_api = item.get("y", 0)
+        self._rebuild_spatial_grid()
+        # compute view bounds once to cull offscreen items
+        w = self.width() if hasattr(self, 'width') else 0
+        h = self.height() if hasattr(self, 'height') else 0
+        margin = 48
+        left = -margin
+        right = w + margin
+        top = -margin
+        bottom = h + margin
+
+        # Determine world bounds for culling based on screen bounds
+        zoomFactor = 2 ** (self._currentZoom - 6)
+        world_left = left / zoomFactor
+        world_right = right / zoomFactor
+        world_top = top / zoomFactor
+        world_bottom = bottom / zoomFactor
+
+        for item in self._spatial_grid.get_items_in_viewport(world_left, world_top, world_right, world_bottom):
+            worldPxX, worldPxY = self._map_pixel(item)
             
-            worldPxX = ((x_api * self._mapScale) + self._mapOffsetX) * zoomFactor
-            worldPxY = ((-y_api * self._mapScale) + self._mapOffsetY) * zoomFactor
-            
-            screenX = worldPxX
-            screenY = worldPxY
-            
+            # MapIconsRenderer is inside overlayManager, which means its coordinate system
+            # is already relative to the scaled map's top-left corner (0,0).
+            # Therefore, we just apply the zoom scale.
+            screenX = worldPxX * zoomFactor
+            screenY = worldPxY * zoomFactor
             if self._should_show(item, True):
                 # Check bounding box
                 icon_size = 30 if item.get("stock") is not None else 24
@@ -280,6 +432,10 @@ class MapIconsRenderer(QQuickItem):
     def updatePaintNode(self, oldNode, updatePaintNodeData):
         if not oldNode:
             oldNode = QSGNode()
+            self._nodes = []
+            self._textures = {}
+            if hasattr(self, '_stock_bg'):
+                del self._stock_bg
 
         if not self._items or self.width() <= 0 or self.height() <= 0:
             while oldNode.childCount() > 0:
@@ -292,11 +448,25 @@ class MapIconsRenderer(QQuickItem):
         if not hasattr(self, '_nodes'):
             self._nodes = []
 
-        zoomFactor = 2 ** self._currentZoom
-        
+        self._rebuild_spatial_grid()
         node_idx = 0
 
-        for item in self._items:
+        # Compute view bounds once to cull offscreen items
+        w = self.width()
+        h = self.height()
+        margin = 64
+        left = -margin
+        right = w + margin
+        top = -margin
+        bottom = h + margin
+
+        zoomFactor = 2 ** (self._currentZoom - 6)
+        world_left = left / zoomFactor
+        world_right = right / zoomFactor
+        world_top = top / zoomFactor
+        world_bottom = bottom / zoomFactor
+
+        for item in self._spatial_grid.get_items_in_viewport(world_left, world_top, world_right, world_bottom):
             if not self._should_show(item, True):
                 continue
 
@@ -304,17 +474,19 @@ class MapIconsRenderer(QQuickItem):
             if not texture:
                 continue
 
-            x_api = item.get("x", 0)
-            y_api = item.get("y", 0)
-            
-            worldPxX = ((x_api * self._mapScale) + self._mapOffsetX) * zoomFactor
-            worldPxY = ((-y_api * self._mapScale) + self._mapOffsetY) * zoomFactor
-            
-            screenX = worldPxX
-            screenY = worldPxY
-            
-            hasStock = self._showStockFilter and item.get("stock") is not None
-            icon_size = 44 if hasStock else 24
+            # Apply zoom to get position within overlayManager
+            # Fast path for pre-computed coordinates
+            if "_wx" in item:
+                screenX = item["_wx"] * zoomFactor
+                screenY = item["_wy"] * zoomFactor
+                hasStock = item["_has_stock"] and self._showStockFilter
+                icon_size = 44 if hasStock else 24
+            else:
+                worldPxX, worldPxY = self._map_pixel(item)
+                screenX = worldPxX * zoomFactor
+                screenY = worldPxY * zoomFactor
+                hasStock = self._showStockFilter and item.get("stock") is not None
+                icon_size = 44 if hasStock else 24
 
             if hasStock:
                 if node_idx < len(self._nodes):
@@ -347,5 +519,8 @@ class MapIconsRenderer(QQuickItem):
         while len(self._nodes) > node_idx:
             node = self._nodes.pop()
             oldNode.removeChildNode(node)
+
+        # Increment frame counter for LRU eviction logic
+        self._frame_count += 1
 
         return oldNode

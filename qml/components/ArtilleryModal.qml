@@ -5,7 +5,10 @@ import QtQuick.Layouts
 Item {
     id: root
     width: 320
-    height: 480
+    height: 600 // Increased height slightly to accommodate wind controls
+
+    signal saveRequested()
+    signal clearRequested()
 
     Rectangle {
         id: bg
@@ -52,7 +55,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: "❌" // times icon
-                        color: parent.containsMouse ? "#ef4444" : settingsController.subtextColor
+                        color: parent.containsMouse ? "#ef4444" : settingsController.secondaryTextColor
                         font.pixelSize: 12
                     }
                     onClicked: root.visible = false
@@ -72,7 +75,7 @@ Item {
                 
                 Text {
                     text: "SELECIONE A ARMA"
-                    color: settingsController.accentColor || "#3b82f6"
+                    color: "#3b82f6" // accent color
                     font.pixelSize: 11
                     font.bold: true
                     font.letterSpacing: 1
@@ -121,15 +124,15 @@ Item {
                     columnSpacing: 8
 
                     // Tipo
-                    Text { text: "📌 Tipo:"; color: settingsController.subtextColor; font.pixelSize: 12; Layout.fillWidth: true }
+                    Text { text: "📌 Tipo:"; color: settingsController.secondaryTextColor; font.pixelSize: 12; Layout.fillWidth: true }
                     Text { text: infoCard.getInfo("type", "-"); color: "white"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignRight; Layout.fillWidth: true }
                     
                     // Munição
-                    Text { text: "💣 Munição:"; color: settingsController.subtextColor; font.pixelSize: 12; Layout.fillWidth: true }
+                    Text { text: "💣 Munição:"; color: settingsController.secondaryTextColor; font.pixelSize: 12; Layout.fillWidth: true }
                     Text { text: infoCard.getInfo("ammo", "-"); color: "white"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignRight; Layout.fillWidth: true }
                     
                     // Alcance
-                    Text { text: "🎯 Alcance:"; color: settingsController.subtextColor; font.pixelSize: 12; Layout.fillWidth: true }
+                    Text { text: "📏 Alcance:"; color: settingsController.secondaryTextColor; font.pixelSize: 12; Layout.fillWidth: true }
                     Text { 
                         text: infoCard.getNestedInfo("range", "minimum", "-") + "m - " + infoCard.getNestedInfo("range", "maximum", "-") + "m"
                         color: "#10b981" // emerald green
@@ -137,7 +140,7 @@ Item {
                     }
                     
                     // Dispersão
-                    Text { text: "💥 Dispersão:"; color: settingsController.subtextColor; font.pixelSize: 12; Layout.fillWidth: true }
+                    Text { text: "🎯 Dispersão:"; color: settingsController.secondaryTextColor; font.pixelSize: 12; Layout.fillWidth: true }
                     Text { 
                         text: infoCard.getNestedInfo("dispersion", "minimum", "-") + "m - " + infoCard.getNestedInfo("dispersion", "maximum", "-") + "m"
                         color: "#f59e0b" // amber
@@ -145,7 +148,7 @@ Item {
                     }
                     
                     // Tripulação
-                    Text { text: "👥 Tripulação:"; color: settingsController.subtextColor; font.pixelSize: 12; Layout.fillWidth: true }
+                    Text { text: "👥 Tripulação:"; color: settingsController.secondaryTextColor; font.pixelSize: 12; Layout.fillWidth: true }
                     Text { 
                         text: infoCard.getInfo("minimumCrew", "-") + " - " + infoCard.getInfo("recommendedCrew", "-")
                         color: "white"; font.bold: true; font.pixelSize: 12; horizontalAlignment: Text.AlignRight; Layout.fillWidth: true 
@@ -154,6 +157,127 @@ Item {
             }
 
             Item { Layout.fillHeight: true } // Flexible spacer
+            
+            // Wind Controls
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                
+                Text {
+                    text: "🌬️ VENTO (TIER: " + Math.round(artilleryController.windTier) + " | AZM: " + Math.round(artilleryController.windDirection) + "°)"
+                    color: "#38bdf8"
+                    font.pixelSize: 11
+                    font.bold: true
+                }
+                
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text { text: "Força"; color: "white"; font.pixelSize: 12; Layout.preferredWidth: 40 }
+                    Slider {
+                        Layout.fillWidth: true
+                        from: 0; to: 5; stepSize: 1
+                        value: artilleryController.windTier
+                        onValueChanged: artilleryController.windTier = value
+                    }
+                }
+                // Wind Rose 3x3 Grid
+                GridLayout {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignHCenter
+                    columns: 3
+                    rowSpacing: 4
+                    columnSpacing: 4
+
+                    Repeater {
+                        model: [
+                            {label: "NW", angle: 315}, {label: "N", angle: 0}, {label: "NE", angle: 45},
+                            {label: "W", angle: 270},  {label: "•", angle: -1}, {label: "E", angle: 90},
+                            {label: "SW", angle: 225}, {label: "S", angle: 180}, {label: "SE", angle: 135}
+                        ]
+                        delegate: Rectangle {
+                            width: 44
+                            height: 36
+                            radius: 6
+                            color: modelData.angle === -1 ? "transparent" : (Math.round(artilleryController.windDirection) === modelData.angle ? "#38bdf8" : Qt.rgba(255/255, 255/255, 255/255, 0.05))
+                            border.color: modelData.angle === -1 ? "transparent" : (Math.round(artilleryController.windDirection) === modelData.angle ? "#0284c7" : Qt.rgba(255/255, 255/255, 255/255, 0.15))
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: modelData.angle === -1 ? "#38bdf8" : (Math.round(artilleryController.windDirection) === modelData.angle ? "#0f172a" : "#94a3b8")
+                                font.pixelSize: modelData.angle === -1 ? 18 : 11
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: modelData.angle !== -1
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    artilleryController.windDirection = modelData.angle;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: Qt.rgba(255/255, 255/255, 255/255, 0.1)
+            }
+            
+            // Save Button
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                
+                Button {
+                    Layout.fillWidth: true
+                    text: "📌 Fixar"
+                    font.bold: true
+                    background: Rectangle {
+                        color: parent.down ? "#1d4ed8" : "#2563eb"
+                        radius: 6
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        color: "white"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        font.bold: true
+                    }
+                    onClicked: {
+                        if (typeof root.parent !== "undefined") {
+                            root.saveRequested()
+                        }
+                    }
+                }
+                
+                Button {
+                    Layout.preferredWidth: 80
+                    text: "🗑️ Limpar"
+                    font.bold: true
+                    background: Rectangle {
+                        color: parent.down ? "#991b1b" : "#dc2626"
+                        radius: 6
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        color: "white"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        font.bold: true
+                    }
+                    onClicked: {
+                        if (typeof root.parent !== "undefined") {
+                            root.clearRequested()
+                        }
+                    }
+                }
+            }
             
             Rectangle {
                 Layout.fillWidth: true

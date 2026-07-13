@@ -59,7 +59,7 @@ class TestGeo(unittest.TestCase):
         self.assertTrue(math.isclose(world_back.x, world_pt.x, abs_tol=0.01))
 
     def test_artillery_calculator(self):
-        calc = ArtilleryCalculator()
+        calc = ArtilleryCalculator(GeoEngine(world_to_meters_factor=38.624867))
         cannon = (100.22, -80.55)
         target = (120.15, -115.33)
         solution = calc.calculate(cannon, target)
@@ -72,7 +72,7 @@ class TestGeo(unittest.TestCase):
         self.assertTrue(math.isclose(solution.dy, -34.78, abs_tol=0.01))
 
     def test_weapon_ranges(self):
-        weapon = StormCannon()
+        weapon = StormCannon(engine=GeoEngine(world_to_meters_factor=38.624867))
         cannon_pt = Point2D(100.22, -80.55)
         target_pt = Point2D(120.15, -115.33)
         

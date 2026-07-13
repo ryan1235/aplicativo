@@ -119,7 +119,10 @@ def configure_responsive_scaling() -> None:
 def configure_qt() -> None:
     os.chdir(BASE_DIR)
     os.environ["QML_DISABLE_DISK_CACHE"] = "1"
-    QPixmapCache.setCacheLimit(10240)
+    # Aggressive cache limits for production (reduce memory footprint)
+    # 2MB pixmap cache is sufficient for UI elements
+    pixmap_limit = 2048 if getattr(sys, 'frozen', False) or "__compiled__" in globals() else 10240
+    QPixmapCache.setCacheLimit(pixmap_limit)
     configure_responsive_scaling()
     pyside_dir = Path(PySide6.__file__).resolve().parent
     try:
@@ -144,12 +147,16 @@ def trim_runtime_memory(engine: QQmlApplicationEngine | None = None) -> None:
         pass
     try:
         import gc
-
+        # Multiple passes ensure deep cleanup
+        gc.collect()
+        gc.collect()
         gc.collect()
     except Exception:
         pass
 
 def custom_message_handler(mode, context, message):
+    if getattr(sys, 'frozen', False) or "__compiled__" in globals():
+        return # Disable terminal prints in production to save RAM and prevent console buffer bottlenecks
     if mode == QtMsgType.QtWarningMsg and "server replied with status code 404" in message:
         return
     print(message)
@@ -166,6 +173,16 @@ def main() -> int:
     qInstallMessageHandler(custom_message_handler)
     cleanup_old_files()
     load_env_file(BASE_DIR / ".env")
+    
+    # Check settings for hardware acceleration disable
+    try:
+        from settings_store import load_settings
+        settings = load_settings()
+        if settings.get("app", {}).get("disable_hardware_acceleration", False):
+            os.environ["QT_QUICK_BACKEND"] = "software"
+    except Exception as e:
+        print("Could not read settings for hardware acceleration:", e)
+        
     configure_qt()
     
     background = any(arg.lower() in BACKGROUND_ARGS for arg in sys.argv[1:])
@@ -190,8 +207,10 @@ def main() -> int:
     from PySide6.QtQml import qmlRegisterType
     from controllers.map_icons_renderer import MapIconsRenderer
     from controllers.map_text_renderer import MapTextRenderer
+    from controllers.map_drawings_renderer import MapDrawingsRenderer
     qmlRegisterType(MapIconsRenderer, "GG.Map", 1, 0, "MapIconsRenderer")
     qmlRegisterType(MapTextRenderer, "GG.Map", 1, 0, "MapTextRenderer")
+    qmlRegisterType(MapDrawingsRenderer, "GG.Map", 1, 0, "MapDrawingsRenderer")
 
     registry = ControllerRegistry(app)
     engine = QQmlApplicationEngine()
@@ -203,6 +222,9 @@ def main() -> int:
         registry.shutdown()
         release_single_instance_mutex(mutex)
         return 1
+    
+    # Aggressive cleanup after QML load to release startup temporaries
+    trim_runtime_memory(engine)
     if background:
         engine.rootObjects()[0].setProperty("visible", False)
 

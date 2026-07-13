@@ -12,9 +12,15 @@ import sys
 import tempfile
 import threading
 import time
+import ssl
 import traceback
 import urllib.request
 import zipfile
+
+try:
+    ssl._create_default_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
 
 import PySide6
 from PySide6.QtCore import QLocale, QObject, Qt, Signal, Slot

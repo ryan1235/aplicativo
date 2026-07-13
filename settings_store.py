@@ -92,6 +92,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "chat_mention_overlay_enabled": True,
         "chat_mention_sound_enabled": True,
         "chat_show_translated_messages": True,
+        "disable_hardware_acceleration": False,
         "sidebar_open": True,
         "sidebar_sections": {
             "core": True,

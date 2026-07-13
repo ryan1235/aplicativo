@@ -22,6 +22,29 @@ class ArtilleryController(QObject):
         self._show_dispersion = True
         self._show_line = True
         self._show_distances = True
+        
+        self._wind_direction = 0.0  # 0 to 359 degrees
+        self._wind_tier = 0         # 0 to 5
+
+    @Property(float, notify=configChanged)
+    def windDirection(self) -> float:
+        return self._wind_direction
+        
+    @windDirection.setter
+    def windDirection(self, val: float) -> None:
+        if self._wind_direction != val:
+            self._wind_direction = val
+            self.configChanged.emit()
+
+    @Property(int, notify=configChanged)
+    def windTier(self) -> int:
+        return self._wind_tier
+        
+    @windTier.setter
+    def windTier(self, val: int) -> None:
+        if self._wind_tier != val:
+            self._wind_tier = val
+            self.configChanged.emit()
 
     @Property(list, notify=weaponChanged)
     def weaponsList(self) -> list:
@@ -87,9 +110,10 @@ class ArtilleryController(QObject):
             self._show_distances = val
             self.configChanged.emit()
 
-    @Slot(float, result='QVariant')
-    def getOverlayData(self, distance_meters: float) -> dict:
+    @Slot('QVariant', result='QVariant')
+    def getOverlayData(self, distance_meters) -> dict:
         """
         Returns the radii in World Units for the current weapon at the given distance.
         """
-        return self.renderer.get_overlay_data(self.manager.active_weapon, distance_meters)
+        dm = float(distance_meters) if distance_meters is not None else 0.0
+        return self.renderer.get_overlay_data(self.manager.active_weapon, dm)

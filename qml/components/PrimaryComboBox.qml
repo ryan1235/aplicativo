@@ -27,9 +27,9 @@ ComboBox {
 
     delegate: ItemDelegate {
         id: delegateItem
-        property bool isObjectRow: typeof modelData === "object"
+        property bool isObjectRow: typeof modelData === "object" && modelData !== null && modelData.text !== undefined
         property bool isHeaderRow: isObjectRow && (modelData.type === "header" || modelData.type === "region_header")
-        property string primaryText: isObjectRow ? (modelData.text || "") : (typeof modelData !== "undefined" ? modelData : "")
+        property string primaryText: isObjectRow ? (modelData.text || "") : (typeof modelData !== "undefined" && modelData !== null ? modelData.toString() : "")
         property string secondaryText: isObjectRow ? (modelData.subText || "") : ""
         property string trailingText: isObjectRow ? (modelData.sideTextKey ? control.tr(modelData.sideTextKey) : (modelData.sideText || "")) : ""
         property color trailingColor: isObjectRow && modelData.sideColor ? modelData.sideColor : settingsController.accentColor

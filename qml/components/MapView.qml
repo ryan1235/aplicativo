@@ -12,14 +12,74 @@ Item {
 
     property string baseUrl: typeof mapController !== "undefined" && mapController ? mapController.baseUrl : "https://foxlogi.com/map-tiles/patch-64/{z}/{x}/{y}.webp"
     property string fallbackUrl: typeof mapController !== "undefined" && mapController ? mapController.fallbackUrl : "https://foxlogi.com/map-tiles/patch-64/{z}/{x}/{y}.webp"
-    property int tileSize: 256
-    property int minZoom: 2
-    property int maxZoom: 7
+    property bool localTilesAvailable: typeof mapController !== "undefined" && mapController ? mapController.localTilesAvailable : false
+    property int tileSize: localTilesAvailable && typeof mapController !== "undefined" && mapController ? mapController.localTileSize : 256
+    property int minZoom: localTilesAvailable ? 0 : 2
+    property int maxZoom: localTilesAvailable && typeof mapController !== "undefined" && mapController ? mapController.localMaxZoom : 7
     property int currentZoom: 2
 
+    // --- Debug calibração malha (ajuste manual) ---
+    property bool showCalibrationDebug: true
+    property real debugMapScale: 1.0
+    property real debugMapOffsetX: 0.0
+    property real debugMapOffsetY: 0.0
+    property real debugZoomMultX: 1.0
+    property real debugZoomMultY: 1.0
+    property string debugZoomMode: "pow2" // pow2 | manifest | foxlogi
+
+    function debugBaseZoomScaleX(z) {
+        if (debugZoomMode === "manifest" && localTilesAvailable && typeof mapController !== "undefined" && mapController)
+            return mapController.getLocalTileLevelWidth(z) / mapController.getLocalTileLevelWidth(0);
+        if (debugZoomMode === "foxlogi" && localTilesAvailable && typeof mapController !== "undefined" && mapController)
+            return 128.0 * mapController.getLocalTileLevelWidth(z) / 32768.0;
+        return Math.pow(2, z);
+    }
+
+    function debugBaseZoomScaleY(z) {
+        if (debugZoomMode === "manifest" && localTilesAvailable && typeof mapController !== "undefined" && mapController)
+            return mapController.getLocalTileLevelHeight(z) / mapController.getLocalTileLevelHeight(0);
+        if (debugZoomMode === "foxlogi" && localTilesAvailable && typeof mapController !== "undefined" && mapController)
+            return 128.0 * mapController.getLocalTileLevelHeight(z) / 32768.0;
+        return Math.pow(2, z);
+    }
+
     // The center of the view in map pixels at the current zoom level
-    property real centerX: (Math.pow(2, currentZoom) * tileSize) / 2
-    property real centerY: (Math.pow(2, currentZoom) * tileSize) / 2
+    property real mapWidthAtZoom: localTilesAvailable && typeof mapController !== "undefined" && mapController ? mapController.getLocalTileLevelWidth(currentZoom) : Math.pow(2, currentZoom) * tileSize
+    property real mapHeightAtZoom: localTilesAvailable && typeof mapController !== "undefined" && mapController ? mapController.getLocalTileLevelHeight(currentZoom) : Math.pow(2, currentZoom) * tileSize
+    property real mapZoomScaleX: debugBaseZoomScaleX(currentZoom) * debugZoomMultX
+    property real mapZoomScaleY: debugBaseZoomScaleY(currentZoom) * debugZoomMultY
+    property real centerX: mapWidthAtZoom / 2
+    property real centerY: mapHeightAtZoom / 2
+
+    function mapLevelWidth(z) {
+        if (localTilesAvailable && typeof mapController !== "undefined" && mapController)
+            return mapController.getLocalTileLevelWidth(z);
+        return Math.pow(2, z) * tileSize;
+    }
+
+    function mapLevelHeight(z) {
+        if (localTilesAvailable && typeof mapController !== "undefined" && mapController)
+            return mapController.getLocalTileLevelHeight(z);
+        return Math.pow(2, z) * tileSize;
+    }
+
+    function layerScaleRatio(fromZoom, toZoom) {
+        if (localTilesAvailable && typeof mapController !== "undefined" && mapController) {
+            var wFrom = mapController.getLocalTileLevelWidth(fromZoom);
+            var wTo = mapController.getLocalTileLevelWidth(toZoom);
+            return wFrom > 0 ? wTo / wFrom : Math.pow(2, toZoom - fromZoom);
+        }
+        return Math.pow(2, toZoom - fromZoom);
+    }
+
+    function layerScaleRatioY(fromZoom, toZoom) {
+        if (localTilesAvailable && typeof mapController !== "undefined" && mapController) {
+            var hFrom = mapController.getLocalTileLevelHeight(fromZoom);
+            var hTo = mapController.getLocalTileLevelHeight(toZoom);
+            return hFrom > 0 ? hTo / hFrom : Math.pow(2, toZoom - fromZoom);
+        }
+        return Math.pow(2, toZoom - fromZoom);
+    }
     
     function tr(key, fallback) {
         if (typeof i18nController !== "undefined") {
@@ -52,6 +112,9 @@ Item {
     function updateCulling() {
         cullCenterX = centerX;
         cullCenterY = centerY;
+        if (typeof mapController !== "undefined" && mapController) {
+            mapController.updateViewport(centerX, centerY, width, height, currentZoom);
+        }
         updateCullingSignal();
     }
     // --- DRAWING SYSTEM PROPERTIES ---
@@ -61,13 +124,59 @@ Item {
     property var artilleryCannon: null
     property var artilleryTarget: null
     property int artilleryStep: 0
-    onActiveToolChanged: root.selectedVehicleIndex = -1
+    property var savedArtilleries: []
+    
+    function saveCurrentArtillery() {
+        if (artilleryCannon && artilleryTarget) {
+            var newSaved = savedArtilleries.slice();
+            
+            var cAPI = root.worldToApi(artilleryCannon.x, artilleryCannon.y);
+            var tAPI = root.worldToApi(artilleryTarget.x, artilleryTarget.y);
+            var windD = typeof artilleryController !== "undefined" && artilleryController ? artilleryController.windDirection : 0;
+            var windT = typeof artilleryController !== "undefined" && artilleryController ? artilleryController.windTier : 0;
+            
+            var mRes = typeof mapController !== "undefined" && mapController ? mapController.calculateArtillery(cAPI.x, cAPI.y, tAPI.x, tAPI.y, windD, windT) : null;
+            var dist = mRes ? (mRes.distance_meters || 0) : 0;
+            var azm = mRes ? (mRes.bearing || 0) : 0;
+            var rads = typeof artilleryController !== "undefined" && artilleryController ? artilleryController.getOverlayData(dist) : null;
+            var icon = typeof artilleryController !== "undefined" && artilleryController.weaponInfo && artilleryController.weaponInfo.icon ? "../../" + artilleryController.weaponInfo.icon : "";
+            
+            newSaved.push({
+                cannon: artilleryCannon,
+                target: artilleryTarget,
+                windDirection: windD,
+                windTier: windT,
+                mathRes: mRes,
+                dist_meters: dist,
+                azm: azm,
+                radii: rads,
+                weaponIcon: icon
+            });
+            savedArtilleries = newSaved;
+            
+            // Reset state so user can place another immediately
+            artilleryStep = 0;
+            artilleryCannon = null;
+            artilleryTarget = null;
+            console.log("MapView: Battery saved! Total saved:", savedArtilleries.length);
+        }
+    }
+    
+    onActiveToolChanged: {
+        root.selectedVehicleIndex = -1
+        if (activeTool === "artillery") {
+            artilleryModal.visible = true;
+        } else {
+            artilleryModal.visible = false;
+        }
+    }
     
     property string activeColor: "#ef4444" // default red
     property string activeVehicleImage: "Blacksteele.png"
     property real activeVehicleRotation: 0
     property real activeVehicleScale: 1.0
     property string activeVehicleName: ""
+    property int activeVehicleCount: 1
     
     property int selectedVehicleIndex: -1
     property real liveVehicleRotation: 0
@@ -86,7 +195,6 @@ Item {
                 var mapData = JSON.parse(mapDataStr);
                 if (mapData && mapData.drawings) {
                     root.drawings = mapData.drawings;
-                    if (typeof drawingCanvas !== "undefined") drawingCanvas.requestPaint();
                 }
             } catch (e) {}
         }
@@ -138,7 +246,6 @@ Item {
                 
                 if (!root.currentDrawing && data.drawings) {
                     root.drawings = data.drawings;
-                    if (typeof drawingCanvas !== "undefined") drawingCanvas.requestPaint();
                 }
             } catch (e) {}
         }
@@ -152,6 +259,8 @@ Item {
     property var currentDrawing: null // currently active drawing while mouse is pressed
     property bool polygonNameDialogVisible: false
     property bool routeNameDialogVisible: false
+    property bool textToolDialogVisible: false
+    property var currentTextLocation: null
     property int dashOffset: 0
     
     property var activeUsers: []
@@ -196,7 +305,6 @@ Item {
         repeat: true
         onTriggered: {
             root.dashOffset = (root.dashOffset + 1) % 48;
-            drawingCanvas.requestPaint();
         }
     }
     
@@ -250,33 +358,91 @@ Item {
         return isInside;
     }
 
+    function getZoomFactor() {
+        return Math.pow(2, currentZoom - 6);
+    }
+
     function screenToWorld(sx, sy) {
         var mapX = sx - (root.width / 2) + root.centerX;
         var mapY = sy - (root.height / 2) + root.centerY;
-        var zoomFactor = Math.pow(2, root.currentZoom);
-        return {x: mapX / zoomFactor, y: mapY / zoomFactor};
+        var zf = getZoomFactor();
+        return {
+            x: mapX / zf,
+            y: mapY / zf
+        };
+    }
+    
+    function findNearestNode(wp, thresholdPixels) {
+        if (!root.drawings) return null;
+        var zf = getZoomFactor();
+        var thresholdWorld = thresholdPixels / zf;
+        var bestDist = thresholdWorld;
+        var bestNode = null;
+        
+        for (var i = 0; i < root.drawings.length; i++) {
+            var d = root.drawings[i];
+            if (!d) continue;
+            
+            if ((d.type === "route" || d.type === "polygon" || d.type === "brush") && d.points) {
+                for (var j = 0; j < d.points.length; j++) {
+                    var p = d.points[j];
+                    var dist = Math.sqrt(Math.pow(p.x - wp.x, 2) + Math.pow(p.y - wp.y, 2));
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestNode = {x: p.x, y: p.y};
+                    }
+                }
+            } else if (d.type === "arrow" && d.start && d.end) {
+                var distStart = Math.sqrt(Math.pow(d.start.x - wp.x, 2) + Math.pow(d.start.y - wp.y, 2));
+                if (distStart < bestDist) {
+                    bestDist = distStart;
+                    bestNode = {x: d.start.x, y: d.start.y};
+                }
+                var distEnd = Math.sqrt(Math.pow(d.end.x - wp.x, 2) + Math.pow(d.end.y - wp.y, 2));
+                if (distEnd < bestDist) {
+                    bestDist = distEnd;
+                    bestNode = {x: d.end.x, y: d.end.y};
+                }
+            } else if (d.type === "parabola" || d.type === "artillery") {
+                // For parabola and artillery, start and end are in API coords, so convert them to world first to check snapping
+                if (d.start && d.end) {
+                    var wStart = apiToWorld(d.start.x, d.start.y);
+                    var wEnd = apiToWorld(d.end.x, d.end.y);
+                    
+                    var distStart2 = Math.sqrt(Math.pow(wStart.x - wp.x, 2) + Math.pow(wStart.y - wp.y, 2));
+                    if (distStart2 < bestDist) {
+                        bestDist = distStart2;
+                        bestNode = {x: wStart.x, y: wStart.y}; // Snap to World coordinate
+                    }
+                    var distEnd2 = Math.sqrt(Math.pow(wEnd.x - wp.x, 2) + Math.pow(wEnd.y - wp.y, 2));
+                    if (distEnd2 < bestDist) {
+                        bestDist = distEnd2;
+                        bestNode = {x: wEnd.x, y: wEnd.y};
+                    }
+                }
+            }
+        }
+        return bestNode;
     }
 
     function worldToCanvas(wx, wy) {
-        var zoomFactor = Math.pow(2, drawingCanvas.lastPaintZoom);
-        var mapX = wx * zoomFactor;
-        var mapY = wy * zoomFactor;
-        var sx = mapX + (root.width / 2) - drawingCanvas.lastPaintCenterX;
-        var sy = mapY + (root.height / 2) - drawingCanvas.lastPaintCenterY;
+        var zf = getZoomFactor();
+        var mapX = wx * zf;
+        var mapY = wy * zf;
+        var sx = mapX + (root.width / 2) - root.centerX;
+        var sy = mapY + (root.height / 2) - root.centerY;
         return {x: sx, y: sy};
     }
 
     function apiToWorld(apiX, apiY) {
-        if (typeof mapController === "undefined" || !mapController) return {x: apiX, y: apiY};
-        var wX = (apiX * mapController.mapScale) + mapController.mapOffsetX;
-        var wY = (-apiY * mapController.mapScale) + mapController.mapOffsetY;
+        var wX = apiX * 80.0;
+        var wY = -apiY * 80.0 - 4024.0;
         return {x: wX, y: wY};
     }
     
     function worldToApi(wX, wY) {
-        if (typeof mapController === "undefined" || !mapController) return {x: wX, y: wY};
-        var apiX = (wX - mapController.mapOffsetX) / mapController.mapScale;
-        var apiY = -(wY - mapController.mapOffsetY) / mapController.mapScale;
+        var apiX = wX / 80.0;
+        var apiY = -(wY + 4024.0) / 80.0;
         return {x: apiX, y: apiY};
     }
 
@@ -328,11 +494,10 @@ Item {
     
     Timer {
         id: cullingTimer
-        interval: 100
+        interval: 150
         repeat: false
         onTriggered: {
             root.updateCulling();
-            drawingCanvas.requestPaint();
         }
     }
     
@@ -371,9 +536,12 @@ Item {
     property bool activeLayerLoaded: (activeLayerIndex === 0) ? layerA.isLoaded : layerB.isLoaded
     
     onCurrentZoomChanged: {
+        if (root.currentZoom < root.minZoom) root.currentZoom = root.minZoom;
+        else if (root.currentZoom > root.maxZoom) root.currentZoom = root.maxZoom;
         if (typeof cullingTimer !== "undefined") cullingTimer.restart();
         var activeLayer = (activeLayerIndex === 0) ? layerA : layerB;
         activeLayer.layerZoom = root.currentZoom;
+        root.updateCulling();
     }
     
     Component.onCompleted: {
@@ -381,9 +549,17 @@ Item {
         layerB.freezeCenter = true;
         layerA.layerZoom = root.currentZoom;
         if (typeof mapController !== "undefined" && mapController) {
+            mapController.mapScale = root.debugMapScale;
+            mapController.mapOffsetX = root.debugMapOffsetX;
+            mapController.mapOffsetY = root.debugMapOffsetY;
             mapController.fetchStockData();
         }
+        root.updateCulling();
     }
+
+    onDebugMapScaleChanged: if (typeof mapController !== "undefined" && mapController) mapController.mapScale = debugMapScale
+    onDebugMapOffsetXChanged: if (typeof mapController !== "undefined" && mapController) mapController.mapOffsetX = debugMapOffsetX
+    onDebugMapOffsetYChanged: if (typeof mapController !== "undefined" && mapController) mapController.mapOffsetY = debugMapOffsetY
 
     Timer {
         interval: 1000
@@ -416,14 +592,14 @@ Item {
         viewWidth: root.width
         viewHeight: root.height
         
-        centerX: root.centerX * Math.pow(2, layerA.layerZoom - root.currentZoom)
-        centerY: root.centerY * Math.pow(2, layerA.layerZoom - root.currentZoom)
+        centerX: root.centerX * root.layerScaleRatio(root.currentZoom, layerA.layerZoom)
+        centerY: root.centerY * root.layerScaleRatioY(root.currentZoom, layerA.layerZoom)
         
         transform: Scale {
             origin.x: layerA.viewWidth / 2 - layerA.x
             origin.y: layerA.viewHeight / 2 - layerA.y
-            xScale: Math.pow(2, root.currentZoom - layerA.layerZoom)
-            yScale: Math.pow(2, root.currentZoom - layerA.layerZoom)
+            xScale: root.layerScaleRatio(layerA.layerZoom, root.currentZoom)
+            yScale: root.layerScaleRatioY(layerA.layerZoom, root.currentZoom)
         }
     }
 
@@ -440,14 +616,14 @@ Item {
         viewWidth: root.width
         viewHeight: root.height
         
-        centerX: root.centerX * Math.pow(2, layerB.layerZoom - root.currentZoom)
-        centerY: root.centerY * Math.pow(2, layerB.layerZoom - root.currentZoom)
+        centerX: root.centerX * root.layerScaleRatio(root.currentZoom, layerB.layerZoom)
+        centerY: root.centerY * root.layerScaleRatioY(root.currentZoom, layerB.layerZoom)
         
         transform: Scale {
             origin.x: layerB.viewWidth / 2 - layerB.x
             origin.y: layerB.viewHeight / 2 - layerB.y
-            xScale: Math.pow(2, root.currentZoom - layerB.layerZoom)
-            yScale: Math.pow(2, root.currentZoom - layerB.layerZoom)
+            xScale: root.layerScaleRatio(layerB.layerZoom, root.currentZoom)
+            yScale: root.layerScaleRatioY(layerB.layerZoom, root.currentZoom)
         }
     }
 
@@ -456,8 +632,8 @@ Item {
         id: overlayManager
         x: (root.width / 2) - root.centerX
         y: (root.height / 2) - root.centerY
-        width: Math.pow(2, root.currentZoom) * root.tileSize
-        height: Math.pow(2, root.currentZoom) * root.tileSize
+        width: root.mapWidthAtZoom
+        height: root.mapHeightAtZoom
         z: 2 // Always on top of map layers
         
         MapIconsRenderer {
@@ -466,6 +642,8 @@ Item {
             mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1
             mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0
             mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0
+            mapZoomScaleX: root.mapZoomScaleX
+            mapZoomScaleY: root.mapZoomScaleY
             currentZoom: root.currentZoom
             centerX: root.centerX
             centerY: root.centerY
@@ -524,13 +702,11 @@ Item {
             model: typeof mapController !== "undefined" && mapController ? mapController.testItemsModel : []
             
             delegate: Item {
-                property real zoomFactor: Math.pow(2, root.currentZoom)
+                property real worldPxX: modelData.x * 80.0
+                property real worldPxY: -modelData.y * 80.0 - 4024.0
                 
-                property real worldPxX: ((modelData.x * mapController.mapScale) + mapController.mapOffsetX) * zoomFactor
-                property real worldPxY: ((-modelData.y * mapController.mapScale) + mapController.mapOffsetY) * zoomFactor
-                
-                x: worldPxX - width / 2
-                y: worldPxY - height / 2
+                x: (worldPxX * getZoomFactor()) + (root.width / 2) - root.centerX - width / 2
+                y: (worldPxY * getZoomFactor()) + (root.height / 2) - root.centerY - height / 2
                 width: 30
                 height: 30
                 
@@ -591,6 +767,8 @@ Item {
         mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1
         mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0
         mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0
+        mapZoomScaleX: root.mapZoomScaleX
+        mapZoomScaleY: root.mapZoomScaleY
         currentZoom: root.currentZoom
         centerX: root.centerX
         centerY: root.centerY
@@ -612,6 +790,11 @@ Item {
         y: 80
         visible: false
         z: 100
+        onSaveRequested: root.saveCurrentArtillery()
+        onClearRequested: {
+            root.savedArtilleries = [];
+            console.log("MapView: All saved batteries cleared.");
+        }
     }
 
     Item {
@@ -619,332 +802,73 @@ Item {
         anchors.fill: parent
         z: 3 // Above map, below UI filters
         
+        Repeater {
+            model: root.savedArtilleries
+            delegate: ArtilleryOverlay {
+                cannonX: modelData.cannon.x
+                cannonY: modelData.cannon.y
+                targetX: modelData.target.x
+                targetY: modelData.target.y
+                isDynamic: false
+                externalMathRes: modelData.mathRes
+                externalRadii: modelData.radii
+                externalIcon: modelData.weaponIcon
+                isActive: true
+                mapController: typeof mapController !== "undefined" ? mapController : null
+                currentZoom: root.currentZoom
+                mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1
+                mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0
+                mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0
+                mapZoomScaleX: root.getZoomFactor()
+                mapZoomScaleY: root.getZoomFactor()
+                centerX: root.centerX
+                centerY: root.centerY
+            }
+        }
+
         ArtilleryOverlay {
-            id: artilleryOverlay
-            isActive: (root.activeTool === "artillery" || root.artilleryCannon !== null)
+            id: dynamicArtilleryOverlay
+            isActive: (root.activeTool === "artillery" && root.artilleryCannon !== null)
             mapController: typeof mapController !== "undefined" ? mapController : null
             currentZoom: root.currentZoom
             mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1
             mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0
             mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0
+            mapZoomScaleX: root.getZoomFactor()
+            mapZoomScaleY: root.getZoomFactor()
             
-            centerX: drawingCanvas.lastPaintCenterX
-            centerY: drawingCanvas.lastPaintCenterY
+            centerX: root.centerX
+            centerY: root.centerY
             
-            cannonX: root.artilleryCannon ? root.worldToApi(root.artilleryCannon.x, root.artilleryCannon.y).x : 0
-            cannonY: root.artilleryCannon ? root.worldToApi(root.artilleryCannon.x, root.artilleryCannon.y).y : 0
-            targetX: root.artilleryTarget ? root.worldToApi(root.artilleryTarget.x, root.artilleryTarget.y).x : 0
-            targetY: root.artilleryTarget ? root.worldToApi(root.artilleryTarget.x, root.artilleryTarget.y).y : 0
+            cannonX: root.artilleryCannon ? root.artilleryCannon.x : 0
+            cannonY: root.artilleryCannon ? root.artilleryCannon.y : 0
+            targetX: root.artilleryTarget ? root.artilleryTarget.x : 0
+            targetY: root.artilleryTarget ? root.artilleryTarget.y : 0
         }
         
-        // This ensures the canvas moves instantly with the map without waiting for repaint
-        transform: Translate {
-            x: drawingCanvas.lastPaintCenterX - root.centerX
-            y: drawingCanvas.lastPaintCenterY - root.centerY
-        }
-        
-        Canvas {
-            id: drawingCanvas
+        MapDrawingsRenderer {
+            id: mapDrawingsRenderer
             anchors.fill: parent
-            
-            property real lastPaintCenterX: root.centerX
-            property real lastPaintCenterY: root.centerY
-            property real lastPaintZoom: root.currentZoom
-            
-            onPaint: {
-                lastPaintCenterX = root.centerX;
-                lastPaintCenterY = root.centerY;
-                lastPaintZoom = root.currentZoom;
-                
-                var ctx = getContext("2d");
-                ctx.clearRect(0, 0, width, height);
-                
-                var allDrawings = root.drawings;
-                if (root.currentDrawing) {
-                    allDrawings = allDrawings.concat([root.currentDrawing]);
-                }
-                
-                for (var i = 0; i < allDrawings.length; i++) {
-                    var d = allDrawings[i];
-                    if (!d) continue;
-                    
-                    ctx.strokeStyle = d.color;
-                    ctx.fillStyle = d.color;
-                    ctx.lineWidth = d.thickness || 3;
-                    ctx.lineCap = "round";
-                    ctx.lineJoin = "round";
-                    
-                    if (d.type === "brush" && d.points && d.points.length > 0) {
-                        ctx.beginPath();
-                        var sp = worldToCanvas(d.points[0].x, d.points[0].y);
-                        ctx.moveTo(sp.x, sp.y);
-                        for (var j = 1; j < d.points.length; j++) {
-                            var p = worldToCanvas(d.points[j].x, d.points[j].y);
-                            ctx.lineTo(p.x, p.y);
-                        }
-                        ctx.stroke();
-                    } else if (d.type === "arrow" && d.start && d.end) {
-                        var p1 = worldToCanvas(d.start.x, d.start.y);
-                        var p2 = worldToCanvas(d.end.x, d.end.y);
-                        var headSize = 10 + (d.thickness || 3) * 1.5;
-                        drawArrow(ctx, p1.x, p1.y, p2.x, p2.y, headSize);
-                    } else if (d.type === "polygon" && d.points && d.points.length > 0) {
-                        ctx.beginPath();
-                        var sp2 = worldToCanvas(d.points[0].x, d.points[0].y);
-                        ctx.moveTo(sp2.x, sp2.y);
-                        for (var k = 1; k < d.points.length; k++) {
-                            var pk = worldToCanvas(d.points[k].x, d.points[k].y);
-                            ctx.lineTo(pk.x, pk.y);
-                        }
-                        if (d.points.length > 2) {
-                            ctx.closePath();
-                        }
-                        
-                        if (d.points.length > 2) {
-                            ctx.save();
-                            ctx.globalAlpha = 0.3;
-                            ctx.fillStyle = d.color;
-                            ctx.fill();
-                            ctx.restore();
-                        }
-                        
-                        ctx.stroke();
-                        
-                        if (d.name) {
-                            var cx = 0, cy = 0;
-                            for (var m = 0; m < d.points.length; m++) {
-                                var ptm = worldToCanvas(d.points[m].x, d.points[m].y);
-                                cx += ptm.x;
-                                cy += ptm.y;
-                            }
-                            cx /= d.points.length;
-                            cy /= d.points.length;
-                            
-                            ctx.fillStyle = "#ffffff";
-                            ctx.font = "bold 14px sans-serif";
-                            ctx.textAlign = "center";
-                            ctx.textBaseline = "middle";
-                            ctx.strokeStyle = "#000000";
-                            ctx.lineWidth = 3;
-                            ctx.strokeText(d.name, cx, cy);
-                            ctx.fillText(d.name, cx, cy);
-                            ctx.lineWidth = d.thickness || 3;
-                        }
-                    } else if (d.type === "route" && d.points && d.points.length > 0) {
-                        ctx.beginPath();
-                        var rStart = worldToCanvas(d.points[0].x, d.points[0].y);
-                        ctx.moveTo(rStart.x, rStart.y);
-                        for (var rj = 1; rj < d.points.length; rj++) {
-                            var rp = worldToCanvas(d.points[rj].x, d.points[rj].y);
-                            ctx.lineTo(rp.x, rp.y);
-                        }
-                        
-                        ctx.save();
-                        ctx.strokeStyle = d.color || "#3b82f6";
-                        ctx.lineWidth = d.thickness || 4;
-                        ctx.setLineDash([8, 6]); // Beautiful dotted/dashed line
-                        ctx.lineDashOffset = -root.dashOffset;
-                        ctx.stroke();
-                        ctx.restore();
-
-                        // Start indicator A (Início) with pulse effect
-                        var startPulse = 10 + Math.sin(root.dashOffset * 0.15) * 1.5;
-                        ctx.beginPath();
-                        ctx.arc(rStart.x, rStart.y, startPulse + 3, 0, 2 * Math.PI);
-                        ctx.fillStyle = (d.color || "#3b82f6") === "#ffffff" ? "rgba(255, 255, 255, 0.2)" : "rgba(59, 130, 246, 0.25)";
-                        ctx.fill();
-
-                        ctx.beginPath();
-                        ctx.arc(rStart.x, rStart.y, 10, 0, 2 * Math.PI);
-                        ctx.fillStyle = d.color || "#3b82f6";
-                        ctx.fill();
-                        ctx.strokeStyle = "#ffffff";
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-
-                        ctx.font = "bold 11px sans-serif";
-                        ctx.fillStyle = (d.color === "#ffffff" || d.color === "#ffffff" || d.color === "#eab308") ? "#111827" : "#ffffff";
-                        ctx.textAlign = "center";
-                        ctx.textBaseline = "middle";
-                        ctx.fillText("A", rStart.x, rStart.y);
-
-                        // End indicator B (Fim)
-                        if (d.points.length > 1) {
-                            var rEnd = worldToCanvas(d.points[d.points.length - 1].x, d.points[d.points.length - 1].y);
-                            var endPulse = 10 + Math.cos(root.dashOffset * 0.15) * 1.5;
-                            ctx.beginPath();
-                            ctx.arc(rEnd.x, rEnd.y, endPulse + 3, 0, 2 * Math.PI);
-                            ctx.fillStyle = (d.color || "#3b82f6") === "#ffffff" ? "rgba(255, 255, 255, 0.2)" : "rgba(59, 130, 246, 0.25)";
-                            ctx.fill();
-
-                            ctx.beginPath();
-                            ctx.arc(rEnd.x, rEnd.y, 10, 0, 2 * Math.PI);
-                            ctx.fillStyle = d.color || "#3b82f6";
-                            ctx.fill();
-                            ctx.strokeStyle = "#ffffff";
-                            ctx.lineWidth = 2;
-                            ctx.stroke();
-
-                            ctx.font = "bold 11px sans-serif";
-                            ctx.fillStyle = (d.color === "#ffffff" || d.color === "#ffffff" || d.color === "#eab308") ? "#111827" : "#ffffff";
-                            ctx.textAlign = "center";
-                            ctx.textBaseline = "middle";
-                            ctx.fillText("B", rEnd.x, rEnd.y);
-                        }
-
-                        // Draw intermediate nodes for route
-                        for (var ri = 1; ri < d.points.length - 1; ri++) {
-                            var rNode = worldToCanvas(d.points[ri].x, d.points[ri].y);
-                            ctx.beginPath();
-                            ctx.arc(rNode.x, rNode.y, 4, 0, 2 * Math.PI);
-                            ctx.fillStyle = "#ffffff";
-                            ctx.fill();
-                            ctx.strokeStyle = d.color || "#3b82f6";
-                            ctx.lineWidth = 1.5;
-                            ctx.stroke();
-                        }
-
-                        // Draw Route Name at center
-                        if (d.name) {
-                            var rcx = 0, rcy = 0;
-                            for (var rm = 0; rm < d.points.length; rm++) {
-                                var rptm = worldToCanvas(d.points[rm].x, d.points[rm].y);
-                                rcx += rptm.x;
-                                rcy += rptm.y;
-                            }
-                            rcx /= d.points.length;
-                            rcy /= d.points.length;
-                            
-                            ctx.font = "bold 12px sans-serif";
-                            var txtWidth = ctx.measureText(d.name).width;
-                            ctx.fillStyle = "rgba(10, 15, 24, 0.85)";
-                            ctx.fillRect(rcx - txtWidth / 2 - 8, rcy - 10, txtWidth + 16, 20);
-                            ctx.strokeStyle = d.color || "#3b82f6";
-                            ctx.lineWidth = 1;
-                            ctx.strokeRect(rcx - txtWidth / 2 - 8, rcy - 10, txtWidth + 16, 20);
-
-                            ctx.fillStyle = "#ffffff";
-                            ctx.textAlign = "center";
-                            ctx.textBaseline = "middle";
-                            ctx.fillText(d.name, rcx, rcy);
-                        }
-                    } else if (d.type === "artillery" && d.start && d.end) {
-                        var aStart = root.apiToWorld(d.start.x, d.start.y);
-                        var aEnd = root.apiToWorld(d.end.x, d.end.y);
-                        var aP1 = worldToCanvas(aStart.x, aStart.y);
-                        var aP2 = worldToCanvas(aEnd.x, aEnd.y);
-                        
-                        ctx.beginPath();
-                        ctx.moveTo(aP1.x, aP1.y);
-                        ctx.lineTo(aP2.x, aP2.y);
-                        ctx.strokeStyle = d.color || "#ef4444";
-                        ctx.lineWidth = d.thickness || 2;
-                        ctx.setLineDash([5, 5]);
-                        ctx.stroke();
-                        ctx.setLineDash([]);
-                        
-                        ctx.beginPath();
-                        ctx.arc(aP2.x, aP2.y, 8, 0, 2 * Math.PI);
-                        ctx.stroke();
-                        ctx.beginPath();
-                        ctx.moveTo(aP2.x - 12, aP2.y); ctx.lineTo(aP2.x + 12, aP2.y);
-                        ctx.moveTo(aP2.x, aP2.y - 12); ctx.lineTo(aP2.x, aP2.y + 12);
-                        ctx.stroke();
-                        
-                        if (d.info) {
-                            var aCx = (aP1.x + aP2.x) / 2;
-                            var aCy = (aP1.y + aP2.y) / 2;
-                            ctx.font = "bold 13px sans-serif";
-                            var aTxtW = ctx.measureText(d.info).width;
-                            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-                            ctx.fillRect(aCx - aTxtW / 2 - 4, aCy - 10, aTxtW + 8, 20);
-                            ctx.fillStyle = "#ffffff";
-                            ctx.textAlign = "center";
-                            ctx.textBaseline = "middle";
-                            ctx.fillText(d.info, aCx, aCy);
-                        }
-                    } else if (d.type === "parabola" && d.start && d.end) {
-                        var aStart = apiToWorld(d.start.x, d.start.y);
-                        var aEnd = apiToWorld(d.end.x, d.end.y);
-                        var sP = worldToCanvas(aStart.x, aStart.y);
-                        var eP = worldToCanvas(aEnd.x, aEnd.y);
-                        
-                        var cx = (sP.x + eP.x) / 2;
-                        var cy = (sP.y + eP.y) / 2;
-                        var dx = eP.x - sP.x;
-                        var dy = eP.y - sP.y;
-                        
-                        // Increase curve factor for a nicer arc
-                        var ctrlX = cx - dy * 0.3;
-                        var ctrlY = cy + dx * 0.3;
-                        
-                        var isHovered = false;
-                        if (root.logisticsHoveredRoute && root.logisticsHoveredRoute.start && root.logisticsHoveredRoute.end) {
-                            if (Math.abs(root.logisticsHoveredRoute.start.x - d.start.x) < 0.1 && 
-                                Math.abs(root.logisticsHoveredRoute.end.x - d.end.x) < 0.1) {
-                                isHovered = true;
-                            }
-                        }
-
-                        // 1. Draw glowing background path
-                        ctx.beginPath();
-                        ctx.moveTo(sP.x, sP.y);
-                        ctx.quadraticCurveTo(ctrlX, ctrlY, eP.x, eP.y);
-                        ctx.lineWidth = isHovered ? 10 : 6;
-                        ctx.strokeStyle = isHovered ? "rgba(234, 179, 8, 0.35)" : "rgba(59, 130, 246, 0.3)";
-                        ctx.stroke();
-
-                        // 2. Draw modern dotted foreground path with animated flow
-                        ctx.beginPath();
-                        ctx.moveTo(sP.x, sP.y);
-                        ctx.quadraticCurveTo(ctrlX, ctrlY, eP.x, eP.y);
-                        ctx.lineWidth = isHovered ? 4.5 : 2.5;
-                        ctx.strokeStyle = isHovered ? "#eab308" : String(d.color || "#3b82f6");
-                        ctx.setLineDash([8, 6]);
-                        ctx.lineDashOffset = -root.dashOffset;
-                        ctx.stroke();
-                        ctx.setLineDash([]);
-                        ctx.lineDashOffset = 0;
-                        
-                        // 3. Draw origin waypoint (circle with an inner dot, matching route color)
-                        ctx.beginPath();
-                        ctx.arc(sP.x, sP.y, 7, 0, 2 * Math.PI);
-                        ctx.fillStyle = isHovered ? "#eab308" : String(d.color || "#3b82f6");
-                        ctx.fill();
-                        ctx.strokeStyle = "#ffffff";
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-                        
-                        ctx.beginPath();
-                        ctx.arc(sP.x, sP.y, 2.5, 0, 2 * Math.PI);
-                        ctx.fillStyle = "#ffffff";
-                        ctx.fill();
-                        
-                        // 4. Draw sleek modern arrowhead at eP
-                        var headlen = 14 + (d.thickness || 4);
-                        var angle = Math.atan2(eP.y - ctrlY, eP.x - ctrlX);
-                        ctx.fillStyle = isHovered ? "#eab308" : String(d.color || "#3b82f6");
-                        ctx.beginPath();
-                        ctx.moveTo(eP.x, eP.y);
-                        ctx.lineTo(eP.x - headlen * Math.cos(angle - Math.PI / 6), eP.y - headlen * Math.sin(angle - Math.PI / 6));
-                        ctx.lineTo(eP.x - headlen * Math.cos(angle + Math.PI / 6), eP.y - headlen * Math.sin(angle + Math.PI / 6));
-                        ctx.closePath();
-                        ctx.fill();
-                        
-                        ctx.strokeStyle = "#ffffff";
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-                    }
-                } // End of allDrawings loop
-            }
+            drawings: root.drawings
+            currentDrawing: root.currentDrawing || {}
+            dashOffset: root.dashOffset
+            mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1.0
+            mapOffsetX: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetX : 0.0
+            mapOffsetY: typeof mapController !== "undefined" && mapController ? mapController.mapOffsetY : 0.0
+            mapZoomScaleX: root.mapZoomScaleX
+            mapZoomScaleY: root.mapZoomScaleY
+            currentZoom: root.currentZoom
+            centerX: root.centerX
+            centerY: root.centerY
+            hoveredRoute: root.logisticsHoveredRoute || {}
         }
 
         // High-fidelity QML overlays for Remote Cursors
         Repeater {
             model: remoteCursorsModel
             delegate: Item {
-                x: (model.wx * Math.pow(2, root.currentZoom)) - root.centerX + (root.width / 2)
-                y: (model.wy * Math.pow(2, root.currentZoom)) - root.centerY + (root.height / 2)
+                x: (model.wx * getZoomFactor()) - root.centerX + (root.width / 2)
+                y: (model.wy * getZoomFactor()) - root.centerY + (root.height / 2)
                 z: 200 // On top of canvas
 
                 // Avatar container
@@ -1094,8 +1018,8 @@ Item {
                 property real wx: modelData.x ? modelData.x : 0
                 property real wy: modelData.y ? modelData.y : 0
                 
-                x: (wx * Math.pow(2, root.currentZoom)) - root.centerX + (root.width / 2) - width/2
-                y: (wy * Math.pow(2, root.currentZoom)) - root.centerY + (root.height / 2) - height/2
+                x: (wx * getZoomFactor()) - root.centerX + (root.width / 2) - width/2
+                y: (wy * getZoomFactor()) - root.centerY + (root.height / 2) - height/2
                 z: root.selectedVehicleIndex === index ? 155 : 150
                 
                 width: vehColumn.implicitWidth
@@ -1108,10 +1032,17 @@ Item {
                     anchors.centerIn: parent
                     spacing: 4
                     Image {
-                        source: typeof appController !== "undefined" ? appController.assetUrl("img/map-layer/" + (modelData.image || "Blacksteele.png")) : "file:///c:/Users/ryanl/OneDrive/Desktop/aplicativo/img/map-layer/" + (modelData.image || "Blacksteele.png")
+                        property string resolutionFolder: {
+                            if (root.mapZoomScaleX > 4.0) return "/large/";
+                            if (root.mapZoomScaleX > 1.5) return "/medium/";
+                            return "/small/";
+                        }
+                        property string imagePath: (modelData.image || "Blacksteele.png").replace("/small/", resolutionFolder)
+                        source: typeof appController !== "undefined" ? appController.assetUrl("img/map-layer/" + imagePath) : "file:///c:/Users/ryanl/OneDrive/Desktop/aplicativo/img/map-layer/" + imagePath
                         
                         property real computedScale: root.selectedVehicleIndex === index ? root.liveVehicleScale : (modelData.scale || 1.0)
-                        property real zoomFactor: Math.pow(2, root.currentZoom - 2)
+                        property real refZoomScale: root.localTilesAvailable && typeof mapController !== "undefined" && mapController ? mapController.getMapZoomScaleX(2) : 4
+                        property real zoomFactor: root.mapZoomScaleX / refZoomScale
                         
                         width: implicitWidth * 0.2 * computedScale * zoomFactor
                         height: implicitHeight * 0.2 * computedScale * zoomFactor
@@ -1143,8 +1074,8 @@ Item {
                         root.liveVehicleRotation = modelData.rotation || 0;
                         root.liveVehicleScale = modelData.scale || 1.0;
                         root.liveVehicleName = modelData.name || "";
-                        
-                        var globalMouse = root.mapFromItem(vehItem, mouse.x, mouse.y);
+                                              
+                        var globalMouse = mapToItem(root, mouse.x, mouse.y);
                         startMouseWorldX = globalMouse.x;
                         startMouseWorldY = globalMouse.y;
                         startWx = vehItem.wx;
@@ -1152,18 +1083,29 @@ Item {
                     }
                     onPositionChanged: function(mouse) {
                         if (pressed) {
-                            var globalMouse = root.mapFromItem(vehItem, mouse.x, mouse.y);
+                            var globalMouse = mapToItem(root, mouse.x, mouse.y);
                             var dx = globalMouse.x - startMouseWorldX;
                             var dy = globalMouse.y - startMouseWorldY;
-                            vehItem.wx = startWx + (dx / Math.pow(2, root.currentZoom));
-                            vehItem.wy = startWy + (dy / Math.pow(2, root.currentZoom));
+                            vehItem.wx = startWx + (dx / getZoomFactor());
+                            vehItem.wy = startWy + (dy / getZoomFactor());
+                            
+                            // Update start positions for continuous dragging without feedback loop
+                            startMouseWorldX = globalMouse.x;
+                            startMouseWorldY = globalMouse.y;
+                            startWx = vehItem.wx;
+                            startWy = vehItem.wy;
                         }
                     }
                     onReleased: function(mouse) {
                         if (startWx !== vehItem.wx || startWy !== vehItem.wy) {
-                            var newDrawings = root.drawings.slice();
-                            newDrawings[index].x = vehItem.wx;
-                            newDrawings[index].y = vehItem.wy;
+                            var newDrawings = [];
+                            for (var i = 0; i < root.drawings.length; i++) {
+                                newDrawings.push(root.drawings[i]);
+                            }
+                            var modified = Object.assign({}, newDrawings[index]);
+                            modified.x = vehItem.wx;
+                            modified.y = vehItem.wy;
+                            newDrawings[index] = modified;
                             root.drawings = newDrawings;
                         }
                     }
@@ -1191,7 +1133,6 @@ Item {
                                 newDrawings.splice(index, 1);
                                 root.drawings = newDrawings;
                                 root.selectedVehicleIndex = -1;
-                                drawingCanvas.requestPaint();
                             }
                         }
                     }
@@ -1357,10 +1298,11 @@ Item {
         property real pressY: 0
         property bool isDragging: false
         property bool didPan: false
+        property real lastCursorSyncTime: 0
         
         function eraseAt(sx, sy) {
             var wp = screenToWorld(sx, sy);
-            var threshold = 15 / Math.pow(2, root.currentZoom);
+            var threshold = 15 / root.mapZoomScaleX;
             var removed = false;
             var newDrawings = [];
             
@@ -1372,25 +1314,25 @@ Item {
                 } else if (d.type === "brush" || d.type === "route") {
                     for (var j = 0; j < d.points.length - 1; j++) {
                         var dist = distanceToSegment(wp.x, wp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
-                        if (dist <= threshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                        if (dist <= threshold + (d.thickness || 3) / root.mapZoomScaleX) {
                             hit = true; break;
                         }
                     }
                 } else if (d.type === "arrow" || d.type === "artillery") {
                     var dist2 = distanceToSegment(wp.x, wp.y, d.start.x, d.start.y, d.end.x, d.end.y);
-                    if (dist2 <= threshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                    if (dist2 <= threshold + (d.thickness || 3) / root.mapZoomScaleX) {
                         hit = true;
                     }
                 } else if (d.type === "parabola") {
                     var sWp = apiToWorld(d.start.x, d.start.y);
                     var eWp = apiToWorld(d.end.x, d.end.y);
                     var pDist = distanceToParabola(wp.x, wp.y, sWp.x, sWp.y, eWp.x, eWp.y);
-                    if (pDist <= threshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                    if (pDist <= threshold + (d.thickness || 3) / root.mapZoomScaleX) {
                         hit = true;
                     }
                 } else if (d.type === "vehicle") {
                     var distVeh = Math.sqrt(Math.pow(wp.x - d.x, 2) + Math.pow(wp.y - d.y, 2));
-                    if (distVeh <= (30 * (d.scale || 1.0)) / Math.pow(2, root.currentZoom)) {
+                    if (distVeh <= (30 * (d.scale || 1.0)) / root.mapZoomScaleX) {
                         hit = true;
                     }
                 }
@@ -1404,7 +1346,6 @@ Item {
             
             if (removed) {
                 root.drawings = newDrawings;
-                drawingCanvas.requestPaint();
             }
         }
         
@@ -1428,12 +1369,12 @@ Item {
                 var wp = screenToWorld(mouse.x, mouse.y);
                 var cUserBrush = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
                 root.currentDrawing = { type: "brush", color: root.activeColor, thickness: root.activeThickness, points: [wp], user: cUserBrush };
-                drawingCanvas.requestPaint();
             } else if (root.activeTool === "arrow") {
                 var wp2 = screenToWorld(mouse.x, mouse.y);
+                var nearestNode2 = findNearestNode(wp2, 15);
+                if (nearestNode2) wp2 = nearestNode2;
                 var cUserArrow = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
                 root.currentDrawing = { type: "arrow", color: root.activeColor, thickness: root.activeThickness, start: wp2, end: wp2, user: cUserArrow };
-                drawingCanvas.requestPaint();
             } else if (root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "vehicle") {
                 cursorShape = Qt.ClosedHandCursor; // Will reset to cross on release if no pan
             } else if (root.activeTool === "eraser") {
@@ -1458,12 +1399,13 @@ Item {
                         poly.points.push(wp);
                         root.currentDrawing = poly;
                     }
-                    drawingCanvas.requestPaint();
                 }
             } else if (root.activeTool === "route") {
                 cursorShape = Qt.CrossCursor;
                 if (!didPan && !root.routeNameDialogVisible) {
                     var wpRoute = screenToWorld(mouse.x, mouse.y);
+                    var nearestNodeR = findNearestNode(wpRoute, 15);
+                    if (nearestNodeR) wpRoute = nearestNodeR;
                     if (!root.currentDrawing || root.currentDrawing.type !== "route") {
                         var cUserRoute = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
                         root.currentDrawing = { type: "route", color: root.activeColor, thickness: root.activeThickness, points: [wpRoute], user: cUserRoute };
@@ -1473,7 +1415,6 @@ Item {
                         route.points.push(wpRoute);
                         root.currentDrawing = route;
                     }
-                    drawingCanvas.requestPaint();
                 }
             } else if (root.activeTool === "vehicle") {
                 cursorShape = Qt.CrossCursor;
@@ -1481,61 +1422,54 @@ Item {
                     var wpVeh = screenToWorld(mouse.x, mouse.y);
                     var cUserVeh = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
                     var newDrawings = root.drawings.slice();
-                    newDrawings.push({
-                        type: "vehicle",
-                        user: cUserVeh,
-                        x: wpVeh.x,
-                        y: wpVeh.y,
-                        image: root.activeVehicleImage,
-                        rotation: root.activeVehicleRotation,
-                        scale: root.activeVehicleScale * (1.0 / Math.pow(2, root.currentZoom - 2)),
-                        name: root.activeVehicleName
-                    });
+                    var count = root.activeVehicleCount || 1;
+                    var scaleFactor = (1.0 / (root.localTilesAvailable && typeof mapController !== "undefined" && mapController ? mapController.getMapZoomScaleX(2) : 4));
+                    var finalScale = root.activeVehicleScale * scaleFactor;
+                    
+                    var angleRad = (root.activeVehicleRotation + 90) * Math.PI / 180.0;
+                    var spacing = 60 * finalScale;
+                    
+                    for (var k = 0; k < count; k++) {
+                        var offset_idx = k - (count - 1) / 2.0;
+                        var dx = Math.cos(angleRad) * spacing * offset_idx;
+                        var dy = Math.sin(angleRad) * spacing * offset_idx;
+                        
+                        newDrawings.push({
+                            type: "vehicle",
+                            user: cUserVeh,
+                            x: wpVeh.x + dx,
+                            y: wpVeh.y + dy,
+                            image: root.activeVehicleImage,
+                            rotation: root.activeVehicleRotation,
+                            scale: finalScale,
+                            name: root.activeVehicleName + (count > 1 ? (" " + (k + 1)) : "")
+                        });
+                    }
                     root.drawings = newDrawings;
-                    drawingCanvas.requestPaint();
+                }
+            } else if (root.activeTool === "text") {
+                cursorShape = Qt.CrossCursor;
+                if (!didPan && !root.textToolDialogVisible) {
+                    var wpText = screenToWorld(mouse.x, mouse.y);
+                    var nearestNodeT = findNearestNode(wpText, 15);
+                    if (nearestNodeT) wpText = nearestNodeT;
+                    
+                    root.currentTextLocation = wpText;
+                    root.textToolDialogVisible = true;
                 }
             } else if (root.activeTool === "artillery") {
                 cursorShape = Qt.CrossCursor;
-                console.log("MapView: artillery clicked! didPan:", didPan, "mouse:", mouse.x, mouse.y);
                 if (!didPan) {
                     var wpArt = screenToWorld(mouse.x, mouse.y);
-                    console.log("MapView: wpArt calculated:", wpArt.x, wpArt.y);
-                    if (root.artilleryStep !== 1) {
+                    if (root.artilleryStep === 0) {
                         root.artilleryCannon = wpArt;
                         root.artilleryTarget = wpArt;
                         root.artilleryStep = 1;
-                        console.log("MapView: step 1, cannon set!");
-                    } else {
+                    } else if (root.artilleryStep === 1) {
                         root.artilleryTarget = wpArt;
-                        
-                        // Sync to drawing log
-                        var wCannonAPI = root.worldToApi(root.artilleryCannon.x, root.artilleryCannon.y);
-                        var wTargetAPI = root.worldToApi(wpArt.x, wpArt.y);
-                        
-                        // calculateArtillery expects API coordinates (which python engine calls World coordinates)
-                        var mathRes = typeof mapController !== "undefined" && mapController ? mapController.calculateArtillery(wCannonAPI.x, wCannonAPI.y, wTargetAPI.x, wTargetAPI.y) : null;
-                        var azm = mathRes ? (mathRes.bearing || 0) : 0;
-                        var dist = mathRes ? (mathRes.distance_meters || 0) : 0;
-                        var infoText = "AZM: " + Math.round(azm) + "° | DIST: " + Math.round(dist) + "m";
-                        
-                        var cUserArt = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
-                        var newArt = { 
-                            type: "artillery", 
-                            color: root.activeColor, 
-                            thickness: root.activeThickness, 
-                            start: wCannonAPI, 
-                            end: wTargetAPI, 
-                            user: cUserArt,
-                            info: infoText
-                        };
-                        var nds = root.drawings.slice();
-                        nds.push(newArt);
-                        root.drawings = nds;
-                        drawingCanvas.requestPaint();
-                        
-                        // Keep step 2 so overlay stays visible
                         root.artilleryStep = 2;
-                        console.log("MapView: step 2, target set and synced to log!");
+                    } else if (root.artilleryStep === 2) {
+                        root.artilleryTarget = wpArt;
                     }
                 }
             } else {
@@ -1568,6 +1502,10 @@ Item {
         }
         
         onPositionChanged: function(mouse) {
+            if (root.activeTool === "artillery" && root.artilleryStep === 1) {
+                var wpArt = screenToWorld(mouse.x, mouse.y);
+                root.artilleryTarget = wpArt;
+            }
             if (isDragging) {
                 if (root.activeTool === "pan" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "vehicle") {
                     var dx = mouse.x - lastX;
@@ -1579,21 +1517,41 @@ Item {
                     }
                     
                     if (didPan || root.activeTool === "pan") {
-                        var mapSize = Math.pow(2, root.currentZoom) * root.tileSize;
-                        root.centerX = Math.max(0, Math.min(mapSize, root.centerX - dx));
-                        root.centerY = Math.max(0, Math.min(mapSize, root.centerY - dy));
+                        root.centerX = Math.max(0, Math.min(root.mapWidthAtZoom, root.centerX - dx));
+                        root.centerY = Math.max(0, Math.min(root.mapHeightAtZoom, root.centerY - dy));
                         lastX = mouse.x;
                         lastY = mouse.y;
-                        drawingCanvas.requestPaint();
                     }
                 } else if (root.activeTool === "brush" && root.currentDrawing) {
+                    var lastPt = root.currentDrawing.points[root.currentDrawing.points.length - 1];
                     var wp = screenToWorld(mouse.x, mouse.y);
-                    root.currentDrawing.points.push(wp);
-                    drawingCanvas.requestPaint();
+                    var spLast = worldToCanvas(lastPt.x, lastPt.y);
+                    var distBrush = Math.sqrt(Math.pow(mouse.x - spLast.x, 2) + Math.pow(mouse.y - spLast.y, 2));
+                    if (distBrush > 4) {
+                        var b = Object.assign({}, root.currentDrawing);
+                        var newPoints = [];
+                        for (var i = 0; i < root.currentDrawing.points.length; i++) {
+                            newPoints.push(root.currentDrawing.points[i]);
+                        }
+                        newPoints.push(wp);
+                        b.points = newPoints;
+                        root.currentDrawing = b;
+                    }
                 } else if (root.activeTool === "arrow" && root.currentDrawing) {
                     var wp2 = screenToWorld(mouse.x, mouse.y);
-                    root.currentDrawing.end = wp2;
-                    drawingCanvas.requestPaint();
+                    var spStart = worldToCanvas(root.currentDrawing.start.x, root.currentDrawing.start.y);
+                    var distArrow = Math.sqrt(Math.pow(mouse.x - spStart.x, 2) + Math.pow(mouse.y - spStart.y, 2));
+                    // Only update arrow if it changed significantly
+                    var prevEnd = root.currentDrawing.end;
+                    var spPrevEnd = worldToCanvas(prevEnd.x, prevEnd.y);
+                    var distArrowDelta = Math.sqrt(Math.pow(mouse.x - spPrevEnd.x, 2) + Math.pow(mouse.y - spPrevEnd.y, 2));
+                    if (distArrowDelta > 3) {
+                        var arr = Object.assign({}, root.currentDrawing);
+                        // Ensure start is a pure JS object so it doesn't lose properties in PySide Variant
+                        arr.start = { x: root.currentDrawing.start.x, y: root.currentDrawing.start.y };
+                        arr.end = { x: wp2.x, y: wp2.y };
+                        root.currentDrawing = arr;
+                    }
                 } else if (root.activeTool === "eraser") {
                     eraseAt(mouse.x, mouse.y);
                 }
@@ -1608,21 +1566,20 @@ Item {
                     for (var r = 0; r < root.logisticsRoutes.length; r++) {
                         var route = root.logisticsRoutes[r];
                         var rdist = distanceToParabola(hwp.x, hwp.y, apiToWorld(route.start.x, route.start.y).x, apiToWorld(route.start.x, route.start.y).y, apiToWorld(route.end.x, route.end.y).x, apiToWorld(route.end.x, route.end.y).y);
-                        if (rdist < 20 / Math.pow(2, root.currentZoom)) {
+                        if (rdist < 20 / root.mapZoomScaleX) {
                             foundHover = route;
                             break;
                         }
                     }
                     if (root.logisticsHoveredRoute !== foundHover) {
                         root.logisticsHoveredRoute = foundHover;
-                        drawingCanvas.requestPaint();
                     }
                 }
                 
                 // Hover for drawings
                 if (!isDragging && root.drawings) {
                     var hoverWp = screenToWorld(mouse.x, mouse.y);
-                    var hoverThreshold = 15 / Math.pow(2, root.currentZoom);
+                    var hoverThreshold = 15 / root.mapZoomScaleX;
                     var foundHoverDrawing = null;
                     
                     for (var i = root.drawings.length - 1; i >= 0; i--) {
@@ -1633,18 +1590,25 @@ Item {
                         } else if (d.type === "brush" || d.type === "route") {
                             for (var j = 0; j < d.points.length - 1; j++) {
                                 var segmentDist = distanceToSegment(hoverWp.x, hoverWp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
-                                if (segmentDist <= hoverThreshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                                if (segmentDist <= hoverThreshold + (d.thickness || 3) / root.mapZoomScaleX) {
                                     hit = true; break;
                                 }
                             }
-                        } else if (d.type === "arrow" || d.type === "artillery") {
+                        } else if (d.type === "arrow") {
                             var arrowDist = distanceToSegment(hoverWp.x, hoverWp.y, d.start.x, d.start.y, d.end.x, d.end.y);
-                            if (arrowDist <= hoverThreshold + (d.thickness || 3) / Math.pow(2, root.currentZoom)) {
+                            if (arrowDist <= hoverThreshold + (d.thickness || 3) / root.mapZoomScaleX) {
+                                hit = true;
+                            }
+                        } else if (d.type === "artillery") {
+                            var aStartWp = apiToWorld(d.start.x, d.start.y);
+                            var aEndWp = apiToWorld(d.end.x, d.end.y);
+                            var artDist = distanceToSegment(hoverWp.x, hoverWp.y, aStartWp.x, aStartWp.y, aEndWp.x, aEndWp.y);
+                            if (artDist <= hoverThreshold + (d.thickness || 3) / root.mapZoomScaleX) {
                                 hit = true;
                             }
                         } else if (d.type === "vehicle") {
                             var vDist = Math.sqrt(Math.pow(hoverWp.x - d.x, 2) + Math.pow(hoverWp.y - d.y, 2));
-                            if (vDist <= (30 * (d.scale || 1.0)) / Math.pow(2, root.currentZoom)) {
+                            if (vDist <= (30 * (d.scale || 1.0)) / root.mapZoomScaleX) {
                                 hit = true;
                             }
                         }
@@ -1680,16 +1644,16 @@ Item {
                 var mx = wheel.x - mapOriginX;
                 var my = wheel.y - mapOriginY;
                 
-                var scaleFactor = Math.pow(2, newZoom - root.currentZoom);
-                var newMx = mx * scaleFactor;
-                var newMy = my * scaleFactor;
+                var scaleFactorX = root.mapLevelWidth(newZoom) / root.mapLevelWidth(root.currentZoom);
+                var scaleFactorY = root.mapLevelHeight(newZoom) / root.mapLevelHeight(root.currentZoom);
+                var newMx = mx * scaleFactorX;
+                var newMy = my * scaleFactorY;
                 
                 var newCenterX = root.centerX + (newMx - mx);
                 var newCenterY = root.centerY + (newMy - my);
                 
-                var mapSize = Math.pow(2, newZoom) * root.tileSize;
-                var finalCenterX = Math.max(0, Math.min(mapSize, newCenterX));
-                var finalCenterY = Math.max(0, Math.min(mapSize, newCenterY));
+                var finalCenterX = Math.max(0, Math.min(root.mapLevelWidth(newZoom), newCenterX));
+                var finalCenterY = Math.max(0, Math.min(root.mapLevelHeight(newZoom), newCenterY));
                 
                 var activeLayer = (activeLayerIndex === 0) ? layerA : layerB;
                 var inactiveLayer = (activeLayerIndex === 0) ? layerB : layerA;
@@ -1703,7 +1667,6 @@ Item {
                 root.centerX = finalCenterX;
                 root.centerY = finalCenterY;
                 root.currentZoom = newZoom;
-                drawingCanvas.requestPaint();
             }
         }
     }
@@ -1962,6 +1925,41 @@ Item {
                 color: settingsController.borderColor
                 anchors.verticalCenter: parent.verticalCenter
             }
+            // Text Tool
+            Rectangle {
+                width: 36
+                height: 36
+                radius: 18
+                color: root.activeTool === "text" ? settingsController.accentColor : "transparent"
+                border.color: root.activeTool === "text" ? settingsController.accentColor : settingsController.borderColor
+                Text {
+                    anchors.centerIn: parent
+                    text: "T"
+                    font.pixelSize: 18
+                    font.bold: true
+                    color: root.activeTool === "text" ? "white" : settingsController.textColor
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        if (root.activeTool === "text") {
+                            root.showToolSettings = !root.showToolSettings;
+                        } else {
+                            if (root.currentDrawing) root.currentDrawing = null;
+                            root.activeTool = "text";
+                            root.showToolSettings = false; // no settings for now except color
+                        }
+                    }
+                    cursorShape: Qt.PointingHandCursor
+                }
+            }
+            
+            Rectangle {
+                width: 1
+                height: 24
+                color: settingsController.borderColor
+                anchors.verticalCenter: parent.verticalCenter
+            }
             // Eraser Tool
             Rectangle {
                 width: 36
@@ -2001,7 +1999,7 @@ Item {
         anchors.bottomMargin: 12
         anchors.horizontalCenter: parent.horizontalCenter
         width: (root.selectedVehicleIndex !== -1 || root.activeTool === "vehicle") ? 320 : 240
-        height: root.selectedVehicleIndex !== -1 ? 260 : (root.activeTool === "eraser" ? 80 : (root.activeTool === "vehicle" ? 380 : 120))
+        height: root.selectedVehicleIndex !== -1 ? 260 : (root.activeTool === "eraser" ? 80 : (root.activeTool === "vehicle" ? 480 : 120))
         radius: 12
         color: settingsController.surfaceColor
         border.color: settingsController.borderColor
@@ -2025,7 +2023,7 @@ Item {
             anchors.fill: parent
             anchors.margins: 12
             spacing: 12
-            visible: root.activeTool !== "eraser" && root.activeTool !== "vehicle"
+            visible: root.activeTool !== "eraser" && root.activeTool !== "vehicle" && root.selectedVehicleIndex === -1
             
             Text {
                 text: root.activeTool === "brush" ? "Espessura e Cor do Pincel" : (root.activeTool === "arrow" ? "Espessura e Cor da Seta" : (root.activeTool === "route" ? "Espessura e Cor da Rota" : "Espessura e Cor da Área"))
@@ -2116,7 +2114,6 @@ Item {
                 onClicked: {
                     root.drawings = [];
                     root.currentDrawing = null;
-                    drawingCanvas.requestPaint();
                     root.showToolSettings = false;
                     root.activeTool = "pan";
                 }
@@ -2149,7 +2146,7 @@ Item {
                     from: 0; to: 360; stepSize: 1
                     value: root.liveVehicleRotation
                     onValueChanged: {
-                        if (root.selectedVehicleIndex !== -1) {
+                        if (root.selectedVehicleIndex !== -1 && root.liveVehicleRotation !== value) {
                             root.liveVehicleRotation = value;
                         }
                     }
@@ -2157,7 +2154,9 @@ Item {
                         if (!pressed && root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
                             if (root.drawings[root.selectedVehicleIndex].rotation !== root.liveVehicleRotation) {
                                 var newDrawings = root.drawings.slice();
-                                newDrawings[root.selectedVehicleIndex].rotation = root.liveVehicleRotation;
+                                var modified = Object.assign({}, newDrawings[root.selectedVehicleIndex]);
+                                modified.rotation = root.liveVehicleRotation;
+                                newDrawings[root.selectedVehicleIndex] = modified;
                                 root.drawings = newDrawings;
                             }
                         }
@@ -2174,7 +2173,7 @@ Item {
                     from: 0.05; to: 3.0; stepSize: 0.05
                     value: root.liveVehicleScale
                     onValueChanged: {
-                        if (root.selectedVehicleIndex !== -1) {
+                        if (root.selectedVehicleIndex !== -1 && root.liveVehicleScale !== value) {
                             root.liveVehicleScale = value;
                         }
                     }
@@ -2182,7 +2181,9 @@ Item {
                         if (!pressed && root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
                             if (root.drawings[root.selectedVehicleIndex].scale !== root.liveVehicleScale) {
                                 var newDrawings = root.drawings.slice();
-                                newDrawings[root.selectedVehicleIndex].scale = root.liveVehicleScale;
+                                var modified = Object.assign({}, newDrawings[root.selectedVehicleIndex]);
+                                modified.scale = root.liveVehicleScale;
+                                newDrawings[root.selectedVehicleIndex] = modified;
                                 root.drawings = newDrawings;
                             }
                         }
@@ -2205,7 +2206,9 @@ Item {
                         if (root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
                             if (root.drawings[root.selectedVehicleIndex].name !== root.liveVehicleName) {
                                 var newDrawings = root.drawings.slice();
-                                newDrawings[root.selectedVehicleIndex].name = root.liveVehicleName;
+                                var modified = Object.assign({}, newDrawings[root.selectedVehicleIndex]);
+                                modified.name = root.liveVehicleName;
+                                newDrawings[root.selectedVehicleIndex] = modified;
                                 root.drawings = newDrawings;
                             }
                         }
@@ -2226,15 +2229,59 @@ Item {
             property string searchText: ""
             
             Text {
-                text: "Catálogo de Embarcações"
+                text: "Catálogo de Embarcações e Veículos"
                 color: settingsController.textColor
                 font.bold: true
                 font.pixelSize: 14
             }
             
+            RowLayout {
+                width: parent.width
+                spacing: 8
+                Text {
+                    text: "Qtd ao clicar:"
+                    color: settingsController.textColor
+                    font.bold: true
+                    font.pixelSize: 12
+                }
+                
+                Rectangle {
+                    width: 32; height: 32
+                    radius: 4
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
+                    border.width: 1
+                    Text { anchors.centerIn: parent; text: "-"; color: settingsController.textColor; font.bold: true }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: if (root.activeVehicleCount > 1) root.activeVehicleCount--
+                        cursorShape: Qt.PointingHandCursor
+                    }
+                }
+                Text {
+                    text: root.activeVehicleCount.toString()
+                    color: settingsController.textColor
+                    font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Rectangle {
+                    width: 32; height: 32
+                    radius: 4
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
+                    border.width: 1
+                    Text { anchors.centerIn: parent; text: "+"; color: settingsController.textColor; font.bold: true }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: if (root.activeVehicleCount < 50) root.activeVehicleCount++
+                        cursorShape: Qt.PointingHandCursor
+                    }
+                }
+            }
+            
             TextField {
                 width: parent.width
-                placeholderText: "Buscar embarcação..."
+                placeholderText: "Buscar..."
                 color: settingsController.textColor
                 font.pixelSize: 12
                 background: Rectangle { color: settingsController.backgroundColor; border.color: settingsController.borderColor; border.width: 1; radius: 6 }
@@ -2246,96 +2293,119 @@ Item {
                 height: 290
                 clip: true
                 
-                Grid {
-                    columns: 3
-                    spacing: 12
-                    
-                    property var allItems: {
-                        if (typeof VehiclesData === "undefined" || !VehiclesData.data.categories || VehiclesData.data.categories.length === 0) return [];
-                        var items = VehiclesData.data.categories[0].items;
-                        var res = [];
-                        for (var i = 0; i < items.length; i++) {
-                            if (vehicleSearchCol.searchText === "" || items[i].name.toLowerCase().indexOf(vehicleSearchCol.searchText) !== -1) {
-                                res.push(items[i]);
-                            }
-                        }
-                        return res;
-                    }
+                Column {
+                    width: parent.width
+                    spacing: 16
                     
                     Repeater {
-                        model: parent.allItems
-                        delegate: Rectangle {
-                            width: 80
-                            height: 88
-                            radius: 8
-                            color: settingsController.backgroundColor
-                            border.color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.borderColor
-                            border.width: root.activeVehicleImage === modelData.image ? 2 : 1
+                        model: {
+                            if (typeof VehiclesData === "undefined" || !VehiclesData.data.categories) return [];
+                            return VehiclesData.data.categories;
+                        }
+                        
+                        delegate: Column {
+                            width: parent.width
+                            spacing: 8
+                            visible: itemsRepeater.count > 0
                             
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 8
-                                color: "white"
-                                opacity: mouseArea.containsMouse ? 0.05 : 0.0
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                            Text {
+                                text: modelData.name
+                                color: settingsController.accentColor
+                                font.bold: true
+                                font.pixelSize: 13
                             }
                             
-                            Column {
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                spacing: 4
+                            Grid {
+                                columns: 3
+                                spacing: 12
                                 
-                                Item {
-                                    width: parent.width
-                                    height: 50
-                                    Image {
-                                        anchors.centerIn: parent
-                                        source: typeof appController !== "undefined" ? appController.assetUrl("img/map-layer/" + modelData.image) : "file:///c:/Users/ryanl/OneDrive/Desktop/aplicativo/img/map-layer/" + modelData.image
-                                        width: parent.width
-                                        height: parent.height
-                                        fillMode: Image.PreserveAspectFit
-                                        smooth: true
-                                        mipmap: true
+                                Repeater {
+                                    id: itemsRepeater
+                                    model: {
+                                        var res = [];
+                                        var items = modelData.items;
+                                        for (var i = 0; i < items.length; i++) {
+                                            if (vehicleSearchCol.searchText === "" || items[i].name.toLowerCase().indexOf(vehicleSearchCol.searchText) !== -1) {
+                                                res.push(items[i]);
+                                            }
+                                        }
+                                        return res;
                                     }
-                                }
-                                
-                                Text {
-                                    text: modelData.name
-                                    color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.textColor
-                                    font.pixelSize: 10
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    width: parent.width
-                                    elide: Text.ElideRight
-                                }
-                            }
-                            
-                            Rectangle {
-                                anchors.top: parent.top
-                                anchors.left: parent.left
-                                anchors.margins: 6
-                                width: 14
-                                height: 14
-                                radius: 3
-                                color: modelData.faction === "w" ? "#2a5b8c" : (modelData.faction === "c" ? "#5a7a50" : "#888888")
-                                visible: modelData.faction !== undefined
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData.faction ? modelData.faction.toUpperCase() : ""
-                                    color: "white"
-                                    font.pixelSize: 9
-                                    font.bold: true
-                                }
-                            }
-                            
-                            MouseArea {
-                                id: mouseArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    root.activeVehicleImage = modelData.image;
-                                    root.activeVehicleName = modelData.name;
+                                    delegate: Rectangle {
+                                        width: 80
+                                        height: 88
+                                        radius: 8
+                                        color: settingsController.backgroundColor
+                                        border.color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.borderColor
+                                        border.width: root.activeVehicleImage === modelData.image ? 2 : 1
+                                        
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 8
+                                            color: "white"
+                                            opacity: mouseArea.containsMouse ? 0.05 : 0.0
+                                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                                        }
+                                        
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 6
+                                            spacing: 4
+                                            
+                                            Item {
+                                                width: parent.width
+                                                height: 50
+                                                Image {
+                                                    anchors.centerIn: parent
+                                                    source: typeof appController !== "undefined" ? appController.assetUrl("img/map-layer/" + modelData.image) : "file:///c:/Users/ryanl/OneDrive/Desktop/aplicativo/img/map-layer/" + modelData.image
+                                                    width: parent.width
+                                                    height: parent.height
+                                                    fillMode: Image.PreserveAspectFit
+                                                    smooth: true
+                                                    mipmap: true
+                                                }
+                                            }
+                                            
+                                            Text {
+                                                text: modelData.name
+                                                color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.textColor
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                width: parent.width
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+                                        
+                                        Rectangle {
+                                            anchors.top: parent.top
+                                            anchors.left: parent.left
+                                            anchors.margins: 6
+                                            width: 14
+                                            height: 14
+                                            radius: 3
+                                            color: modelData.faction === "w" ? "#2a5b8c" : (modelData.faction === "c" ? "#5a7a50" : "#888888")
+                                            visible: modelData.faction !== undefined
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: modelData.faction ? modelData.faction.toUpperCase() : ""
+                                                color: "white"
+                                                font.pixelSize: 9
+                                                font.bold: true
+                                            }
+                                        }
+                                        
+                                        MouseArea {
+                                            id: mouseArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.activeVehicleImage = modelData.image;
+                                                root.activeVehicleName = modelData.name;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2547,7 +2617,6 @@ Item {
                     onClicked: {
                         root.polygonNameDialogVisible = false;
                         root.currentDrawing = null;
-                        drawingCanvas.requestPaint();
                     }
                 }
                 
@@ -2575,7 +2644,6 @@ Item {
                             root.currentDrawing = null;
                             polygonNameInput.text = "";
                             root.polygonNameDialogVisible = false;
-                            drawingCanvas.requestPaint();
                         }
                     }
                 }
@@ -2658,7 +2726,6 @@ Item {
                                 root.activeColor = modelData;
                                 if (root.currentDrawing) {
                                     root.currentDrawing.color = modelData;
-                                    drawingCanvas.requestPaint();
                                 }
                             }
                             cursorShape: Qt.PointingHandCursor
@@ -2688,7 +2755,6 @@ Item {
                         root.activeThickness = value;
                         if (root.currentDrawing) {
                             root.currentDrawing.thickness = value;
-                            drawingCanvas.requestPaint();
                         }
                     }
                 }
@@ -2704,7 +2770,6 @@ Item {
                     onClicked: {
                         root.routeNameDialogVisible = false;
                         root.currentDrawing = null;
-                        drawingCanvas.requestPaint();
                     }
                 }
                 
@@ -2734,8 +2799,131 @@ Item {
                             root.currentDrawing = null;
                             routeNameInput.text = "";
                             root.routeNameDialogVisible = false;
-                            drawingCanvas.requestPaint();
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- TEXT TOOL MODAL ---
+    Rectangle {
+        id: textToolModal
+        visible: root.textToolDialogVisible
+        anchors.centerIn: parent
+        width: 320
+        height: 180
+        radius: 8
+        color: settingsController.surfaceColor
+        border.color: settingsController.borderColor
+        border.width: 1
+        z: 200
+        
+        MultiEffect {
+            source: textToolModal
+            anchors.fill: textToolModal
+            shadowEnabled: true
+            shadowOpacity: 0.5
+            shadowBlur: 1.0
+            shadowVerticalOffset: 4
+            shadowColor: "black"
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            
+            Text {
+                text: "Adicionar Texto"
+                color: settingsController.textColor
+                font.bold: true
+                font.pixelSize: 16
+                Layout.fillWidth: true
+            }
+            
+            TextField {
+                id: textToolInput
+                Layout.fillWidth: true
+                placeholderText: "Ex: Alvo Principal 1"
+                color: settingsController.textColor
+                background: Rectangle {
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
+                    border.width: 1
+                    radius: 4
+                }
+                onAccepted: finishTextBtn.clicked()
+            }
+            
+            Row {
+                spacing: 8
+                Layout.alignment: Qt.AlignHCenter
+                Repeater {
+                    model: ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#a855f7", "#ff7849"]
+                    delegate: Rectangle {
+                        width: 24
+                        height: 24
+                        radius: 12
+                        color: modelData
+                        border.color: root.activeColor === modelData ? settingsController.accentColor : "#888888"
+                        border.width: root.activeColor === modelData ? 3 : 1
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: root.activeColor = modelData;
+                            cursorShape: Qt.PointingHandCursor
+                        }
+                    }
+                }
+            }
+            
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                
+                Button {
+                    Layout.fillWidth: true
+                    text: "Cancelar"
+                    onClicked: {
+                        root.textToolDialogVisible = false;
+                        root.currentTextLocation = null;
+                        textToolInput.text = "";
+                    }
+                }
+                
+                Button {
+                    id: finishTextBtn
+                    Layout.fillWidth: true
+                    text: "Salvar"
+                    background: Rectangle {
+                        color: settingsController.accentColor
+                        radius: 4
+                    }
+                    contentItem: Text {
+                        text: "Salvar"
+                        color: "white"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        font.bold: true
+                    }
+                    onClicked: {
+                        if (root.currentTextLocation && textToolInput.text.trim() !== "") {
+                            var cUserText = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                            var newTextDrawing = {
+                                type: "text",
+                                text: textToolInput.text.trim(),
+                                color: root.activeColor,
+                                start: root.currentTextLocation, // Use start to hold the coordinate
+                                user: cUserText
+                            };
+                            
+                            var newDrawings = root.drawings.slice();
+                            newDrawings.push(newTextDrawing);
+                            root.drawings = newDrawings;
+                        }
+                        root.textToolDialogVisible = false;
+                        root.currentTextLocation = null;
+                        textToolInput.text = "";
                     }
                 }
             }
@@ -2818,6 +3006,38 @@ Item {
 
     // --- AUTO SAVE TIMER ---
     Item {
+        property real lastSentWx: -99999
+        property real lastSentWy: -99999
+        
+        Timer {
+            interval: 50
+            running: true
+            repeat: true
+            onTriggered: {
+                if (globalHoverTracker.hovered && Qt.application.active) {
+                    var mx = globalHoverTracker.point.position.x;
+                    var my = globalHoverTracker.point.position.y;
+                    var wp = screenToWorld(mx, my);
+                    if (Math.abs(wp.x - parent.lastSentWx) > 0.1 || Math.abs(wp.y - parent.lastSentWy) > 0.1) {
+                        parent.lastSentWx = wp.x;
+                        parent.lastSentWy = wp.y;
+                        var userId = (typeof chatController !== "undefined" && chatController.currentUserId) ? chatController.currentUserId : "";
+                        if (typeof mapSessionController !== "undefined" && mapSessionController.currentRoom !== "") {
+                            var payload = {
+                                user: {
+                                    id: userId,
+                                    nick: typeof chatController !== "undefined" && chatController.currentUserName ? chatController.currentUserName : "Unknown",
+                                    avatar: typeof chatController !== "undefined" && chatController.currentUserAvatar ? chatController.currentUserAvatar : "",
+                                    status: { x: wp.x, y: wp.y }
+                                }
+                            };
+                            mapSessionController.sendMapUpdate(JSON.stringify(payload));
+                        }
+                    }
+                }
+            }
+        }
+        
         Timer {
             interval: 500
             running: true
@@ -2833,7 +3053,9 @@ Item {
                     allDrawings.push(root.currentDrawing);
                 }
                 
-                var wp = screenToWorld(mapMouseArea.mouseX, mapMouseArea.mouseY);
+                var mx = globalHoverTracker.hovered ? globalHoverTracker.point.position.x : mapMouseArea.mouseX;
+                var my = globalHoverTracker.hovered ? globalHoverTracker.point.position.y : mapMouseArea.mouseY;
+                var wp = screenToWorld(mx, my);
                 var isMouseActive = globalHoverTracker.hovered && Qt.application.active;
                 var data = {
                     user: {
@@ -2893,7 +3115,6 @@ Item {
             root.drawings = currentDrawings;
             root.drawingsChanged();
             
-            drawingCanvas.requestPaint();
         }
         onVisibleChanged: {
             root.logisticsModalVisible = visible;

@@ -14,6 +14,7 @@ def bearing(p1: Point2D, p2: Point2D) -> float:
     """
     Calculate the bearing (azimuth) from p1 to p2 in degrees.
     North is 0 degrees, clockwise.
+    Assumes Y increases towards North (API coordinate system).
     """
     dx = p2.x - p1.x
     dy = p2.y - p1.y

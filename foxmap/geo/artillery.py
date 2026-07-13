@@ -12,6 +12,8 @@ class ArtillerySolution:
     angle: float
     dx: float
     dy: float
+    aim_x: float = 0.0
+    aim_y: float = 0.0
 
 class ArtilleryCalculator:
     """
@@ -21,13 +23,28 @@ class ArtilleryCalculator:
     def __init__(self, engine: GeoEngine = None):
         self.engine = engine or GeoEngine()
 
-    def calculate(self, cannon_pos: tuple[float, float], target_pos: tuple[float, float]) -> ArtillerySolution:
+    def calculate(self, cannon_pos: tuple[float, float], target_pos: tuple[float, float], wind_direction: float = 0.0, wind_tier: int = 0) -> ArtillerySolution:
         """
-        Calculates artillery firing solution.
+        Calculates artillery firing solution with optional wind compensation.
         Input coordinates are expected as (x, y) tuples in World coordinates.
         """
         cannon_pt = Point2D(*cannon_pos)
         target_pt = Point2D(*target_pos)
+
+        # Wind compensation: Target = Aim + Wind => Aim = Target - Wind
+        # Wind shift is ~5m per tier in the direction of the wind
+        if wind_tier > 0:
+            shift_meters = wind_tier * 5.0
+            shift_wu = shift_meters / self.engine.world_to_meters_factor
+            import math
+            # Foxhole Azimuth: 0 is North (Up), 90 is East (Right)
+            # Wind direction is where the wind is blowing TO.
+            # Convert wind azimuth to math radians
+            rad = math.radians(wind_direction - 90)
+            # Subtract wind shift vector from target to get aim point
+            aim_x = target_pt.x - (shift_wu * math.cos(rad))
+            aim_y = target_pt.y - (shift_wu * math.sin(rad))
+            target_pt = Point2D(aim_x, aim_y)
 
         # Basic differences in world coordinates
         dx = target_pt.x - cannon_pt.x
@@ -49,5 +66,7 @@ class ArtilleryCalculator:
             bearing=azimuth,
             angle=ang,
             dx=dx,
-            dy=dy
+            dy=dy,
+            aim_x=target_pt.x,
+            aim_y=target_pt.y
         )
