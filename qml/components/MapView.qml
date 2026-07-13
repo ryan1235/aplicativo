@@ -877,23 +877,68 @@ Item {
                 y: (targetWy * getZoomFactor()) - root.centerY + (root.height / 2)
                 z: 200 // On top of canvas
 
-                // Avatar container
+                // Cursor Arrow
+                Text {
+                    text: "🡔" // default arrow
+                    font.pixelSize: 24
+                    color: "#f59e0b" // orange
+                    x: -6
+                    y: -12
+                    style: Text.Outline
+                    styleColor: "white"
+                    visible: !model.tool || model.tool === "pan"
+                }
+
+                // Tool Icon
+                Text {
+                    text: {
+                        if (model.tool === "brush") return "🖌️";
+                        if (model.tool === "arrow") return "↗️";
+                        if (model.tool === "polygon") return "⬟";
+                        if (model.tool === "route") return "🛣️";
+                        if (model.tool === "eraser") return "🧽";
+                        if (model.tool === "vehicle") return "🚙";
+                        if (model.tool === "artillery") return "🎯";
+                        if (model.tool === "text") return "📝";
+                        return "✏️";
+                    }
+                    font.pixelSize: 18
+                    x: 2
+                    y: -14
+                    visible: model.tool && model.tool !== "pan"
+                }
+
+                // Avatar container at bottom right
                 Rectangle {
-                    width: 40
-                    height: 40
-                    radius: 20
+                    x: 10
+                    y: 10
+                    width: 32
+                    height: 32
+                    radius: 16
                     color: "#111827"
-                    border.color: "#3b82f6"
+                    border.color: "#f59e0b" // orange
                     border.width: 2
-                    anchors.centerIn: parent
-                    clip: true
+                    
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        radius: 14
+                        color: "transparent"
+                        border.color: "white"
+                        border.width: 1
+                        z: 5
+                    }
                     
                     Image {
                         anchors.fill: parent
-                        anchors.margins: 2 // space for border
+                        anchors.margins: 2
                         source: model.avatar || ""
                         fillMode: Image.PreserveAspectCrop
                         visible: model.avatar !== ""
+                        layer.enabled: true
+                        layer.effect: OpacityMask {
+                            maskSource: Rectangle { width: 28; height: 28; radius: 14 }
+                        }
                     }
                     
                     Text {
@@ -901,19 +946,20 @@ Item {
                         text: model.nick ? model.nick.substring(0,1).toUpperCase() : "?"
                         color: "#ffffff"
                         font.bold: true
-                        font.pixelSize: 18
+                        font.pixelSize: 14
                         visible: model.avatar === ""
                     }
                 }
                 
                 // Name Tag
                 Rectangle {
-                    anchors.top: parent.verticalCenter
-                    anchors.topMargin: 24
-                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.top: parent.top
+                    anchors.topMargin: 46
+                    anchors.horizontalCenter: parent.left
+                    anchors.horizontalCenterOffset: 26
                     color: "#d9111827"
                     radius: 4
-                    border.color: "#3b82f6"
+                    border.color: "#f59e0b"
                     border.width: 1
                     width: nameText.implicitWidth + 12
                     height: nameText.implicitHeight + 6
@@ -3014,6 +3060,7 @@ Item {
     Item {
         property real lastSentWx: -99999
         property real lastSentWy: -99999
+        property string lastSentDrawingsJson: ""
         
         Timer {
             interval: 50
@@ -3034,7 +3081,8 @@ Item {
                                     id: userId,
                                     nick: typeof chatController !== "undefined" && chatController.currentUserName ? chatController.currentUserName : "Unknown",
                                     avatar: typeof chatController !== "undefined" && chatController.currentUserAvatar ? chatController.currentUserAvatar : "",
-                                    status: { x: wp.x, y: wp.y }
+                                    status: { x: wp.x, y: wp.y },
+                                    tool: root.activeTool
                                 }
                             };
                             mapSessionController.sendMapUpdate(JSON.stringify(payload));
@@ -3059,31 +3107,49 @@ Item {
                     allDrawings.push(root.currentDrawing);
                 }
                 
+                var drawingsStr = JSON.stringify(allDrawings);
+                var drawingsChanged = (drawingsStr !== parent.lastSentDrawingsJson);
+                
                 var mx = globalHoverTracker.hovered ? globalHoverTracker.point.position.x : mapMouseArea.mouseX;
                 var my = globalHoverTracker.hovered ? globalHoverTracker.point.position.y : mapMouseArea.mouseY;
                 var wp = screenToWorld(mx, my);
                 var isMouseActive = globalHoverTracker.hovered && Qt.application.active;
+                
                 var data = {
                     user: {
                         nick: typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido",
                         avatar: typeof chatController !== "undefined" ? chatController.currentUserAvatar : "",
                         id: currentUserId,
-                        status: isMouseActive ? { x: wp.x, y: wp.y } : null
-                    },
-                    drawings: allDrawings
+                        status: isMouseActive ? { x: wp.x, y: wp.y } : null,
+                        tool: root.activeTool
+                    }
                 };
                 
-                var jsonStr = JSON.stringify(data, function(key, val) {
+                if (drawingsChanged) {
+                    data.drawings = allDrawings;
+                }
+                
+                var jsonStr = JSON.stringify(data);
+                
+                // For debug log: show local user + all active remote users separately
+                var debugLog = {
+                    me: data.user,
+                    active_users: root.remoteCursorsDict, // dictionary of remote users
+                    drawings_synced: drawingsChanged
+                };
+                var debugStr = JSON.stringify(debugLog, function(key, val) {
                     if (val && typeof val.x === 'number') val.x = Math.round(val.x * 100) / 100;
                     if (val && typeof val.y === 'number') val.y = Math.round(val.y * 100) / 100;
                     return val;
                 }, 2);
-                jsonStr = jsonStr.replace(/\{\n\s+"x": ([\d.-]+),\n\s+"y": ([\d.-]+)\n\s+\}/g, '{ "x": $1, "y": $2 }');
+                debugStr = debugStr.replace(/\{\n\s+"x": ([\d.-]+),\n\s+"y": ([\d.-]+)\n\s+\}/g, '{ "x": $1, "y": $2 }');
+                jsonDebugWindow.jsonOutput = debugStr;
                 
-                jsonDebugWindow.jsonOutput = jsonStr;
-                
-                if (typeof mapSessionController !== "undefined") {
+                if (typeof mapSessionController !== "undefined" && mapSessionController.currentRoom !== "") {
                     mapSessionController.sendMapUpdate(jsonStr);
+                    if (drawingsChanged) {
+                        parent.lastSentDrawingsJson = drawingsStr;
+                    }
                     var date = new Date();
                     var h = date.getHours();
                     var m = date.getMinutes();
