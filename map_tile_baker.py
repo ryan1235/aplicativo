@@ -19,7 +19,10 @@ from app_paths import resource_dir
 
 VENDOR_DIR = resource_dir() / "vendor"
 if VENDOR_DIR.exists() and str(VENDOR_DIR) not in sys.path:
-    sys.path.insert(0, str(VENDOR_DIR))
+    # Keep the active environment's packages ahead of bundled fallbacks.  In
+    # particular, Pillow needs the compiled PIL._imaging extension installed
+    # in the virtual environment; the source-only vendor copy cannot provide it.
+    sys.path.append(str(VENDOR_DIR))
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont  # noqa: E402
 
