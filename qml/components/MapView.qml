@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import Qt5Compat.GraphicalEffects
 import QtQuick.Layouts
 import "SlangTerms.js" as SlangTerms
 import "Vehicles.js" as VehiclesData
