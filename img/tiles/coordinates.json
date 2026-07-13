@@ -1,0 +1,14 @@
+{
+  "tileFormula": {
+    "x": "floor(worldX / tileSize)",
+    "y": "floor(worldY / tileSize)"
+  },
+  "localFormula": {
+    "x": "worldX % tileSize",
+    "y": "worldY % tileSize"
+  },
+  "gridFormula": {
+    "x": "floor(worldX / cellSize)",
+    "y": "floor(worldY / cellSize)"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "format": "webp",
+  "tileSize": 512,
+  "width": 20480,
+  "height": 12432,
+  "maxZoom": 6,
+  "minZoom": 0,
+  "generatedAt": "2026-07-11T12:08:03.927044Z",
+  "hasTransparency": true,
+  "recommendedCacheTiles": 200,
+  "recommendedCellSize": 1024,
+  "recommendedPreloadRadius": 1,
+  "totalTiles": 873,
+  "totalSizeBytes": 22341120,
+  "levels": {
+    "6": {
+      "width": 20480,
+      "height": 12432,
+      "cols": 40,
+      "rows": 25,
+      "quality": 85,
+      "tiles": 1000
+    },
+    "5": {
+      "width": 10240,
+      "height": 6216,
+      "cols": 20,
+      "rows": 13,
+      "quality": 80,
+      "tiles": 260
+    },
+    "4": {
+      "width": 5120,
+      "height": 3108,
+      "cols": 10,
+      "rows": 7,
+      "quality": 75,
+      "tiles": 70
+    },
+    "3": {
+      "width": 2560,
+      "height": 1554,
+      "cols": 5,
+      "rows": 4,
+      "quality": 68,
+      "tiles": 20
+    },
+    "2": {
+      "width": 1280,
+      "height": 777,
+      "cols": 3,
+      "rows": 2,
+      "quality": 60,
+      "tiles": 6
+    },
+    "1": {
+      "width": 640,
+      "height": 388,
+      "cols": 2,
+      "rows": 1,
+      "quality": 50,
+      "tiles": 2
+    },
+    "0": {
+      "width": 320,
+      "height": 194,
+      "cols": 1,
+      "rows": 1,
+      "quality": 40,
+      "tiles": 1
+    }
+  },
+  "world": {
+    "width": 20480,
+    "height": 12432,
+    "minX": 0,
+    "minY": 0,
+    "maxX": 20480,
+    "maxY": 12432
+  },
+  "grid": {
+    "cellSize": 1024,
+    "cols": 20,
+    "rows": 13
+  },
+  "projection": {
+    "tileSize": 512,
+    "cellSize": 1024
+  }
+}

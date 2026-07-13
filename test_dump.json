@@ -1,0 +1,29 @@
+[
+  {
+    "NormalizedMapCoords": {
+      "x": 0.47227418422698975,
+      "y": 0.8542836904525757
+    },
+    "MapId": "EWorldConquestMapId::CallumsCapeHex",
+    "RecentMapItemDetails": {
+      "Flags": 4,
+      "DetailValue": 0,
+      "AltDetailValue": 0,
+      "StockpileInfo": {
+        "Items": [],
+        "ItemCrates": [],
+        "Vehicles": [],
+        "VehicleCrates": [],
+        "Structures": [],
+        "StructureCrates": []
+      },
+      "ReserveStockpileInfoList": [],
+      "FactoryEntries": [],
+      "RefineryEntries": [],
+      "Values": ""
+    },
+    "CodeName": "MaintenanceTunnel",
+    "RenderState": "EPinnedMapWidgetRenderState::IconOnly",
+    "LastUpdated": "2026-07-05T02:16:37.496Z"
+  }
+]
