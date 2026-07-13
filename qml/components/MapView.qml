@@ -867,8 +867,14 @@ Item {
         Repeater {
             model: remoteCursorsModel
             delegate: Item {
-                x: (model.wx * getZoomFactor()) - root.centerX + (root.width / 2)
-                y: (model.wy * getZoomFactor()) - root.centerY + (root.height / 2)
+                property real targetWx: model.wx
+                property real targetWy: model.wy
+                
+                Behavior on targetWx { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+                Behavior on targetWy { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+                
+                x: (targetWx * getZoomFactor()) - root.centerX + (root.width / 2)
+                y: (targetWy * getZoomFactor()) - root.centerY + (root.height / 2)
                 z: 200 // On top of canvas
 
                 // Avatar container
@@ -3260,20 +3266,30 @@ Item {
         id: drawingHoverTooltip
         property string tooltipText: ""
         visible: false
-        width: tooltipLabel.width + 12
-        height: tooltipLabel.height + 8
-        color: "#1e1e1e"
-        border.color: "#333333"
+        width: tooltipRow.implicitWidth + 20
+        height: tooltipRow.implicitHeight + 12
+        color: "#f00f172a" // sleek slate 900
+        border.color: "#3b82f6" // blue 500
         border.width: 1
-        radius: 4
+        radius: 6
         z: 9999
         
-        Text {
-            id: tooltipLabel
+        Row {
+            id: tooltipRow
             anchors.centerIn: parent
-            color: "#e2e8f0"
-            font.pixelSize: 12
-            text: drawingHoverTooltip.tooltipText
+            spacing: 6
+            Text {
+                text: "✏️"
+                font.pixelSize: 12
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            Text {
+                color: "#e2e8f0"
+                font.pixelSize: 13
+                font.bold: true
+                text: drawingHoverTooltip.tooltipText
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
 }

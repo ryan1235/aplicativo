@@ -599,6 +599,10 @@ class ChatController(QObject):
     def discordId(self) -> str:
         return self._current_user_discord_id or self._saved_discord_id()
 
+    @Property(str, notify=changed)
+    def currentUserId(self) -> str:
+        return self._current_user_id or self.discordId or self.steam.steamId or ""
+
     @Property("QVariantList", notify=changed)
     def roomsRows(self) -> list[dict[str, Any]]:
         return self.rooms.items()
