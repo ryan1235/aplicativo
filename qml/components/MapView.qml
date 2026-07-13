@@ -196,6 +196,9 @@ Item {
                 var mapData = JSON.parse(mapDataStr);
                 if (mapData && mapData.drawings) {
                     root.drawings = mapData.drawings;
+                    if (typeof autoSaveTimers !== "undefined") {
+                        autoSaveTimers.lastSentDrawingsJson = JSON.stringify(mapData.drawings);
+                    }
                 }
             } catch (e) {}
         }
@@ -228,6 +231,7 @@ Item {
                                 remoteCursorsModel.setProperty(j, "wy", data.user.status.y);
                                 remoteCursorsModel.setProperty(j, "nick", data.user.nick || "");
                                 remoteCursorsModel.setProperty(j, "avatar", data.user.avatar || "");
+                                remoteCursorsModel.setProperty(j, "tool", data.user.tool || "pan");
                                 found = true;
                                 break;
                             }
@@ -238,7 +242,8 @@ Item {
                                 wx: data.user.status.x,
                                 wy: data.user.status.y,
                                 nick: data.user.nick || "",
-                                avatar: data.user.avatar || ""
+                                avatar: data.user.avatar || "",
+                                tool: data.user.tool || "pan"
                             });
                         }
                     }
@@ -247,6 +252,9 @@ Item {
                 
                 if (!root.currentDrawing && data.drawings) {
                     root.drawings = data.drawings;
+                    if (typeof autoSaveTimers !== "undefined") {
+                        autoSaveTimers.lastSentDrawingsJson = JSON.stringify(data.drawings);
+                    }
                 }
             } catch (e) {}
         }
@@ -3059,6 +3067,7 @@ Item {
 
     // --- AUTO SAVE TIMER ---
     Item {
+        id: autoSaveTimers
         property real lastSentWx: -99999
         property real lastSentWy: -99999
         property string lastSentDrawingsJson: ""
