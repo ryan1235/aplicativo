@@ -5,11 +5,103 @@ import Qt5Compat.GraphicalEffects
 import QtQuick.Layouts
 import "SlangTerms.js" as SlangTerms
 import "Vehicles.js" as VehiclesData
+import "MapToolsData.js" as ToolsData
 import GG.Map 1.0
 
 Item {
     id: root
     clip: true
+    focus: true
+
+    CommandPalette {
+        id: commandPalette
+        onCommandExecuted: function(cmdId) {
+            if (cmdId === "select_all") {
+                // Not implemented yet
+            } else if (cmdId === "clear_drawings") {
+                if (typeof mapSessionController !== 'undefined') mapSessionController.pushEvent("clear_all", "all", "{}");
+                root.currentDrawing = null;
+            } else if (cmdId === "clear_artillery") {
+                root.savedArtilleries = [];
+            } else if (cmdId === "center_map") {
+                root.centerX = root.mapWidthAtZoom / 2;
+                root.centerY = root.mapHeightAtZoom / 2;
+            } else if (cmdId === "toggle_grid") {
+                // Custom logic
+            } else if (cmdId === "export_map") {
+                // Custom logic
+            } else if (cmdId === "import_map") {
+                // Custom logic
+            } else if (cmdId === "toggle_theme") {
+                // Custom logic
+            }
+        }
+    }
+
+    // --- KEYBOARD SHORTCUTS ---
+    Shortcut { sequence: "Ctrl+K"; onActivated: commandPalette.open() }
+    Shortcut { sequence: "V"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "pan"; root.showToolSettings = false; } }
+    Shortcut { sequence: "B"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "brush"; root.showToolSettings = true; } }
+    Shortcut { sequence: "L"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "arrow"; root.showToolSettings = true; } }
+    Shortcut { sequence: "R"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "route"; root.showToolSettings = true; } }
+    Shortcut { sequence: "P"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "polygon"; root.showToolSettings = true; } }
+    Shortcut { sequence: "T"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "text"; root.showToolSettings = false; } }
+    Shortcut { sequence: "M"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "vehicle"; root.showToolSettings = true; } }
+    Shortcut { sequence: "A"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "artillery"; artilleryModal.visible = true; } }
+    Shortcut { sequence: "E"; onActivated: if (!polygonNameDialogVisible && !routeNameDialogVisible && !commandPalette.visible) { root.activeTool = "eraser"; root.showToolSettings = true; } }
+    Shortcut { sequence: "Esc"; onActivated: { if (commandPalette.visible) commandPalette.visible = false; else if (root.currentDrawing) root.currentDrawing = null; } }
+
+    property var clipboardDrawing: null
+    Shortcut { 
+        sequence: "Ctrl+C"
+        onActivated: {
+            if (root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
+                root.clipboardDrawing = JSON.parse(JSON.stringify(root.drawings[root.selectedVehicleIndex]));
+            }
+        }
+    }
+    
+    property string hoveredDrawingId: ""
+    property var hoveredDrawing: null
+    
+    Shortcut { 
+        sequence: "Ctrl+V"
+        onActivated: {
+            if (root.clipboardDrawing) {
+                var newDrawing = JSON.parse(JSON.stringify(root.clipboardDrawing));
+                newDrawing.id = "draw_" + Date.now();
+                // Apply generic offset to all points if they exist
+                if (newDrawing.points) {
+                    for(var i=0; i<newDrawing.points.length; i++) {
+                        newDrawing.points[i].x += 25;
+                        newDrawing.points[i].y += 25;
+                    }
+                } else if (newDrawing.x !== undefined && newDrawing.y !== undefined) {
+                    newDrawing.x += 25;
+                    newDrawing.y += 25;
+                } else if (newDrawing.start && newDrawing.end) {
+                    newDrawing.start.x += 25; newDrawing.start.y += 25;
+                    newDrawing.end.x += 25; newDrawing.end.y += 25;
+                }
+                
+                if (typeof mapSessionController !== 'undefined') {
+                    mapSessionController.pushEvent("add_drawing", newDrawing.id, JSON.stringify(newDrawing));
+                }
+            }
+        }
+    }
+    Shortcut { 
+        sequence: "Ctrl+X"
+        onActivated: {
+            if (root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
+                root.clipboardDrawing = JSON.parse(JSON.stringify(root.drawings[root.selectedVehicleIndex]));
+                if (typeof mapSessionController !== 'undefined') {
+                    mapSessionController.pushEvent("remove_drawing", root.drawings[root.selectedVehicleIndex].id, "{}");
+                }
+                root.selectedVehicleIndex = -1;
+            }
+        }
+    }
 
     property string baseUrl: typeof mapController !== "undefined" && mapController ? mapController.baseUrl : "https://foxlogi.com/map-tiles/patch-64/{z}/{x}/{y}.webp"
     property string fallbackUrl: typeof mapController !== "undefined" && mapController ? mapController.fallbackUrl : "https://foxlogi.com/map-tiles/patch-64/{z}/{x}/{y}.webp"
@@ -99,6 +191,8 @@ Item {
     property bool showIcons: false
     property bool showStockFilter: true
     property bool showMainStructures: true
+    property bool showTacticalSymbols: true
+    property bool showTacticalLines: true
     
     // Component Lifecycle
     Component.onDestruction: {
@@ -173,6 +267,44 @@ Item {
     }
     
     property string activeColor: "#ef4444" // default red
+    property int activeThickness: 3
+    property real activeOpacity: 1.0
+    property string activeLineStyle: "solid"
+    property string activeArrowPosition: "end"
+    property string activeArrowPlacement: "center"
+    property string activeSymbol: "defense"
+    property bool activeHighlight: false
+    property int activeExpiration: 0
+    property bool activeLocked: false
+    property bool brushNameDialogVisible: false
+    property bool skipBrushNameDialog: false
+
+    property string inspectedDrawingId: ""
+    property var inspectedDrawing: null
+    property bool inspectMode: false
+
+    Timer {
+        id: expirationTimer
+        interval: 1000
+        running: true
+        repeat: true
+        onTriggered: {
+            if (!root.drawings || root.drawings.length === 0) return;
+            var now = Date.now();
+            for (var i = 0; i < root.drawings.length; i++) {
+                var d = root.drawings[i];
+                if (d.expiresAt && d.expiresAt > 0 && d.expiresAt <= now) {
+                    var dId = d.id || d._id || d.eventId;
+                    if (typeof mapSessionController !== 'undefined') {
+                        if (dId) {
+                            mapSessionController.pushEvent("remove_drawing", dId, "{}");
+                            removeDrawingLocally(dId);
+                        }
+                    }
+                }
+            }
+        }
+    }
     property string activeVehicleImage: "Blacksteele.png"
     property real activeVehicleRotation: 0
     property real activeVehicleScale: 1.0
@@ -186,7 +318,7 @@ Item {
     property bool wasEditingOnPress: false
 
     // --- MULTIPLAYER SESSION ---
-    property var remoteCursorsDict: ({})
+    property var usersDict: ({})
     ListModel { id: remoteCursorsModel }
 
     Connections {
@@ -196,11 +328,29 @@ Item {
                 var mapData = JSON.parse(mapDataStr);
                 if (mapData && mapData.drawings) {
                     root.drawings = mapData.drawings;
-                    if (typeof autoSaveTimers !== "undefined") {
-                        autoSaveTimers.lastSentDrawingsJson = JSON.stringify(mapData.drawings);
-                    }
                 }
             } catch (e) {}
+        }
+        function onLogAppended(logStr) {
+            try {
+                var parsed = JSON.parse(logStr);
+                
+                if (parsed.serverVersion !== undefined) jsonDebugWindow.serverVersion = parsed.serverVersion;
+                if (parsed.action !== undefined) jsonDebugWindow.latestLogType = parsed.action;
+                if (parsed.category === 'SINCRONIZAÇÃO' && parsed.action === 'queue_event') {
+                    jsonDebugWindow.pendingQueueSize += 1;
+                }
+                if (parsed.action === 'event_ack') {
+                    jsonDebugWindow.pendingQueueSize = Math.max(0, jsonDebugWindow.pendingQueueSize - 1);
+                }
+                if (parsed.action === 'snapshot_download' || parsed.action === 'connect') {
+                    jsonDebugWindow.pendingQueueSize = 0;
+                }
+                
+                logStr = JSON.stringify(parsed, null, 2);
+            } catch (e) {}
+            var currentLog = jsonDebugWindow.jsonOutput || "";
+            jsonDebugWindow.jsonOutput = logStr + "\n\n" + currentLog.substring(0, 10000);
         }
         function onMapUpdated(dataStr) {
             try {
@@ -210,51 +360,56 @@ Item {
                 root.lastSyncTime = (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
                 
                 var data = JSON.parse(dataStr);
-                var currentUserId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
+                // With Event Sourcing, data is an event object.
                 
-                if (data.user && data.user.id && data.user.id !== currentUserId) {
-                    var cursors = root.remoteCursorsDict;
-                    if (data.user.status === null) {
-                        delete cursors[data.user.id];
+                if (data.type === "cursor_move") {
+                    var cursors = root.usersDict;
+                    if (data.payload.status === null) {
+                        delete cursors[data.userId];
                         for (var i = 0; i < remoteCursorsModel.count; i++) {
-                            if (remoteCursorsModel.get(i).userId === data.user.id) {
+                            if (remoteCursorsModel.get(i).userId === data.userId) {
                                 remoteCursorsModel.remove(i);
                                 break;
                             }
                         }
                     } else {
-                        cursors[data.user.id] = data.user;
+                        cursors[data.userId] = data.payload;
                         var found = false;
                         for (var j = 0; j < remoteCursorsModel.count; j++) {
-                            if (remoteCursorsModel.get(j).userId === data.user.id) {
-                                remoteCursorsModel.setProperty(j, "wx", data.user.status.x);
-                                remoteCursorsModel.setProperty(j, "wy", data.user.status.y);
-                                remoteCursorsModel.setProperty(j, "nick", data.user.nick || "");
-                                remoteCursorsModel.setProperty(j, "avatar", data.user.avatar || "");
-                                remoteCursorsModel.setProperty(j, "tool", data.user.tool || "pan");
+                            if (remoteCursorsModel.get(j).userId === data.userId) {
+                                remoteCursorsModel.setProperty(j, "wx", data.payload.status.x);
+                                remoteCursorsModel.setProperty(j, "wy", data.payload.status.y);
+                                remoteCursorsModel.setProperty(j, "nick", data.payload.nick || "");
+                                remoteCursorsModel.setProperty(j, "avatar", data.payload.avatar || "");
+                                remoteCursorsModel.setProperty(j, "tool", data.payload.tool || "pan");
                                 found = true;
                                 break;
                             }
                         }
                         if (!found) {
                             remoteCursorsModel.append({
-                                userId: data.user.id,
-                                wx: data.user.status.x,
-                                wy: data.user.status.y,
-                                nick: data.user.nick || "",
-                                avatar: data.user.avatar || "",
-                                tool: data.user.tool || "pan"
+                                userId: data.userId,
+                                wx: data.payload.status.x,
+                                wy: data.payload.status.y,
+                                nick: data.payload.nick || "",
+                                avatar: data.payload.avatar || "",
+                                tool: data.payload.tool || "pan"
                             });
                         }
                     }
-                    root.remoteCursorsDict = cursors;
-                }
-                
-                if (!root.currentDrawing && data.drawings) {
-                    root.drawings = data.drawings;
-                    if (typeof autoSaveTimers !== "undefined") {
-                        autoSaveTimers.lastSentDrawingsJson = JSON.stringify(data.drawings);
+                    root.usersDict = cursors;
+                } else if (data.type === "full_state") {
+                    if (data.payload.drawings) {
+                        root.drawings = data.payload.drawings;
                     }
+                    if (data.payload.tacticalSymbols) {
+                        root.tacticalSymbols = data.payload.tacticalSymbols;
+                    }
+                } else if (data.type === "add_drawing") {
+                    var newDrawings = root.drawings.slice();
+                    newDrawings.push(data.payload);
+                    // Do not emit pushEvent since this came from the server
+                    // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
                 }
             } catch (e) {}
         }
@@ -262,10 +417,28 @@ Item {
             kickedPopup.open();
         }
     }
-    property int activeThickness: 3
+
     property bool showToolSettings: false
     property var drawings: [] // stores objects like {type: "brush", color: "red", thickness: 3, points: [{x,y}...]}
+    
+    function removeDrawingLocally(dId) {
+        if (!root.drawings || !dId) return;
+        var newDrawings = [];
+        for (var i = 0; i < root.drawings.length; i++) {
+            var d = root.drawings[i];
+            var thisId = d.id || d._id || d.eventId;
+            if (thisId !== dId) {
+                newDrawings.push(d);
+            }
+        }
+        root.drawings = newDrawings;
+    }
+    
+    property var tacticalSymbols: [] // stores objects like {type: "tactical_symbol", symbolId: "defense", ...}
     property var currentDrawing: null // currently active drawing while mouse is pressed
+    property int selectedSymbolIndex: -1
+    property real liveSymbolRotation: 0
+    property real liveSymbolScale: 1.0
     property bool polygonNameDialogVisible: false
     property bool routeNameDialogVisible: false
     property bool textToolDialogVisible: false
@@ -287,12 +460,12 @@ Item {
         root.historicUsers = hUsers;
     }
     
-    onRemoteCursorsDictChanged: {
+    onUsersDictChanged: {
         var aUsers = [];
-        var keys = Object.keys(root.remoteCursorsDict);
+        var keys = Object.keys(root.usersDict);
         for (var i = 0; i < keys.length; i++) {
-            var obj = root.remoteCursorsDict[keys[i]];
-            aUsers.push({ id: obj.id, name: keys[i], avatar: obj.avatar });
+            var obj = root.usersDict[keys[i]];
+            aUsers.push({ id: obj.id, name: obj.nick || keys[i], avatar: obj.avatar || "" });
         }
         root.activeUsers = aUsers;
     }
@@ -310,7 +483,7 @@ Item {
     Timer {
         id: lineAnimationTimer
         interval: 35
-        running: root.hasAnimatedDrawings
+        running: root.hasAnimatedDrawings || root.hoveredDrawingId !== "" || root.inspectedDrawingId !== ""
         repeat: true
         onTriggered: {
             root.dashOffset = (root.dashOffset + 1) % 48;
@@ -859,6 +1032,7 @@ Item {
             id: mapDrawingsRenderer
             anchors.fill: parent
             drawings: root.drawings
+            showTacticalLines: root.showTacticalLines
             currentDrawing: root.currentDrawing || {}
             dashOffset: root.dashOffset
             mapScale: typeof mapController !== "undefined" && mapController ? mapController.mapScale : 1.0
@@ -870,6 +1044,8 @@ Item {
             centerX: root.centerX
             centerY: root.centerY
             hoveredRoute: root.logisticsHoveredRoute || {}
+            hoveredDrawingId: root.hoveredDrawingId
+            inspectedDrawingId: root.inspectMode && root.showToolSettings ? root.inspectedDrawingId : ""
         }
 
         // High-fidelity QML overlays for Remote Cursors
@@ -1167,7 +1343,15 @@ Item {
                             modified.x = vehItem.wx;
                             modified.y = vehItem.wy;
                             newDrawings[index] = modified;
-                            root.drawings = newDrawings;
+                            // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
                         }
                     }
                     cursorShape: Qt.PointingHandCursor
@@ -1192,8 +1376,120 @@ Item {
                             onClicked: {
                                 var newDrawings = root.drawings.slice();
                                 newDrawings.splice(index, 1);
-                                root.drawings = newDrawings;
+                                // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
                                 root.selectedVehicleIndex = -1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Tactical Symbols layer
+        Repeater {
+            model: root.tacticalSymbols
+            delegate: Item {
+                id: tsItem
+                visible: root.showTacticalSymbols
+                
+                property real wx: modelData.x ? modelData.x : 0
+                property real wy: modelData.y ? modelData.y : 0
+                property string symIcon: modelData.icon || "🛡"
+                property string symColor: modelData.color || "#ffffff"
+                
+                x: (wx * getZoomFactor()) - root.centerX + (root.width / 2) - width/2
+                y: (wy * getZoomFactor()) - root.centerY + (root.height / 2) - height/2
+                z: root.selectedSymbolIndex === index ? 165 : 160
+                
+                width: 40 * (modelData.scale || 1.0)
+                height: 40 * (modelData.scale || 1.0)
+                
+                rotation: root.selectedSymbolIndex === index ? root.liveSymbolRotation : (modelData.rotation || 0)
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: tsItem.symIcon
+                    color: tsItem.symColor
+                    font.pixelSize: 32 * (modelData.scale || 1.0)
+                    style: Text.Outline
+                    styleColor: "black"
+                }
+                
+                MouseArea {
+                    anchors.fill: parent
+                    drag.target: null
+                    property real startMouseWorldX
+                    property real startMouseWorldY
+                    property real startWx
+                    property real startWy
+                    onPressed: function(mouse) {
+                        root.selectedSymbolIndex = index;
+                        root.liveSymbolRotation = modelData.rotation || 0;
+                        root.liveSymbolScale = modelData.scale || 1.0;
+                        
+                        var globalMouse = mapToItem(root, mouse.x, mouse.y);
+                        startMouseWorldX = globalMouse.x;
+                        startMouseWorldY = globalMouse.y;
+                        startWx = tsItem.wx;
+                        startWy = tsItem.wy;
+                    }
+                    onPositionChanged: function(mouse) {
+                        if (pressed) {
+                            var globalMouse = mapToItem(root, mouse.x, mouse.y);
+                            var dx = globalMouse.x - startMouseWorldX;
+                            var dy = globalMouse.y - startMouseWorldY;
+                            tsItem.wx = startWx + (dx / getZoomFactor());
+                            tsItem.wy = startWy + (dy / getZoomFactor());
+                            
+                            startMouseWorldX = globalMouse.x;
+                            startMouseWorldY = globalMouse.y;
+                            startWx = tsItem.wx;
+                            startWy = tsItem.wy;
+                        }
+                    }
+                    onReleased: function(mouse) {
+                        if (startWx !== tsItem.wx || startWy !== tsItem.wy) {
+                            var modified = Object.assign({}, root.tacticalSymbols[index]);
+                            modified.x = tsItem.wx;
+                            modified.y = tsItem.wy;
+                            if (typeof mapSessionController !== 'undefined') {
+                                mapSessionController.pushEvent("update_tactical_symbol", modified.id, JSON.stringify(modified));
+                            }
+                        }
+                    }
+                    cursorShape: Qt.PointingHandCursor
+                }
+                
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    color: "transparent"
+                    border.color: "#eab308"
+                    border.width: 2
+                    radius: 4
+                    visible: root.selectedSymbolIndex === index
+                    
+                    Rectangle {
+                        anchors.top: parent.top; anchors.right: parent.right; anchors.margins: -10
+                        width: 20; height: 20; radius: 10; color: "#ef4444"
+                        Text { anchors.centerIn: parent; text: "×"; color: "white"; font.bold: true; font.pixelSize: 14 }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                var toDelete = root.tacticalSymbols[index];
+                                if (typeof mapSessionController !== 'undefined') {
+                                    mapSessionController.pushEvent("remove_tactical_symbol", toDelete.id, "{}");
+                                }
+                                root.selectedSymbolIndex = -1;
                             }
                         }
                     }
@@ -1337,6 +1633,16 @@ Item {
                 onCheckedChanged: root.showIcons = checked
             }
             StyledCheckBox { 
+                text: root.tr("map.filter.tactical_symbols", "Mostrar Símbolos Táticos")
+                checked: root.showTacticalSymbols
+                onCheckedChanged: root.showTacticalSymbols = checked
+            }
+            StyledCheckBox { 
+                text: root.tr("map.filter.tactical_lines", "Mostrar Linhas Táticas")
+                checked: root.showTacticalLines
+                onCheckedChanged: root.showTacticalLines = checked
+            }
+            StyledCheckBox { 
                 text: root.tr("map.filter.stock", "Depósitos com Estoque")
                 checked: root.showStockFilter
                 onCheckedChanged: root.showStockFilter = checked
@@ -1344,9 +1650,7 @@ Item {
         }
     }
 
-    HoverHandler {
-        id: globalHoverTracker
-    }
+
 
     MouseArea {
         id: mapMouseArea
@@ -1361,52 +1665,138 @@ Item {
         property bool didPan: false
         property real lastCursorSyncTime: 0
         
-        function eraseAt(sx, sy) {
+        function hitTestAt(sx, sy) {
             var wp = screenToWorld(sx, sy);
-            var threshold = 15 / root.mapZoomScaleX;
-            var removed = false;
-            var newDrawings = [];
             
-            for (var i = 0; i < root.drawings.length; i++) {
+            // Check tactical symbols first (they are usually smaller/on top)
+            for (var k = root.tacticalSymbols.length - 1; k >= 0; k--) {
+                var ts = root.tacticalSymbols[k];
+                var distTS = Math.sqrt(Math.pow(wp.x - ts.x, 2) + Math.pow(wp.y - ts.y, 2));
+                if (distTS <= (30 * (ts.scale || 1.0)) / root.getZoomFactor()) {
+                    return ts;
+                }
+            }
+            
+            // Check drawings in reverse order (top to bottom)
+            for (var i = root.drawings.length - 1; i >= 0; i--) {
                 var d = root.drawings[i];
                 var hit = false;
+                var baseThickness = d.thickness || 3;
+                var threshold = Math.max(baseThickness * 2, 20) / root.getZoomFactor();
+                
                 if (d.type === "polygon") {
                     hit = isPointInPolygon(wp.x, wp.y, d.points);
-                } else if (d.type === "brush" || d.type === "route") {
-                    for (var j = 0; j < d.points.length - 1; j++) {
-                        var dist = distanceToSegment(wp.x, wp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
-                        if (dist <= threshold + (d.thickness || 3) / root.mapZoomScaleX) {
-                            hit = true; break;
+                } else if (d.type === "brush" || d.type === "route" || d.type === "defensive_line") {
+                    if (d.points.length === 1) {
+                        var distPt = Math.sqrt(Math.pow(wp.x - d.points[0].x, 2) + Math.pow(wp.y - d.points[0].y, 2));
+                        if (distPt <= threshold) { hit = true; }
+                    } else {
+                        for (var j = 0; j < d.points.length - 1; j++) {
+                            var dist = distanceToSegment(wp.x, wp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
+                            if (dist <= threshold) {
+                                hit = true; break;
+                            }
                         }
                     }
                 } else if (d.type === "arrow" || d.type === "artillery") {
                     var dist2 = distanceToSegment(wp.x, wp.y, d.start.x, d.start.y, d.end.x, d.end.y);
-                    if (dist2 <= threshold + (d.thickness || 3) / root.mapZoomScaleX) {
+                    if (dist2 <= threshold) {
                         hit = true;
                     }
                 } else if (d.type === "parabola") {
                     var sWp = apiToWorld(d.start.x, d.start.y);
                     var eWp = apiToWorld(d.end.x, d.end.y);
                     var pDist = distanceToParabola(wp.x, wp.y, sWp.x, sWp.y, eWp.x, eWp.y);
-                    if (pDist <= threshold + (d.thickness || 3) / root.mapZoomScaleX) {
+                    if (pDist <= threshold) {
+                        hit = true;
+                    }
+                }
+                
+                if (hit) return d;
+            }
+            return null;
+        }
+
+        function eraseAt(sx, sy) {
+            var wp = screenToWorld(sx, sy);
+            var removed = false;
+            var newDrawings = [];
+            
+            for (var i = 0; i < root.drawings.length; i++) {
+                var d = root.drawings[i];
+                if (d.locked) {
+                    newDrawings.push(d);
+                    continue;
+                }
+                var hit = false;
+                var baseThickness = d.thickness || 3;
+                var threshold = Math.max(baseThickness * 2, 20) / root.getZoomFactor();
+                
+                if (d.type === "polygon") {
+                    hit = isPointInPolygon(wp.x, wp.y, d.points);
+                } else if (d.type === "brush" || d.type === "route") {
+                    if (d.points.length === 1) {
+                        var distPtErase = Math.sqrt(Math.pow(wp.x - d.points[0].x, 2) + Math.pow(wp.y - d.points[0].y, 2));
+                        if (distPtErase <= threshold) { hit = true; }
+                    } else {
+                        for (var j = 0; j < d.points.length - 1; j++) {
+                            var dist = distanceToSegment(wp.x, wp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
+                            if (dist <= threshold) {
+                                hit = true; break;
+                            }
+                        }
+                    }
+                } else if (d.type === "arrow" || d.type === "artillery") {
+                    var dist2 = distanceToSegment(wp.x, wp.y, d.start.x, d.start.y, d.end.x, d.end.y);
+                    if (dist2 <= threshold) {
+                        hit = true;
+                    }
+                } else if (d.type === "parabola") {
+                    var sWp = apiToWorld(d.start.x, d.start.y);
+                    var eWp = apiToWorld(d.end.x, d.end.y);
+                    var pDist = distanceToParabola(wp.x, wp.y, sWp.x, sWp.y, eWp.x, eWp.y);
+                    if (pDist <= threshold) {
                         hit = true;
                     }
                 } else if (d.type === "vehicle") {
                     var distVeh = Math.sqrt(Math.pow(wp.x - d.x, 2) + Math.pow(wp.y - d.y, 2));
-                    if (distVeh <= (30 * (d.scale || 1.0)) / root.mapZoomScaleX) {
+                    if (distVeh <= (35 * (d.scale || 1.0)) / root.getZoomFactor()) {
                         hit = true;
                     }
                 }
                 
                 if (hit) {
+                    if (typeof mapSessionController !== 'undefined') {
+                        mapSessionController.pushEvent("remove_drawing", d.id || d._id || d.eventId, "{}");
+                    }
                     removed = true;
                 } else {
                     newDrawings.push(d);
                 }
             }
             
+            for (var k = 0; k < root.tacticalSymbols.length; k++) {
+                var ts = root.tacticalSymbols[k];
+                if (ts.locked) continue;
+                var distTS = Math.sqrt(Math.pow(wp.x - ts.x, 2) + Math.pow(wp.y - ts.y, 2));
+                if (distTS <= (30 * (ts.scale || 1.0)) / root.getZoomFactor()) {
+                    if (typeof mapSessionController !== 'undefined') {
+                        mapSessionController.pushEvent("remove_tactical_symbol", ts.id, "{}");
+                    }
+                    removed = true;
+                }
+            }
+            
             if (removed) {
-                root.drawings = newDrawings;
+                // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
             }
         }
         
@@ -1429,13 +1819,67 @@ Item {
             } else if (root.activeTool === "brush") {
                 var wp = screenToWorld(mouse.x, mouse.y);
                 var cUserBrush = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
-                root.currentDrawing = { type: "brush", color: root.activeColor, thickness: root.activeThickness, points: [wp], user: cUserBrush };
+                
+                if (root.activeLineStyle === "symbol") {
+                    var symColor = root.activeColor;
+                    var symIcon = root.activeSymbol;
+                    var syms = SymbolData.getSymbols();
+                    for (var s = 0; s < syms.length; s++) {
+                        if (syms[s].id === root.activeSymbol) {
+                            symIcon = syms[s].icon;
+                            break;
+                        }
+                    }
+                    var ts = {
+                        id: "ts_" + Date.now(),
+                        type: "tactical_symbol",
+                        symbolId: root.activeSymbol,
+                        icon: symIcon,
+                        x: wp.x,
+                        y: wp.y,
+                        rotation: 0,
+                        scale: 1.0,
+                        color: symColor,
+                        locked: root.activeLocked,
+                        createdBy: cUserBrush,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    };
+                    if (typeof mapSessionController !== 'undefined') {
+                        mapSessionController.pushEvent("add_tactical_symbol", ts.id, JSON.stringify(ts));
+                    }
+                    root.currentDrawing = null;
+                } else {
+                    var expiresAt = root.activeExpiration > 0 ? (Date.now() + root.activeExpiration * 1000) : null;
+                    var cUserId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
+                    root.currentDrawing = { 
+                        type: "brush", 
+                        color: root.activeColor, 
+                        thickness: root.activeThickness, 
+                        opacity: root.activeOpacity, 
+                        lineStyle: root.activeLineStyle, 
+                        arrowPosition: root.activeArrowPosition,
+                        arrowPlacement: root.activeArrowPlacement,
+                        highlight: root.activeHighlight, 
+                        locked: root.activeLocked, 
+                        expiresAt: expiresAt, 
+                        points: [wp], 
+                        user: cUserBrush,
+                        createdBy: cUserId,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    };
+                }
             } else if (root.activeTool === "arrow") {
                 var wp2 = screenToWorld(mouse.x, mouse.y);
                 var nearestNode2 = findNearestNode(wp2, 15);
                 if (nearestNode2) wp2 = nearestNode2;
                 var cUserArrow = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
-                root.currentDrawing = { type: "arrow", color: root.activeColor, thickness: root.activeThickness, start: wp2, end: wp2, user: cUserArrow };
+                var cUserArrowId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
+                root.currentDrawing = { 
+                    type: "arrow", color: root.activeColor, thickness: root.activeThickness, 
+                    start: wp2, end: wp2, user: cUserArrow, createdBy: cUserArrowId, createdAt: Date.now(), updatedAt: Date.now() 
+                };
             } else if (root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "vehicle") {
                 cursorShape = Qt.ClosedHandCursor; // Will reset to cross on release if no pan
             } else if (root.activeTool === "eraser") {
@@ -1447,13 +1891,108 @@ Item {
             isDragging = false;
             if (root.activeTool === "pan") {
                 cursorShape = Qt.OpenHandCursor;
+                if (!didPan) {
+                    var hitP = hitTestAt(mouse.x, mouse.y);
+                    if (hitP) {
+                        root.inspectedDrawingId = hitP.id || hitP._id || hitP.eventId || "";
+                        root.inspectedDrawing = hitP;
+                        root.inspectMode = true;
+                        
+                        // Switch active tool to the drawing's tool so the proper settings menu loads
+                        var dType = hitP.type || "brush";
+                        if (dType === "defensive_line" || dType === "minefield" || dType === "checkpoint" || dType === "line") dType = "brush";
+                        if (dType !== "brush" && dType !== "polygon" && dType !== "route" && dType !== "vehicle" && dType !== "arrow" && dType !== "text") dType = "brush";
+                        
+                        root.activeTool = dType;
+                        root.showToolSettings = true;
+                        
+                        if (toolSettingsLoader.item && typeof toolSettingsLoader.item.setCurrentTab === 'function') {
+                            toolSettingsLoader.item.setCurrentTab("info");
+                        }
+                    } else {
+                        root.inspectedDrawingId = "";
+                        root.inspectedDrawing = null;
+                        root.inspectMode = false;
+                    }
+                }
+            } else if (root.activeTool === "brush") {
+                if (!didPan) {
+                    var hitB = hitTestAt(mouse.x, mouse.y);
+                    if (hitB) {
+                        root.currentDrawing = null; // Discard the point created in onPressed!
+                        root.inspectedDrawingId = hitB.id || hitB._id || hitB.eventId || "";
+                        root.inspectedDrawing = hitB;
+                        root.inspectMode = true;
+                        root.showToolSettings = true;
+                        if (toolSettingsLoader.item && typeof toolSettingsLoader.item.setCurrentTab === 'function') {
+                            toolSettingsLoader.item.setCurrentTab("info");
+                        }
+                        return; // Don't draw a dot if we hit something
+                    } else {
+                        root.inspectedDrawingId = "";
+                        root.inspectedDrawing = null;
+                        root.inspectMode = false;
+                    }
+                }
+                
+                // If we didn't hit anything, continue drawing brush
+                if (!didPan) {
+                    var wpB = screenToWorld(mouse.x, mouse.y);
+                    var nearestNodeB = findNearestNode(wpB, 15);
+                    if (nearestNodeB) wpB = nearestNodeB;
+                    
+                    if (!root.currentDrawing || root.currentDrawing.type !== "brush") {
+                        var cUserBrush = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
+                        var cUserBrushId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
+                        root.currentDrawing = { 
+                            type: "brush", 
+                            color: root.activeColor, 
+                            thickness: root.activeThickness, 
+                            opacity: root.activeOpacity, 
+                            lineStyle: root.activeLineStyle, 
+                            arrowPosition: root.activeArrowPosition, 
+                            arrowPlacement: root.activeArrowPlacement,
+                            highlight: root.activeHighlight,
+                            locked: root.activeLocked,
+                            points: [wpB], 
+                            user: cUserBrush,
+                            createdBy: cUserBrushId,
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        };
+                    } else {
+                        var b = Object.assign({}, root.currentDrawing);
+                        b.points = b.points.slice();
+                        b.points.push(wpB);
+                        root.currentDrawing = b;
+                    }
+                }
+                if (root.activeTool === "brush" && !root.skipBrushNameDialog) {
+                    root.brushNameDialogVisible = true;
+                    if (typeof brushNameInput !== "undefined") brushNameInput.forceActiveFocus();
+                } else if (root.activeTool === "brush") {
+                    var newDrawings = root.drawings.slice();
+                    var lastB = Object.assign({}, root.currentDrawing);
+                    lastB.id = "draw_" + Date.now();
+                    var exp = root.activeExpiration > 0 ? (Date.now() + root.activeExpiration * 1000) : null;
+                    if (exp) lastB.expiresAt = exp;
+                    newDrawings.push(lastB);
+                    if (typeof mapSessionController !== 'undefined') {
+                        mapSessionController.pushEvent("add_drawing", lastB.id, JSON.stringify(lastB));
+                    }
+                    root.currentDrawing = null;
+                }
             } else if (root.activeTool === "polygon") {
                 cursorShape = Qt.CrossCursor;
                 if (!didPan && !root.polygonNameDialogVisible) {
                     var wp = screenToWorld(mouse.x, mouse.y);
                     if (!root.currentDrawing || root.currentDrawing.type !== "polygon") {
                         var cUserPoly = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
-                        root.currentDrawing = { type: "polygon", color: root.activeColor, thickness: root.activeThickness, points: [wp], user: cUserPoly };
+                        var cUserPolyId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
+                        root.currentDrawing = { 
+                            type: "polygon", color: root.activeColor, thickness: root.activeThickness, 
+                            points: [wp], user: cUserPoly, createdBy: cUserPolyId, createdAt: Date.now(), updatedAt: Date.now() 
+                        };
                     } else {
                         var poly = Object.assign({}, root.currentDrawing);
                         poly.points = poly.points.slice();
@@ -1467,14 +2006,39 @@ Item {
                     var wpRoute = screenToWorld(mouse.x, mouse.y);
                     var nearestNodeR = findNearestNode(wpRoute, 15);
                     if (nearestNodeR) wpRoute = nearestNodeR;
-                    if (!root.currentDrawing || root.currentDrawing.type !== "route") {
+                    if (!root.currentDrawing || root.currentDrawing.type !== "route" || root.currentDrawing.points.length === 0) {
                         var cUserRoute = typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido";
-                        root.currentDrawing = { type: "route", color: root.activeColor, thickness: root.activeThickness, points: [wpRoute], user: cUserRoute };
+                        var cUserRouteId = typeof chatController !== "undefined" ? chatController.currentUserId : "";
+                        root.currentDrawing = { 
+                            type: "route", color: root.activeColor, thickness: root.activeThickness, 
+                            points: [wpRoute], user: cUserRoute, createdBy: cUserRouteId, createdAt: Date.now(), updatedAt: Date.now() 
+                        };
                     } else {
-                        var route = Object.assign({}, root.currentDrawing);
-                        route.points = route.points.slice();
-                        route.points.push(wpRoute);
-                        root.currentDrawing = route;
+                        var startPoint = root.currentDrawing.points[0];
+                        if (typeof routingController !== "undefined") {
+                            var resultStr = routingController.calculateRoute(startPoint.x, startPoint.y, wpRoute.x, wpRoute.y);
+                            var result = JSON.parse(resultStr);
+                            if (result && result.points && result.points.length > 0) {
+                                var route = Object.assign({}, root.currentDrawing);
+                                route.points = result.points;
+                                route.cost = result.cost;
+                                route.time_mins = result.time_mins;
+                                root.currentDrawing = route;
+                                root.routeNameDialogVisible = true;
+                                if (typeof routeNameInput !== "undefined") routeNameInput.forceActiveFocus();
+                            } else {
+                                console.log("Failed to calculate route:", resultStr);
+                                var routeFail = Object.assign({}, root.currentDrawing);
+                                routeFail.points = routeFail.points.slice();
+                                routeFail.points.push(wpRoute);
+                                root.currentDrawing = routeFail;
+                            }
+                        } else {
+                            var routeFallback = Object.assign({}, root.currentDrawing);
+                            routeFallback.points = routeFallback.points.slice();
+                            routeFallback.points.push(wpRoute);
+                            root.currentDrawing = routeFallback;
+                        }
                     }
                 }
             } else if (root.activeTool === "vehicle") {
@@ -1506,7 +2070,15 @@ Item {
                             name: root.activeVehicleName + (count > 1 ? (" " + (k + 1)) : "")
                         });
                     }
-                    root.drawings = newDrawings;
+                    // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
                 }
             } else if (root.activeTool === "text") {
                 cursorShape = Qt.CrossCursor;
@@ -1535,10 +2107,23 @@ Item {
                 }
             } else {
                 if (root.currentDrawing) {
-                    var newDrawings = root.drawings.slice();
-                    newDrawings.push(root.currentDrawing);
-                    root.drawings = newDrawings;
-                    root.currentDrawing = null;
+                    if (root.activeTool === "brush" && !root.skipBrushNameDialog) {
+                        root.brushNameDialogVisible = true;
+                        if (typeof brushNameInput !== "undefined") brushNameInput.forceActiveFocus();
+                    } else {
+                        var newDrawings = root.drawings.slice();
+                        newDrawings.push(root.currentDrawing);
+                        // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                        if (typeof mapSessionController !== 'undefined') {
+                            if (newDrawings.length > 0) {
+                                var lastAdded = newDrawings[newDrawings.length - 1];
+                                mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                            } else {
+                                mapSessionController.pushEvent("clear_all", "all", "{}");
+                            }
+                        }
+                        root.currentDrawing = null;
+                    }
                 }
             }
         }
@@ -1555,10 +2140,23 @@ Item {
             cursorShape = Qt.ArrowCursor;
             isDragging = false;
             if (root.currentDrawing && root.activeTool !== "polygon" && root.activeTool !== "route") {
-                var newDrawings = root.drawings.slice();
-                newDrawings.push(root.currentDrawing);
-                root.drawings = newDrawings;
-                root.currentDrawing = null;
+                if (root.activeTool === "brush" && !root.skipBrushNameDialog) {
+                    root.brushNameDialogVisible = true;
+                    if (typeof brushNameInput !== "undefined") brushNameInput.forceActiveFocus();
+                } else {
+                    var newDrawings = root.drawings.slice();
+                    newDrawings.push(root.currentDrawing);
+                    // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                    if (typeof mapSessionController !== 'undefined') {
+                        if (newDrawings.length > 0) {
+                            var lastAdded = newDrawings[newDrawings.length - 1];
+                            mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                        } else {
+                            mapSessionController.pushEvent("clear_all", "all", "{}");
+                        }
+                    }
+                    root.currentDrawing = null;
+                }
             }
         }
         
@@ -1568,22 +2166,26 @@ Item {
                 root.artilleryTarget = wpArt;
             }
             if (isDragging) {
-                if (root.activeTool === "pan" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "vehicle") {
+                if (root.activeTool === "pan" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "vehicle" || root.activeTool === "brush") {
                     var dx = mouse.x - lastX;
                     var dy = mouse.y - lastY;
                     
                     var dist = Math.sqrt(Math.pow(mouse.x - pressX, 2) + Math.pow(mouse.y - pressY, 2));
-                    if (dist > 5) {
+                    if (dist > 15) {
                         didPan = true;
                     }
                     
                     if (didPan || root.activeTool === "pan") {
-                        root.centerX = Math.max(0, Math.min(root.mapWidthAtZoom, root.centerX - dx));
-                        root.centerY = Math.max(0, Math.min(root.mapHeightAtZoom, root.centerY - dy));
-                        lastX = mouse.x;
-                        lastY = mouse.y;
+                        if (root.activeTool !== "brush") {
+                            root.centerX = Math.max(0, Math.min(root.mapWidthAtZoom, root.centerX - dx));
+                            root.centerY = Math.max(0, Math.min(root.mapHeightAtZoom, root.centerY - dy));
+                            lastX = mouse.x;
+                            lastY = mouse.y;
+                        }
                     }
-                } else if (root.activeTool === "brush" && root.currentDrawing) {
+                }
+                
+                if (root.activeTool === "brush" && root.currentDrawing) {
                     var lastPt = root.currentDrawing.points[root.currentDrawing.points.length - 1];
                     var wp = screenToWorld(mouse.x, mouse.y);
                     var spLast = worldToCanvas(lastPt.x, lastPt.y);
@@ -1627,7 +2229,7 @@ Item {
                     for (var r = 0; r < root.logisticsRoutes.length; r++) {
                         var route = root.logisticsRoutes[r];
                         var rdist = distanceToParabola(hwp.x, hwp.y, apiToWorld(route.start.x, route.start.y).x, apiToWorld(route.start.x, route.start.y).y, apiToWorld(route.end.x, route.end.y).x, apiToWorld(route.end.x, route.end.y).y);
-                        if (rdist < 20 / root.mapZoomScaleX) {
+                        if (rdist < 20 / root.getZoomFactor()) {
                             foundHover = route;
                             break;
                         }
@@ -1638,55 +2240,30 @@ Item {
                 }
                 
                 // Hover for drawings
-                if (!isDragging && root.drawings) {
-                    var hoverWp = screenToWorld(mouse.x, mouse.y);
-                    var hoverThreshold = 15 / root.mapZoomScaleX;
-                    var foundHoverDrawing = null;
+                if (!isDragging) {
+                    var foundHoverDrawing = hitTestAt(mouse.x, mouse.y);
                     
-                    for (var i = root.drawings.length - 1; i >= 0; i--) {
-                        var d = root.drawings[i];
-                        var hit = false;
-                        if (d.type === "polygon") {
-                            hit = isPointInPolygon(hoverWp.x, hoverWp.y, d.points);
-                        } else if (d.type === "brush" || d.type === "route") {
-                            for (var j = 0; j < d.points.length - 1; j++) {
-                                var segmentDist = distanceToSegment(hoverWp.x, hoverWp.y, d.points[j].x, d.points[j].y, d.points[j+1].x, d.points[j+1].y);
-                                if (segmentDist <= hoverThreshold + (d.thickness || 3) / root.mapZoomScaleX) {
-                                    hit = true; break;
-                                }
-                            }
-                        } else if (d.type === "arrow") {
-                            var arrowDist = distanceToSegment(hoverWp.x, hoverWp.y, d.start.x, d.start.y, d.end.x, d.end.y);
-                            if (arrowDist <= hoverThreshold + (d.thickness || 3) / root.mapZoomScaleX) {
-                                hit = true;
-                            }
-                        } else if (d.type === "artillery") {
-                            var aStartWp = apiToWorld(d.start.x, d.start.y);
-                            var aEndWp = apiToWorld(d.end.x, d.end.y);
-                            var artDist = distanceToSegment(hoverWp.x, hoverWp.y, aStartWp.x, aStartWp.y, aEndWp.x, aEndWp.y);
-                            if (artDist <= hoverThreshold + (d.thickness || 3) / root.mapZoomScaleX) {
-                                hit = true;
-                            }
-                        } else if (d.type === "vehicle") {
-                            var vDist = Math.sqrt(Math.pow(hoverWp.x - d.x, 2) + Math.pow(hoverWp.y - d.y, 2));
-                            if (vDist <= (30 * (d.scale || 1.0)) / root.mapZoomScaleX) {
-                                hit = true;
-                            }
+                    if (foundHoverDrawing) {
+                        var hId = foundHoverDrawing.id || foundHoverDrawing._id || foundHoverDrawing.eventId || "";
+                        if (root.hoveredDrawingId !== hId) {
+                            console.log("[HOVER] Novo item detectado: " + hId);
+                            root.hoveredDrawingId = hId;
+                            root.hoveredDrawing = foundHoverDrawing;
                         }
-                        
-                        if (hit) {
-                            foundHoverDrawing = d;
-                            break;
-                        }
-                    }
-                    
-                    if (foundHoverDrawing && foundHoverDrawing.user) {
-                        drawingHoverTooltip.tooltipText = foundHoverDrawing.user;
+                        drawingHoverTooltip.drawingData = foundHoverDrawing;
                         drawingHoverTooltip.x = mouse.x + 15;
                         drawingHoverTooltip.y = mouse.y + 15;
-                        drawingHoverTooltip.visible = true;
+                        if (root.activeTool === "pan" || root.activeTool === "brush" || root.activeTool === "polygon" || root.activeTool === "route") {
+                            cursorShape = Qt.PointingHandCursor;
+                        }
                     } else {
-                        drawingHoverTooltip.visible = false;
+                        if (root.hoveredDrawingId !== "") {
+                            root.hoveredDrawingId = "";
+                            root.hoveredDrawing = null;
+                        }
+                        drawingHoverTooltip.drawingData = null;
+                        if (root.activeTool === "pan") cursorShape = Qt.OpenHandCursor;
+                        else if (root.activeTool === "brush") cursorShape = Qt.CrossCursor;
                     }
                 }
             }
@@ -1733,745 +2310,163 @@ Item {
     }
 
     // --- BOTTOM DRAWING TOOLBAR ---
-    Rectangle {
+    MapToolbar {
         id: drawingToolbar
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 24
         anchors.horizontalCenter: parent.horizontalCenter
-        height: 50
-        width: toolbarRow.implicitWidth + 32
-        radius: 25
-        color: settingsController.surfaceColor
-        border.color: settingsController.borderColor
-        border.width: 1
         z: 100
-
-        MultiEffect {
-            source: drawingToolbar
-            anchors.fill: drawingToolbar
-            shadowEnabled: true
-            shadowOpacity: 0.4
-            shadowBlur: 0.8
-            shadowVerticalOffset: 4
-            shadowColor: "black"
+        
+        activeTool: root.activeTool
+        globalToolTip: globalToolTip
+        
+        onToolSelected: function(toolId) {
+            if (root.currentDrawing) root.currentDrawing = null;
+            root.activeTool = toolId;
+            
+            var toolObj = ToolsData.getToolById(toolId);
+            if (toolObj && toolObj.hasProperties) {
+                root.showToolSettings = true;
+            } else {
+                root.showToolSettings = false;
+            }
+            
+            if (toolId === "artillery") {
+                artilleryModal.visible = true;
+            } else {
+                artilleryModal.visible = false;
+            }
+            
+            if (toolId === "logistics") {
+                root.logisticsModalVisible = true;
+                logisticsModal.open();
+            } else {
+                root.logisticsModalVisible = false;
+            }
         }
-
-        Row {
-            id: toolbarRow
-            anchors.centerIn: parent
-            spacing: 16
-
-            // Pan Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "pan" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "pan" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "✋"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        root.activeTool = "pan";
-                        root.showToolSettings = false;
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-
-            // Brush Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "brush" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "brush" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "🖌️"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.activeTool === "brush") {
-                            root.showToolSettings = !root.showToolSettings;
-                        } else {
-                            root.activeTool = "brush";
-                            root.showToolSettings = true;
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-
-            // Arrow Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "arrow" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "arrow" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "↗️"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.activeTool === "arrow") {
-                            root.showToolSettings = !root.showToolSettings;
-                        } else {
-                            root.activeTool = "arrow";
-                            root.showToolSettings = true;
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-
-            // Polygon Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "polygon" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "polygon" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "⬟"
-                    font.pixelSize: 18
-                    color: root.activeTool === "polygon" ? "white" : settingsController.textColor
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.activeTool === "polygon") {
-                            root.showToolSettings = !root.showToolSettings;
-                        } else {
-                            if (root.currentDrawing && root.currentDrawing.type === "polygon") {
-                                root.currentDrawing = null; // discard if changing tool
-                            }
-                            root.activeTool = "polygon";
-                            root.showToolSettings = true;
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-
-            // Route Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "route" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "route" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "🛣️"
-                    font.pixelSize: 18
-                    color: root.activeTool === "route" ? "white" : settingsController.textColor
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.activeTool === "route") {
-                            root.showToolSettings = !root.showToolSettings;
-                        } else {
-                            if (root.currentDrawing && root.currentDrawing.type === "route") {
-                                root.currentDrawing = null; // discard if changing tool
-                            }
-                            root.activeTool = "route";
-                            root.showToolSettings = true;
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-            
-            // Artillery Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "artillery" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "artillery" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "🎯"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.currentDrawing) root.currentDrawing = null;
-                        
-                        if (root.activeTool === "artillery") {
-                            root.activeTool = "pan";
-                            artilleryModal.visible = false;
-                        } else {
-                            root.activeTool = "artillery";
-                            artilleryModal.visible = true;
-                            root.showToolSettings = false;
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-
-            // Vehicle Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "vehicle" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "vehicle" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "🚢"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.activeTool === "vehicle") {
-                            root.showToolSettings = !root.showToolSettings;
-                        } else {
-                            if (root.currentDrawing) root.currentDrawing = null;
-                            root.activeTool = "vehicle";
-                            root.showToolSettings = true;
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-            
-            
-            Rectangle {
-                width: 1
-                height: 24
-                color: settingsController.borderColor
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            // Logistics Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.logisticsModalVisible ? settingsController.accentColor : "transparent"
-                border.color: root.logisticsModalVisible ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "🚚"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        logisticsModal.open();
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-            
-            Rectangle {
-                width: 1
-                height: 24
-                color: settingsController.borderColor
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            // Text Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "text" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "text" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "T"
-                    font.pixelSize: 18
-                    font.bold: true
-                    color: root.activeTool === "text" ? "white" : settingsController.textColor
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.activeTool === "text") {
-                            root.showToolSettings = !root.showToolSettings;
-                        } else {
-                            if (root.currentDrawing) root.currentDrawing = null;
-                            root.activeTool = "text";
-                            root.showToolSettings = false; // no settings for now except color
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
-            
-            Rectangle {
-                width: 1
-                height: 24
-                color: settingsController.borderColor
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            // Eraser Tool
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: root.activeTool === "eraser" ? settingsController.accentColor : "transparent"
-                border.color: root.activeTool === "eraser" ? settingsController.accentColor : settingsController.borderColor
-                Text {
-                    anchors.centerIn: parent
-                    text: "🧽"
-                    font.pixelSize: 18
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: {
-                        if (root.activeTool === "eraser") {
-                            root.showToolSettings = !root.showToolSettings;
-                        } else {
-                            if (root.currentDrawing && root.currentDrawing.type === "polygon") {
-                                root.currentDrawing = null;
-                            }
-                            root.activeTool = "eraser";
-                            root.showToolSettings = true;
-                        }
-                    }
-                    cursorShape: Qt.PointingHandCursor
-                }
-            }
+        
+        onToggleSettings: {
+            root.showToolSettings = !root.showToolSettings;
         }
     }
 
-    // --- TOOL SETTINGS MODAL ---
-    Rectangle {
-        id: toolSettingsModal
-        visible: (root.showToolSettings && (root.activeTool === "brush" || root.activeTool === "arrow" || root.activeTool === "polygon" || root.activeTool === "route" || root.activeTool === "eraser" || root.activeTool === "vehicle")) || root.selectedVehicleIndex !== -1
+    // --- DYNAMIC TOOL SETTINGS MODAL ---
+    Loader {
+        id: toolSettingsLoader
+        property var activeToolObj: null
+        
+        Connections {
+            target: root
+            function onActiveToolChanged() {
+                toolSettingsLoader.activeToolObj = ToolsData.getToolById(root.activeTool);
+                console.log("[DEBUG] toolSettingsLoader onActiveToolChanged:", root.activeTool, "Obj:", toolSettingsLoader.activeToolObj ? toolSettingsLoader.activeToolObj.id : "null", "Visible:", root.showToolSettings);
+            }
+            function onSkipBrushNameDialogChanged() {
+                if (toolSettingsLoader.item && toolSettingsLoader.item.skipBrushNameDialog !== undefined) {
+                    toolSettingsLoader.item.skipBrushNameDialog = root.skipBrushNameDialog;
+                }
+            }
+        }
+        
+        Component.onCompleted: {
+            activeToolObj = ToolsData.getToolById(root.activeTool);
+            console.log("[DEBUG] toolSettingsLoader completed:", root.activeTool);
+        }
+        
+        onVisibleChanged: {
+            console.log("[DEBUG] toolSettingsLoader visible changed to:", visible, "source:", source);
+        }
+        
+        visible: root.showToolSettings && activeToolObj && activeToolObj.settingsComponent
+        source: visible ? activeToolObj.settingsComponent : ""
+
+        
         anchors.bottom: drawingToolbar.top
-        anchors.bottomMargin: 12
+        anchors.bottomMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
-        width: (root.selectedVehicleIndex !== -1 || root.activeTool === "vehicle") ? 320 : 240
-        height: root.selectedVehicleIndex !== -1 ? 260 : (root.activeTool === "eraser" ? 80 : (root.activeTool === "vehicle" ? 480 : 120))
-        radius: 12
-        color: settingsController.surfaceColor
-        border.color: settingsController.borderColor
-        border.width: 1
         z: 100
         
-        // Block clicks from propagating to map
-        MouseArea { anchors.fill: parent }
-
-        MultiEffect {
-            source: toolSettingsModal
-            anchors.fill: toolSettingsModal
-            shadowEnabled: true
-            shadowOpacity: 0.3
-            shadowBlur: 0.8
-            shadowVerticalOffset: 2
-            shadowColor: "black"
-        }
-
-        Column {
-            anchors.fill: parent
-            anchors.margins: 12
-            spacing: 12
-            visible: root.activeTool !== "eraser" && root.activeTool !== "vehicle" && root.selectedVehicleIndex === -1
-            
-            Text {
-                text: root.activeTool === "brush" ? "Espessura e Cor do Pincel" : (root.activeTool === "arrow" ? "Espessura e Cor da Seta" : (root.activeTool === "route" ? "Espessura e Cor da Rota" : "Espessura e Cor da Área"))
-                color: settingsController.textColor
-                font.bold: true
-                font.pixelSize: 12
-            }
-            
-            Row {
-                spacing: 8
-                Repeater {
-                    model: ["#ef4444", "#3b82f6", "#22c55e", "#eab308", "#ffffff", "#000000"]
-                    delegate: Rectangle {
-                        width: 24
-                        height: 24
-                        radius: 12
-                        color: modelData
-                        border.color: root.activeColor === modelData ? settingsController.accentColor : "#888888"
-                        border.width: root.activeColor === modelData ? 3 : 1
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: root.activeColor = modelData
-                            cursorShape: Qt.PointingHandCursor
-                        }
-                    }
-                }
-            }
-            
-            RowLayout {
-                width: parent.width
-                spacing: 8
-                
-                Rectangle {
-                    width: 24
-                    height: 24
-                    color: "transparent"
-                    Layout.alignment: Qt.AlignVCenter
-                    
-                    Rectangle {
-                        anchors.centerIn: parent
-                        width: Math.min(24, Math.max(4, root.activeThickness))
-                        height: width
-                        radius: width / 2
-                        color: root.activeColor
-                        border.color: root.activeColor === "#000000" ? "#ffffff" : "transparent"
-                        border.width: 1
-                    }
-                }
-                
-                Slider {
-                    Layout.fillWidth: true
-                    from: 1
-                    to: 20
-                    value: root.activeThickness
-                    stepSize: 1
-                    onValueChanged: root.activeThickness = value
-                }
+        onItemChanged: {
+            if (item) {
+                if (item.skipBrushNameDialog !== undefined) item.skipBrushNameDialog = root.skipBrushNameDialog;
+                if (item.inspectMode !== undefined) item.inspectMode = Qt.binding(function() { return root.inspectMode; });
+                if (item.inspectedDrawing !== undefined) item.inspectedDrawing = Qt.binding(function() { return root.inspectedDrawing; });
             }
         }
         
-        Column {
-            anchors.fill: parent
-            anchors.margins: 12
-            spacing: 12
-            visible: root.activeTool === "eraser"
+        Connections {
+            target: toolSettingsLoader.item
+            ignoreUnknownSignals: true
             
-            Text {
-                text: "Opções da Borracha"
-                color: settingsController.textColor
-                font.bold: true
-                font.pixelSize: 12
-            }
-            
-            Button {
-                width: parent.width
-                height: 32
-                background: Rectangle {
-                    color: "#ef4444"
-                    radius: 4
-                }
-                contentItem: Text {
-                    text: "Limpar Todos os Desenhos"
-                    color: "white"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    font.bold: true
-                }
-                onClicked: {
-                    root.drawings = [];
-                    root.currentDrawing = null;
-                    root.showToolSettings = false;
-                    root.activeTool = "pan";
+            function onActiveColorChanged() {
+                if (toolSettingsLoader.item && toolSettingsLoader.item.activeColor !== undefined) {
+                    root.activeColor = toolSettingsLoader.item.activeColor;
                 }
             }
-        }
-        
-        Column {
-            anchors.fill: parent
-            anchors.margins: 16
-            spacing: 16
-            visible: root.selectedVehicleIndex !== -1
-            
-            RowLayout {
-                width: parent.width
-                Text {
-                    text: "Editar Embarcação"
-                    color: settingsController.textColor
-                    font.bold: true
-                    font.pixelSize: 14
-                    Layout.fillWidth: true
+            function onActiveThicknessChanged() {
+                if (toolSettingsLoader.item && toolSettingsLoader.item.activeThickness !== undefined) {
+                    root.activeThickness = toolSettingsLoader.item.activeThickness;
                 }
             }
-            
-            Column {
-                width: parent.width
-                spacing: 4
-                Text { text: "Rotação"; color: settingsController.mutedTextColor; font.pixelSize: 11; font.bold: true }
-                Slider {
-                    width: parent.width
-                    from: 0; to: 360; stepSize: 1
-                    value: root.liveVehicleRotation
-                    onValueChanged: {
-                        if (root.selectedVehicleIndex !== -1 && root.liveVehicleRotation !== value) {
-                            root.liveVehicleRotation = value;
-                        }
-                    }
-                    onPressedChanged: {
-                        if (!pressed && root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
-                            if (root.drawings[root.selectedVehicleIndex].rotation !== root.liveVehicleRotation) {
-                                var newDrawings = root.drawings.slice();
-                                var modified = Object.assign({}, newDrawings[root.selectedVehicleIndex]);
-                                modified.rotation = root.liveVehicleRotation;
-                                newDrawings[root.selectedVehicleIndex] = modified;
-                                root.drawings = newDrawings;
-                            }
-                        }
-                    }
+            function onActiveOpacityChanged() {
+                if (toolSettingsLoader.item && toolSettingsLoader.item.activeOpacity !== undefined) {
+                    root.activeOpacity = toolSettingsLoader.item.activeOpacity;
                 }
             }
+            function onActiveLineStyleChanged() { if (toolSettingsLoader.item && toolSettingsLoader.item.activeLineStyle !== undefined) root.activeLineStyle = toolSettingsLoader.item.activeLineStyle; }
+            function onArrowPositionChanged() { if (toolSettingsLoader.item && toolSettingsLoader.item.arrowPosition !== undefined) root.activeArrowPosition = toolSettingsLoader.item.arrowPosition; }
+            function onArrowPlacementChanged() { if (toolSettingsLoader.item && toolSettingsLoader.item.arrowPlacement !== undefined) root.activeArrowPlacement = toolSettingsLoader.item.arrowPlacement; }
+            function onActiveSymbolChanged() { if (toolSettingsLoader.item && toolSettingsLoader.item.activeSymbol !== undefined) root.activeSymbol = toolSettingsLoader.item.activeSymbol; }
+            function onActiveHighlightChanged() { if (toolSettingsLoader.item && toolSettingsLoader.item.activeHighlight !== undefined) root.activeHighlight = toolSettingsLoader.item.activeHighlight; }
+            function onActiveExpirationChanged() { if (toolSettingsLoader.item && toolSettingsLoader.item.activeExpiration !== undefined) root.activeExpiration = toolSettingsLoader.item.activeExpiration; }
+            function onActiveLockedChanged() { if (toolSettingsLoader.item && toolSettingsLoader.item.activeLocked !== undefined) root.activeLocked = toolSettingsLoader.item.activeLocked; }
+            function onResetDescriptionDialog(ask) { root.skipBrushNameDialog = !ask; }
             
-            Column {
-                width: parent.width
-                spacing: 4
-                Text { text: "Tamanho"; color: settingsController.mutedTextColor; font.pixelSize: 11; font.bold: true }
-                Slider {
-                    width: parent.width
-                    from: 0.05; to: 3.0; stepSize: 0.05
-                    value: root.liveVehicleScale
-                    onValueChanged: {
-                        if (root.selectedVehicleIndex !== -1 && root.liveVehicleScale !== value) {
-                            root.liveVehicleScale = value;
-                        }
-                    }
-                    onPressedChanged: {
-                        if (!pressed && root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
-                            if (root.drawings[root.selectedVehicleIndex].scale !== root.liveVehicleScale) {
-                                var newDrawings = root.drawings.slice();
-                                var modified = Object.assign({}, newDrawings[root.selectedVehicleIndex]);
-                                modified.scale = root.liveVehicleScale;
-                                newDrawings[root.selectedVehicleIndex] = modified;
-                                root.drawings = newDrawings;
-                            }
-                        }
-                    }
+            function onColorChanged(c) { root.activeColor = c; }
+            function onThicknessChanged(t) { root.activeThickness = t; }
+            function onOpacityChanged(o) { root.activeOpacity = o; }
+            
+            function onClearAllRequested() {
+                if (typeof mapSessionController !== 'undefined') {
+                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                }
+                root.currentDrawing = null;
+                root.showToolSettings = false;
+                root.activeTool = "pan";
+            }
+            function onFinishDrawing() {
+                if (root.activeTool === "polygon" && root.currentDrawing && root.currentDrawing.type === "polygon") {
+                    polygonNameDialogVisible = true;
+                    polygonNameInput.forceActiveFocus();
+                } else if (root.activeTool === "route" && root.currentDrawing && root.currentDrawing.type === "route") {
+                    routeNameDialogVisible = true;
+                    routeNameInput.forceActiveFocus();
                 }
             }
-            
-            Column {
-                width: parent.width
-                spacing: 4
-                Text { text: "Nome da Embarcação"; color: settingsController.mutedTextColor; font.pixelSize: 11; font.bold: true }
-                TextField {
-                    width: parent.width
-                    text: root.liveVehicleName
-                    font.pixelSize: 12
-                    onTextEdited: {
-                        root.liveVehicleName = text;
-                    }
-                    onEditingFinished: {
-                        if (root.selectedVehicleIndex !== -1 && root.drawings[root.selectedVehicleIndex]) {
-                            if (root.drawings[root.selectedVehicleIndex].name !== root.liveVehicleName) {
-                                var newDrawings = root.drawings.slice();
-                                var modified = Object.assign({}, newDrawings[root.selectedVehicleIndex]);
-                                modified.name = root.liveVehicleName;
-                                newDrawings[root.selectedVehicleIndex] = modified;
-                                root.drawings = newDrawings;
-                            }
-                        }
-                    }
-                    color: settingsController.textColor
-                    background: Rectangle { color: settingsController.backgroundColor; border.color: settingsController.borderColor; border.width: 1; radius: 6 }
-                }
+            function onVehicleSelected(img, name) {
+                root.activeVehicleImage = img;
+                root.activeVehicleName = name;
+            }
+            function onVehicleCountChanged(c) {
+                root.activeVehicleCount = c;
             }
         }
         
-        Column {
-            id: vehicleSearchCol
-            anchors.fill: parent
-            anchors.margins: 16
-            spacing: 16
-            visible: root.activeTool === "vehicle" && root.selectedVehicleIndex === -1
-            
-            property string searchText: ""
-            
-            Text {
-                text: "Catálogo de Embarcações e Veículos"
-                color: settingsController.textColor
-                font.bold: true
-                font.pixelSize: 14
-            }
-            
-            RowLayout {
-                width: parent.width
-                spacing: 8
-                Text {
-                    text: "Qtd ao clicar:"
-                    color: settingsController.textColor
-                    font.bold: true
-                    font.pixelSize: 12
-                }
+        onLoaded: {
+            if (item) {
+                if (item.activeColor !== undefined) item.activeColor = root.activeColor;
+                if (item.activeThickness !== undefined) item.activeThickness = root.activeThickness;
+                if (item.activeOpacity !== undefined) item.activeOpacity = root.activeOpacity;
+                if (item.activeLineStyle !== undefined) item.activeLineStyle = root.activeLineStyle;
+                if (item.activeArrowHead !== undefined) item.activeArrowHead = root.activeArrowHead;
+                if (item.activeHighlight !== undefined) item.activeHighlight = root.activeHighlight;
+                if (item.activeExpiration !== undefined) item.activeExpiration = root.activeExpiration;
+                if (item.activeLocked !== undefined) item.activeLocked = root.activeLocked;
+                if (item.activeToolId !== undefined) item.activeToolId = root.activeTool;
                 
-                Rectangle {
-                    width: 32; height: 32
-                    radius: 4
-                    color: settingsController.backgroundColor
-                    border.color: settingsController.borderColor
-                    border.width: 1
-                    Text { anchors.centerIn: parent; text: "-"; color: settingsController.textColor; font.bold: true }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: if (root.activeVehicleCount > 1) root.activeVehicleCount--
-                        cursorShape: Qt.PointingHandCursor
-                    }
-                }
-                Text {
-                    text: root.activeVehicleCount.toString()
-                    color: settingsController.textColor
-                    font.bold: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Rectangle {
-                    width: 32; height: 32
-                    radius: 4
-                    color: settingsController.backgroundColor
-                    border.color: settingsController.borderColor
-                    border.width: 1
-                    Text { anchors.centerIn: parent; text: "+"; color: settingsController.textColor; font.bold: true }
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: if (root.activeVehicleCount < 50) root.activeVehicleCount++
-                        cursorShape: Qt.PointingHandCursor
-                    }
-                }
-            }
-            
-            TextField {
-                width: parent.width
-                placeholderText: "Buscar..."
-                color: settingsController.textColor
-                font.pixelSize: 12
-                background: Rectangle { color: settingsController.backgroundColor; border.color: settingsController.borderColor; border.width: 1; radius: 6 }
-                onTextEdited: vehicleSearchCol.searchText = text.toLowerCase()
-            }
-            
-            ScrollView {
-                width: parent.width
-                height: 290
-                clip: true
-                
-                Column {
-                    width: parent.width
-                    spacing: 16
-                    
-                    Repeater {
-                        model: {
-                            if (typeof VehiclesData === "undefined" || !VehiclesData.data.categories) return [];
-                            return VehiclesData.data.categories;
-                        }
-                        
-                        delegate: Column {
-                            width: parent.width
-                            spacing: 8
-                            visible: itemsRepeater.count > 0
-                            
-                            Text {
-                                text: modelData.name
-                                color: settingsController.accentColor
-                                font.bold: true
-                                font.pixelSize: 13
-                            }
-                            
-                            Grid {
-                                columns: 3
-                                spacing: 12
-                                
-                                Repeater {
-                                    id: itemsRepeater
-                                    model: {
-                                        var res = [];
-                                        var items = modelData.items;
-                                        for (var i = 0; i < items.length; i++) {
-                                            if (vehicleSearchCol.searchText === "" || items[i].name.toLowerCase().indexOf(vehicleSearchCol.searchText) !== -1) {
-                                                res.push(items[i]);
-                                            }
-                                        }
-                                        return res;
-                                    }
-                                    delegate: Rectangle {
-                                        width: 80
-                                        height: 88
-                                        radius: 8
-                                        color: settingsController.backgroundColor
-                                        border.color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.borderColor
-                                        border.width: root.activeVehicleImage === modelData.image ? 2 : 1
-                                        
-                                        Rectangle {
-                                            anchors.fill: parent
-                                            radius: 8
-                                            color: "white"
-                                            opacity: mouseArea.containsMouse ? 0.05 : 0.0
-                                            Behavior on opacity { NumberAnimation { duration: 150 } }
-                                        }
-                                        
-                                        Column {
-                                            anchors.fill: parent
-                                            anchors.margins: 6
-                                            spacing: 4
-                                            
-                                            Item {
-                                                width: parent.width
-                                                height: 50
-                                                Image {
-                                                    anchors.centerIn: parent
-                                                    source: typeof appController !== "undefined" ? appController.assetUrl("img/map-layer/" + modelData.image) : "file:///c:/Users/ryanl/OneDrive/Desktop/aplicativo/img/map-layer/" + modelData.image
-                                                    width: parent.width
-                                                    height: parent.height
-                                                    fillMode: Image.PreserveAspectFit
-                                                    smooth: true
-                                                    mipmap: true
-                                                }
-                                            }
-                                            
-                                            Text {
-                                                text: modelData.name
-                                                color: root.activeVehicleImage === modelData.image ? settingsController.accentColor : settingsController.textColor
-                                                font.pixelSize: 10
-                                                font.bold: true
-                                                horizontalAlignment: Text.AlignHCenter
-                                                width: parent.width
-                                                elide: Text.ElideRight
-                                            }
-                                        }
-                                        
-                                        Rectangle {
-                                            anchors.top: parent.top
-                                            anchors.left: parent.left
-                                            anchors.margins: 6
-                                            width: 14
-                                            height: 14
-                                            radius: 3
-                                            color: modelData.faction === "w" ? "#2a5b8c" : (modelData.faction === "c" ? "#5a7a50" : "#888888")
-                                            visible: modelData.faction !== undefined
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: modelData.faction ? modelData.faction.toUpperCase() : ""
-                                                color: "white"
-                                                font.pixelSize: 9
-                                                font.bold: true
-                                            }
-                                        }
-                                        
-                                        MouseArea {
-                                            id: mouseArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                root.activeVehicleImage = modelData.image;
-                                                root.activeVehicleName = modelData.name;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                if (item.activeVehicleImage !== undefined) item.activeVehicleImage = root.activeVehicleImage;
+                if (item.activeVehicleName !== undefined) item.activeVehicleName = root.activeVehicleName;
+                if (item.activeVehicleCount !== undefined) item.activeVehicleCount = root.activeVehicleCount;
             }
         }
     }
@@ -2560,63 +2555,7 @@ Item {
         }
     }
 
-    Rectangle {
-        visible: root.activeTool === "polygon" && root.currentDrawing && root.currentDrawing.type === "polygon" && root.currentDrawing.points.length >= 2 && !root.polygonNameDialogVisible
-        anchors.bottom: toolSettingsModal.visible ? toolSettingsModal.top : drawingToolbar.top
-        anchors.bottomMargin: 12
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: 140
-        height: 36
-        radius: 18
-        color: settingsController.accentColor
-        z: 100
-        
-        Text {
-            anchors.centerIn: parent
-            text: "✅ Finalizar Área"
-            color: "white"
-            font.bold: true
-            font.pixelSize: 13
-        }
-        
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                root.polygonNameDialogVisible = true;
-                polygonNameInput.forceActiveFocus();
-            }
-        }
-    }
 
-    Rectangle {
-        visible: root.activeTool === "route" && root.currentDrawing && root.currentDrawing.type === "route" && root.currentDrawing.points.length >= 2 && !root.routeNameDialogVisible
-        anchors.bottom: toolSettingsModal.visible ? toolSettingsModal.top : drawingToolbar.top
-        anchors.bottomMargin: 12
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: 140
-        height: 36
-        radius: 18
-        color: settingsController.accentColor
-        z: 100
-        
-        Text {
-            anchors.centerIn: parent
-            text: "✅ Finalizar Rota"
-            color: "white"
-            font.bold: true
-            font.pixelSize: 13
-        }
-        
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                root.routeNameDialogVisible = true;
-                routeNameInput.forceActiveFocus();
-            }
-        }
-    }
     
     // --- POLYGON NAME MODAL ---
     Rectangle {
@@ -2701,10 +2640,128 @@ Item {
                             root.currentDrawing.name = polygonNameInput.text;
                             var newDrawings = root.drawings.slice();
                             newDrawings.push(root.currentDrawing);
-                            root.drawings = newDrawings;
+                            // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
                             root.currentDrawing = null;
                             polygonNameInput.text = "";
                             root.polygonNameDialogVisible = false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- BRUSH NAME MODAL ---
+    Rectangle {
+        id: brushNameModal
+        visible: root.brushNameDialogVisible
+        anchors.centerIn: parent
+        width: 300
+        height: 170
+        radius: 8
+        color: settingsController.surfaceColor
+        border.color: settingsController.borderColor
+        border.width: 1
+        z: 200
+        
+        MultiEffect {
+            source: brushNameModal
+            anchors.fill: brushNameModal
+            shadowEnabled: true
+            shadowOpacity: 0.5
+            shadowBlur: 1.0
+            shadowVerticalOffset: 4
+            shadowColor: "black"
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            
+            Text {
+                text: "Adicionar descrição? (Opcional)"
+                color: settingsController.textColor
+                font.bold: true
+                font.pixelSize: 16
+                Layout.fillWidth: true
+            }
+            
+            TextField {
+                id: brushNameInput
+                Layout.fillWidth: true
+                placeholderText: "Ex: Linha de Defesa"
+                color: settingsController.textColor
+                background: Rectangle {
+                    color: settingsController.backgroundColor
+                    border.color: settingsController.borderColor
+                    border.width: 1
+                    radius: 4
+                }
+                onAccepted: finishBrushBtn.clicked()
+            }
+            
+            StyledCheckBox {
+                text: "Não perguntar novamente (nesta sessão)"
+                checked: root.skipBrushNameDialog
+                onCheckedChanged: root.skipBrushNameDialog = checked
+                Layout.fillWidth: true
+            }
+            
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                
+                Button {
+                    Layout.fillWidth: true
+                    text: "Sem Descrição"
+                    onClicked: {
+                        brushNameInput.text = "";
+                        finishBrushBtn.clicked();
+                    }
+                }
+                
+                Button {
+                    id: finishBrushBtn
+                    Layout.fillWidth: true
+                    text: "Salvar"
+                    background: Rectangle {
+                        color: settingsController.accentColor
+                        radius: 4
+                    }
+                    contentItem: Text {
+                        text: "Salvar"
+                        color: "white"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        font.bold: true
+                    }
+                    onClicked: {
+                        if (root.currentDrawing && root.currentDrawing.type === "brush") {
+                            if (brushNameInput.text.trim() !== "") {
+                                root.currentDrawing.label = brushNameInput.text;
+                            }
+                            var newDrawings = root.drawings.slice();
+                            newDrawings.push(root.currentDrawing);
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
+                            root.currentDrawing = null;
+                            brushNameInput.text = "";
+                            root.brushNameDialogVisible = false;
                         }
                     }
                 }
@@ -2718,7 +2775,7 @@ Item {
         visible: root.routeNameDialogVisible
         anchors.centerIn: parent
         width: 320
-        height: 250
+        height: 270
         radius: 8
         color: settingsController.surfaceColor
         border.color: settingsController.borderColor
@@ -2821,6 +2878,15 @@ Item {
                 }
             }
             
+            Text {
+                text: root.currentDrawing && root.currentDrawing.time_mins ? "Tempo Estimado: ~" + Math.ceil(root.currentDrawing.time_mins) + " minutos" : ""
+                color: settingsController.accentColor
+                font.pixelSize: 13
+                font.bold: true
+                visible: root.currentDrawing && root.currentDrawing.time_mins !== undefined
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 12
@@ -2856,7 +2922,15 @@ Item {
                             root.currentDrawing.thickness = root.activeThickness;
                             var newDrawings = root.drawings.slice();
                             newDrawings.push(root.currentDrawing);
-                            root.drawings = newDrawings;
+                            // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
                             root.currentDrawing = null;
                             routeNameInput.text = "";
                             root.routeNameDialogVisible = false;
@@ -2980,7 +3054,15 @@ Item {
                             
                             var newDrawings = root.drawings.slice();
                             newDrawings.push(newTextDrawing);
-                            root.drawings = newDrawings;
+                            // root.drawings = newDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (newDrawings.length > 0) {
+                                    var lastAdded = newDrawings[newDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
                         }
                         root.textToolDialogVisible = false;
                         root.currentTextLocation = null;
@@ -3007,6 +3089,10 @@ Item {
         clip: true
         
         property string jsonOutput: ""
+        property int serverVersion: 0
+        property int pendingQueueSize: 0
+        property string latestLogType: ""
+
         
         ColumnLayout {
             anchors.fill: parent
@@ -3051,6 +3137,15 @@ Item {
                 Layout.fillHeight: true
                 clip: true
                 
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Text { text: "Ver: " + jsonDebugWindow.serverVersion; color: "#00ff00"; font.bold: true }
+                    Text { text: "Queue: " + jsonDebugWindow.pendingQueueSize; color: jsonDebugWindow.pendingQueueSize > 0 ? "#ffaa00" : "#00ff00"; font.bold: true }
+                    Text { text: "Last: " + jsonDebugWindow.latestLogType; color: "#aaaaaa"; Layout.fillWidth: true; elide: Text.ElideRight }
+                }
+                Rectangle { height: 1; Layout.fillWidth: true; color: "#333333" }
+                
                 TextEdit {
                     id: jsonTextEdit
                     text: jsonDebugWindow.jsonOutput
@@ -3065,105 +3160,51 @@ Item {
         }
     }
 
-    // --- AUTO SAVE TIMER ---
+    // --- EVENT SOURCING TIMERS ---
     Item {
         id: autoSaveTimers
         property real lastSentWx: -99999
         property real lastSentWy: -99999
-        property string lastSentDrawingsJson: ""
         
         Timer {
             interval: 50
             running: true
             repeat: true
             onTriggered: {
-                if (globalHoverTracker.hovered && Qt.application.active) {
-                    var mx = globalHoverTracker.point.position.x;
-                    var my = globalHoverTracker.point.position.y;
-                    var wp = screenToWorld(mx, my);
-                    if (Math.abs(wp.x - parent.lastSentWx) > 0.1 || Math.abs(wp.y - parent.lastSentWy) > 0.1) {
-                        parent.lastSentWx = wp.x;
+                if (Qt.application.active) {
+                    var isHovered = mapMouseArea.containsMouse;
+                    var isPressed = mapMouseArea.pressed;
+                    if (isHovered || isPressed) {
+                        var mx = mapMouseArea.mouseX;
+                        var my = mapMouseArea.mouseY;
+                        var wp = screenToWorld(mx, my);
+                        if (Math.abs(wp.x - parent.lastSentWx) > 0.1 || Math.abs(wp.y - parent.lastSentWy) > 0.1) {
+                            parent.lastSentWx = wp.x;
                         parent.lastSentWy = wp.y;
                         var userId = (typeof chatController !== "undefined" && chatController.currentUserId) ? chatController.currentUserId : "";
-                        if (typeof mapSessionController !== "undefined" && mapSessionController.currentRoom !== "") {
+                        var nick = (typeof chatController !== "undefined" && chatController.currentUserName) ? chatController.currentUserName : "Unknown";
+                        var avatar = (typeof chatController !== "undefined" && chatController.currentUserAvatar) ? chatController.currentUserAvatar : "";
+                        
+                        if (typeof mapSessionController !== "undefined") {
                             var payload = {
-                                user: {
-                                    id: userId,
-                                    nick: typeof chatController !== "undefined" && chatController.currentUserName ? chatController.currentUserName : "Unknown",
-                                    avatar: typeof chatController !== "undefined" && chatController.currentUserAvatar ? chatController.currentUserAvatar : "",
-                                    status: { x: wp.x, y: wp.y },
-                                    tool: root.activeTool
-                                }
+                                nick: nick,
+                                avatar: avatar,
+                                status: { x: wp.x, y: wp.y },
+                                tool: root.activeTool
                             };
-                            mapSessionController.sendMapUpdate(JSON.stringify(payload));
+                            mapSessionController.pushEvent("cursor_move", userId, JSON.stringify(payload));
+                            
+                            // Optimistically update local state for unified debugging
+                            var cursors = root.usersDict;
+                            cursors[userId] = payload;
+                            root.usersDict = cursors;
+                            
+                            if (typeof mapSessionController.debugSync !== "undefined" && mapSessionController.debugSync) {
+                                // Logs are now appended directly via the onLogAppended signal
+                            }
                         }
                     }
-                }
-            }
-        }
-        
-        Timer {
-            interval: 500
-            running: true
-            repeat: true
-            onTriggered: {
-                var currentUserId = "";
-                if (typeof chatController !== "undefined") {
-                     currentUserId = typeof chatController.currentUserId !== "undefined" ? chatController.currentUserId : "";
-                }
-                
-                var allDrawings = root.drawings.slice();
-                if (root.currentDrawing) {
-                    allDrawings.push(root.currentDrawing);
-                }
-                
-                var drawingsStr = JSON.stringify(allDrawings);
-                var drawingsChanged = (drawingsStr !== parent.lastSentDrawingsJson);
-                
-                var mx = globalHoverTracker.hovered ? globalHoverTracker.point.position.x : mapMouseArea.mouseX;
-                var my = globalHoverTracker.hovered ? globalHoverTracker.point.position.y : mapMouseArea.mouseY;
-                var wp = screenToWorld(mx, my);
-                var isMouseActive = globalHoverTracker.hovered && Qt.application.active;
-                
-                var data = {
-                    user: {
-                        nick: typeof chatController !== "undefined" ? chatController.currentUserName : "Desconhecido",
-                        avatar: typeof chatController !== "undefined" ? chatController.currentUserAvatar : "",
-                        id: currentUserId,
-                        status: isMouseActive ? { x: wp.x, y: wp.y } : null,
-                        tool: root.activeTool
                     }
-                };
-                
-                if (drawingsChanged) {
-                    data.drawings = allDrawings;
-                }
-                
-                var jsonStr = JSON.stringify(data);
-                
-                // For debug log: show local user + all active remote users separately
-                var debugLog = {
-                    me: data.user,
-                    active_users: root.remoteCursorsDict, // dictionary of remote users
-                    drawings_synced: drawingsChanged
-                };
-                var debugStr = JSON.stringify(debugLog, function(key, val) {
-                    if (val && typeof val.x === 'number') val.x = Math.round(val.x * 100) / 100;
-                    if (val && typeof val.y === 'number') val.y = Math.round(val.y * 100) / 100;
-                    return val;
-                }, 2);
-                debugStr = debugStr.replace(/\{\n\s+"x": ([\d.-]+),\n\s+"y": ([\d.-]+)\n\s+\}/g, '{ "x": $1, "y": $2 }');
-                jsonDebugWindow.jsonOutput = debugStr;
-                
-                if (typeof mapSessionController !== "undefined" && mapSessionController.currentRoom !== "") {
-                    mapSessionController.sendMapUpdate(jsonStr);
-                    if (drawingsChanged) {
-                        parent.lastSentDrawingsJson = drawingsStr;
-                    }
-                    var date = new Date();
-                    var h = date.getHours();
-                    var m = date.getMinutes();
-                    root.lastSyncTime = (h < 10 ? "0" + h : h) + ":" + (m < 10 ? "0" + m : m);
                 }
             }
         }
@@ -3194,7 +3235,15 @@ Item {
             for (var j = 0; j < newDrawings.length; j++) {
                 currentDrawings.push(newDrawings[j]);
             }
-            root.drawings = currentDrawings;
+            // root.drawings = currentDrawings; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                if (currentDrawings.length > 0) {
+                                    var lastAdded = currentDrawings[currentDrawings.length - 1];
+                                    mapSessionController.pushEvent("add_drawing", "draw_" + Date.now(), JSON.stringify(lastAdded));
+                                } else {
+                                    mapSessionController.pushEvent("clear_all", "all", "{}");
+                                }
+                            }
             root.drawingsChanged();
             
         }
@@ -3328,7 +3377,10 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 onClicked: {
                     kickedPopup.close();
-                    root.drawings = [];
+                    // root.drawings = []; // Managed by SyncManager via onMapUpdated
+                            if (typeof mapSessionController !== 'undefined') {
+                                mapSessionController.pushEvent("clear_all", "all", "{}");
+                            }
                     root.remoteCursorsDict = ({});
                     if (typeof mapSessionController !== "undefined") {
                         mapSessionController._current_room = "";
@@ -3340,31 +3392,57 @@ Item {
     
     Rectangle {
         id: drawingHoverTooltip
-        property string tooltipText: ""
-        visible: false
-        width: tooltipRow.implicitWidth + 20
-        height: tooltipRow.implicitHeight + 12
+        property var drawingData: null
+        opacity: drawingHoverTooltip.drawingData ? 1.0 : 0.0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+        
+        width: tooltipContent.implicitWidth + 24
+        height: tooltipContent.implicitHeight + 20
         color: "#f00f172a" // sleek slate 900
         border.color: "#3b82f6" // blue 500
         border.width: 1
-        radius: 6
+        radius: 8
         z: 9999
         
-        Row {
-            id: tooltipRow
+        function formatExpiration(msTime) {
+            if (!msTime) return "";
+            var now = Date.now();
+            if (msTime <= now) return "Expirado";
+            var diff = Math.floor((msTime - now) / 1000);
+            var m = Math.floor(diff / 60);
+            var s = diff % 60;
+            return m + "m " + s + "s";
+        }
+        
+        Column {
+            id: tooltipContent
             anchors.centerIn: parent
             spacing: 6
+            
             Text {
-                text: "✏️"
-                font.pixelSize: 12
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            Text {
-                color: "#e2e8f0"
-                font.pixelSize: 13
+                text: "👤 " + (drawingHoverTooltip.drawingData ? (drawingHoverTooltip.drawingData.user || "Desconhecido") : "")
+                color: "#f8fafc"
+                font.pixelSize: 14
                 font.bold: true
-                text: drawingHoverTooltip.tooltipText
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            
+            Rectangle {
+                width: parent.width * 0.8
+                height: 1
+                color: "#334155"
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: drawingHoverTooltip.drawingData && drawingHoverTooltip.drawingData.expiresAt
+            }
+            
+            Text {
+                text: "⏳ Expira em " + drawingHoverTooltip.formatExpiration(drawingHoverTooltip.drawingData ? drawingHoverTooltip.drawingData.expiresAt : null)
+                color: "#fbbf24"
+                font.pixelSize: 12
+                font.bold: true
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: drawingHoverTooltip.drawingData && drawingHoverTooltip.drawingData.expiresAt
             }
         }
     }

@@ -112,6 +112,7 @@ from .debug_controller import DebugController
 from .custom_notifications_controller import CustomNotificationsController
 from .map_controller import MapController
 from .map_session_controller import MapSessionController
+from .routing_controller import RoutingController
 
 class ControllerRegistry(QObject):
     def __init__(self, app: QApplication) -> None:
@@ -143,6 +144,7 @@ class ControllerRegistry(QObject):
         self.mapController = MapController(self.settings_data, self)
         self.mapSessionController = MapSessionController(self.chatController, self)
         self.artilleryController = ArtilleryController(self)
+        self.routingController = RoutingController(str(BASE_DIR), self)
         for controller in (
             self.appController,
             self.settingsController,
@@ -217,6 +219,7 @@ class ControllerRegistry(QObject):
             "mapController",
             "mapSessionController",
             "artilleryController",
+            "routingController",
         ):
             context.setContextProperty(name, getattr(self, name))
         context.setContextProperty("navItems", self.appController.navItems)

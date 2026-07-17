@@ -1,5 +1,6 @@
 from __future__ import annotations
 from .dict_list_model import DictListModel
+from .sync_manager import SyncManager
 from .api_http_error import ApiHttpError
 from .auth_ui_error import AuthUiError
 import base64
@@ -20,6 +21,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from typing import Any, Callable
 import unicodedata
 import urllib.error
@@ -105,6 +107,7 @@ class MapSessionController(QObject):
     resultFromWorker = Signal(str, str)
     currentRoomChanged = Signal()
     currentRoomCreatorChanged = Signal()
+    logAppended = Signal(str)
 
     def __init__(self, chatController, parent=None):
         super().__init__(parent)
@@ -120,6 +123,8 @@ class MapSessionController(QObject):
         self._current_room = ""
         self._current_room_creator = ""
         self.resultFromWorker.connect(self._apply_result)
+        self.sync_manager = SyncManager()
+        self._debug_sync = True
         
     @Property(str, notify=currentRoomChanged)
     def currentRoom(self):
@@ -140,6 +145,14 @@ class MapSessionController(QObject):
         if self._current_room_creator != value:
             self._current_room_creator = value
             self.currentRoomCreatorChanged.emit()
+
+    @Property(bool)
+    def debugSync(self):
+        return self._debug_sync
+        
+    @debugSync.setter
+    def debugSync(self, value):
+        self._debug_sync = value
 
     def _get_token(self):
         return self._chatController._token if self._chatController else ""
@@ -273,6 +286,13 @@ class MapSessionController(QObject):
 
     @Slot(str)
     def connectWs(self, roomId: str):
+        if self._current_room != roomId:
+            self.sync_manager.reset_state()
+            self.sync_manager.pending_events.clear()
+            self.sync_manager.sequence_counter = 0
+            # Notify QML to clear visual state immediately
+            self.mapUpdated.emit(json.dumps({"type": "full_state", "payload": {"drawings": [], "tacticalSymbols": []}}))
+            
         self.currentRoom = roomId
         token = self._get_token()
         if not token: return
@@ -296,10 +316,12 @@ class MapSessionController(QObject):
         payload = {"event": "join_room", "room_id": self._current_room}
         msg = json.dumps(payload)
         self.send_ws_message(msg)
+        self._log_event("CONEXÃO", "connect", {})
+        self.replayPendingEvents()
 
     @Slot()
     def _on_ws_disconnected(self):
-        pass
+        self._log_event("CONEXÃO", "disconnect", {})
 
     @Slot(str)
     def _on_ws_text_received(self, message: str):
@@ -307,21 +329,136 @@ class MapSessionController(QObject):
             data = json.loads(message)
             event = data.get("event")
             if event == "joined_room":
-                self.roomJoined.emit(data.get("room_id", ""), json.dumps(data.get("mapData", {})))
+                map_data = data.get("mapData", {})
+                self.sync_manager.process_incoming_snapshot(map_data, 0)
+                self.roomJoined.emit(data.get("room_id", ""), json.dumps(map_data))
             elif event == "map_update":
-                self.mapUpdated.emit(json.dumps(data.get("data", {})))
+                payload_data = data.get("data", {})
+                server_ver = payload_data.get("serverVersion", self.sync_manager.server_version)
+                action = payload_data.get("type", "map_update")
+                
+                if action == "ack":
+                    seq = payload_data.get("sequence")
+                    self.sync_manager.receive_ack(seq, server_ver)
+                    self._log_event("SINCRONIZAÇÃO", "event_ack", {"sequence": seq, "serverVersion": server_ver})
+                elif action == "snapshot":
+                    self.sync_manager.process_incoming_snapshot(payload_data.get("payload", {}), server_ver)
+                    self._log_event("SINCRONIZAÇÃO", "snapshot_download", {"serverVersion": server_ver})
+                    render_list = self.sync_manager.build_render_drawings()
+                    tactical_list = self.sync_manager.build_tactical_symbols()
+                    self.mapUpdated.emit(json.dumps({"type": "full_state", "payload": {"drawings": render_list, "tacticalSymbols": tactical_list}}))
+                elif action == "version_conflict":
+                    self._log_event("ERROS", "version_conflict", {"serverVersion": server_ver})
+                    self.fetchLatestState()
+                else:
+                    if action != "cursor_move":
+                        self.sync_manager.process_incoming_event(action, payload_data.get("objectId"), payload_data.get("payload"), server_ver)
+                        render_list = self.sync_manager.build_render_drawings()
+                        tactical_list = self.sync_manager.build_tactical_symbols()
+                        self.mapUpdated.emit(json.dumps({"type": "full_state", "payload": {"drawings": render_list, "tacticalSymbols": tactical_list}}))
+                        self._log_event("EVENTOS", "event_received", {"event": action, "serverVersion": server_ver})
+                    else:
+                        self.mapUpdated.emit(json.dumps(payload_data))
             elif event == "kicked":
                 self._ws.close()
                 self.userKicked.emit()
-        except Exception:
-            pass
+        except Exception as e:
+            self._log_event("ERROS", "exception", {"error": str(e)})
 
     def send_ws_message(self, msg: str):
         if self._ws.isValid():
             self._ws.sendTextMessage(msg)
+            
+    def _log_event(self, category: str, action: str, payload: dict):
+        if not self._debug_sync:
+            return
+            
+        now = datetime.now(timezone.utc).isoformat()
+        user_id = self._chatController._current_user_id if self._chatController else ""
+        nick = self._chatController._current_user_name if self._chatController else "Unknown"
+        
+        log_entry = {
+            "timestamp": now,
+            "eventId": f"evt_{uuid.uuid4().hex[:8]}",
+            "serverVersion": self.sync_manager.server_version,
+            "clientVersion": getattr(self.sync_manager, "sequence_counter", 0),
+            "userId": user_id,
+            "nick": nick,
+            "category": category,
+            "action": action,
+            "payload": payload,
+        }
+        
+        # print structured JSON to stdout for debugging
+        log_str = json.dumps(log_entry, ensure_ascii=False)
+        self.logAppended.emit(log_str)
+
+    @Slot(str, str, str)
+    def pushEvent(self, event_type: str, object_id: str, payload_json: str):
+        try:
+            payload = json.loads(payload_json) if payload_json else {}
+            user_id = self._chatController._current_user_id if self._chatController else ""
+            
+            if event_type == "cursor_move":
+                evt = {
+                    "eventId": f"evt_{uuid.uuid4().hex[:8]}",
+                    "type": event_type,
+                    "userId": user_id,
+                    "objectId": object_id,
+                    "timestamp": int(time.time()),
+                    "payload": payload
+                }
+                if self._ws.isValid() and self._current_room:
+                    self.send_ws_message(json.dumps({"event": "map_event", "room_id": self._current_room, "data": evt}))
+                return
+                
+            evt = self.sync_manager.add_pending_event(event_type, object_id, payload)
+            evt["userId"] = user_id
+            
+            render_list = self.sync_manager.build_render_drawings()
+            tactical_list = self.sync_manager.build_tactical_symbols()
+            self.mapUpdated.emit(json.dumps({"type": "full_state", "payload": {"drawings": render_list, "tacticalSymbols": tactical_list}}))
+            
+            if self._ws.isValid() and self._current_room:
+                msg = json.dumps({
+                    "event": "map_event",
+                    "room_id": self._current_room,
+                    "data": evt
+                })
+                self.send_ws_message(msg)
+                self._log_event("EVENTOS", "event_sent", evt)
+            else:
+                self._log_event("SINCRONIZAÇÃO", "queue_event", evt)
+        except Exception as e:
+            self._log_event("ERROS", "invalid payload", {"error": str(e)})
+
+    @Slot()
+    def fetchLatestState(self):
+        if self._ws.isValid() and self._current_room:
+            self.send_ws_message(json.dumps({
+                "event": "fetch_state",
+                "room_id": self._current_room
+            }))
+            self._log_event("SINCRONIZAÇÃO", "fetch_state", {})
+
+    @Slot()
+    def replayPendingEvents(self):
+        if not self.sync_manager.pending_events or not self._ws.isValid() or not self._current_room:
+            return
+            
+        self._log_event("SINCRONIZAÇÃO", "replay_pending", {"count": len(self.sync_manager.pending_events)})
+        
+        for evt in self.sync_manager.pending_events:
+            msg = json.dumps({
+                "event": "map_event",
+                "room_id": self._current_room,
+                "data": evt
+            })
+            self.send_ws_message(msg)
 
     @Slot(str)
     def sendMapUpdate(self, dataJson: str):
+        # Kept for backward compatibility, but routes to the new schema
         if self._ws.isValid() and self._current_room:
             try:
                 data = json.loads(dataJson)
@@ -333,7 +470,7 @@ class MapSessionController(QObject):
                 msg = json.dumps(payload)
                 self.send_ws_message(msg)
             except Exception as e:
-                print(f"Error sending map update: {e}")
+                self._log_event("ERROS", "exception", {"error": str(e)})
 
     @Slot()
     def leaveWsRoom(self):

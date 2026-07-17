@@ -49,7 +49,7 @@ Rectangle {
 
     // Keep track of which warehouse is selected
     property int selectedWarehouseIndex: 0
-    property var currentWarehouse: (modelData.stock && modelData.stock.length > selectedWarehouseIndex) ? modelData.stock[selectedWarehouseIndex] : null
+    property var currentWarehouse: (modelData && modelData.stock && modelData.stock.length > selectedWarehouseIndex) ? modelData.stock[selectedWarehouseIndex] : null
 
     // Helper to group items by category
     function getItemsByCategory(catKey) {
@@ -94,7 +94,7 @@ Rectangle {
                     font.bold: true
                 }
                 Text {
-                    text: root.tr("map.stock.updated", "Atualizado") + ": " + modelData.name + " - " + (stockpileModal.currentWarehouse ? stockpileModal.currentWarehouse.last_update : "")
+                    text: root.tr("map.stock.updated", "Atualizado") + ": " + (modelData ? modelData.name : "") + " - " + (stockpileModal.currentWarehouse ? stockpileModal.currentWarehouse.last_update : "")
                     color: settingsController.mutedTextColor
                     font.family: "Segoe UI"
                     font.pixelSize: 11
@@ -105,10 +105,10 @@ Rectangle {
             ComboBox {
                 id: warehouseCombo
                 Layout.preferredWidth: 150
-                visible: modelData.stock !== undefined && modelData.stock !== null && modelData.stock.length > 1
+                visible: modelData && modelData.stock !== undefined && modelData.stock !== null && modelData.stock.length > 1
                 model: {
                     var arr = [];
-                    if (modelData.stock) {
+                    if (modelData && modelData.stock) {
                         for (var i = 0; i < modelData.stock.length; i++) {
                             arr.push(modelData.stock[i].warehouse_name);
                         }

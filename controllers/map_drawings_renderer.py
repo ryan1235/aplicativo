@@ -11,6 +11,7 @@ class MapDrawingsRenderer(QQuickPaintedItem):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._drawings = []
+        self._show_tactical_lines = True
         self._current_drawing = {}
         self._dash_offset = 0.0
         self._map_scale = 1.0
@@ -21,6 +22,8 @@ class MapDrawingsRenderer(QQuickPaintedItem):
         self._center_y = 0.0
         self._map_zoom_scale_x = 4.0
         self._map_zoom_scale_y = 4.0
+        self._inspected_drawing_id = ""
+        self._hovered_drawing_id = ""
 
         # Debounce updates during fast interactions
         self._update_timer = QTimer(self)
@@ -33,10 +36,33 @@ class MapDrawingsRenderer(QQuickPaintedItem):
         self.setRenderTarget(QQuickPaintedItem.Image)
 
     drawingsChanged = Signal()
+    showTacticalLinesChanged = Signal()
     currentDrawingChanged = Signal()
     paramsChanged = Signal()
     dashOffsetChanged = Signal()
     hoveredRouteChanged = Signal()
+    inspectedDrawingIdChanged = Signal()
+    hoveredDrawingIdChanged = Signal()
+
+    @Property(str, notify=inspectedDrawingIdChanged)
+    def inspectedDrawingId(self):
+        return self._inspected_drawing_id
+    @inspectedDrawingId.setter
+    def inspectedDrawingId(self, val):
+        if self._inspected_drawing_id != val:
+            self._inspected_drawing_id = val
+            self.inspectedDrawingIdChanged.emit()
+            self.schedule_update()
+
+    @Property(str, notify=hoveredDrawingIdChanged)
+    def hoveredDrawingId(self):
+        return self._hovered_drawing_id
+    @hoveredDrawingId.setter
+    def hoveredDrawingId(self, val):
+        if self._hovered_drawing_id != val:
+            self._hovered_drawing_id = val
+            self.hoveredDrawingIdChanged.emit()
+            self.schedule_update()
 
     @Property(list, notify=drawingsChanged)
     def drawings(self):
@@ -47,6 +73,18 @@ class MapDrawingsRenderer(QQuickPaintedItem):
             val = val.toVariant()
         self._drawings = val if isinstance(val, list) else list(val) if val else []
         self.drawingsChanged.emit()
+        self.schedule_update()
+
+    @Property(bool, notify=showTacticalLinesChanged)
+    def showTacticalLines(self):
+        return self._show_tactical_lines
+
+    @showTacticalLines.setter
+    def showTacticalLines(self, val):
+        if self._show_tactical_lines != val:
+            self._show_tactical_lines = val
+            self.showTacticalLinesChanged.emit()
+            self.update()
         self.schedule_update()
 
     @Property('QVariant', notify=currentDrawingChanged)
@@ -179,10 +217,88 @@ class MapDrawingsRenderer(QQuickPaintedItem):
         wX = apiX * 80.0
         wY = -apiY * 80.0 - 4024.0
         return wX, wY
+    def _draw_shapes_along_path(self, painter, points, viewport_width, viewport_height, shape_type, thickness, color, outlineWidth=0.0, outlineColor=None, shadowColor=None):
+        if len(points) < 2: return
+        
+        spacing = thickness * 5
+        if shape_type == "defensive_line": spacing = 40.0
+        elif shape_type == "minefield": spacing = 35.0
+        elif shape_type == "checkpoint": spacing = 50.0
+        
+        accumulated_dist = 0.0
+        
+        for i in range(len(points)-1):
+            p1 = points[i]
+            p2 = points[i+1]
+            x1, y1 = self.worldToCanvas(p1.get("x",0), p1.get("y",0), viewport_width, viewport_height)
+            x2, y2 = self.worldToCanvas(p2.get("x",0), p2.get("y",0), viewport_width, viewport_height)
+            
+            dx = x2 - x1
+            dy = y2 - y1
+            segment_len = math.hypot(dx, dy)
+            if segment_len == 0: continue
+            
+            ux, uy = dx / segment_len, dy / segment_len
+            angle = math.atan2(dy, dx)
+            dist_to_next = spacing - accumulated_dist
+            
+            curr_dist = dist_to_next
+            while curr_dist <= segment_len:
+                cx = x1 + ux * curr_dist
+                cy = y1 + uy * curr_dist
+                
+                painter.save()
+                painter.translate(cx, cy)
+                painter.rotate(math.degrees(angle))
+                
+                size = max(10, thickness * 2)
+                
+                def draw_shape_with_effects(draw_fn):
+                    if shadowColor and outlineWidth > 0:
+                        painter.save()
+                        painter.translate(2.0, 2.0)
+                        draw_fn(shadowColor, thickness + outlineWidth * 2.0 + 2.0)
+                        painter.restore()
+                    if outlineColor and outlineWidth > 0:
+                        draw_fn(outlineColor, thickness + outlineWidth * 2.0)
+                    draw_fn(color, thickness)
+                
+                if shape_type in ["defensive_line", "barricade"]:
+                    path = QPainterPath()
+                    path.moveTo(-size/2, 0)
+                    path.lineTo(size/2, 0)
+                    path.lineTo(0, -size)
+                    path.lineTo(-size/2, 0)
+                    def draw_tri(col, t):
+                        painter.setBrush(col)
+                        painter.setPen(QPen(col, t/2, Qt.SolidLine))
+                        painter.drawPath(path)
+                    draw_shape_with_effects(draw_tri)
+                elif shape_type == "minefield":
+                    def draw_mine(col, t):
+                        painter.setPen(QPen(col, t, Qt.SolidLine))
+                        painter.drawLine(QPointF(-size/2, -size/2), QPointF(size/2, size/2))
+                        painter.drawLine(QPointF(-size/2, size/2), QPointF(size/2, -size/2))
+                    draw_shape_with_effects(draw_mine)
+                elif shape_type == "checkpoint":
+                    def draw_check(col, t):
+                        painter.setBrush(col)
+                        painter.setPen(QPen(col, t/2, Qt.SolidLine))
+                        painter.drawRect(QRectF(-size/2, -size/2, size, size))
+                    draw_shape_with_effects(draw_check)
+                elif shape_type == "barrier":
+                    def draw_bar(col, t):
+                        painter.setPen(QPen(col, t, Qt.SolidLine))
+                        painter.drawLine(QPointF(0, -size), QPointF(0, size))
+                    draw_shape_with_effects(draw_bar)
+                    
+                painter.restore()
+                curr_dist += spacing
+                
+            accumulated_dist = segment_len - (curr_dist - spacing)
 
-    def drawArrow(self, painter, p1x, p1y, p2x, p2y, headSize):
+    def drawArrow(self, painter, p1x, p1y, p2x, p2y, headSize, drawShaft=True, outlineWidth=0.0, outlineColor=None, shadowColor=None):
         angle = math.atan2(p2y - p1y, p2x - p1x)
-        painter.drawLine(QPointF(p1x, p1y), QPointF(p2x, p2y))
         
         a1x = p2x - headSize * math.cos(angle - math.pi / 6)
         a1y = p2y - headSize * math.sin(angle - math.pi / 6)
@@ -190,12 +306,38 @@ class MapDrawingsRenderer(QQuickPaintedItem):
         a2y = p2y - headSize * math.sin(angle + math.pi / 6)
         
         path = QPainterPath()
+        if drawShaft:
+            path.moveTo(p1x, p1y)
+            path.lineTo(p2x, p2y)
         path.moveTo(p2x, p2y)
         path.lineTo(a1x, a1y)
         path.lineTo(a2x, a2y)
         path.closeSubpath()
+        
+        orig_pen = painter.pen()
+        
+        if shadowColor and outlineWidth > 0:
+            painter.save()
+            shadow_pen = QPen(orig_pen)
+            shadow_pen.setColor(shadowColor)
+            shadow_pen.setWidthF(orig_pen.widthF() + outlineWidth * 2.0 + 2.0)
+            painter.setPen(shadow_pen)
+            painter.translate(2.0, 2.0)
+            painter.drawPath(path)
+            painter.fillPath(path, shadowColor)
+            painter.restore()
+            
+        if outlineColor and outlineWidth > 0:
+            out_pen = QPen(orig_pen)
+            out_pen.setColor(outlineColor)
+            out_pen.setWidthF(orig_pen.widthF() + outlineWidth * 2.0)
+            painter.setPen(out_pen)
+            painter.drawPath(path)
+            painter.fillPath(path, outlineColor)
+            
+        painter.setPen(orig_pen)
         painter.drawPath(path)
-        painter.fillPath(path, painter.pen().color())
+        painter.fillPath(path, orig_pen.color())
 
     def paint(self, painter: QPainter):
         viewport_width = self.width()
@@ -219,7 +361,8 @@ class MapDrawingsRenderer(QQuickPaintedItem):
                 continue
                 
             dtype = d.get("type", "")
-            if not dtype:
+            
+            if dtype == "brush" and not self._show_tactical_lines:
                 continue
                 
             color_str = d.get("color", "#3b82f6")
@@ -235,13 +378,133 @@ class MapDrawingsRenderer(QQuickPaintedItem):
                 if len(points) > 1:
                     if not self._points_in_view(points, viewport_width, viewport_height):
                         continue
+                        
+                    lineStyle = d.get("lineStyle", "solid")
+                    highlight = d.get("highlight", False)
+                    opacity = float(d.get("opacity", 1.0))
+                    
+                    brush_color = QColor(color_str)
+                    if highlight:
+                        brush_color.setAlphaF(0.25 * opacity)
+                    else:
+                        brush_color.setAlphaF(opacity)
+                        
+                    brush_pen = QPen(brush_color, thickness, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                    if lineStyle == "dashed":
+                        brush_pen.setStyle(Qt.CustomDashLine)
+                        brush_pen.setDashPattern([6, 6])
+                    elif lineStyle == "dotted":
+                        brush_pen.setStyle(Qt.CustomDashLine)
+                        brush_pen.setDashPattern([1, 4])
+
                     path = QPainterPath()
                     sx, sy = self.worldToCanvas(points[0].get("x", 0), points[0].get("y", 0), viewport_width, viewport_height)
                     path.moveTo(sx, sy)
+                    
+                    last_px, last_py = sx, sy
                     for pt in points[1:]:
                         px, py = self.worldToCanvas(pt.get("x", 0), pt.get("y", 0), viewport_width, viewport_height)
                         path.lineTo(px, py)
+                        last_px, last_py = px, py
+                        
+                    d_id = d.get("id") or d.get("_id") or d.get("eventId") or ""
+                    is_inspected = (d_id == self._inspected_drawing_id and self._inspected_drawing_id != "")
+                    is_hovered = (d_id == self._hovered_drawing_id and self._hovered_drawing_id != "")
+
+                    if is_inspected:
+                        # Draw a yellow glow under everything
+                        painter.save()
+                        glow_pen = QPen(QColor(255, 215, 0, 150), thickness + 12.0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                        painter.setPen(glow_pen)
+                        painter.drawPath(path)
+                        painter.restore()
+                        
+                    if is_hovered:
+                        painter.save()
+                        pulse = math.sin(self._dash_offset * 0.2) * 3.0
+                        hover_glow_pen = QPen(QColor(255, 255, 255, 200), thickness + 8.0 + max(0, pulse), Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+                        painter.setPen(hover_glow_pen)
+                        painter.drawPath(path)
+                        painter.restore()
+                        brush_color = brush_color.lighter(150)
+                        brush_pen.setColor(brush_color)
+                        thickness += 2.0
+                        brush_pen.setWidthF(thickness)
+
+                    if not highlight:
+                        outlineWidth = max(thickness * 0.20, 2.0)
+                        shadowColor = QColor(0, 0, 0, int(70 * opacity))
+                        outlineColor = QColor(0, 0, 0, int(255 * opacity)) if brush_color.lightnessF() > 0.4 else QColor(255, 255, 255, int(255 * opacity))
+                        
+                        if is_inspected:
+                            outlineColor = QColor(255, 215, 0, 255)
+                            outlineWidth = max(thickness * 0.30, 3.0)
+                        elif is_hovered:
+                            outlineColor = QColor(255, 255, 255, 255)
+                            outlineWidth = max(thickness * 0.40, 4.0)
+
+                        width_in = brush_pen.widthF()
+                        is_dashed = brush_pen.style() == Qt.CustomDashLine
+                        pattern_in = brush_pen.dashPattern() if is_dashed else []
+
+                        # Draw shadow
+                        painter.save()
+                        shadow_pen = QPen(brush_pen)
+                        shadow_pen.setColor(shadowColor)
+                        width_shadow = thickness + outlineWidth * 2.0 + 2.0
+                        shadow_pen.setWidthF(width_shadow)
+                        if is_dashed and width_shadow > 0:
+                            shadow_pen.setDashPattern([p * width_in / width_shadow for p in pattern_in])
+                        painter.setPen(shadow_pen)
+                        painter.translate(2.0, 2.0)
+                        painter.drawPath(path)
+                        painter.restore()
+                        
+                        # Draw outline
+                        out_pen = QPen(brush_pen)
+                        out_pen.setColor(outlineColor)
+                        width_out = thickness + outlineWidth * 2.0
+                        out_pen.setWidthF(width_out)
+                        if is_dashed and width_out > 0:
+                            out_pen.setDashPattern([p * width_in / width_out for p in pattern_in])
+                        painter.setPen(out_pen)
+                        painter.drawPath(path)
+                    
+                    painter.setPen(brush_pen)
                     painter.drawPath(path)
+                    
+                    if d.get("arrowHead", False) or lineStyle in ["advance", "double_movement"]:
+                        if len(points) >= 2:
+                            pt1 = points[-2]
+                            p1x, p1y = self.worldToCanvas(pt1.get("x", 0), pt1.get("y", 0), viewport_width, viewport_height)
+                            p2x, p2y = last_px, last_py
+                            headSize = max(10.0, thickness * 2.5)
+                            self.drawArrow(painter, p1x, p1y, p2x, p2y, headSize, False, outlineWidth, outlineColor, shadowColor)
+                            
+                    if lineStyle in ["retreat", "double_movement"]:
+                        if len(points) >= 2:
+                            pt1 = points[1]
+                            p1x, p1y = self.worldToCanvas(pt1.get("x", 0), pt1.get("y", 0), viewport_width, viewport_height)
+                            p2x, p2y = sx, sy
+                            headSize = max(10.0, thickness * 2.5)
+                            self.drawArrow(painter, p1x, p1y, p2x, p2y, headSize, False, outlineWidth, outlineColor, shadowColor)
+                            
+                    if lineStyle in ["barricade", "barrier", "defensive_line", "minefield", "checkpoint"]:
+                        self._draw_shapes_along_path(painter, points, viewport_width, viewport_height, lineStyle, thickness, brush_color, outlineWidth, outlineColor, shadowColor)
+                            
+                    label = d.get("label", "")
+                    if label:
+                        font = QFont("sans-serif", 12, QFont.Bold)
+                        painter.setFont(font)
+                        fm = QFontMetrics(font)
+                        
+                        painter.setPen(QPen(QColor(0, 0, 0, int(255*opacity)), 2))
+                        painter.drawText(last_px + 8, last_py + fm.ascent()/2, label)
+                        
+                        label_color = QColor("#ffffff")
+                        label_color.setAlphaF(opacity)
+                        painter.setPen(label_color)
+                        painter.drawText(last_px + 8, last_py + fm.ascent()/2, label)
                     
             elif dtype == "arrow":
                 start = d.get("start")
@@ -349,12 +612,7 @@ class MapDrawingsRenderer(QQuickPaintedItem):
                         painter.setPen(text_color)
                         painter.drawText(end_px - fm.horizontalAdvance("B")/2, end_py + fm.ascent()/2 - fm.height()/2 + 1, "B")
                         
-                    # Intermediate nodes
-                    painter.setBrush(QColor("#ffffff"))
-                    painter.setPen(solid_pen)
-                    for pt in points[1:-1]:
-                        px, py = self.worldToCanvas(pt.get("x", 0), pt.get("y", 0), viewport_width, viewport_height)
-                        painter.drawEllipse(QPointF(px, py), 4, 4)
+                    # Intermediate nodes (removed to keep route clean)
                         
                     # Route Name
                     name = d.get("name", "")
